@@ -19,3 +19,7 @@ Cargo.lock
 
 # mdBook build output
 book/book/
+
+# Project-specific (not for version control)
+.claude/
+openspec/
