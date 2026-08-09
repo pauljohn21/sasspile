@@ -1,0 +1,26 @@
+[package]
+name = "sasspile"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.97"
+description = "A pure Rust SCSS compiler — functional style, type-safe pipeline"
+license = "MIT"
+repository = "https://github.com/sasspile/sasspile"
+keywords = ["sass", "scss", "css", "compiler"]
+categories = ["command-line-utilities", "web-programming"]
+
+[dependencies]
+thiserror = "2"
+im = "15"  # 不可变 HashMap —— 支持函数式状态传递
+
+[[bin]]
+name = "sasspile"
+path = "src/main.rs"
+
+[lib]
+name = "sasspile"
+path = "src/lib.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
