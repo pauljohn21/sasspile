@@ -5,7 +5,10 @@ edition = "2024"
 rust-version = "1.97"
 description = "A pure Rust SCSS compiler — functional style, type-safe pipeline"
 license = "MIT"
-repository = "https://github.com/sasspile/sasspile"
+repository = "https://github.com/pauljohn21/sasspile"
+documentation = "https://github.com/pauljohn21/sasspile"
+readme = "README.md"
+authors = ["pauljohn21"]
 keywords = ["sass", "scss", "css", "compiler"]
 categories = ["command-line-utilities", "web-programming"]
 
