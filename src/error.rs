@@ -1,6 +1,20 @@
 //! 统一错误类型。
 //!
 //! 使用 `thiserror` 派生 `std::error::Error` trait。
+//!
+//! # 错误处理示例
+//!
+//! ```
+//! use sasspile::{compile_expanded, SassError};
+//!
+//! match compile_expanded("a { color: $undefined; }") {
+//!     Ok(css) => println!("{}", css),
+//!     Err(SassError::UndefinedVariable(name)) => {
+//!         eprintln!("错误: 变量 '{}' 未定义", name);
+//!     }
+//!     Err(e) => eprintln!("编译失败: {}", e),
+//! }
+//! ```
 
 use thiserror::Error;
 

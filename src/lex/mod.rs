@@ -2,6 +2,23 @@
 //!
 //! Lexer 自身实现 `Iterator<Item = Result<Token, SassError>>`，
 //! 逐字符扫描源码，产出 token 流。
+//!
+//! # 设计说明
+//!
+//! 使用 Rust Iterator trait 实现惰性求值，支持：
+//! - Unicode 字符（包括中文）
+//! - 手写扫描器（无正则依赖）
+//! - O(n) 时间复杂度
+//!
+//! # 示例
+//!
+//! ```
+//! use sasspile::lex::Lexer;
+//! use sasspile::lex::token::Token;
+//!
+//! let mut lexer = Lexer::new("a { color: red; }");
+//! let tokens: Result<Vec<_>, _> = lexer.collect();
+//! ```
 
 pub mod token;
 

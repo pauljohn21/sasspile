@@ -7,6 +7,11 @@ use crate::parse::ast::Value;
 use im::HashMap;
 
 /// 求值环境——不可变变量绑定。
+///
+/// 使用持久化数据结构（`im::HashMap`）确保：
+/// - 绑定变量返回新环境
+/// - 旧环境保持不变
+/// - O(1) 查找复杂度
 #[derive(Debug, Clone, Default)]
 pub struct Env {
     /// 变量绑定表。

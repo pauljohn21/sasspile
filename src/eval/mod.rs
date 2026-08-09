@@ -1,6 +1,12 @@
 //! 求值器——fold 实现。
 //!
 //! 使用 `try_fold` 替代 for loop + 可变状态。
+//!
+//! # 设计说明
+//!
+//! - 纯函数式：使用 `try_fold` 而非可变状态
+//! - 不可变环境：变量使用 `im::HashMap` 存储
+//! - 支持内建函数调用
 
 pub mod builtin;
 pub mod env;

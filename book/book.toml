@@ -1,0 +1,14 @@
+[book]
+title = "sasspile 文档"
+authors = ["pauljohn21"]
+language = "zh-CN"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/pauljohn21/sasspile"
+edit-url-template = "https://github.com/pauljohn21/sasspile/edit/main/book/{path}"

@@ -16,3 +16,6 @@ Thumbs.db
 
 # Cargo
 Cargo.lock
+
+# mdBook build output
+book/book/

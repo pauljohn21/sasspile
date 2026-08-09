@@ -1,6 +1,24 @@
 //! 阶段 5: Serialized —— 最终 CSS 字符串。
+//!
+//! 编译管线的终点，包含最终输出的 CSS 文本。
 
 /// 序列化产物——最终 CSS 输出。
+///
+/// 由 `Evaluated::serialize()` 产生，包含编译管线的最终结果。
+///
+/// # 示例
+///
+/// ```
+/// use sasspile::stage::source::Source;
+/// use sasspile::OutputStyle;
+///
+/// let serialized = Source::new("a { color: red; }".to_string())
+///     .lex().unwrap()
+///     .parse().unwrap()
+///     .evaluate().unwrap()
+///     .serialize(OutputStyle::Expanded);
+/// assert_eq!(serialized.as_str(), "a {\n  color: red;\n}\n");
+/// ```
 #[derive(Debug, Clone)]
 pub struct Serialized {
     /// CSS 文本。
@@ -9,11 +27,29 @@ pub struct Serialized {
 
 impl Serialized {
     /// 获取 CSS 字符串引用。
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use sasspile::stage::serialized::Serialized;
+    ///
+    /// let s = Serialized { css: "a{color:red;}".to_string() };
+    /// assert_eq!(s.as_str(), "a{color:red;}");
+    /// ```
     pub fn as_str(&self) -> &str {
         &self.css
     }
 
     /// 消费自身，返回 CSS 字符串。
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use sasspile::stage::serialized::Serialized;
+    ///
+    /// let s = Serialized { css: "a{color:red;}".to_string() };
+    /// assert_eq!(s.into_string(), "a{color:red;}");
+    /// ```
     pub fn into_string(self) -> String {
         self.css
     }

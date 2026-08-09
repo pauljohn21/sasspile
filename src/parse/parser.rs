@@ -1,4 +1,6 @@
 //! 语法分析器——递归下降 + Result 组合。
+//!
+//! 将 Token 序列转换为抽象语法树（AST）。
 
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;

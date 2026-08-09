@@ -16,6 +16,21 @@ mod string;
 // ── 公共 API ──
 
 /// 分派内建函数调用。
+///
+/// # 支持的模块
+///
+/// - `sass:math`: 数学运算（`abs`, `ceil`, `floor`, `sqrt` 等）
+/// - `sass:string`: 字符串操作（`length`, `index`, `slice` 等）
+/// - `sass:list`: 列表操作（`length`, `nth`, `append` 等）
+/// - `sass:map`: Map 操作（`get`, `keys`, `merge` 等）
+/// - `sass:color`: 颜色操作（`adjust`, `mix`, `invert` 等）
+///
+/// # 示例
+///
+/// ```ignore
+/// let args = vec![Value::Number(3.14, None)];
+/// let result = builtin::call("math.floor", &args)?; // 3.0
+/// ```
 pub fn call(name: &str, args: &[Value]) -> Result<Value> {
     match name {
         // sass:math 函数

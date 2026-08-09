@@ -1,6 +1,16 @@
 //! Token 定义——词法分析器的产出。
+//!
+//! 每个 Token 代表源码中的一个语法单位，如标识符、数字、符号等。
 
 /// 词法单元。
+///
+/// # 示例
+///
+/// ```
+/// use sasspile::lex::token::Token;
+///
+/// assert!(matches!(Token::Ident("color".to_string()), Token::Ident(_)));
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// 标识符——`color`, `border-radius`。
