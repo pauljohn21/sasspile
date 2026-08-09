@@ -43,6 +43,9 @@ pub enum CssNode {
 
     /// 注释。
     Comment(String),
+
+    /// @at-root 输出——不嵌套在父选择器下。
+    AtRoot(Vec<CssNode>),
 }
 
 impl std::fmt::Display for CssNode {
@@ -62,6 +65,7 @@ impl std::fmt::Display for CssNode {
             CssNode::Comment(text) => write!(f, "/* {text} */"),
             CssNode::Rule { selector, .. } => write!(f, "{selector} {{ ... }}"),
             CssNode::AtRule { name, .. } => write!(f, "@{name} {{ ... }}"),
+            CssNode::AtRoot(nodes) => write!(f, "{}", nodes.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(" ")),
         }
     }
 }
