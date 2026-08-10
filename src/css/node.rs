@@ -39,6 +39,8 @@ pub enum CssNode {
         params: Option<String>,
         /// 子节点。
         children: Vec<CssNode>,
+        /// 是否有 body（`{}`）——@custom-media 等无 body。
+        has_body: bool,
     },
 
     /// 注释。
@@ -64,7 +66,7 @@ impl std::fmt::Display for CssNode {
             }
             CssNode::Comment(text) => write!(f, "/* {text} */"),
             CssNode::Rule { selector, .. } => write!(f, "{selector} {{ ... }}"),
-            CssNode::AtRule { name, .. } => write!(f, "@{name} {{ ... }}"),
+            CssNode::AtRule { name, has_body, .. } => write!(f, "@{name}{}", if *has_body { " { ... }" } else { "" }),
             CssNode::AtRoot(nodes) => write!(f, "{}", nodes.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(" ")),
         }
     }

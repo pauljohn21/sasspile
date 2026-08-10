@@ -111,7 +111,7 @@ impl Serializer {
                 parts.push(format!("{indent}}}"));
                 parts.join("\n")
             }
-            CssNode::AtRule { name, params, children } => {
+            CssNode::AtRule { has_body: true, name, params, children } => {
                 let p = params.as_deref().unwrap_or("");
                 if children.is_empty() {
                     // 空块——单行输出
@@ -134,6 +134,14 @@ impl Serializer {
                     parts.join("\n")
                 }
             }
+            CssNode::AtRule { has_body: false, name, params, .. } => {
+                let p = params.as_deref().unwrap_or("");
+                if p.is_empty() {
+                    format!("{indent}@{name};")
+                } else {
+                    format!("{indent}@{name} {p};")
+                }
+            }
         }
     }
 
@@ -153,10 +161,14 @@ impl Serializer {
                 let kids: String = children.iter().map(Self::serialize_node_compressed).collect();
                 format!("{selector}{{{decls}{kids}}}")
             }
-            CssNode::AtRule { name, params, children } => {
+            CssNode::AtRule { has_body: true, name, params, children } => {
                 let p = params.as_deref().unwrap_or("");
                 let kids: String = children.iter().map(Self::serialize_node_compressed).collect();
                 format!("@{name} {p}{{{kids}}}")
+            }
+            CssNode::AtRule { has_body: false, name, params, .. } => {
+                let p = params.as_deref().unwrap_or("");
+                if p.is_empty() { format!("@{name};") } else { format!("@{name} {p};") }
             }
         }
     }

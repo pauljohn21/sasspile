@@ -923,7 +923,7 @@ Ok((css, current_env))
                         .collect();
                     *selector = parts.join(",").trim().to_string();
                 }
-                CssNode::AtRule { children, .. } => {
+                CssNode::AtRule { has_body: true, children, .. } => {
                     Self::apply_extends(children, extends);
                 }
                 CssNode::AtRoot(kids) => {
@@ -1115,14 +1115,15 @@ css: module_css,
 
     // —— @规则 ——
     fn eval_at_rule(name: &str, params: &Option<String>, body: &Option<Vec<Node>>, env: &Env) -> Result<(Vec<CssNode>, Env)> {
-        let children = match body {
-            Some(nodes) => Self::eval_nodes(nodes, env)?.0,
-            None => Vec::new(),
+        let (children, has_body) = match body {
+            Some(nodes) => (Self::eval_nodes(nodes, env)?.0, true),
+            None => (Vec::new(), false),
         };
         Ok((vec![CssNode::AtRule {
             name: name.to_string(),
             params: params.clone(),
             children,
+            has_body,
         }], env.clone()))
     }
 
