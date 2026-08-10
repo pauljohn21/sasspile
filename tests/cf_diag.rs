@@ -126,6 +126,18 @@ fn diag_import() { diag("directives/import", 15); }
 #[test]
 fn diag_use() { diag("directives/use", 15); }
 
+#[test]
+fn diag_css() { diag("css", 20); }
+
+#[test]
+fn diag_non_conformant() { diag("non_conformant", 20); }
+
+#[test]
+fn diag_function() { diag("directives/function", 15); }
+
+#[test]
+fn diag_extend() { diag("directives/extend", 15); }
+
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");

@@ -133,18 +133,28 @@ impl<'tok> Parser<'tok> {
         Ok(Node::Rule { selector, body })
     }
 
-    fn parse_selector(&mut self) -> Result<String> {
-        let mut s = String::new();
-        while let Some(t) = self.peek() {
-            match t {
-                Token::LBrace => break,
-                Token::Whitespace => { s.push(' '); self.advance(); }
-                Token::Comment(_, _) => { self.advance(); } // 跳过注释
-                _ => { s.push_str(&t.to_string()); self.advance(); }
-            }
-        }
-        Ok(s.trim().to_string())
-    }
+fn parse_selector(&mut self) -> Result<String> {
+let mut s = String::new();
+let mut bracket_depth = 0i32;
+while let Some(t) = self.peek() {
+match t {
+Token::LBrace => break,
+Token::LBracket => { bracket_depth += 1; s.push('['); self.advance(); }
+Token::RBracket => { bracket_depth -= 1; s.push(']'); self.advance(); }
+Token::Whitespace => {
+if bracket_depth > 0 {
+self.advance(); // 跳过括号内空白
+} else {
+s.push(' ');
+self.advance();
+}
+}
+Token::Comment(_, _) => { self.advance(); } // 跳过注释
+_ => { s.push_str(&t.to_string()); self.advance(); }
+}
+}
+Ok(s.trim().to_string())
+}
 
     fn parse_decl(&mut self) -> Result<Node> {
         let property = self.parse_property()?;

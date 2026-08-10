@@ -651,7 +651,7 @@ Ok((vec![], env.clone()))
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Color(a), Value::Color(b)) => a == b,
             (Value::Null, Value::Null) => true,
-            (Value::List(a, _, false), Value::List(b, _, false)) => {
+            (Value::List(a, _, _), Value::List(b, _, _)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| Self::values_eq(x, y))
             }
             (Value::Map(a), Value::Map(b)) => {
@@ -769,7 +769,7 @@ Ok((vec![], env.clone()))
                 // 单变量遍历 Map：每对作为一个子列表
                 pairs.iter().map(|(k, v)| vec![Value::List(vec![k.clone(), v.clone()], Separator::Space, false)]).collect()
             }
-            Value::List(es, _, false) => es.iter().map(|e| vec![e.clone()]).collect(),
+            Value::List(es, _, _) => es.iter().map(|e| vec![e.clone()]).collect(),
             Value::Map(pairs) => pairs.iter().flat_map(|(k, v)| vec![vec![k.clone()], vec![v.clone()]]).collect(),
             other => vec![vec![other.clone()]],
         };
@@ -841,7 +841,7 @@ Ok((vec![], env.clone()))
             let val = Self::eval_value(&arg.value, env)?;
             if arg.spread {
                 // 展开 $args... 为多个位置参数
-                if let Value::List(items, _, false) = val {
+                if let Value::List(items, _, _) = val {
                     positional.extend(items);
                 } else {
                     positional.push(val);
@@ -1200,23 +1200,34 @@ css: module_css,
                 _ => Err(SassError::Eval("grayscale 需要 1 个颜色参数".into())),
             },
             // list
-            "length" | "list-length" => match args {
-                [Value::List(es, _, false)] => Ok(Value::Number(es.len() as f64, None)),
-                [Value::Map(pairs)] => Ok(Value::Number(pairs.len() as f64, None)),
-                [_] => Ok(Value::Number(1.0, None)),
-                _ => Err(SassError::Eval("length 需要 1 个参数".into())),
-            },
-            "nth" => match args {
-                [Value::List(es, _, false), Value::Number(n, _)] => {
-                    let len = es.len() as i64;
-                    let idx = *n as i64;
-                    let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
-                        else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
-                        else { return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into())); };
-                    es.get(actual).cloned().ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
-                }
-                _ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
-            },
+"length" | "list-length" => match args {
+[Value::List(es, _, _)] => Ok(Value::Number(es.len() as f64, None)),
+[Value::Map(pairs)] => Ok(Value::Number(pairs.len() as f64, None)),
+[_] => Ok(Value::Number(1.0, None)),
+_ => Err(SassError::Eval("length 需要 1 个参数".into())),
+},
+"nth" => match args {
+[Value::List(es, _, _), Value::Number(n, _)] => {
+let len = es.len() as i64;
+let idx = *n as i64;
+let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
+else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
+else { return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into())); };
+es.get(actual).cloned().ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
+}
+[Value::Map(pairs), Value::Number(n, _)] => {
+let len = pairs.len() as i64;
+let idx = *n as i64;
+let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
+else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
+else { return Err(SassError::Eval("nth 索引 0 无效".into())); };
+pairs.get(actual).map(|(k, v)| Value::List(vec![k.clone(), v.clone()], Separator::Space, false))
+.ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
+}
+[other, Value::Number(1.0, _)] => Ok(other.clone()),
+[other, Value::Number(-1.0, _)] => Ok(other.clone()),
+_ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
+},
             // map
             "map-get" => match args {
                 [Value::Map(pairs), key] => pairs.iter()
@@ -1446,7 +1457,7 @@ css: module_css,
                 _ => Err(SassError::Eval("join 需要 2-4 个参数".into())),
             },
             "index" => match args {
-                [Value::List(items, _, false), needle] => {
+                [Value::List(items, _, _), needle] => {
                     for (i, item) in items.iter().enumerate() {
                         if Self::values_eq(item, needle) {
                             return Ok(Value::Number((i + 1) as f64, None));
@@ -1482,7 +1493,7 @@ css: module_css,
                 _ => Ok(Value::Bool(false)),
             },
             "zip" => match args {
-                [Value::List(a, _, false), Value::List(b, _, false)] => {
+                [Value::List(a, _, _), Value::List(b, _, _)] => {
                     let pairs: Vec<Value> = a.iter().zip(b.iter()).map(|(x, y)| {
                         Value::List(vec![x.clone(), y.clone()], Separator::Space, false)
                     }).collect();
