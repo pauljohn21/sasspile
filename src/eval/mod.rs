@@ -1625,11 +1625,17 @@ Ok(Value::Number(a / b, u1.clone()))
             },
             // selector functions
             "selector-append" => {
-                let parts: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                let parts: Vec<String> = args.iter().map(|a| match a {
+                    Value::String(s, _) => s.clone(),
+                    _ => a.to_string(),
+                }).collect();
                 Ok(Value::String(parts.join(""), false))
             }
             "selector-nest" => {
-                let parts: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                let parts: Vec<String> = args.iter().map(|a| match a {
+                    Value::String(s, _) => s.clone(),
+                    _ => a.to_string(),
+                }).collect();
                 Ok(Value::String(parts.join(" "), false))
             }
             "selector-is-super" => match args {
