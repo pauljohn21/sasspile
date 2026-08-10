@@ -184,7 +184,12 @@ impl Evaluator {
             return Err(SassError::Eval("递归深度超过限制（可能是无限循环）".into()));
         }
         nodes.iter().try_fold((Vec::new(), env.clone()), |(mut css, env), node| {
-            let (mut out, new_env) = Self::eval_node(node, &env)?;
+            let node_span = tracing::debug_span!("eval_node_item", node = ?std::mem::discriminant(node));
+            let _enter = node_span.enter();
+            let (mut out, new_env) = Self::eval_node(node, &env).map_err(|e| {
+                tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
+                e
+            })?;
             css.append(&mut out);
             Ok((css, new_env))
         })
@@ -305,6 +310,8 @@ Ok((vec![], env.clone()))
 
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。
     fn eval_rule(selector: &str, body: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
+        let span = tracing::info_span!("eval_rule", selector = selector);
+        let _enter = span.enter();
         // 对选择器中的 #{...} 插值求值
         let selector = if selector.contains("#{") {
             Self::eval_interp_str(selector, env)
@@ -421,6 +428,7 @@ Ok((vec![], env.clone()))
     }
 
     /// 求值值表达式。
+    #[instrument(skip(value, env), fields(depth = env.depth), level = "trace")]
     fn eval_value(value: &Value, env: &Env) -> Result<Value> {
         match value {
             Value::Number(..) | Value::Color(..) | Value::Bool(..) | Value::Null | Value::Calc(..) => Ok(value.clone()),
@@ -758,7 +766,9 @@ Ok((vec![], env.clone()))
         }
     }
 
-fn eval_for(var: &str, from: &Value, to: &Value, inclusive: bool, body: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    fn eval_for(var: &str, from: &Value, to: &Value, inclusive: bool, body: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
+        let span = tracing::info_span!("eval_for", var = var, inclusive = inclusive);
+        let _enter = span.enter();
 let from_val = Self::eval_value(from, env)?;
 let to_val = Self::eval_value(to, env)?;
 let (start, end) = match (from_val, to_val) {
@@ -786,6 +796,8 @@ Ok((css, current_env))
 }
 
     fn eval_each(vars: &[String], list: &Value, body: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
+        let span = tracing::info_span!("eval_each", n_vars = vars.len());
+        let _enter = span.enter();
         let evaluated = Self::eval_value(list, env)?;
         // 对 Map，按 (key, value) 对迭代
         let items: Vec<Vec<Value>> = match &evaluated {
@@ -846,6 +858,8 @@ Ok((css, current_env))
 
     // —— Mixin / Function ——
     fn eval_include(name: &str, args: &[Arg], content: &Option<Vec<Node>>, env: &Env) -> Result<(Vec<CssNode>, Env)> {
+        let span = tracing::info_span!("eval_include", name = name, n_args = args.len());
+        let _enter = span.enter();
         let mixin = env.get_mixin(name).ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?.clone();
         // 绑定参数
         let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
@@ -908,6 +922,8 @@ Ok((css, current_env))
 
     /// 调用函数（内建或用户定义）。
     fn call_function(name: &str, args: &[Value], env: &Env) -> Result<Value> {
+        let span = tracing::info_span!("call_function", name = name, n_args = args.len());
+        let _enter = span.enter();
         // 用户函数
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, args, env);
@@ -965,6 +981,8 @@ Ok((css, current_env))
 
     /// 解析模块 URL 到文件路径——_ 前缀加在文件名上，不是路径上。
     fn resolve_file(base: Option<&PathBuf>, url: &str) -> Option<PathBuf> {
+        let span = tracing::debug_span!("resolve_file", url = url);
+        let _enter = span.enter();
         let base_dir = base
             .as_ref()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -999,6 +1017,8 @@ Ok((css, current_env))
 
     /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
     fn load_module(path: &Path, config: &[(String, Value)], caller_env: &Env) -> Result<ModuleExports> {
+        let span = tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
+        let _enter = span.enter();
         // 防止循环导入导致栈溢出
         if caller_env.depth > 50 {
             return Ok(ModuleExports::default());
@@ -1027,6 +1047,8 @@ css: module_css,
 
     /// 模块限定函数调用。
     fn call_module_function(name: &str, args: &[Value], env: &Env) -> Result<Value> {
+        let span = tracing::info_span!("call_module_function", name = name);
+        let _enter = span.enter();
         // 先检查文件加载的命名空间
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
@@ -1120,6 +1142,8 @@ css: module_css,
     }
 
     fn call_user_function(func: &FunctionDef, args: &[Value], env: &Env) -> Result<Value> {
+        let span = tracing::info_span!("call_user_function", n_params = func.params.len(), n_args = args.len());
+        let _enter = span.enter();
         let mut func_env = env.incr_depth();
         for (i, param) in func.params.iter().enumerate() {
             let val = if let Some(arg) = args.get(i) {
@@ -1170,6 +1194,8 @@ css: module_css,
 
     /// 内建函数分派。
     fn call_builtin(name: &str, args: &[Value], env: &Env) -> Result<Value> {
+        let span = tracing::info_span!("call_builtin", name = name, n_args = args.len());
+        let _enter = span.enter();
         match name {
             // math
             "abs" => match args {
