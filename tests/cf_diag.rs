@@ -156,6 +156,12 @@ fn diag_for() { diag("directives/for", 15); }
 #[test]
 fn diag_each() { diag("directives/each", 15); }
 
+#[test]
+fn diag_while() { diag("directives/while", 15); }
+
+#[test]
+fn diag_media() { diag("directives/media", 15); }
+
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
