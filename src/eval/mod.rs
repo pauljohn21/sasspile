@@ -499,7 +499,13 @@ Ok((vec![], env.clone()))
     fn eval_binop(op: &BinOpKind, left: &Value, right: &Value, env: &Env) -> Result<Value> {
         let l = Self::eval_value(left, env)?;
         let r = Self::eval_value(right, env)?;
-        match op {
+        tracing::trace!(
+            target: "sasspile::binop",
+            op = ?op,
+            left = %l, right = %r,
+            "binop operands evaluated"
+        );
+        let result = match op {
             BinOpKind::Add => Self::add(&l, &r),
             BinOpKind::Sub => Self::sub(&l, &r),
             BinOpKind::Mul => Self::mul(&l, &r),
@@ -510,7 +516,16 @@ Ok((vec![], env.clone()))
             BinOpKind::And => match l { Value::Bool(false) => Ok(Value::Bool(false)), _ => Ok(r) },
             BinOpKind::Or => match l { Value::Bool(true) => Ok(Value::Bool(true)), _ => Ok(r) },
             BinOpKind::Lt | BinOpKind::Gt | BinOpKind::LtEq | BinOpKind::GtEq => Self::compare(op, &l, &r),
+        };
+        if let Ok(v) = &result {
+            tracing::trace!(
+                target: "sasspile::binop",
+                op = ?op,
+                result = %v,
+                "binop result"
+            );
         }
+        result
     }
 
     fn add(l: &Value, r: &Value) -> Result<Value> {
@@ -938,16 +953,35 @@ Ok((css, current_env))
 
     /// 应用 @extend 后处理——遍历 CSS 树，为目标选择器添加继承者。
     fn apply_extends(nodes: &mut [CssNode], extends: &[(String, String)]) {
+        let span = tracing::info_span!("apply_extends", n_extends = extends.len());
+        let _enter = span.enter();
         for node in nodes.iter_mut() {
             match node {
                 CssNode::Rule { selector, children, .. } => {
+                    tracing::debug!(
+                        target: "sasspile::extend",
+                        selector = %selector,
+                        "processing rule for extends"
+                    );
                     // 应用 extend
                     for (extender, target) in extends {
                         let target_trimmed = target.trim();
                         if selector.contains(target_trimmed) {
+                            tracing::info!(
+                                target: "sasspile::extend",
+                                extender = %extender,
+                                target = %target_trimmed,
+                                selector = %selector,
+                                "extend matched"
+                            );
                             if target_trimmed.starts_with('%') {
                                 // 占位符：直接替换为目标
                                 *selector = selector.replace(target_trimmed, extender);
+                                tracing::debug!(
+                                    target: "sasspile::extend",
+                                    new_selector = %selector,
+                                    "placeholder replaced"
+                                );
                             } else {
                                 // 普通选择器：添加继承者作为额外选择器
                                 let new_sel = selector.replace(target_trimmed, extender);
@@ -955,6 +989,11 @@ Ok((css, current_env))
                                     if !selector.contains(&new_sel) {
                                         selector.push_str(", ");
                                         selector.push_str(&new_sel);
+                                        tracing::debug!(
+                                            target: "sasspile::extend",
+                                            final_selector = %selector,
+                                            "extender appended"
+                                        );
                                     }
                                 }
                             }
