@@ -218,21 +218,28 @@ impl Evaluator {
                 [Value::String(s, _), Value::String(sep, _)] => {
                     let parts: Vec<Value> = if sep.is_empty() {
                         s.chars()
-                            .map(|c| Value::String(c.to_string(), false))
+                            .map(|c| Value::String(c.to_string(), true))
                             .collect()
                     } else {
                         s.split(sep.as_str())
-                            .map(|p| Value::String(p.to_string(), false))
+                            .map(|p| Value::String(p.to_string(), true))
                             .collect()
                     };
-                    Ok(Value::List(parts, Separator::Comma, false))
+                    Ok(Value::List(parts, Separator::Comma, true))
                 }
                 [Value::String(s, _)] => {
                     let parts: Vec<Value> = s
                         .chars()
-                        .map(|c| Value::String(c.to_string(), false))
+                        .map(|c| Value::String(c.to_string(), true))
                         .collect();
-                    Ok(Value::List(parts, Separator::Comma, false))
+                    Ok(Value::List(parts, Separator::Comma, true))
+                }
+                [Value::String(s, _), Value::Null] => {
+                    let parts: Vec<Value> = s
+                        .chars()
+                        .map(|c| Value::String(c.to_string(), true))
+                        .collect();
+                    Ok(Value::List(parts, Separator::Comma, true))
                 }
                 _ => Err(SassError::Eval("str-split 需要 1-2 个参数".into())),
             },
