@@ -300,11 +300,11 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "@use \"sass:list\";\na {b: list.nth(list.join((), c), 1)}";
+        let input = "$m: (c: d);\na {b: map-remove($m, x)}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), "NTH OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "NTH ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "MAP OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "MAP ERROR"),
         }
     }
 
