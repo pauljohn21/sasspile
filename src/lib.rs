@@ -29,17 +29,29 @@ pub use stage::source::Source;
 
 use std::path::PathBuf;
 
-/// 初始化 tracing 日志——用 `RUST_LOG` 环境变量控制级别。
+/// 初始化 tracing 日志——用 `RUST_LOG` 环境变量控制级别和 target。
 ///
-/// ```rust
-/// sasspile::init_tracing();
-/// let css = sasspile::compile_expanded("a { color: red; }").unwrap();
+/// # Target 过滤
+///
+/// ```bash
+/// # 只看颜色相关 events
+/// RUST_LOG="sasspile::color=debug" cargo test -- --nocapture
+///
+/// # 组合多个 target
+/// RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test -- --nocapture
 /// ```
 pub fn init_tracing() {
     use tracing_subscriber::{fmt, EnvFilter};
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("warn"));
     let _ = fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target(false)
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_level(true)
+        .with_ansi(true)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false)
         .compact()
         .try_init();
 }
@@ -272,11 +284,17 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "a {b: undefined-fn(1, 2)}";
+        let input = "a:is(%b, c) {x: y}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), "ERR OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "ERR ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "SELECTOR OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "SELECTOR ERROR"),
         }
+    }
+
+    #[test]
+    fn test_init_tracing_shows_target() {
+        init_tracing();
+        tracing::info!(target: "test_target_check", "tracing target visibility test");
     }
 }
