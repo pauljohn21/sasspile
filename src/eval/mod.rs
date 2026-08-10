@@ -567,7 +567,11 @@ Ok((vec![], env.clone()))
     fn div(l: &Value, r: &Value) -> Result<Value> {
         match (l, r) {
             (Value::Number(a, u1), Value::Number(b, _)) => {
-                if *b == 0.0 { return Err(SassError::DivideByZero); }
+                if *b == 0.0 {
+                    // SCSS: 1/0 = Infinity, -1/0 = -Infinity, 0/0 = NaN
+                    if *a == 0.0 { return Ok(Value::Number(f64::NAN, u1.clone())); }
+                    return Ok(Value::Number(a / b, u1.clone())); // f64 除零产生 Infinity
+                }
                 Ok(Value::Number(a / b, u1.clone()))
             }
             // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
@@ -1312,10 +1316,13 @@ _ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
             },
             "unique-id" => Ok(Value::String(format!("id{}", std::time::SystemTime::now().elapsed().unwrap_or_default().as_nanos()), false)),
             // math (additional)
-            "math.div" | "div" => match args {
-                [Value::Number(a, u1), Value::Number(b, _)] => {
-                    if *b == 0.0 { return Err(SassError::DivideByZero); }
-                    Ok(Value::Number(a / b, u1.clone()))
+"math.div" | "div" => match args {
+[Value::Number(a, u1), Value::Number(b, _)] => {
+if *b == 0.0 {
+if *a == 0.0 { return Ok(Value::Number(f64::NAN, u1.clone())); }
+return Ok(Value::Number(a / b, u1.clone()));
+}
+Ok(Value::Number(a / b, u1.clone()))
                 }
                 _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
             },

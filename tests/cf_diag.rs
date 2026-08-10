@@ -138,6 +138,9 @@ fn diag_function() { diag("directives/function", 15); }
 #[test]
 fn diag_extend() { diag("directives/extend", 15); }
 
+#[test]
+fn diag_numbers() { diag("values/numbers", 20); }
+
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
