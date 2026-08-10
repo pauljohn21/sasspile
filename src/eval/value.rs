@@ -343,11 +343,7 @@ impl Evaluator {
                     .iter()
                     .map(|(k, v)| format!("{}: {}", Self::inspect_value(k), Self::inspect_value(v)))
                     .collect();
-                if pairs.len() == 1 {
-                    format!("({},)", parts.join(", "))
-                } else {
-                    format!("({})", parts.join(", "))
-                }
+                format!("({})", parts.join(", "))
             }
             Value::String(s, quoted) => {
                 if *quoted {
