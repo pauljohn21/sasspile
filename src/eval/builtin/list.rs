@@ -21,12 +21,12 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 let actual = if idx > 0 {
                     (idx as usize).saturating_sub(1)
                 } else if idx < 0 {
-                    ((len + idx) as usize).saturating_sub(1)
+                    (len + idx) as usize
                 } else {
-                    return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into()));
+                    return Err(SassError::Eval("nth 索引 0 無効（1 から開始）".into()));
                 };
                 Ok(Some(es.get(actual).cloned().ok_or_else(|| {
-                    SassError::Eval(format!("nth 索引 {idx} 超出范围"))
+                    SassError::Eval(format!("nth 索引 {idx} 超出範囲"))
                 })?))
             }
             [Value::Map(pairs), Value::Number(n, _)] => {
@@ -35,9 +35,9 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 let actual = if idx > 0 {
                     (idx as usize).saturating_sub(1)
                 } else if idx < 0 {
-                    ((len + idx) as usize).saturating_sub(1)
+                    (len + idx) as usize
                 } else {
-                    return Err(SassError::Eval("nth 索引 0 无效".into()));
+                    return Err(SassError::Eval("nth 索引 0 无効".into()));
                 };
                 Ok(Some(
                     pairs
@@ -53,12 +53,12 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             _ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
         },
         "append" => match args {
-            [Value::List(items, sep, false), val] => {
+            [Value::List(items, sep, bracketed), val] => {
                 let mut new_items = items.clone();
                 new_items.push(val.clone());
-                Ok(Some(Value::List(new_items, sep.clone(), false)))
+                Ok(Some(Value::List(new_items, sep.clone(), *bracketed)))
             }
-            [Value::List(items, sep, false), val, Value::String(s, _)] => {
+            [Value::List(items, sep, bracketed), val, Value::String(s, _)] => {
                 let new_sep = match s.as_str() {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
@@ -67,7 +67,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 };
                 let mut new_items = items.clone();
                 new_items.push(val.clone());
-                Ok(Some(Value::List(new_items, new_sep, false)))
+                Ok(Some(Value::List(new_items, new_sep, *bracketed)))
             }
             [other, val] => {
                 let items = match other {
