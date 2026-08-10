@@ -1,41 +1,24 @@
-//! sass-spec 全量统计——支持文件路径解析（@import/@use/@forward）。
+//! sass-spec 全量统计——使用 manifest 跳过不支持的目录。
+//!
+//! manifest 在 `tests/spec_manifest.rs` 中定义 `SKIP_DIRS` 跳过列表。
+//! 支持新功能后，从 `SKIP_DIRS` 移除对应条目即可。
 
+mod spec_manifest;
+
+use spec_manifest::collect_hrx_files;
 use std::path::Path;
 use tracing::info;
 
-/// 递归遍历目录，收集所有 HRX 文件路径。
-fn collect_hrx_files(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                collect_hrx_files(&path, files);
-            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
-                if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 100_000 {
-                        files.push(path);
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// HRX 测试用例——包含所有文件和期望输出。
 struct HrxCase {
-    /// (相对路径, 内容) — 所有 .scss/.sass 文件
     files: Vec<(String, String)>,
-    /// input.scss 的路径（相对于 HRX 根）
     input_path: String,
-    /// 期望输出
     expected_output: String,
-    /// 是否期望错误
     expect_error: bool,
 }
 
 /// 解析 HRX——提取所有文件和测试用例。
 fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    // 第一步：收集所有 (path, content) 对
     let mut files: Vec<(String, String)> = Vec::new();
     let mut current_path = String::new();
     let mut current_content = String::new();
@@ -56,7 +39,6 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
         files.push((current_path, current_content));
     }
 
-    // 第二步：为每个 input.scss 构建测试用例
     let mut cases = Vec::new();
     for (path, _input) in &files {
         if path.ends_with("input.scss") {
@@ -71,7 +53,6 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
                 .unwrap_or_default();
             let expect_error = files.iter().any(|(p, _)| p == &error_path);
 
-            // 收集所有 .scss/.css 文件（排除 sass/ 变体）
             let case_files: Vec<(String, String)> = files
                 .iter()
                 .filter(|(p, _)| {
@@ -94,21 +75,18 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
 /// 运行单个测试用例——写入临时目录并用 compile_file 编译。
 fn run_case(case: &HrxCase) -> bool {
     if case.expected_output.is_empty() && !case.expect_error {
-        return true; // 跳过
+        return true;
     }
 
-    // 输入大小限制
     let total_size: usize = case.files.iter().map(|(_, c)| c.len()).sum();
-    if total_size > 50000 {
+    if total_size > 50_000 {
         return false;
     }
 
-    // 创建临时目录
     let tmp_dir = std::env::temp_dir().join(format!("sass-spec-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
 
-    // 写入所有文件
     for (path, content) in &case.files {
         let file_path = tmp_dir.join(path);
         if let Some(parent) = file_path.parent() {
@@ -117,11 +95,8 @@ fn run_case(case: &HrxCase) -> bool {
         std::fs::write(&file_path, content).ok();
     }
 
-    // 编译 input.scss
     let input_file = tmp_dir.join(&case.input_path);
     let result = sasspile::compile_file(&input_file, sasspile::OutputStyle::Expanded);
-
-    // 清理
     let _ = std::fs::remove_dir_all(&tmp_dir);
 
     if case.expect_error {
@@ -134,34 +109,59 @@ fn run_case(case: &HrxCase) -> bool {
     }
 }
 
+/// 按 spec 一级目录运行并统计。
+fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize) {
+    let dir = spec_root.join(dir_name);
+    if !dir.exists() {
+        return (0, 0, 0, 0);
+    }
+
+    // 使用 manifest 的 collect_hrx_files（自动跳过 SKIP_DIRS）
+    let (files, skipped) = collect_hrx_files(&dir);
+
+    let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
+    for file in &files {
+        if let Ok(content) = std::fs::read_to_string(file) {
+            for case in &parse_hrx(&content) {
+                cases += 1;
+                if case.expected_output.is_empty() && !case.expect_error {
+                    skip += 1;
+                    continue;
+                }
+                if run_case(case) {
+                    pass += 1;
+                } else {
+                    fail += 1;
+                }
+            }
+        }
+    }
+
+    let evaluated = cases - skip;
+    let pct = if evaluated > 0 {
+        pass * 100 / evaluated
+    } else {
+        0
+    };
+    info!(
+        dir = dir_name,
+        pass = pass,
+        fail = fail,
+        skip = skip,
+        skipped_dirs = skipped,
+        total = cases,
+        pct = pct,
+        "sass-spec 目录"
+    );
+    (pass, fail, skip, cases)
+}
+
 #[test]
 fn test_import_use_forward() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
     for subdir in &["directives/import", "directives/use", "directives/forward"] {
-        let dir = spec_root.join(subdir);
-        if !dir.exists() {
-            continue;
-        }
-        let mut files = Vec::new();
-        collect_hrx_files(&dir, &mut files);
-        let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
-        for file in &files {
-            if let Ok(content) = std::fs::read_to_string(file) {
-                for case in &parse_hrx(&content) {
-                    cases += 1;
-                    if case.expected_output.is_empty() && !case.expect_error {
-                        skip += 1;
-                        continue;
-                    }
-                    if run_case(case) {
-                        pass += 1;
-                    } else {
-                        fail += 1;
-                    }
-                }
-            }
-        }
+        let (pass, fail, skip, cases) = run_spec_dir(&spec_root, subdir);
         let evaluated = cases - skip;
         let pct = if evaluated > 0 {
             pass * 100 / evaluated
@@ -175,7 +175,7 @@ fn test_import_use_forward() {
             skip = skip,
             total = cases,
             pct = pct,
-            "sass-spec 子目录"
+            "import/use/forward"
         );
     }
 }
@@ -185,97 +185,27 @@ fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
 
-    let subdirs = [
+    // 所有 spec 一级目录（manifest 自动跳过不支持的功能）
+    let dirs = [
         "variables",
-        "values/numbers",
-        "values/colors",
-        "values/lists",
-        "values/maps",
+        "values",
         "css",
         "operators",
         "expressions",
-        "directives/if",
-        "directives/for",
-        "directives/each",
-        "directives/while",
-        "directives/mixin",
-        "directives/function",
-        "directives/use",
-        "directives/forward",
-        "directives/import",
-        "directives/extend",
-        "directives/at_root",
-        "directives/media",
-        "directives/supports",
-        "core_functions/math",
-        "core_functions/string",
-        "core_functions/list",
-        "core_functions/map",
-        "core_functions/color",
-        "core_functions/meta",
-        "core_functions/selector",
+        "directives",
+        "core_functions",
         "parser",
-        "non_conformant",
-        "libsass",
-        "libsass-closed-issues",
         "callable",
     ];
 
-    let mut total_pass = 0usize;
-    let mut total_fail = 0usize;
-    let mut total_skip = 0usize;
-    let mut total_cases = 0usize;
+    let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
 
-    for subdir in &subdirs {
-        let dir = spec_root.join(subdir);
-        if !dir.exists() {
-            continue;
-        }
-
-        let mut files = Vec::new();
-        collect_hrx_files(&dir, &mut files);
-
-        let mut pass = 0usize;
-        let mut fail = 0usize;
-        let mut skip = 0usize;
-        let mut cases = 0usize;
-
-        for file in &files {
-            if let Ok(content) = std::fs::read_to_string(file) {
-                for case in &parse_hrx(&content) {
-                    cases += 1;
-                    if case.expected_output.is_empty() && !case.expect_error {
-                        skip += 1;
-                        continue;
-                    }
-                    if run_case(case) {
-                        pass += 1;
-                    } else {
-                        fail += 1;
-                    }
-                }
-            }
-        }
-
+    for dir in &dirs {
+        let (pass, fail, skip, cases) = run_spec_dir(&spec_root, dir);
         total_pass += pass;
         total_fail += fail;
         total_skip += skip;
         total_cases += cases;
-        let evaluated = cases - skip;
-        let pct = if evaluated > 0 {
-            pass * 100 / evaluated
-        } else {
-            0
-        };
-        info!(
-            subdir = subdir,
-            pass = pass,
-            fail = fail,
-            skip = skip,
-            total = cases,
-            pct = pct,
-            "sass-spec 子目录"
-        );
     }
 
     let evaluated = total_cases - total_skip;
@@ -291,6 +221,6 @@ fn test_sass_spec_full_stats() {
         total = total_cases,
         evaluated = evaluated,
         pct = overall_pct,
-        "sass-spec 全量统计"
+        "sass-spec 全量统计（已跳过不支持的目录）"
     );
 }
