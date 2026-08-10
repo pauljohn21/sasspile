@@ -145,15 +145,16 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             _ => Err(SassError::Eval("index 需要 2 个参数".into())),
         },
         "list-separator" | "separator" => match args {
-            [Value::List(_, Separator::Comma, false)] => {
+            [Value::List(_, Separator::Comma, _)] => {
                 Ok(Some(Value::String("comma".into(), false)))
             }
-            [Value::List(_, Separator::Space, false)] => {
+            [Value::List(_, Separator::Space, _)] => {
                 Ok(Some(Value::String("space".into(), false)))
             }
-            [Value::List(_, Separator::Slash, false)] => {
+            [Value::List(_, Separator::Slash, _)] => {
                 Ok(Some(Value::String("slash".into(), false)))
             }
+            [Value::Map(_)] => Ok(Some(Value::String("comma".into(), false))),
             _ => Ok(Some(Value::String("space".into(), false))),
         },
         "set-nth" => match args {
