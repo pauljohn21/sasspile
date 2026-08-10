@@ -1,8 +1,6 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
-use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
 
 impl Evaluator {
     pub(crate) fn eval_include(
@@ -60,7 +58,6 @@ impl Evaluator {
                     param.name.clone(),
                     Value::List(rest, Separator::Comma, false),
                 );
-                pos_idx = positional.len();
                 break;
             }
             // 优先用关键字参数

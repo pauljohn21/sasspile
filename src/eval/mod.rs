@@ -5,15 +5,15 @@ use crate::error::{Result, SassError};
 use crate::lex::Lexer;
 use crate::lex::token::Token;
 use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
+use tracing::{instrument, warn};
 
 use im::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 /// 模块导出——加载的文件模块的成员。
 #[derive(Debug, Clone, Default)]
-struct ModuleExports {
+pub(crate) struct ModuleExports {
     vars: HashMap<String, Value>,
     mixins: HashMap<String, MixinDef>,
     functions: HashMap<String, FunctionDef>,
@@ -50,14 +50,14 @@ pub struct Env {
 
 /// mixin 定义存储。
 #[derive(Debug, Clone)]
-struct MixinDef {
+pub(crate) struct MixinDef {
     params: Vec<Param>,
     body: Vec<Node>,
 }
 
 /// 函数定义存储。
 #[derive(Debug, Clone)]
-struct FunctionDef {
+pub(crate) struct FunctionDef {
     params: Vec<Param>,
     body: Vec<Node>,
 }
@@ -83,20 +83,20 @@ impl Env {
     pub fn has_var(&self, name: &str) -> bool {
         self.vars.contains_key(name)
     }
-    pub fn define_mixin(&self, name: String, def: MixinDef) -> Self {
+    pub(crate) fn define_mixin(&self, name: String, def: MixinDef) -> Self {
         let mut new = self.clone();
         new.mixins.insert(name, def);
         new
     }
-    pub fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
+    pub(crate) fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
         self.mixins.get(name)
     }
-    pub fn define_function(&self, name: String, def: FunctionDef) -> Self {
+    pub(crate) fn define_function(&self, name: String, def: FunctionDef) -> Self {
         let mut new = self.clone();
         new.functions.insert(name, def);
         new
     }
-    pub fn get_function(&self, name: &str) -> Option<&FunctionDef> {
+    pub(crate) fn get_function(&self, name: &str) -> Option<&FunctionDef> {
         self.functions.get(name)
     }
     /// 设置 @content 内容块。
@@ -126,13 +126,13 @@ impl Env {
         self.builtin_modules.iter().any(|m| m == name)
     }
     /// 添加命名空间模块。
-    pub fn add_namespace(&self, ns: String, exports: ModuleExports) -> Self {
+    pub(crate) fn add_namespace(&self, ns: String, exports: ModuleExports) -> Self {
         let mut new = self.clone();
         new.namespaces.insert(ns, Rc::new(exports));
         new
     }
     /// 获取命名空间模块。
-    pub fn get_namespace(&self, ns: &str) -> Option<&ModuleExports> {
+    pub(crate) fn get_namespace(&self, ns: &str) -> Option<&ModuleExports> {
         self.namespaces.get(ns).map(|rc| rc.as_ref())
     }
     /// 设置基础路径。

@@ -2,8 +2,7 @@ use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
-use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
+use tracing::{instrument, warn};
 
 impl Evaluator {
     pub(crate) fn eval_variable(

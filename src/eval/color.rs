@@ -1,7 +1,5 @@
 use super::*;
 use crate::error::Result;
-use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
 
 impl Evaluator {
     pub(crate) fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Color {

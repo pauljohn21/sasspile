@@ -1,8 +1,6 @@
 use super::*;
 use crate::error::{Result, SassError};
-use crate::parse::ast::*;
 use std::path::{Path, PathBuf};
-use tracing::{instrument, trace, warn};
 
 impl Evaluator {
     pub(crate) fn resolve_file(base: Option<&PathBuf>, url: &str) -> Option<PathBuf> {

@@ -6,7 +6,6 @@ use super::Parser;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
-use tracing::{instrument, trace, warn};
 
 impl<'tok> Parser<'tok> {
     // —— @规则解析 ——

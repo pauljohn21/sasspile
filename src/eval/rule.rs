@@ -1,8 +1,6 @@
 use super::*;
 use crate::css::node::CssNode;
-use crate::error::{Result, SassError};
-use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
+use crate::error::Result;
 
 impl Evaluator {
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。

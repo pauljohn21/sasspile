@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_compile_use_file() {
-        use std::io::Write;
+        
         let dir = std::env::temp_dir().join("sasspile_test_use");
         std::fs::create_dir_all(&dir).unwrap();
         // 创建 _config.scss
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_compile_use_star() {
-        use std::io::Write;
+        
         let dir = std::env::temp_dir().join("sasspile_test_star");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("_vars.scss"), "$w: 100px;\n").unwrap();

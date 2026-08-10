@@ -22,6 +22,7 @@ enum FailOracle<'a> {
     /// 错误模式：编译仍然报错。
     Error,
     /// 输出保持模式：输出与原始（错误）输出相同。
+    #[allow(dead_code)]
     OutputPreserve { original_output: &'a str },
 }
 

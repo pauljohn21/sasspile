@@ -8,10 +8,7 @@ pub mod list;
 pub mod selector;
 
 use super::*;
-use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
-use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
 
 impl Evaluator {
     pub(crate) fn call_builtin(name: &str, args: &[Value], env: &Env) -> Result<Value> {

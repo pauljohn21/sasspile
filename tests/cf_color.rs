@@ -77,7 +77,7 @@ fn color_error_patterns() {
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
             let stem = file.file_stem().unwrap().to_string_lossy().to_string();
-            for (name, input, expected) in &parse_hrx(&content) {
+            for (_name, input, expected) in &parse_hrx(&content) {
                 match sasspile::compile_expanded(input) {
                     Ok(actual) => {
                         if actual.trim() == expected.trim() {
@@ -86,7 +86,7 @@ fn color_error_patterns() {
                             fail += 1;
                             let a = actual.trim();
                             let e = expected.trim();
-                            let key = if a.is_empty() {
+                            let _key = if a.is_empty() {
                                 "empty".to_string()
                             } else if a.lines().next() != e.lines().next() {
                                 "first_line".to_string()

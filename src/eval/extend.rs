@@ -1,6 +1,5 @@
 use super::*;
 use crate::css::node::CssNode;
-use tracing::instrument;
 
 impl Evaluator {
     pub(crate) fn apply_extends(nodes: &mut [CssNode], extends: &[(String, String)]) {

@@ -1,8 +1,6 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
-use crate::parse::ast::*;
-use tracing::{instrument, trace, warn};
 
 impl Evaluator {
     pub(crate) fn eval_if(

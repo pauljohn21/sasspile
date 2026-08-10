@@ -252,7 +252,7 @@ impl std::fmt::Display for Value {
                 if n.is_nan() {
                     return write!(f, "calc(NaN)");
                 }
-                if (n.fract() == 0.0) {
+                if n.fract() == 0.0 {
                     write!(f, "{}", *n as i64)
                 } else {
                     write!(f, "{n}")
@@ -265,7 +265,7 @@ impl std::fmt::Display for Value {
                 if n.is_nan() {
                     return write!(f, "calc(NaN * 1{unit})");
                 }
-                if (n.fract() == 0.0) {
+                if n.fract() == 0.0 {
                     write!(f, "{}{unit}", *n as i64)
                 } else {
                     write!(f, "{n}{unit}")

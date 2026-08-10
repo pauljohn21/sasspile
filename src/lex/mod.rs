@@ -138,6 +138,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// 扫描 `#{...}` 插值——递归匹配大括号。
+    #[allow(dead_code)]
     fn scan_interp(&mut self) -> Result<Token> {
         self.next_char(); // 消费 #
         self.next_char(); // 消费 {

@@ -6,7 +6,7 @@ mod ast_impl;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use ast::*;
-use tracing::{instrument, trace, warn};
+use tracing::warn;
 
 /// 语法分析器。
 pub struct Parser<'tok> {
@@ -38,6 +38,7 @@ impl<'tok> Parser<'tok> {
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
     }
+    #[allow(dead_code)]
     fn peek_n(&self, n: usize) -> Option<&Token> {
         self.tokens.get(self.pos + n)
     }

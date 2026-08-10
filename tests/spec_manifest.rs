@@ -91,12 +91,14 @@ fn collect_recursive(
 }
 
 /// 递归收集所有 HRX 文件（含跳过的），用于 manifest 统计。
+#[allow(dead_code)]
 pub fn collect_all_hrx(spec_root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_all_recursive(spec_root, &mut files);
     files
 }
 
+#[allow(dead_code)]
 fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -115,6 +117,7 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
 }
 
 /// 按一级目录统计 HRX 文件分布。
+#[allow(dead_code)]
 pub fn stats_by_dir(spec_root: &Path) -> Vec<(String, usize)> {
     let all = collect_all_hrx(spec_root);
     let mut counts: std::collections::BTreeMap<String, usize> =
