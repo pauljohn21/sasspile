@@ -381,3 +381,92 @@ Value::String("b".into(), false),
         assert_eq!(c.a, 0.5);
     }
 }
+
+/// AST 节点序列化——用于最小化工具将 AST 转回 SCSS 源码。
+impl Node {
+    /// 将 AST 节点序列化回 SCSS 源码——用于最小化工具。
+    pub fn to_scss(&self, indent: usize) -> String {
+        let pad = "  ".repeat(indent);
+        match self {
+            Node::Rule { selector, body } => {
+                let body: String = body.iter()
+                    .map(|n| n.to_scss(indent + 1))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if body.is_empty() {
+                    format!("{pad}{selector} {{}}")
+                } else {
+                    format!("{pad}{selector} {{\n{body}\n{pad}}}")
+                }
+            }
+            Node::Decl { property, value, important } => {
+                let imp = if *important { " !important" } else { "" };
+                format!("{pad}{property}: {value}{imp};")
+            }
+            Node::Variable { name, value, flags } => {
+                let mut s = format!("{pad}${name}: {value}");
+                if flags.default { s.push_str(" !default"); }
+                if flags.global { s.push_str(" !global"); }
+                s.push(';');
+                s
+            }
+            Node::Comment(text, silent) => {
+                if *silent { format!("{pad}// {text}") }
+                else { format!("{pad}/* {text} */") }
+            }
+            // —— 以下变体在任务 3 实现 ——
+            _ => format!("{pad}/* TODO: to_scss for this variant */"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod to_scss_tests {
+    use super::*;
+
+    #[test]
+    fn test_rule_to_scss() {
+        let node = Node::Rule {
+            selector: "a".into(),
+            body: vec![Node::Decl {
+                property: "color".into(),
+                value: Value::String("red".into(), false),
+                important: false,
+            }],
+        };
+        let scss = node.to_scss(0);
+        assert!(scss.contains("a {"));
+        assert!(scss.contains("color: red;"));
+        assert!(scss.contains("}"));
+    }
+
+    #[test]
+    fn test_decl_to_scss() {
+        let node = Node::Decl {
+            property: "width".into(),
+            value: Value::Number(100.0, Some("px".into())),
+            important: true,
+        };
+        let scss = node.to_scss(0);
+        assert_eq!(scss, "width: 100px !important;");
+    }
+
+    #[test]
+    fn test_variable_to_scss() {
+        let node = Node::Variable {
+            name: "color".into(),
+            value: Value::String("blue".into(), false),
+            flags: VarFlags { default: true, global: false },
+        };
+        let scss = node.to_scss(0);
+        assert_eq!(scss, "$color: blue !default;");
+    }
+
+    #[test]
+    fn test_comment_to_scss() {
+        let silent = Node::Comment("hello".into(), true);
+        let loud = Node::Comment("world".into(), false);
+        assert_eq!(silent.to_scss(0), "// hello");
+        assert_eq!(loud.to_scss(0), "/* world */");
+    }
+}
