@@ -587,10 +587,13 @@ Ok(s.trim().to_string())
         while let Some(t) = self.peek() {
             match t {
                 Token::LBrace | Token::Semicolon | Token::Eof => break,
+                Token::Comment(_, _) => { self.advance(); } // 跳过注释
                 Token::Whitespace => { s.push(' '); self.advance(); }
                 _ => { s.push_str(&t.to_string()); self.advance(); }
             }
         }
+        // 标准化冒号周围空白
+        let s = s.replace(" : ", ": ").replace(":  ", ": ");
         Ok(s.trim().to_string())
     }
 

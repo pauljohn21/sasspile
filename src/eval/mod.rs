@@ -707,7 +707,12 @@ Ok((vec![], env.clone()))
                 }
                 // 尝试求值表达式
                 if let Ok(val) = Self::eval_simple_expr(&expr, env) {
-                    result.push_str(&val.to_string());
+                    // 插值上下文中字符串去引号
+                    let s = match &val {
+                        Value::String(s, _) => s.clone(),
+                        _ => val.to_string(),
+                    };
+                    result.push_str(&s);
                 } else {
                     result.push_str(&expr);
                 }
