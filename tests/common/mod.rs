@@ -5,9 +5,19 @@
 /// CSS diff 行类型。
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffLine {
-    Changed { line: usize, expected: String, actual: String },
-    ExtraExpected { line: usize, content: String },
-    ExtraActual { line: usize, content: String },
+    Changed {
+        line: usize,
+        expected: String,
+        actual: String,
+    },
+    ExtraExpected {
+        line: usize,
+        content: String,
+    },
+    ExtraActual {
+        line: usize,
+        content: String,
+    },
 }
 
 /// CSS diff 结果。
@@ -19,24 +29,45 @@ pub struct DiffResult {
 impl DiffResult {
     /// 分类错误模式——用于统计。
     pub fn classify(&self) -> &'static str {
-        if self.lines.is_empty() { return "identical"; }
-        let has_missing = self.lines.iter().any(|l| matches!(l, DiffLine::ExtraExpected { .. }));
-        let has_extra = self.lines.iter().any(|l| matches!(l, DiffLine::ExtraActual { .. }));
-        if has_missing && !has_extra { "missing_output" }
-        else if has_extra && !has_missing { "extra_output" }
-        else { "content_diff" }
+        if self.lines.is_empty() {
+            return "identical";
+        }
+        let has_missing = self
+            .lines
+            .iter()
+            .any(|l| matches!(l, DiffLine::ExtraExpected { .. }));
+        let has_extra = self
+            .lines
+            .iter()
+            .any(|l| matches!(l, DiffLine::ExtraActual { .. }));
+        if has_missing && !has_extra {
+            "missing_output"
+        } else if has_extra && !has_missing {
+            "extra_output"
+        } else {
+            "content_diff"
+        }
     }
 
     /// 格式化为终端可读文本。
     pub fn format_terminal(&self) -> String {
-        self.lines.iter().map(|l| match l {
-            DiffLine::Changed { line, expected, actual } =>
-                format!("  L{line}: exp='{expected}' act='{actual}'"),
-            DiffLine::ExtraExpected { line, content } =>
-                format!("  L{line}: exp='{content}' act=(missing)"),
-            DiffLine::ExtraActual { line, content } =>
-                format!("  L{line}: exp=(missing) act='{content}'"),
-        }).collect::<Vec<_>>().join("\n")
+        self.lines
+            .iter()
+            .map(|l| match l {
+                DiffLine::Changed {
+                    line,
+                    expected,
+                    actual,
+                } => format!("  L{line}: exp='{expected}' act='{actual}'"),
+                DiffLine::ExtraExpected { line, content } => {
+                    format!("  L{line}: exp='{content}' act=(missing)")
+                }
+                DiffLine::ExtraActual { line, content } => {
+                    format!("  L{line}: exp=(missing) act='{content}'")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -126,8 +157,10 @@ mod tests {
     fn test_diff_changed_line() {
         let result = diff_css("a { color: red; }", "a { color: blue; }");
         assert_eq!(result.lines.len(), 1);
-        assert!(matches!(&result.lines[0], DiffLine::Changed { line: 1, expected, actual }
-            if expected == "a { color: red; }" && actual == "a { color: blue; }"));
+        assert!(
+            matches!(&result.lines[0], DiffLine::Changed { line: 1, expected, actual }
+            if expected == "a { color: red; }" && actual == "a { color: blue; }")
+        );
         assert_eq!(result.classify(), "content_diff");
     }
 
@@ -135,7 +168,10 @@ mod tests {
     fn test_diff_missing_output() {
         let result = diff_css("a { color: red; }\nb { color: blue; }", "a { color: red; }");
         assert_eq!(result.lines.len(), 1);
-        assert!(matches!(&result.lines[0], DiffLine::ExtraExpected { line: 2, .. }));
+        assert!(matches!(
+            &result.lines[0],
+            DiffLine::ExtraExpected { line: 2, .. }
+        ));
         assert_eq!(result.classify(), "missing_output");
     }
 
@@ -143,7 +179,10 @@ mod tests {
     fn test_diff_extra_output() {
         let result = diff_css("a { color: red; }", "a { color: red; }\nb { color: blue; }");
         assert_eq!(result.lines.len(), 1);
-        assert!(matches!(&result.lines[0], DiffLine::ExtraActual { line: 2, .. }));
+        assert!(matches!(
+            &result.lines[0],
+            DiffLine::ExtraActual { line: 2, .. }
+        ));
         assert_eq!(result.classify(), "extra_output");
     }
 

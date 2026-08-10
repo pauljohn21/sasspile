@@ -95,7 +95,10 @@ impl<'src> Lexer<'src> {
             }
         }
         // 单位
-        if self.source[start..self.pos].bytes().any(|b| b.is_ascii_digit()) {
+        if self.source[start..self.pos]
+            .bytes()
+            .any(|b| b.is_ascii_digit())
+        {
             while let Some(c) = self.peek() {
                 if c.is_ascii_alphabetic() || c == '%' {
                     self.next_char();
@@ -273,7 +276,9 @@ impl<'src> Lexer<'src> {
             }
             self.next_char();
         }
-        let text = self.source[start..self.pos.saturating_sub(2)].trim().to_string();
+        let text = self.source[start..self.pos.saturating_sub(2)]
+            .trim()
+            .to_string();
         Token::Comment(text, false)
     }
 }
@@ -294,22 +299,70 @@ impl<'src> Iterator for Lexer<'src> {
             // 数字
             '0'..='9' => self.scan_number(),
             // 符号
-            '{' => { self.next_char(); Token::LBrace }
-            '}' => { self.next_char(); Token::RBrace }
-            '(' => { self.next_char(); Token::LParen }
-            ')' => { self.next_char(); Token::RParen }
-            '[' => { self.next_char(); Token::LBracket }
-            ']' => { self.next_char(); Token::RBracket }
-            ':' => { self.next_char(); Token::Colon }
-            ';' => { self.next_char(); Token::Semicolon }
-            ',' => { self.next_char(); Token::Comma }
-            '+' => { self.next_char(); Token::Plus }
-            '*' => { self.next_char(); Token::Star }
-            '%' => { self.next_char(); Token::Percent }
-        '&' => { self.next_char(); Token::Amp }
-        '^' => { self.next_char(); Token::Caret }
-        '~' => { self.next_char(); Token::Tilde }
-        '|' => { self.next_char(); Token::Pipe }
+            '{' => {
+                self.next_char();
+                Token::LBrace
+            }
+            '}' => {
+                self.next_char();
+                Token::RBrace
+            }
+            '(' => {
+                self.next_char();
+                Token::LParen
+            }
+            ')' => {
+                self.next_char();
+                Token::RParen
+            }
+            '[' => {
+                self.next_char();
+                Token::LBracket
+            }
+            ']' => {
+                self.next_char();
+                Token::RBracket
+            }
+            ':' => {
+                self.next_char();
+                Token::Colon
+            }
+            ';' => {
+                self.next_char();
+                Token::Semicolon
+            }
+            ',' => {
+                self.next_char();
+                Token::Comma
+            }
+            '+' => {
+                self.next_char();
+                Token::Plus
+            }
+            '*' => {
+                self.next_char();
+                Token::Star
+            }
+            '%' => {
+                self.next_char();
+                Token::Percent
+            }
+            '&' => {
+                self.next_char();
+                Token::Amp
+            }
+            '^' => {
+                self.next_char();
+                Token::Caret
+            }
+            '~' => {
+                self.next_char();
+                Token::Tilde
+            }
+            '|' => {
+                self.next_char();
+                Token::Pipe
+            }
             // 点——可能是小数开始或 Dot
             '.' => {
                 if self.peek2().is_some_and(|c| c.is_ascii_digit()) {
@@ -325,7 +378,10 @@ impl<'src> Iterator for Lexer<'src> {
                 }
             }
             // 减号
-            '-' => { self.next_char(); Token::Minus }
+            '-' => {
+                self.next_char();
+                Token::Minus
+            }
             // 斜杠——可能是注释或除法
             '/' => {
                 self.next_char();
@@ -338,7 +394,7 @@ impl<'src> Iterator for Lexer<'src> {
                         self.next_char();
                         self.scan_block_comment()
                     }
-                    _ => Token::Slash
+                    _ => Token::Slash,
                 }
             }
             // 感叹号
@@ -401,4 +457,3 @@ impl<'src> Iterator for Lexer<'src> {
         Some(Ok(token))
     }
 }
-

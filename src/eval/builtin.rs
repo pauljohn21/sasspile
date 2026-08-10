@@ -3,6 +3,7 @@
 //! `call_builtin` 按 match 分派到各函数组。
 //! list 和 selector 函数已拆分到子模块。
 
+pub mod color;
 pub mod list;
 pub mod selector;
 
@@ -34,14 +35,26 @@ impl Evaluator {
                 [Value::Number(n, u)] => Ok(Value::Number(n.round(), u.clone())),
                 _ => Err(SassError::Eval("round 需要 1 个数字参数".into())),
             },
-            "min" => args.iter().try_fold(Value::Number(f64::INFINITY, None), |acc, v| match (acc, v) {
-                (Value::Number(a, _), Value::Number(b, u)) => Ok(Value::Number(a.min(*b), u.clone())),
-                _ => Err(SassError::Eval("min 需要数字参数".into())),
-            }),
-            "max" => args.iter().try_fold(Value::Number(f64::NEG_INFINITY, None), |acc, v| match (acc, v) {
-                (Value::Number(a, _), Value::Number(b, u)) => Ok(Value::Number(a.max(*b), u.clone())),
-                _ => Err(SassError::Eval("max 需要数字参数".into())),
-            }),
+            "min" => args
+                .iter()
+                .try_fold(Value::Number(f64::INFINITY, None), |acc, v| {
+                    match (acc, v) {
+                        (Value::Number(a, _), Value::Number(b, u)) => {
+                            Ok(Value::Number(a.min(*b), u.clone()))
+                        }
+                        _ => Err(SassError::Eval("min 需要数字参数".into())),
+                    }
+                }),
+            "max" => args
+                .iter()
+                .try_fold(Value::Number(f64::NEG_INFINITY, None), |acc, v| {
+                    match (acc, v) {
+                        (Value::Number(a, _), Value::Number(b, u)) => {
+                            Ok(Value::Number(a.max(*b), u.clone()))
+                        }
+                        _ => Err(SassError::Eval("max 需要数字参数".into())),
+                    }
+                }),
             "percentage" => match args {
                 [Value::Number(n, _)] => Ok(Value::Number(n * 100.0, Some("%".into()))),
                 _ => Err(SassError::Eval("percentage 需要 1 个数字参数".into())),
@@ -73,35 +86,46 @@ impl Evaluator {
             "darken" => Self::builtin_darken(args),
             "lighten" => Self::builtin_lighten(args),
             "mix" => Self::builtin_mix(args),
-            "invert" => match args {
-                [Value::Color(c)] => Ok(Value::Color(Color::rgb(255 - c.r, 255 - c.g, 255 - c.b))),
-                _ => Err(SassError::Eval("invert 需要 1 个颜色参数".into())),
-            },
-            "grayscale" => match args {
-                [Value::Color(c)] => {
-                    let avg = ((c.r as u16 + c.g as u16 + c.b as u16) / 3) as u8;
-                    Ok(Value::Color(Color::rgba(avg, avg, avg, c.a)))
+            // color 子模块分派 (invert/grayscale/color-channel/hwb/complement 等)
+            "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
+            | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue" | "saturate"
+            | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
+            | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness" => {
+                if let Some(v) = color::call(name, args)? {
+                    Ok(v)
+                } else {
+                    Err(SassError::UndefinedFunction(name.to_string()))
                 }
-                _ => Err(SassError::Eval("grayscale 需要 1 个颜色参数".into())),
-            },
+            }
             // map
             "map-get" => match args {
-                [Value::Map(pairs), key] => pairs.iter()
+                [Value::Map(pairs), key] => pairs
+                    .iter()
                     .find(|(k, _)| Self::values_eq(k, key))
                     .map(|(_, v)| v.clone())
                     .ok_or_else(|| SassError::Eval(format!("map-get: 键 {key} 不存在"))),
                 _ => Err(SassError::Eval("map-get 需要 (map, key) 参数".into())),
             },
             "map-keys" => match args {
-                [Value::Map(pairs)] => Ok(Value::List(pairs.iter().map(|(k, _)| k.clone()).collect(), Separator::Comma, false)),
+                [Value::Map(pairs)] => Ok(Value::List(
+                    pairs.iter().map(|(k, _)| k.clone()).collect(),
+                    Separator::Comma,
+                    false,
+                )),
                 _ => Err(SassError::Eval("map-keys 需要 1 个 map 参数".into())),
             },
             "map-values" => match args {
-                [Value::Map(pairs)] => Ok(Value::List(pairs.iter().map(|(_, v)| v.clone()).collect(), Separator::Comma, false)),
+                [Value::Map(pairs)] => Ok(Value::List(
+                    pairs.iter().map(|(_, v)| v.clone()).collect(),
+                    Separator::Comma,
+                    false,
+                )),
                 _ => Err(SassError::Eval("map-values 需要 1 个 map 参数".into())),
             },
             "map-has-key" => match args {
-                [Value::Map(pairs), key] => Ok(Value::Bool(pairs.iter().any(|(k, _)| Self::values_eq(k, key)))),
+                [Value::Map(pairs), key] => Ok(Value::Bool(
+                    pairs.iter().any(|(k, _)| Self::values_eq(k, key)),
+                )),
                 _ => Err(SassError::Eval("map-has-key 需要 (map, key) 参数".into())),
             },
             // meta
@@ -120,7 +144,11 @@ impl Evaluator {
                 _ => Err(SassError::Eval("inspect 需要 1 个参数".into())),
             },
             "if" => match args {
-                [cond, t, f] => Ok(if Self::is_truthy(cond) { t.clone() } else { f.clone() }),
+                [cond, t, f] => Ok(if Self::is_truthy(cond) {
+                    t.clone()
+                } else {
+                    f.clone()
+                }),
                 _ => Err(SassError::Eval("if 需要 3 个参数".into())),
             },
             // string (additional)
@@ -129,33 +157,53 @@ impl Evaluator {
                     let start = *start as isize;
                     let chars: Vec<char> = s.chars().collect();
                     let len = chars.len() as isize;
-                    let start_idx = if start < 0 { (len + start).max(0) as usize } else { (start - 1).max(0) as usize };
+                    let start_idx = if start < 0 {
+                        (len + start).max(0) as usize
+                    } else {
+                        (start - 1).max(0) as usize
+                    };
                     let result: String = chars[start_idx.min(len as usize)..].iter().collect();
                     Ok(Value::String(result, *q))
                 }
-                [Value::String(s, q), Value::Number(start, _), Value::Number(end, _)] => {
+                [
+                    Value::String(s, q),
+                    Value::Number(start, _),
+                    Value::Number(end, _),
+                ] => {
                     let start = *start as isize;
                     let end = *end as isize;
                     let chars: Vec<char> = s.chars().collect();
                     let len = chars.len() as isize;
-                    let start_idx = if start < 0 { (len + start).max(0) as usize } else { (start - 1).max(0) as usize };
-                    let end_idx = if end < 0 { (len + end + 1).max(0) as usize } else { end.min(len) as usize };
-                    let result: String = chars[start_idx.min(end_idx)..end_idx.min(len as usize)].iter().collect();
+                    let start_idx = if start < 0 {
+                        (len + start).max(0) as usize
+                    } else {
+                        (start - 1).max(0) as usize
+                    };
+                    let end_idx = if end < 0 {
+                        (len + end + 1).max(0) as usize
+                    } else {
+                        end.min(len) as usize
+                    };
+                    let result: String = chars[start_idx.min(end_idx)..end_idx.min(len as usize)]
+                        .iter()
+                        .collect();
                     Ok(Value::String(result, *q))
                 }
                 _ => Err(SassError::Eval("str-slice 需要 2-3 个参数".into())),
             },
             "str-index" => match args {
-                [Value::String(s, _), Value::String(needle, _)] => {
-                    match s.find(needle) {
-                        Some(pos) => Ok(Value::Number((s[..pos].chars().count() + 1) as f64, None)),
-                        None => Ok(Value::Null),
-                    }
-                }
+                [Value::String(s, _), Value::String(needle, _)] => match s.find(needle) {
+                    Some(pos) => Ok(Value::Number((s[..pos].chars().count() + 1) as f64, None)),
+                    None => Ok(Value::Null),
+                },
                 _ => Err(SassError::Eval("str-index 需要 2 个字符串参数".into())),
             },
             "str-insert" => match args {
-                [Value::String(s, q), Value::String(insert, _), Value::Number(idx, _)] => {
+                [
+                    Value::String(s, q),
+                    Value::String(insert, _),
+                    Value::Number(idx, _),
+                ] => {
                     let idx = *idx as usize;
                     let chars: Vec<char> = s.chars().collect();
                     let pos = idx.min(chars.len()).min(idx.saturating_sub(1));
@@ -169,27 +217,45 @@ impl Evaluator {
             "str-split" => match args {
                 [Value::String(s, _), Value::String(sep, _)] => {
                     let parts: Vec<Value> = if sep.is_empty() {
-                        s.chars().map(|c| Value::String(c.to_string(), false)).collect()
+                        s.chars()
+                            .map(|c| Value::String(c.to_string(), false))
+                            .collect()
                     } else {
-                        s.split(sep.as_str()).map(|p| Value::String(p.to_string(), false)).collect()
+                        s.split(sep.as_str())
+                            .map(|p| Value::String(p.to_string(), false))
+                            .collect()
                     };
                     Ok(Value::List(parts, Separator::Comma, false))
                 }
                 [Value::String(s, _)] => {
-                    let parts: Vec<Value> = s.chars().map(|c| Value::String(c.to_string(), false)).collect();
+                    let parts: Vec<Value> = s
+                        .chars()
+                        .map(|c| Value::String(c.to_string(), false))
+                        .collect();
                     Ok(Value::List(parts, Separator::Comma, false))
                 }
                 _ => Err(SassError::Eval("str-split 需要 1-2 个参数".into())),
             },
-            "unique-id" => Ok(Value::String(format!("id{}", std::time::SystemTime::now().elapsed().unwrap_or_default().as_nanos()), false)),
+            "unique-id" => Ok(Value::String(
+                format!(
+                    "id{}",
+                    std::time::SystemTime::now()
+                        .elapsed()
+                        .unwrap_or_default()
+                        .as_nanos()
+                ),
+                false,
+            )),
             // math (additional)
-"math.div" | "div" => match args {
-[Value::Number(a, u1), Value::Number(b, _)] => {
-if *b == 0.0 {
-if *a == 0.0 { return Ok(Value::Number(f64::NAN, u1.clone())); }
-return Ok(Value::Number(a / b, u1.clone()));
-}
-Ok(Value::Number(a / b, u1.clone()))
+            "math.div" | "div" => match args {
+                [Value::Number(a, u1), Value::Number(b, _)] => {
+                    if *b == 0.0 {
+                        if *a == 0.0 {
+                            return Ok(Value::Number(f64::NAN, u1.clone()));
+                        }
+                        return Ok(Value::Number(a / b, u1.clone()));
+                    }
+                    Ok(Value::Number(a / b, u1.clone()))
                 }
                 _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
             },
@@ -201,12 +267,24 @@ Ok(Value::Number(a / b, u1.clone()))
                 [Value::Number(n, _)] => Ok(Value::Number(n.sqrt(), None)),
                 _ => Err(SassError::Eval("sqrt 需要 1 个数字参数".into())),
             },
-            "sin" => match args { [Value::Number(n, _)] => Ok(Value::Number(n.sin(), None)), _ => Err(SassError::Eval("sin 需要 1 个参数".into())) },
-            "cos" => match args { [Value::Number(n, _)] => Ok(Value::Number(n.cos(), None)), _ => Err(SassError::Eval("cos 需要 1 个参数".into())) },
-            "tan" => match args { [Value::Number(n, _)] => Ok(Value::Number(n.tan(), None)), _ => Err(SassError::Eval("tan 需要 1 个参数".into())) },
+            "sin" => match args {
+                [Value::Number(n, _)] => Ok(Value::Number(n.sin(), None)),
+                _ => Err(SassError::Eval("sin 需要 1 个参数".into())),
+            },
+            "cos" => match args {
+                [Value::Number(n, _)] => Ok(Value::Number(n.cos(), None)),
+                _ => Err(SassError::Eval("cos 需要 1 个参数".into())),
+            },
+            "tan" => match args {
+                [Value::Number(n, _)] => Ok(Value::Number(n.tan(), None)),
+                _ => Err(SassError::Eval("tan 需要 1 个参数".into())),
+            },
             "random" => match args {
                 [] => Ok(Value::Number(Self::simple_random(), None)),
-                [Value::Number(n, _)] => Ok(Value::Number((Self::simple_random() * n).floor() + 1.0, None)),
+                [Value::Number(n, _)] => Ok(Value::Number(
+                    (Self::simple_random() * n).floor() + 1.0,
+                    None,
+                )),
                 _ => Err(SassError::Eval("random 需要 0-1 个参数".into())),
             },
             "unit" => match args {
@@ -221,69 +299,35 @@ Ok(Value::Number(a / b, u1.clone()))
             },
             "compatible" => match args {
                 [Value::Number(_, None), _] => Ok(Value::Bool(true)),
-                [Value::Number(_, Some(u1)), Value::Number(_, Some(u2))] => Ok(Value::Bool(u1 == u2)),
+                [Value::Number(_, Some(u1)), Value::Number(_, Some(u2))] => {
+                    Ok(Value::Bool(u1 == u2))
+                }
                 [Value::Number(_, Some(_)), Value::Number(_, None)] => Ok(Value::Bool(true)),
                 _ => Err(SassError::Eval("compatible 需要 2 个数字参数".into())),
-            },
-            // color (additional)
-            "color-channel" => match args {
-                [Value::Color(c), Value::String(ch, _)] => match ch.as_str() {
-                    "red" => Ok(Value::Number(c.r as f64, None)),
-                    "green" => Ok(Value::Number(c.g as f64, None)),
-                    "blue" => Ok(Value::Number(c.b as f64, None)),
-                    "alpha" => Ok(Value::Number(c.a as f64, None)),
-                    _ => Err(SassError::Eval(format!("未知颜色通道: {ch}"))),
-                }
-                _ => Err(SassError::Eval("color-channel 需要 (color, channel) 参数".into())),
-            },
-            "adjust-color" | "change-color" | "scale-color" => {
-                args.first().cloned().ok_or_else(|| SassError::Eval("颜色函数需要至少 1 个参数".into()))
-            }
-            "hwb" => match args {
-                [Value::Number(h, _), Value::Number(w, _), Value::Number(b, _)] => {
-                    Ok(Value::Color(Self::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, 1.0)))
-                }
-                [Value::Number(h, _), Value::Number(w, _), Value::Number(b, _), Value::Number(a, _)] => {
-                    Ok(Value::Color(Self::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, *a as f32)))
-                }
-                _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
-            }
-            "complement" => match args {
-                [Value::Color(c)] => Ok(Value::Color(Color::rgb(255 - c.r, 255 - c.g, 255 - c.b))),
-                _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
             },
             // map (additional)
             "map-merge" => match args {
                 [Value::Map(a), Value::Map(b)] => {
                     let mut merged = a.clone();
-                    for (k, v) in b { merged.push((k.clone(), v.clone())); }
+                    for (k, v) in b {
+                        merged.push((k.clone(), v.clone()));
+                    }
                     Ok(Value::Map(merged))
                 }
                 _ => Err(SassError::Eval("map-merge 需要 2 个 map 参数".into())),
             },
             "map-remove" => match args {
                 [Value::Map(pairs), keys @ ..] => {
-                    let filtered: Vec<(Value, Value)> = pairs.iter()
+                    let filtered: Vec<(Value, Value)> = pairs
+                        .iter()
                         .filter(|(k, _)| !keys.iter().any(|key| Self::values_eq(k, key)))
                         .cloned()
                         .collect();
                     Ok(Value::Map(filtered))
                 }
+                [] => Err(SassError::Eval("map-remove 需要至少 1 个参数".into())),
                 [other] => Ok(other.clone()),
                 _ => Err(SassError::Eval("map-remove 需要至少 1 个参数".into())),
-            },
-            "map-deep-remove" => match args {
-                [Value::Map(pairs), key @ ..] => {
-                    let keys: Vec<&Value> = key.iter().collect();
-                    if keys.is_empty() { return Ok(Value::Map(pairs.clone())); }
-                    let filtered: Vec<(Value, Value)> = pairs.iter()
-                        .filter(|(k, _)| !Self::values_eq(k, keys[0]))
-                        .cloned()
-                        .collect();
-                    Ok(Value::Map(filtered))
-                }
-                [other, ..] => Ok(other.clone()),
-                _ => Err(SassError::Eval("map-deep-remove 需要至少 1 个参数".into())),
             },
             "map-set" => match args {
                 [Value::Map(pairs), key, val] => {
@@ -295,8 +339,45 @@ Ok(Value::Number(a / b, u1.clone()))
                     }
                     Ok(Value::Map(result))
                 }
+                [Value::Null, key, val] => Ok(Value::Map(vec![(key.clone(), val.clone())])),
                 [other, _key, _val] => Ok(other.clone()),
                 _ => Err(SassError::Eval("map-set 需要 3 个参数".into())),
+            },
+            "map-deep-remove" => match args {
+                [Value::Map(pairs), key @ ..] => {
+                    let keys: Vec<&Value> = key.iter().collect();
+                    if keys.is_empty() {
+                        return Ok(Value::Map(pairs.clone()));
+                    }
+                    let target_key = keys[0];
+                    let remaining_keys = &keys[1..];
+                    let mut result: Vec<(Value, Value)> = Vec::new();
+                    for (k, v) in pairs.iter() {
+                        if Self::values_eq(k, target_key) {
+                            if remaining_keys.is_empty() {
+                                // 移除这个键
+                                continue;
+                            } else if let Value::Map(inner) = v {
+                                // 递归移除子 map 中的键
+                                let new_inner = Self::call_builtin(
+                                    "map-deep-remove",
+                                    &[Value::Map(inner.clone()), remaining_keys[0].clone()],
+                                    env,
+                                )?;
+                                result.push((k.clone(), new_inner));
+                            } else {
+                                // 不是 map，保留原样
+                                result.push((k.clone(), v.clone()));
+                            }
+                        } else {
+                            // 不匹配，保留原样
+                            result.push((k.clone(), v.clone()));
+                        }
+                    }
+                    Ok(Value::Map(result))
+                }
+                [other, ..] => Ok(other.clone()),
+                _ => Err(SassError::Eval("map-deep-remove 需要至少 1 个参数".into())),
             },
             // meta (additional)
             "mixin-exists" => Ok(Value::Bool(false)),
@@ -324,111 +405,21 @@ Ok(Value::Number(a / b, u1.clone()))
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
             },
-            // color (additional)
-            "hsl" => match args {
-                [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _)] => {
-                    Ok(Value::Color(Self::hsl_to_rgb(*h, *s / 100.0, *l / 100.0)))
-                }
-                [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _), Value::Number(a, _)] => {
-                    let mut c = Self::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                    c.a = *a as f32;
-                    Ok(Value::Color(c))
-                }
-                _ => Err(SassError::Eval("hsl 需要 3-4 个参数".into())),
-            },
-            "hsla" => match args {
-                [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _), Value::Number(a, _)] => {
-                    let mut c = Self::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                    c.a = *a as f32;
-                    Ok(Value::Color(c))
-                }
-                _ => Err(SassError::Eval("hsla 需要 4 个参数".into())),
-            },
-            "adjust-hue" => match args {
-                [Value::Color(c), Value::Number(deg, _)] => {
-                    let (h, s, l) = Self::rgb_to_hsl(c.r, c.g, c.b);
-                    let new_h = (h + *deg).rem_euclid(360.0);
-                    Ok(Value::Color(Self::hsl_to_rgb(new_h, s, l)))
-                }
-                _ => Err(SassError::Eval("adjust-hue 需要 (color, degrees) 参数".into())),
-            },
-            "saturate" => match args {
-                [Value::Color(c), Value::Number(amount, _)] => {
-                    let (h, s, l) = Self::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Value::Color(Self::hsl_to_rgb(h, (s + *amount / 100.0).min(1.0), l)))
-                }
-                [Value::Number(n, _)] => Ok(Value::String(format!("saturate({})", n), false)),
-                _ => Err(SassError::Eval("saturate 需要 (color, amount) 参数".into())),
-            },
-            "desaturate" => match args {
-                [Value::Color(c), Value::Number(amount, _)] => {
-                    let (h, s, l) = Self::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Value::Color(Self::hsl_to_rgb(h, (s - *amount / 100.0).max(0.0), l)))
-                }
-                _ => Err(SassError::Eval("desaturate 需要 (color, amount) 参数".into())),
-            },
-            "transparentize" | "fade-out" => match args {
-                [Value::Color(c), Value::Number(amount, _)] => {
-                    Ok(Value::Color(Color::rgba(c.r, c.g, c.b, (c.a - *amount as f32).max(0.0))))
-                }
-                _ => Err(SassError::Eval("transparentize 需要 (color, amount) 参数".into())),
-            },
-            "opacify" | "fade-in" => match args {
-                [Value::Color(c), Value::Number(amount, _)] => {
-                    Ok(Value::Color(Color::rgba(c.r, c.g, c.b, (c.a + *amount as f32).min(1.0))))
-                }
-                _ => Err(SassError::Eval("opacify 需要 (color, amount) 参数".into())),
-            },
-            "alpha" | "opacity" => match args {
-                [Value::Color(c)] => Ok(Value::Number(c.a as f64, None)),
-                _ => Err(SassError::Eval("alpha 需要 1 个颜色参数".into())),
-            },
-            "red" => match args {
-                [Value::Color(c)] => Ok(Value::Number(c.r as f64, None)),
-                _ => Err(SassError::Eval("red 需要 1 个颜色参数".into())),
-            },
-            "green" => match args {
-                [Value::Color(c)] => Ok(Value::Number(c.g as f64, None)),
-                _ => Err(SassError::Eval("green 需要 1 个颜色参数".into())),
-            },
-            "blue" => match args {
-                [Value::Color(c)] => Ok(Value::Number(c.b as f64, None)),
-                _ => Err(SassError::Eval("blue 需要 1 个颜色参数".into())),
-            },
-            "hue" => match args {
-                [Value::Color(c)] => {
-                    let (h, _, _) = Self::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Value::Number(h, Some("deg".into())))
-                }
-                _ => Err(SassError::Eval("hue 需要 1 个颜色参数".into())),
-            },
-            "saturation" => match args {
-                [Value::Color(c)] => {
-                    let (_, s, _) = Self::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Value::Number(s * 100.0, Some("%".into())))
-                }
-                _ => Err(SassError::Eval("saturation 需要 1 个颜色参数".into())),
-            },
-            "lightness" => match args {
-                [Value::Color(c)] => {
-                    let (_, _, l) = Self::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Value::Number(l * 100.0, Some("%".into())))
-                }
-                _ => Err(SassError::Eval("lightness 需要 1 个颜色参数".into())),
-            },
             // math (additional)
             "clamp" => match args {
-                [Value::Number(min, _), Value::Number(val, _), Value::Number(max, _)] => {
-                    Ok(Value::Number(val.max(*min).min(*max), None))
-                }
+                [
+                    Value::Number(min, _),
+                    Value::Number(val, _),
+                    Value::Number(max, _),
+                ] => Ok(Value::Number(val.max(*min).min(*max), None)),
                 _ => Err(SassError::Eval("clamp 需要 3 个数字参数".into())),
             },
-"comparable" => match args {
-[Value::Number(_, u1), Value::Number(_, u2)] => {
-Ok(Value::Bool(Self::units_compatible(u1.as_deref(), u2.as_deref())))
-}
-_ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
-},
+            "comparable" => match args {
+                [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
+                    Self::units_compatible(u1.as_deref(), u2.as_deref()),
+                )),
+                _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
+            },
             "unitless" => match args {
                 [Value::Number(_, None)] => Ok(Value::Bool(true)),
                 [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),
@@ -436,21 +427,35 @@ _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
             },
             // CSS 原生函数——原样保留
             "calc" | "env" | "var" => {
-                let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+                let arg_str = args
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 Ok(Value::Calc(format!("{name}({arg_str})")))
-            },
+            }
             // list 子模块分派
-            "length" | "list-length" | "nth" | "append" | "join" | "index"
-            | "list-separator" | "separator" | "set-nth" | "is-bracketed"
-            | "list-slash" | "zip" => {
-                if let Some(v) = list::call(name, args)? { Ok(v) }
-                else { Err(SassError::UndefinedFunction(name.to_string())) }
+            "length" | "list-length" | "nth" | "append" | "join" | "index" | "list-separator"
+            | "separator" | "set-nth" | "is-bracketed" | "list-slash" | "zip" => {
+                if let Some(v) = list::call(name, args)? {
+                    Ok(v)
+                } else {
+                    Err(SassError::UndefinedFunction(name.to_string()))
+                }
             }
             // selector 子模块分派
-            "selector-append" | "selector-nest" | "selector-is-super" | "selector-parse"
-            | "selector-simple-selectors" | "selector-unify" | "selector-extend" => {
-                if let Some(v) = selector::call(name, args)? { Ok(v) }
-                else { Err(SassError::UndefinedFunction(name.to_string())) }
+            "selector-append"
+            | "selector-nest"
+            | "selector-is-super"
+            | "selector-parse"
+            | "selector-simple-selectors"
+            | "selector-unify"
+            | "selector-extend" => {
+                if let Some(v) = selector::call(name, args)? {
+                    Ok(v)
+                } else {
+                    Err(SassError::UndefinedFunction(name.to_string()))
+                }
             }
             // not a function → 原样输出
             _ => Err(SassError::UndefinedFunction(name.to_string())),

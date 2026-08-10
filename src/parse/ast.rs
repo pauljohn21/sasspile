@@ -99,7 +99,7 @@ pub enum Node {
     Use {
         url: String,
         namespace: Option<String>,
-        star: bool,       // as *
+        star: bool,                   // as *
         config: Vec<(String, Value)>, // with ($x: val)
     },
     Forward {
@@ -207,7 +207,12 @@ pub struct Color {
 
 impl Default for Color {
     fn default() -> Self {
-        Self { r: 0, g: 0, b: 0, a: 1.0 }
+        Self {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 1.0,
+        }
     }
 }
 
@@ -240,24 +245,32 @@ pub struct Ast {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-Value::Number(n, None) => {
-if n.is_infinite() { return write!(f, "calc(infinity)"); }
-if n.is_nan() { return write!(f, "calc(NaN)"); }
-if (n.fract() == 0.0) {
-write!(f, "{}", *n as i64)
-} else {
-write!(f, "{n}")
-}
-}
-Value::Number(n, Some(unit)) => {
-if n.is_infinite() { return write!(f, "calc(infinity * 1{unit})"); }
-if n.is_nan() { return write!(f, "calc(NaN * 1{unit})"); }
-if (n.fract() == 0.0) {
-write!(f, "{}{unit}", *n as i64)
-} else {
-write!(f, "{n}{unit}")
-}
-}
+            Value::Number(n, None) => {
+                if n.is_infinite() {
+                    return write!(f, "calc(infinity)");
+                }
+                if n.is_nan() {
+                    return write!(f, "calc(NaN)");
+                }
+                if (n.fract() == 0.0) {
+                    write!(f, "{}", *n as i64)
+                } else {
+                    write!(f, "{n}")
+                }
+            }
+            Value::Number(n, Some(unit)) => {
+                if n.is_infinite() {
+                    return write!(f, "calc(infinity * 1{unit})");
+                }
+                if n.is_nan() {
+                    return write!(f, "calc(NaN * 1{unit})");
+                }
+                if (n.fract() == 0.0) {
+                    write!(f, "{}{unit}", *n as i64)
+                } else {
+                    write!(f, "{n}{unit}")
+                }
+            }
             Value::String(s, true) => write!(f, "\"{s}\""),
             Value::String(s, false) => write!(f, "{s}"),
             Value::Color(c) => {
@@ -269,7 +282,9 @@ write!(f, "{n}{unit}")
             }
             Value::List(elements, sep, bracketed) => {
                 if elements.is_empty() {
-                    if *bracketed { return write!(f, "[]"); }
+                    if *bracketed {
+                        return write!(f, "[]");
+                    }
                     return write!(f, "");
                 }
                 let sep_str = match sep {
@@ -280,13 +295,14 @@ write!(f, "{n}{unit}")
                 };
                 let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
                 let inner = parts.join(sep_str);
-                if *bracketed { write!(f, "[{}]", inner) } else { write!(f, "{}", inner) }
+                if *bracketed {
+                    write!(f, "[{}]", inner)
+                } else {
+                    write!(f, "{}", inner)
+                }
             }
             Value::Map(pairs) => {
-                let parts: Vec<String> = pairs
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {v}"))
-                    .collect();
+                let parts: Vec<String> = pairs.iter().map(|(k, v)| format!("{k}: {v}")).collect();
                 write!(f, "({})", parts.join(", "))
             }
             Value::Variable(name) => write!(f, "${name}"),

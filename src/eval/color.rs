@@ -54,15 +54,27 @@ impl Evaluator {
         let mut w = w;
         let mut b = b;
         let sum = w + b;
-        if sum > 1.0 { w /= sum; b /= sum; }
+        if sum > 1.0 {
+            w /= sum;
+            b /= sum;
+        }
         let factor = 1.0 - w - b;
         let hue_to_rgb = |m1: f64, m2: f64, mut hue: f64| -> f64 {
-            if hue < 0.0 { hue += 1.0; }
-            if hue > 1.0 { hue -= 1.0; }
-            if hue < 1.0 / 6.0 { m1 + (m2 - m1) * hue * 6.0 }
-            else if hue < 0.5 { m2 }
-            else if hue < 2.0 / 3.0 { m1 + (m2 - m1) * (2.0 / 3.0 - hue) * 6.0 }
-            else { m1 }
+            if hue < 0.0 {
+                hue += 1.0;
+            }
+            if hue > 1.0 {
+                hue -= 1.0;
+            }
+            if hue < 1.0 / 6.0 {
+                m1 + (m2 - m1) * hue * 6.0
+            } else if hue < 0.5 {
+                m2
+            } else if hue < 2.0 / 3.0 {
+                m1 + (m2 - m1) * (2.0 / 3.0 - hue) * 6.0
+            } else {
+                m1
+            }
         };
         let to_rgb = |hue: f64| -> f64 { hue_to_rgb(0.0, 1.0, hue) * factor + w };
         let r = to_rgb(h + 1.0 / 3.0);
@@ -94,7 +106,11 @@ impl Evaluator {
             return (0.0, 0.0, l);
         }
         let d = max - min;
-        let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+        let s = if l > 0.5 {
+            d / (2.0 - max - min)
+        } else {
+            d / (max + min)
+        };
         let h = if max == r {
             ((g - b) / d + if g < b { 6.0 } else { 0.0 }) * 60.0
         } else if max == g {
@@ -114,17 +130,21 @@ impl Evaluator {
 
     /// 简单伪随机数——基于系统时间。
     pub(crate) fn simple_random() -> f64 {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let val = (nanos % 1_000_000) as f64;
-    val / 1_000_000.0
-}
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let val = (nanos % 1_000_000) as f64;
+        val / 1_000_000.0
+    }
 
-pub(crate) fn builtin_rgba(args: &[Value]) -> Result<Value> {
+    pub(crate) fn builtin_rgba(args: &[Value]) -> Result<Value> {
         match args {
-            [Value::Number(r, _), Value::Number(g, _), Value::Number(b, _)] => {
+            [
+                Value::Number(r, _),
+                Value::Number(g, _),
+                Value::Number(b, _),
+            ] => {
                 tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
@@ -133,14 +153,21 @@ pub(crate) fn builtin_rgba(args: &[Value]) -> Result<Value> {
                 );
                 Ok(Value::Color(Color::rgb(*r as u8, *g as u8, *b as u8)))
             }
-            [Value::Number(r, _), Value::Number(g, _), Value::Number(b, _), Value::Number(a, _)] => {
+            [
+                Value::Number(r, _),
+                Value::Number(g, _),
+                Value::Number(b, _),
+                Value::Number(a, _),
+            ] => {
                 tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
                     r = *r, g = *g, b = *b, a = *a,
                     "rgba 4-arg input"
                 );
-                Ok(Value::Color(Color::rgba(*r as u8, *g as u8, *b as u8, *a as f32)))
+                Ok(Value::Color(Color::rgba(
+                    *r as u8, *g as u8, *b as u8, *a as f32,
+                )))
             }
             _ => Err(SassError::Eval("rgba 需要 3-4 个数字参数".into())),
         }

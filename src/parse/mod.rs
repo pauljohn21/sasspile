@@ -3,9 +3,9 @@
 pub mod ast;
 mod ast_impl;
 
-use ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
+use ast::*;
 use tracing::{instrument, trace, warn};
 
 /// 语法分析器。
@@ -35,20 +35,31 @@ impl<'tok> Parser<'tok> {
     }
 
     // —— 基础操作 ——
-    fn peek(&self) -> Option<&Token> { self.tokens.get(self.pos) }
-    fn peek_n(&self, n: usize) -> Option<&Token> { self.tokens.get(self.pos + n) }
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.pos)
+    }
+    fn peek_n(&self, n: usize) -> Option<&Token> {
+        self.tokens.get(self.pos + n)
+    }
     fn advance(&mut self) -> Option<&Token> {
         let t = self.tokens.get(self.pos);
-        if !matches!(t, Some(Token::Eof) | None) { self.pos += 1; }
+        if !matches!(t, Some(Token::Eof) | None) {
+            self.pos += 1;
+        }
         t
     }
     fn at_end(&self) -> bool {
         let mut i = self.pos;
-        while matches!(self.tokens.get(i), Some(Token::Whitespace)) { i += 1; }
+        while matches!(self.tokens.get(i), Some(Token::Whitespace)) {
+            i += 1;
+        }
         matches!(self.tokens.get(i), None | Some(Token::Eof))
     }
     fn skip_ws(&mut self) {
-        while matches!(self.peek(), Some(Token::Whitespace) | Some(Token::Comment(_, _))) {
+        while matches!(
+            self.peek(),
+            Some(Token::Whitespace) | Some(Token::Comment(_, _))
+        ) {
             self.pos += 1;
         }
     }
@@ -69,6 +80,6 @@ impl<'tok> Parser<'tok> {
     }
 }
 
-mod nodes;
 mod at_rules;
 mod expr;
+mod nodes;

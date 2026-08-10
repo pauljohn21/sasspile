@@ -18,22 +18,33 @@ fn test_string_display() {
 fn test_color_display() {
     assert_eq!(Value::Color(Color::rgb(255, 0, 0)).to_string(), "#ff0000");
     assert_eq!(Value::Color(Color::rgb(0, 0, 0)).to_string(), "#000000");
-    assert_eq!(Value::Color(Color::rgba(0, 0, 0, 0.5)).to_string(), "rgba(0, 0, 0, 0.5)");
+    assert_eq!(
+        Value::Color(Color::rgba(0, 0, 0, 0.5)).to_string(),
+        "rgba(0, 0, 0, 0.5)"
+    );
 }
 
 #[test]
 fn test_list_display() {
-    let list = Value::List(vec![
-        Value::Number(1.0, None),
-        Value::Number(2.0, None),
-        Value::Number(3.0, None),
-    ], Separator::Comma, false);
+    let list = Value::List(
+        vec![
+            Value::Number(1.0, None),
+            Value::Number(2.0, None),
+            Value::Number(3.0, None),
+        ],
+        Separator::Comma,
+        false,
+    );
     assert_eq!(list.to_string(), "1, 2, 3");
 
-    let space_list = Value::List(vec![
-        Value::String("a".into(), false),
-        Value::String("b".into(), false),
-    ], Separator::Space, false);
+    let space_list = Value::List(
+        vec![
+            Value::String("a".into(), false),
+            Value::String("b".into(), false),
+        ],
+        Separator::Space,
+        false,
+    );
     assert_eq!(space_list.to_string(), "a b");
 }
 

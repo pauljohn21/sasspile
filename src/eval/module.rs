@@ -15,7 +15,8 @@ impl Evaluator {
         // 拆分路径和文件名——_ 前缀只加在文件名上
         let url_path = std::path::Path::new(url);
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
-        let filename = url_path.file_name()
+        let filename = url_path
+            .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| url.to_string());
         let candidates = [
@@ -25,8 +26,12 @@ impl Evaluator {
             base_dir.join(parent).join(format!("{filename}.sass")),
             base_dir.join(parent).join(format!("_{filename}.css")),
             base_dir.join(parent).join(format!("{filename}.css")),
-            base_dir.join(parent).join(format!("_{filename}.import.scss")),
-            base_dir.join(parent).join(format!("{filename}.import.scss")),
+            base_dir
+                .join(parent)
+                .join(format!("_{filename}.import.scss")),
+            base_dir
+                .join(parent)
+                .join(format!("{filename}.import.scss")),
             base_dir.join(url).join("_index.scss"),
             base_dir.join(url).join("index.scss"),
             base_dir.join(url).join("_index.sass"),
@@ -41,7 +46,11 @@ impl Evaluator {
     }
 
     /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
-    pub(crate) fn load_module(path: &Path, config: &[(String, Value)], caller_env: &Env) -> Result<ModuleExports> {
+    pub(crate) fn load_module(
+        path: &Path,
+        config: &[(String, Value)],
+        caller_env: &Env,
+    ) -> Result<ModuleExports> {
         let span = tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
         let _enter = span.enter();
         // 防止循环导入导致栈溢出
@@ -61,13 +70,13 @@ impl Evaluator {
             let val = Self::eval_value(value, caller_env)?;
             env = env.bind(name.clone(), val);
         }
-let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
-Ok(ModuleExports {
-vars: final_env.vars,
-mixins: final_env.mixins,
-functions: final_env.functions,
-css: module_css,
-})
+        let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
+        Ok(ModuleExports {
+            vars: final_env.vars,
+            mixins: final_env.mixins,
+            functions: final_env.functions,
+            css: module_css,
+        })
     }
 
     /// 模块限定函数调用。
@@ -165,5 +174,4 @@ css: module_css,
         };
         Self::call_builtin(builtin_name, args, env)
     }
-
 }

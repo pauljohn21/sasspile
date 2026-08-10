@@ -8,7 +8,9 @@ impl Evaluator {
         let _enter = span.enter();
         for node in nodes.iter_mut() {
             match node {
-                CssNode::Rule { selector, children, .. } => {
+                CssNode::Rule {
+                    selector, children, ..
+                } => {
                     tracing::debug!(
                         target: "sasspile::extend",
                         selector = %selector,
@@ -53,12 +55,17 @@ impl Evaluator {
                     // 递归处理子规则
                     Self::apply_extends(children, extends);
                     // 移除未被继承的占位符选择器部分
-                    let parts: Vec<&str> = selector.split(',')
+                    let parts: Vec<&str> = selector
+                        .split(',')
                         .filter(|s| !s.trim().starts_with('%'))
                         .collect();
                     *selector = parts.join(",").trim().to_string();
                 }
-                CssNode::AtRule { has_body: true, children, .. } => {
+                CssNode::AtRule {
+                    has_body: true,
+                    children,
+                    ..
+                } => {
                     Self::apply_extends(children, extends);
                 }
                 CssNode::AtRoot(kids) => {
@@ -68,5 +75,4 @@ impl Evaluator {
             }
         }
     }
-
 }

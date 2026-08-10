@@ -5,10 +5,18 @@ use crate::parse::ast::*;
 use tracing::{instrument, trace, warn};
 
 impl Evaluator {
-    pub(crate) fn eval_include(name: &str, args: &[Arg], content: &Option<Vec<Node>>, env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_include(
+        name: &str,
+        args: &[Arg],
+        content: &Option<Vec<Node>>,
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
         let span = tracing::info_span!("eval_include", name = name, n_args = args.len());
         let _enter = span.enter();
-        let mixin = env.get_mixin(name).ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?.clone();
+        let mixin = env
+            .get_mixin(name)
+            .ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?
+            .clone();
         // 绑定参数
         let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         // 注入 @content 块
@@ -48,7 +56,10 @@ impl Evaluator {
             if param.rest {
                 // 剩余参数——收集剩余位置参数
                 let rest: Vec<Value> = positional[pos_idx..].to_vec();
-                new_env = new_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
+                new_env = new_env.bind(
+                    param.name.clone(),
+                    Value::List(rest, Separator::Comma, false),
+                );
                 pos_idx = positional.len();
                 break;
             }
@@ -84,8 +95,16 @@ impl Evaluator {
         Self::call_builtin(name, args, env)
     }
 
-    pub(crate) fn call_user_function(func: &FunctionDef, args: &[Value], env: &Env) -> Result<Value> {
-        let span = tracing::info_span!("call_user_function", n_params = func.params.len(), n_args = args.len());
+    pub(crate) fn call_user_function(
+        func: &FunctionDef,
+        args: &[Value],
+        env: &Env,
+    ) -> Result<Value> {
+        let span = tracing::info_span!(
+            "call_user_function",
+            n_params = func.params.len(),
+            n_args = args.len()
+        );
         let _enter = span.enter();
         let mut func_env = env.incr_depth();
         for (i, param) in func.params.iter().enumerate() {
@@ -110,29 +129,40 @@ impl Evaluator {
     }
 
     // —— @at-root ——
-    pub(crate) fn eval_at_root(_query: &Option<String>, body: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_at_root(
+        _query: &Option<String>,
+        body: &[Node],
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
         let (css, new_env) = Self::eval_nodes(body, env)?;
         // 包装为 AtRoot，信号 eval_rule 不嵌套
         Ok((vec![CssNode::AtRoot(css)], new_env))
     }
 
     // —— @规则 ——
-    pub(crate) fn eval_at_rule(name: &str, params: &Option<String>, body: &Option<Vec<Node>>, env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_at_rule(
+        name: &str,
+        params: &Option<String>,
+        body: &Option<Vec<Node>>,
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
         let (children, has_body) = match body {
             Some(nodes) => (Self::eval_nodes(nodes, env)?.0, true),
             None => (Vec::new(), false),
         };
-        Ok((vec![CssNode::AtRule {
-            name: name.to_string(),
-            params: params.clone(),
-            children,
-            has_body,
-        }], env.clone()))
+        Ok((
+            vec![CssNode::AtRule {
+                name: name.to_string(),
+                params: params.clone(),
+                children,
+                has_body,
+            }],
+            env.clone(),
+        ))
     }
 
     // —— 辅助 ——
     pub(crate) fn is_truthy(v: &Value) -> bool {
         !matches!(v, Value::Bool(false) | Value::Null)
     }
-
 }

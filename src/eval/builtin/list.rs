@@ -2,9 +2,9 @@
 //!
 //! 包含 length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip。
 
+use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use super::super::Evaluator;
 
 pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
     match name {
@@ -18,19 +18,35 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             [Value::List(es, _, _), Value::Number(n, _)] => {
                 let len = es.len() as i64;
                 let idx = *n as i64;
-                let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
-                else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
-                else { return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into())); };
-                Ok(Some(es.get(actual).cloned().ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))?))
+                let actual = if idx > 0 {
+                    (idx as usize).saturating_sub(1)
+                } else if idx < 0 {
+                    ((len + idx) as usize).saturating_sub(1)
+                } else {
+                    return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into()));
+                };
+                Ok(Some(es.get(actual).cloned().ok_or_else(|| {
+                    SassError::Eval(format!("nth 索引 {idx} 超出范围"))
+                })?))
             }
             [Value::Map(pairs), Value::Number(n, _)] => {
                 let len = pairs.len() as i64;
                 let idx = *n as i64;
-                let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
-                else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
-                else { return Err(SassError::Eval("nth 索引 0 无效".into())); };
-                Ok(Some(pairs.get(actual).map(|(k, v)| Value::List(vec![k.clone(), v.clone()], Separator::Space, false))
-                .ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))?))
+                let actual = if idx > 0 {
+                    (idx as usize).saturating_sub(1)
+                } else if idx < 0 {
+                    ((len + idx) as usize).saturating_sub(1)
+                } else {
+                    return Err(SassError::Eval("nth 索引 0 无效".into()));
+                };
+                Ok(Some(
+                    pairs
+                        .get(actual)
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))?,
+                ))
             }
             [other, Value::Number(1.0, _)] => Ok(Some(other.clone())),
             [other, Value::Number(-1.0, _)] => Ok(Some(other.clone())),
@@ -73,12 +89,22 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 items.extend(b.clone());
                 Ok(Some(Value::List(items, sep, false)))
             }
-            [Value::List(a, sa, false), Value::List(b, sb, false), Value::String(s, _)] => {
+            [
+                Value::List(a, sa, false),
+                Value::List(b, sb, false),
+                Value::String(s, _),
+            ] => {
                 let sep = match s.as_str() {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
-                    _ => if a.is_empty() { sb.clone() } else { sa.clone() },
+                    _ => {
+                        if a.is_empty() {
+                            sb.clone()
+                        } else {
+                            sa.clone()
+                        }
+                    }
                 };
                 let mut items = a.clone();
                 items.extend(b.clone());
@@ -110,15 +136,24 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 Ok(Some(Value::Null))
             }
             [other, needle] => {
-                if Evaluator::values_eq(other, needle) { Ok(Some(Value::Number(1.0, None))) }
-                else { Ok(Some(Value::Null)) }
+                if Evaluator::values_eq(other, needle) {
+                    Ok(Some(Value::Number(1.0, None)))
+                } else {
+                    Ok(Some(Value::Null))
+                }
             }
             _ => Err(SassError::Eval("index 需要 2 个参数".into())),
         },
         "list-separator" | "separator" => match args {
-            [Value::List(_, Separator::Comma, false)] => Ok(Some(Value::String("comma".into(), false))),
-            [Value::List(_, Separator::Space, false)] => Ok(Some(Value::String("space".into(), false))),
-            [Value::List(_, Separator::Slash, false)] => Ok(Some(Value::String("slash".into(), false))),
+            [Value::List(_, Separator::Comma, false)] => {
+                Ok(Some(Value::String("comma".into(), false)))
+            }
+            [Value::List(_, Separator::Space, false)] => {
+                Ok(Some(Value::String("space".into(), false)))
+            }
+            [Value::List(_, Separator::Slash, false)] => {
+                Ok(Some(Value::String("slash".into(), false)))
+            }
             _ => Ok(Some(Value::String("space".into(), false))),
         },
         "set-nth" => match args {
@@ -137,14 +172,20 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             _ => Ok(Some(Value::Bool(false))),
         },
         "list-slash" => match args {
-            [a, b] => Ok(Some(Value::List(vec![a.clone(), b.clone()], Separator::Slash, false))),
+            [a, b] => Ok(Some(Value::List(
+                vec![a.clone(), b.clone()],
+                Separator::Slash,
+                false,
+            ))),
             _ => Err(SassError::Eval("list-slash 需要 2 个参数".into())),
         },
         "zip" => match args {
             [Value::List(a, _, _), Value::List(b, _, _)] => {
-                let pairs: Vec<Value> = a.iter().zip(b.iter()).map(|(x, y)| {
-                    Value::List(vec![x.clone(), y.clone()], Separator::Space, false)
-                }).collect();
+                let pairs: Vec<Value> = a
+                    .iter()
+                    .zip(b.iter())
+                    .map(|(x, y)| Value::List(vec![x.clone(), y.clone()], Separator::Space, false))
+                    .collect();
                 Ok(Some(Value::List(pairs, Separator::Comma, false)))
             }
             _ => Err(SassError::Eval("zip 需要 2+ 个列表参数".into())),

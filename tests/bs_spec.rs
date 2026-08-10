@@ -12,16 +12,46 @@ fn try_compile(name: &str, file: &str) {
     }
 }
 
-#[test] fn bs_reboot()    { try_compile("reboot", "_reboot.scss"); }
-#[test] fn bs_alert()     { try_compile("alert", "_alert.scss"); }
-#[test] fn bs_badge()     { try_compile("badge", "_badge.scss"); }
-#[test] fn bs_close()     { try_compile("close", "_close.scss"); }
-#[test] fn bs_containers(){ try_compile("containers", "_containers.scss"); }
-#[test] fn bs_grid()      { try_compile("grid", "_grid.scss"); }
-#[test] fn bs_root()      { try_compile("root", "_root.scss"); }
-#[test] fn bs_type()      { try_compile("type", "_type.scss"); }
-#[test] fn bs_buttons()   { try_compile("buttons", "_buttons.scss"); }
-#[test] fn bs_card()      { try_compile("card", "_card.scss"); }
+#[test]
+fn bs_reboot() {
+    try_compile("reboot", "_reboot.scss");
+}
+#[test]
+fn bs_alert() {
+    try_compile("alert", "_alert.scss");
+}
+#[test]
+fn bs_badge() {
+    try_compile("badge", "_badge.scss");
+}
+#[test]
+fn bs_close() {
+    try_compile("close", "_close.scss");
+}
+#[test]
+fn bs_containers() {
+    try_compile("containers", "_containers.scss");
+}
+#[test]
+fn bs_grid() {
+    try_compile("grid", "_grid.scss");
+}
+#[test]
+fn bs_root() {
+    try_compile("root", "_root.scss");
+}
+#[test]
+fn bs_type() {
+    try_compile("type", "_type.scss");
+}
+#[test]
+fn bs_buttons() {
+    try_compile("buttons", "_buttons.scss");
+}
+#[test]
+fn bs_card() {
+    try_compile("card", "_card.scss");
+}
 
 #[test]
 fn bs_full() {

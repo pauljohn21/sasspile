@@ -1,12 +1,17 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
-use crate::parse::ast::*;
 use crate::parse::ast::BinOpKind;
+use crate::parse::ast::*;
 use tracing::{instrument, trace, warn};
 
 impl Evaluator {
-    pub(crate) fn eval_variable(name: &str, value: &Value, flags: &VarFlags, env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_variable(
+        name: &str,
+        value: &Value,
+        flags: &VarFlags,
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
         if flags.default && env.has_var(name) {
             return Ok((vec![], env.clone()));
         }
@@ -18,7 +23,11 @@ impl Evaluator {
     #[instrument(skip(value, env), fields(depth = env.depth), level = "trace")]
     pub(crate) fn eval_value(value: &Value, env: &Env) -> Result<Value> {
         match value {
-            Value::Number(..) | Value::Color(..) | Value::Bool(..) | Value::Null | Value::Calc(..) => Ok(value.clone()),
+            Value::Number(..)
+            | Value::Color(..)
+            | Value::Bool(..)
+            | Value::Null
+            | Value::Calc(..) => Ok(value.clone()),
             Value::String(s, quoted) => {
                 // 处理插值在字符串中
                 if s.contains('#') && s.contains('{') {
@@ -43,27 +52,28 @@ impl Evaluator {
                     .ok_or_else(|| SassError::UndefinedVariable(name.clone()))
             }
             Value::List(elements, sep, bracketed) => {
-                let evaluated: Vec<Value> = elements.iter()
+                let evaluated: Vec<Value> = elements
+                    .iter()
                     .map(|e| Self::eval_value(e, env))
                     .collect::<Result<_>>()?;
                 // 空格分隔列表可能需要进一步处理
                 Ok(Value::List(evaluated, sep.clone(), *bracketed))
             }
             Value::Map(pairs) => {
-                let evaluated: Vec<(Value, Value)> = pairs.iter()
+                let evaluated: Vec<(Value, Value)> = pairs
+                    .iter()
                     .map(|(k, v)| Ok((Self::eval_value(k, env)?, Self::eval_value(v, env)?)))
                     .collect::<Result<_>>()?;
                 Ok(Value::Map(evaluated))
             }
             Value::Call(name, args) => {
-                let evaluated_args: Vec<Value> = args.iter()
+                let evaluated_args: Vec<Value> = args
+                    .iter()
                     .map(|a| Self::eval_value(&a.value, env))
                     .collect::<Result<_>>()?;
                 Self::call_function(name, &evaluated_args, env)
             }
-            Value::Interp(s) => {
-                Ok(Value::String(Self::eval_interp_str(s, env), false))
-            }
+            Value::Interp(s) => Ok(Value::String(Self::eval_interp_str(s, env), false)),
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),
             Value::UnaryOp(op, v) => {
                 let val = Self::eval_value(v, env)?;
@@ -83,7 +93,12 @@ impl Evaluator {
     }
 
     /// 求值二元运算。
-    pub(crate) fn eval_binop(op: &BinOpKind, left: &Value, right: &Value, env: &Env) -> Result<Value> {
+    pub(crate) fn eval_binop(
+        op: &BinOpKind,
+        left: &Value,
+        right: &Value,
+        env: &Env,
+    ) -> Result<Value> {
         let l = Self::eval_value(left, env)?;
         let r = Self::eval_value(right, env)?;
         tracing::trace!(
@@ -100,9 +115,17 @@ impl Evaluator {
             BinOpKind::Mod => Self::modulo(&l, &r),
             BinOpKind::Eq => Ok(Value::Bool(Self::values_eq(&l, &r))),
             BinOpKind::NotEq => Ok(Value::Bool(!Self::values_eq(&l, &r))),
-            BinOpKind::And => match l { Value::Bool(false) => Ok(Value::Bool(false)), _ => Ok(r) },
-            BinOpKind::Or => match l { Value::Bool(true) => Ok(Value::Bool(true)), _ => Ok(r) },
-            BinOpKind::Lt | BinOpKind::Gt | BinOpKind::LtEq | BinOpKind::GtEq => Self::compare(op, &l, &r),
+            BinOpKind::And => match l {
+                Value::Bool(false) => Ok(Value::Bool(false)),
+                _ => Ok(r),
+            },
+            BinOpKind::Or => match l {
+                Value::Bool(true) => Ok(Value::Bool(true)),
+                _ => Ok(r),
+            },
+            BinOpKind::Lt | BinOpKind::Gt | BinOpKind::LtEq | BinOpKind::GtEq => {
+                Self::compare(op, &l, &r)
+            }
         };
         if let Ok(v) = &result {
             tracing::trace!(
@@ -125,11 +148,23 @@ impl Evaluator {
             }
             // 字符串拼接——结果引号跟随左侧
             (Value::String(a, qa), Value::String(b, _)) => Ok(Value::String(format!("{a}{b}"), qa)),
-            (Value::String(a, qa), Value::Number(n, u)) => Ok(Value::String(format!("{a}{}{}", n, u.as_deref().unwrap_or("")), qa)),
-            (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(format!("{a}#{:02x}{:02x}{:02x}", c.r, c.g, c.b), qa)),
+            (Value::String(a, qa), Value::Number(n, u)) => Ok(Value::String(
+                format!("{a}{}{}", n, u.as_deref().unwrap_or("")),
+                qa,
+            )),
+            (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
+                format!("{a}#{:02x}{:02x}{:02x}", c.r, c.g, c.b),
+                qa,
+            )),
             (Value::String(a, qa), Value::Null) => Ok(Value::String(a, qa)),
-            (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(format!("{}{}{b}", n, u.as_deref().unwrap_or("")), qb)),
-            (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(format!("#{:02x}{:02x}{:02x}{b}", c.r, c.g, c.b), qb)),
+            (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(
+                format!("{}{}{b}", n, u.as_deref().unwrap_or("")),
+                qb,
+            )),
+            (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
+                format!("#{:02x}{:02x}{:02x}{b}", c.r, c.g, c.b),
+                qb,
+            )),
             (Value::Null, Value::String(b, qb)) => Ok(Value::String(b, qb)),
             // 列表拼接
             (Value::List(mut items, sep, _), Value::List(items2, _, _)) => {
@@ -157,11 +192,25 @@ impl Evaluator {
                 Ok(Value::Number(a - b, unit))
             }
             // 字符串拼接——用 - 连接
-            (Value::String(a, qa), Value::String(b, _)) => Ok(Value::String(format!("{a}-{b}"), qa)),
-            (Value::String(a, qa), Value::Number(n, u)) => Ok(Value::String(format!("{a}-{}{}", n, u.as_deref().unwrap_or("")), qa)),
-            (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(format!("{a}-#{:02x}{:02x}{:02x}", c.r, c.g, c.b), qa)),
-            (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(format!("{}{}-{b}", n, u.as_deref().unwrap_or("")), qb)),
-            (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(format!("#{:02x}{:02x}{:02x}-{b}", c.r, c.g, c.b), qb)),
+            (Value::String(a, qa), Value::String(b, _)) => {
+                Ok(Value::String(format!("{a}-{b}"), qa))
+            }
+            (Value::String(a, qa), Value::Number(n, u)) => Ok(Value::String(
+                format!("{a}-{}{}", n, u.as_deref().unwrap_or("")),
+                qa,
+            )),
+            (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
+                format!("{a}-#{:02x}{:02x}{:02x}", c.r, c.g, c.b),
+                qa,
+            )),
+            (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(
+                format!("{}{}-{b}", n, u.as_deref().unwrap_or("")),
+                qb,
+            )),
+            (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
+                format!("#{:02x}{:02x}{:02x}-{b}", c.r, c.g, c.b),
+                qb,
+            )),
             _ => Err(SassError::Eval("不支持的 - 运算".into())),
         }
     }
@@ -179,7 +228,9 @@ impl Evaluator {
             (Value::Number(a, u1), Value::Number(b, _)) => {
                 if *b == 0.0 {
                     // SCSS: 1/0 = Infinity, -1/0 = -Infinity, 0/0 = NaN
-                    if *a == 0.0 { return Ok(Value::Number(f64::NAN, u1.clone())); }
+                    if *a == 0.0 {
+                        return Ok(Value::Number(f64::NAN, u1.clone()));
+                    }
                     return Ok(Value::Number(a / b, u1.clone())); // f64 除零产生 Infinity
                 }
                 Ok(Value::Number(a / b, u1.clone()))
@@ -191,13 +242,23 @@ impl Evaluator {
     pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
         match (l, r) {
             (Value::Number(a, u), Value::Number(b, _)) => {
-                if *b == 0.0 { return Err(SassError::DivideByZero); }
+                if *b == 0.0 {
+                    return Err(SassError::DivideByZero);
+                }
                 Ok(Value::Number(a % b, u.clone()))
             }
             // Null RHS — % 不是运算符，作为字符串保留
-            (l, Value::Null) => Ok(Value::List(vec![l.clone(), Value::String("%".to_string(), false)], Separator::Space, false)),
+            (l, Value::Null) => Ok(Value::List(
+                vec![l.clone(), Value::String("%".to_string(), false)],
+                Separator::Space,
+                false,
+            )),
             // 非数字 % —— 作为空格分隔列表保留
-            _ => Ok(Value::List(vec![l.clone(), r.clone()], Separator::Space, false)),
+            _ => Ok(Value::List(
+                vec![l.clone(), r.clone()],
+                Separator::Space,
+                false,
+            )),
         }
     }
     pub(crate) fn compare(op: &BinOpKind, l: &Value, r: &Value) -> Result<Value> {
@@ -218,20 +279,26 @@ impl Evaluator {
 
     /// 检查两个单位是否兼容（属于同一物理量类别）。
     pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
-        if u1 == u2 { return true; }
-        if u1.is_none() || u2.is_none() { return true; }
+        if u1 == u2 {
+            return true;
+        }
+        if u1.is_none() || u2.is_none() {
+            return true;
+        }
         // 单位兼容组——同组的单位互相兼容
         const GROUPS: &[&[&str]] = &[
-            &["px", "in", "cm", "mm", "pt", "pc", "q"],  // 长度
-            &["deg", "grad", "rad", "turn"],              // 角度
-            &["s", "ms"],                                  // 时间
-            &["hz", "khz"],                               // 频率
-            &["dpi", "dpcm", "dppx"],                     // 分辨率
+            &["px", "in", "cm", "mm", "pt", "pc", "q"], // 长度
+            &["deg", "grad", "rad", "turn"],            // 角度
+            &["s", "ms"],                               // 时间
+            &["hz", "khz"],                             // 频率
+            &["dpi", "dpcm", "dppx"],                   // 分辨率
         ];
         for group in GROUPS {
             let has1 = group.contains(&u1.unwrap());
             let has2 = group.contains(&u2.unwrap());
-            if has1 && has2 { return true; }
+            if has1 && has2 {
+                return true;
+            }
         }
         false
     }
@@ -241,8 +308,12 @@ impl Evaluator {
         match v {
             Value::List(elements, sep, bracketed) => {
                 if elements.is_empty() {
-                    if *bracketed { return "[]".to_string(); }
-                    if matches!(sep, Separator::Comma) { return "()".to_string(); }
+                    if *bracketed {
+                        return "[]".to_string();
+                    }
+                    if matches!(sep, Separator::Comma) {
+                        return "()".to_string();
+                    }
                     return String::new();
                 }
                 let sep_str = match sep {
@@ -253,11 +324,19 @@ impl Evaluator {
                 };
                 let parts: Vec<String> = elements.iter().map(Self::inspect_value).collect();
                 let inner = if elements.len() == 1 && matches!(sep, Separator::Comma) {
-                    if *bracketed { format!("{},", parts[0]) } else { format!("({},)", parts[0]) }
+                    if *bracketed {
+                        format!("{},", parts[0])
+                    } else {
+                        format!("({},)", parts[0])
+                    }
                 } else {
                     parts.join(sep_str)
                 };
-                if *bracketed { format!("[{}]", inner) } else { inner }
+                if *bracketed {
+                    format!("[{}]", inner)
+                } else {
+                    inner
+                }
             }
             Value::Map(pairs) => {
                 let parts: Vec<String> = pairs
@@ -271,7 +350,11 @@ impl Evaluator {
                 }
             }
             Value::String(s, quoted) => {
-                if *quoted { format!("\"{s}\"") } else { s.clone() }
+                if *quoted {
+                    format!("\"{s}\"")
+                } else {
+                    s.clone()
+                }
             }
             Value::Null => "null".to_string(),
             _ => v.to_string(),
@@ -281,8 +364,12 @@ impl Evaluator {
     pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
         match (l, r) {
             (Value::Number(a, _), Value::Number(b, _)) => {
-                if a.is_nan() && b.is_nan() { return true; }
-                if a.is_infinite() && b.is_infinite() && a.signum() == b.signum() { return true; }
+                if a.is_nan() && b.is_nan() {
+                    return true;
+                }
+                if a.is_infinite() && b.is_infinite() && a.signum() == b.signum() {
+                    return true;
+                }
                 (a - b).abs() < f64::EPSILON
             }
             (Value::String(a, _), Value::String(b, _)) => a == b,
@@ -293,9 +380,11 @@ impl Evaluator {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| Self::values_eq(x, y))
             }
             (Value::Map(a), Value::Map(b)) => {
-                a.len() == b.len() && a.iter().all(|(k, v)| {
-                    b.iter().any(|(k2, v2)| Self::values_eq(k, k2) && Self::values_eq(v, v2))
-                })
+                a.len() == b.len()
+                    && a.iter().all(|(k, v)| {
+                        b.iter()
+                            .any(|(k2, v2)| Self::values_eq(k, k2) && Self::values_eq(v, v2))
+                    })
             }
             _ => false,
         }
@@ -311,9 +400,18 @@ impl Evaluator {
                 let mut expr = String::new();
                 let mut depth = 1;
                 while let Some(ch) = chars.next() {
-                    if ch == '{' { depth += 1; expr.push(ch); }
-                    else if ch == '}' { depth -= 1; if depth == 0 { break; } expr.push(ch); }
-                    else { expr.push(ch); }
+                    if ch == '{' {
+                        depth += 1;
+                        expr.push(ch);
+                    } else if ch == '}' {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                        expr.push(ch);
+                    } else {
+                        expr.push(ch);
+                    }
                 }
                 // 尝试求值表达式
                 if let Ok(val) = Self::eval_simple_expr(&expr, env) {
@@ -338,7 +436,10 @@ impl Evaluator {
         let expr = expr.trim();
         // 变量引用
         if let Some(name) = expr.strip_prefix('$') {
-            return env.lookup(name).cloned().ok_or_else(|| SassError::UndefinedVariable(name.to_string()));
+            return env
+                .lookup(name)
+                .cloned()
+                .ok_or_else(|| SassError::UndefinedVariable(name.to_string()));
         }
         // 尝试作为数字
         if let Ok(n) = expr.parse::<f64>() {
@@ -346,11 +447,15 @@ impl Evaluator {
         }
         // 尝试词法分析 + 解析
         let tokens: Vec<_> = crate::lex::Lexer::new(expr)
-            .filter(|t| !matches!(t.as_ref(), Ok(crate::lex::token::Token::Whitespace) | Ok(crate::lex::token::Token::Eof)))
+            .filter(|t| {
+                !matches!(
+                    t.as_ref(),
+                    Ok(crate::lex::token::Token::Whitespace) | Ok(crate::lex::token::Token::Eof)
+                )
+            })
             .collect::<crate::error::Result<Vec<_>>>()?;
         let mut parser = crate::parse::Parser::new(&tokens);
         let v = parser.parse_value()?;
         Self::eval_value(&v, env)
     }
-
 }

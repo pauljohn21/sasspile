@@ -42,7 +42,8 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
             let output_path = format!("{base}output.css");
             let error_path = format!("{base}error");
 
-            let expected_output = files.iter()
+            let expected_output = files
+                .iter()
                 .find(|(p, _)| p == &output_path)
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
@@ -81,8 +82,12 @@ fn run_case(case: &HrxCase) -> Result<(), String> {
         let expected_trimmed = case.expected_output.trim();
 
         if actual_trimmed != expected_trimmed {
-            Err(format!("不匹配 [{}]: 期望 {} 字节, 实际 {} 字节",
-                case.name, expected_trimmed.len(), actual_trimmed.len()))
+            Err(format!(
+                "不匹配 [{}]: 期望 {} 字节, 实际 {} 字节",
+                case.name,
+                expected_trimmed.len(),
+                actual_trimmed.len()
+            ))
         } else {
             Ok(())
         }
@@ -97,7 +102,9 @@ fn run_dir(dir: &Path, max_tests: usize) -> (usize, usize, usize) {
 
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
-            if total >= max_tests { break; }
+            if total >= max_tests {
+                break;
+            }
             let path = entry.path();
             if path.is_dir() {
                 let (p, f, t) = run_dir(&path, max_tests - total);
@@ -107,12 +114,16 @@ fn run_dir(dir: &Path, max_tests: usize) -> (usize, usize, usize) {
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
                 // 限制单文件大小
                 if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() > 100_000 { continue; } // 跳过超大 HRX
+                    if meta.len() > 100_000 {
+                        continue;
+                    } // 跳过超大 HRX
                 }
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     let cases = parse_hrx(&content);
                     for case in &cases {
-                        if total >= max_tests { break; }
+                        if total >= max_tests {
+                            break;
+                        }
                         total += 1;
                         match run_case(case) {
                             Ok(()) => passed += 1,
@@ -165,23 +176,33 @@ fn test_css_diagnostic() {
 }
 
 fn diag_dir(dir: &Path, shown: &mut usize) {
-    if *shown >= 10 { return; }
+    if *shown >= 10 {
+        return;
+    }
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
-            if *shown >= 10 { return; }
+            if *shown >= 10 {
+                return;
+            }
             let path = entry.path();
             if path.is_dir() {
                 diag_dir(&path, shown);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
                 if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() > 50000 { continue; }
+                    if meta.len() > 50000 {
+                        continue;
+                    }
                 }
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     let cases = parse_hrx(&content);
                     let stem = path.file_stem().unwrap().to_string_lossy();
                     for case in &cases {
-                        if *shown >= 10 { return; }
-                        if case.expected_output.is_empty() { continue; }
+                        if *shown >= 10 {
+                            return;
+                        }
+                        if case.expected_output.is_empty() {
+                            continue;
+                        }
                         match sasspile::compile_expanded(&case.input) {
                             Ok(actual) => {
                                 let a = actual.trim();
@@ -211,6 +232,10 @@ fn test_sass_spec_summary() {
     let (passed, failed, total) = run_dir(&spec_root, 50);
     let compliance = if total > 0 {
         (passed as f64 / total as f64) * 100.0
-    } else { 0.0 };
-    eprintln!("\n=== sass-spec 合规快报（前 {total} 个）===\n通过: {passed}\n失败: {failed}\n合规率: {compliance:.1}%");
+    } else {
+        0.0
+    };
+    eprintln!(
+        "\n=== sass-spec 合规快报（前 {total} 个）===\n通过: {passed}\n失败: {failed}\n合规率: {compliance:.1}%"
+    );
 }

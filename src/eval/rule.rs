@@ -6,7 +6,11 @@ use tracing::{instrument, trace, warn};
 
 impl Evaluator {
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。
-    pub(crate) fn eval_rule(selector: &str, body: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_rule(
+        selector: &str,
+        body: &[Node],
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
         let span = tracing::info_span!("eval_rule", selector = selector);
         let _enter = span.enter();
         // 对选择器中的 #{...} 插值求值
@@ -25,7 +29,11 @@ impl Evaluator {
             match node {
                 CssNode::Declaration { .. } => current_decls.push(node),
                 CssNode::AtRoot(nodes) => root_nodes.extend(nodes),
-                CssNode::Rule { selector: child_sel, declarations: child_decls, children: child_kids } => {
+                CssNode::Rule {
+                    selector: child_sel,
+                    declarations: child_decls,
+                    children: child_kids,
+                } => {
                     // 遇到嵌套规则——先刷新当前声明组
                     if !current_decls.is_empty() {
                         result.push(CssNode::Rule {
@@ -45,7 +53,12 @@ impl Evaluator {
                     }
                     // 递归展平子规则的子规则
                     for kid in child_kids {
-                        if let CssNode::Rule { selector: kid_sel, declarations: kid_decls, .. } = kid {
+                        if let CssNode::Rule {
+                            selector: kid_sel,
+                            declarations: kid_decls,
+                            ..
+                        } = kid
+                        {
                             let kid_combined = Self::combine_selectors(&combined, &kid_sel);
                             if !kid_decls.is_empty() {
                                 result.push(CssNode::Rule {
@@ -98,8 +111,16 @@ impl Evaluator {
 
     /// 组合选择器——处理 & 替换和逗号分隔选择器。
     pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
-        let parents: Vec<&str> = parent.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        let children: Vec<&str> = child.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let parents: Vec<&str> = parent
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let children: Vec<&str> = child
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
         let mut result = Vec::new();
         for p in &parents {
             for c in &children {

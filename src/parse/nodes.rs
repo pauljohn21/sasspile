@@ -3,19 +3,21 @@
 //! 包含 parse_node/parse_rule/parse_decl/parse_variable 等节点级解析，
 //! 以及 parse_params/parse_args/parse_config 等参数解析和辅助方法。
 
-use super::ast::*;
 use super::Parser;
-use tracing::{instrument, trace, warn};
+use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
+use tracing::{instrument, trace, warn};
 
 impl<'tok> Parser<'tok> {
-
     // —— 节点解析 ——
     #[instrument(skip(self), fields(pos = self.pos))]
     pub(crate) fn parse_node(&mut self) -> Result<Node> {
         self.skip_ws();
-        let peek_str = self.peek().map(|t| t.to_string()).unwrap_or_else(|| "EOF".into());
+        let peek_str = self
+            .peek()
+            .map(|t| t.to_string())
+            .unwrap_or_else(|| "EOF".into());
         trace!(peek = %peek_str, "parse_node");
         match self.peek() {
             Some(Token::AtRule(name)) => self.parse_at_rule(name.clone()),
@@ -25,7 +27,10 @@ impl<'tok> Parser<'tok> {
                 self.advance();
                 Ok(node)
             }
-            Some(Token::Whitespace) => { self.advance(); self.parse_node() }
+            Some(Token::Whitespace) => {
+                self.advance();
+                self.parse_node()
+            }
             _ => self.parse_rule_or_decl(),
         }
     }
@@ -51,8 +56,12 @@ impl<'tok> Parser<'tok> {
                     }
                     continue;
                 }
-                Token::Whitespace => { i += 1; }
-                _ => { i += 1; }
+                Token::Whitespace => {
+                    i += 1;
+                }
+                _ => {
+                    i += 1;
+                }
             }
         }
         true
@@ -77,35 +86,48 @@ impl<'tok> Parser<'tok> {
         Ok(Node::Rule { selector, body })
     }
 
-pub(crate) fn parse_selector(&mut self) -> Result<String> {
-let mut s = String::new();
-let mut bracket_depth = 0i32;
-while let Some(t) = self.peek() {
-tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
-match t {
-Token::LBrace => break,
-Token::LBracket => { bracket_depth += 1; s.push('['); self.advance(); }
-Token::RBracket => { bracket_depth -= 1; s.push(']'); self.advance(); }
-Token::Whitespace => {
-if bracket_depth > 0 {
-// 括号内：标准化为单空格（而非跳过）
-if s.ends_with('[') || s.ends_with('=') {
-self.advance(); // = 或 [ 后的空白跳过
-} else {
-s.push(' ');
-self.advance();
-}
-} else {
-s.push(' ');
-self.advance();
-}
-}
-Token::Comment(_, _) => { self.advance(); } // 跳过注释
-_ => { s.push_str(&t.to_string()); self.advance(); }
-}
-}
-Ok(s.trim().to_string())
-}
+    pub(crate) fn parse_selector(&mut self) -> Result<String> {
+        let mut s = String::new();
+        let mut bracket_depth = 0i32;
+        while let Some(t) = self.peek() {
+            tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
+            match t {
+                Token::LBrace => break,
+                Token::LBracket => {
+                    bracket_depth += 1;
+                    s.push('[');
+                    self.advance();
+                }
+                Token::RBracket => {
+                    bracket_depth -= 1;
+                    s.push(']');
+                    self.advance();
+                }
+                Token::Whitespace => {
+                    if bracket_depth > 0 {
+                        // 括号内：标准化为单空格（而非跳过）
+                        if s.ends_with('[') || s.ends_with('=') {
+                            self.advance(); // = 或 [ 后的空白跳过
+                        } else {
+                            s.push(' ');
+                            self.advance();
+                        }
+                    } else {
+                        s.push(' ');
+                        self.advance();
+                    }
+                }
+                Token::Comment(_, _) => {
+                    self.advance();
+                } // 跳过注释
+                _ => {
+                    s.push_str(&t.to_string());
+                    self.advance();
+                }
+            }
+        }
+        Ok(s.trim().to_string())
+    }
 
     pub(crate) fn parse_decl(&mut self) -> Result<Node> {
         let property = self.parse_property()?;
@@ -115,8 +137,14 @@ Ok(s.trim().to_string())
         let value = self.parse_value()?;
         let important = self.check_important()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
-        Ok(Node::Decl { property, value, important })
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
+        Ok(Node::Decl {
+            property,
+            value,
+            important,
+        })
     }
 
     pub(crate) fn parse_property(&mut self) -> Result<String> {
@@ -124,7 +152,10 @@ Ok(s.trim().to_string())
         while let Some(t) = self.peek() {
             match t {
                 Token::Colon | Token::Whitespace | Token::RBrace | Token::Semicolon => break,
-                _ => { s.push_str(&t.to_string()); self.advance(); }
+                _ => {
+                    s.push_str(&t.to_string());
+                    self.advance();
+                }
             }
         }
         Ok(s)
@@ -136,7 +167,10 @@ Ok(s.trim().to_string())
             self.advance();
             self.skip_ws();
             if let Some(Token::Ident(s)) = self.peek() {
-                if s == "important" { self.advance(); return Ok(true); }
+                if s == "important" {
+                    self.advance();
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
@@ -144,8 +178,17 @@ Ok(s.trim().to_string())
 
     pub(crate) fn parse_variable(&mut self) -> Result<Node> {
         let name = match self.peek() {
-            Some(Token::Dollar(n)) => { let n = n.clone(); self.advance(); n }
-            _ => return Err(SassError::Parse { expected: "$var".into(), found: "other".into() }),
+            Some(Token::Dollar(n)) => {
+                let n = n.clone();
+                self.advance();
+                n
+            }
+            _ => {
+                return Err(SassError::Parse {
+                    expected: "$var".into(),
+                    found: "other".into(),
+                });
+            }
         };
         self.skip_ws();
         self.expect(&Token::Colon)?;
@@ -153,7 +196,9 @@ Ok(s.trim().to_string())
         let value = self.parse_value()?;
         let flags = self.parse_var_flags()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::Variable { name, value, flags })
     }
 
@@ -186,7 +231,9 @@ Ok(s.trim().to_string())
             }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::RBrace) { self.advance(); }
+        if self.peek() == Some(&Token::RBrace) {
+            self.advance();
+        }
         Ok(nodes)
     }
 
@@ -196,10 +243,21 @@ Ok(s.trim().to_string())
         let mut params = Vec::new();
         loop {
             self.skip_ws();
-            if self.peek() == Some(&Token::RParen) { break; }
+            if self.peek() == Some(&Token::RParen) {
+                break;
+            }
             let name = match self.peek() {
-                Some(Token::Dollar(n)) => { let n = n.clone(); self.advance(); n }
-                _ => return Err(SassError::Parse { expected: "$param".into(), found: "other".into() }),
+                Some(Token::Dollar(n)) => {
+                    let n = n.clone();
+                    self.advance();
+                    n
+                }
+                _ => {
+                    return Err(SassError::Parse {
+                        expected: "$param".into(),
+                        found: "other".into(),
+                    });
+                }
             };
             self.skip_ws();
             let default = if self.peek() == Some(&Token::Colon) {
@@ -215,12 +273,22 @@ Ok(s.trim().to_string())
             } else {
                 false
             };
-            params.push(Param { name, default, rest });
+            params.push(Param {
+                name,
+                default,
+                rest,
+            });
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) { self.advance(); } else { break; }
+            if self.peek() == Some(&Token::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::RParen) { self.advance(); }
+        if self.peek() == Some(&Token::RParen) {
+            self.advance();
+        }
         Ok(params)
     }
 
@@ -229,7 +297,9 @@ Ok(s.trim().to_string())
         let mut args = Vec::new();
         loop {
             self.skip_ws();
-            if self.peek() == Some(&Token::RParen) { break; }
+            if self.peek() == Some(&Token::RParen) {
+                break;
+            }
             // 检查关键字参数 $name: value 或 name: value（如 if(else: c)）
             let is_kwarg = match self.peek() {
                 Some(Token::Dollar(_)) => {
@@ -241,7 +311,9 @@ Ok(s.trim().to_string())
                     };
                     matches!(after_ws, Some(Token::Colon))
                 }
-                Some(Token::Ident(s)) if !matches!(s.as_str(), "true" | "false" | "null" | "and" | "or" | "not") => {
+                Some(Token::Ident(s))
+                    if !matches!(s.as_str(), "true" | "false" | "null" | "and" | "or" | "not") =>
+                {
                     let next = self.tokens.get(self.pos + 1);
                     let after_ws = if matches!(next, Some(Token::Whitespace)) {
                         self.tokens.get(self.pos + 2)
@@ -254,8 +326,16 @@ Ok(s.trim().to_string())
             };
             let (name, value) = if is_kwarg {
                 let n = match self.peek() {
-                    Some(Token::Dollar(n)) => { let n = n.clone(); self.advance(); n }
-                    Some(Token::Ident(n)) => { let n = n.clone(); self.advance(); n }
+                    Some(Token::Dollar(n)) => {
+                        let n = n.clone();
+                        self.advance();
+                        n
+                    }
+                    Some(Token::Ident(n)) => {
+                        let n = n.clone();
+                        self.advance();
+                        n
+                    }
                     _ => unreachable!(),
                 };
                 self.skip_ws();
@@ -271,12 +351,22 @@ Ok(s.trim().to_string())
             } else {
                 false
             };
-            args.push(Arg { name, value, spread });
+            args.push(Arg {
+                name,
+                value,
+                spread,
+            });
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) { self.advance(); } else { break; }
+            if self.peek() == Some(&Token::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::RParen) { self.advance(); }
+        if self.peek() == Some(&Token::RParen) {
+            self.advance();
+        }
         Ok(args)
     }
 
@@ -284,10 +374,21 @@ Ok(s.trim().to_string())
         let mut config = Vec::new();
         loop {
             self.skip_ws();
-            if self.peek() == Some(&Token::RParen) { break; }
+            if self.peek() == Some(&Token::RParen) {
+                break;
+            }
             let name = match self.peek() {
-                Some(Token::Dollar(n)) => { let n = n.clone(); self.advance(); n }
-                _ => return Err(SassError::Parse { expected: "$var".into(), found: "other".into() }),
+                Some(Token::Dollar(n)) => {
+                    let n = n.clone();
+                    self.advance();
+                    n
+                }
+                _ => {
+                    return Err(SassError::Parse {
+                        expected: "$var".into(),
+                        found: "other".into(),
+                    });
+                }
             };
             self.skip_ws();
             self.expect(&Token::Colon)?;
@@ -295,9 +396,15 @@ Ok(s.trim().to_string())
             let value = self.parse_value()?;
             config.push((name, value));
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) { self.advance(); } else { break; }
+            if self.peek() == Some(&Token::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
         }
-        if self.peek() == Some(&Token::RParen) { self.advance(); }
+        if self.peek() == Some(&Token::RParen) {
+            self.advance();
+        }
         Ok(config)
     }
 
@@ -306,9 +413,17 @@ Ok(s.trim().to_string())
         while let Some(t) = self.peek() {
             match t {
                 Token::Semicolon | Token::LBrace => break,
-                Token::Dollar(n) => { members.push(n.clone()); self.advance(); }
-                Token::Ident(n) => { members.push(n.clone()); self.advance(); }
-                Token::Whitespace | Token::Comma => { self.advance(); }
+                Token::Dollar(n) => {
+                    members.push(n.clone());
+                    self.advance();
+                }
+                Token::Ident(n) => {
+                    members.push(n.clone());
+                    self.advance();
+                }
+                Token::Whitespace | Token::Comma => {
+                    self.advance();
+                }
                 _ => break,
             }
         }
@@ -319,17 +434,35 @@ Ok(s.trim().to_string())
     pub(crate) fn parse_ident_name(&mut self) -> Result<String> {
         self.skip_ws();
         match self.peek() {
-            Some(Token::Ident(s)) => { let s = s.clone(); self.advance(); Ok(s) }
-            _ => Err(SassError::Parse { expected: "标识符".into(), found: "other".into() }),
+            Some(Token::Ident(s)) => {
+                let s = s.clone();
+                self.advance();
+                Ok(s)
+            }
+            _ => Err(SassError::Parse {
+                expected: "标识符".into(),
+                found: "other".into(),
+            }),
         }
     }
 
     pub(crate) fn parse_string_value(&mut self) -> Result<String> {
         self.skip_ws();
         match self.peek() {
-            Some(Token::String(s, _)) => { let s = s.clone(); self.advance(); Ok(s) }
-            Some(Token::Ident(s)) => { let s = s.clone(); self.advance(); Ok(s) }
-            _ => Err(SassError::Parse { expected: "字符串".into(), found: "other".into() }),
+            Some(Token::String(s, _)) => {
+                let s = s.clone();
+                self.advance();
+                Ok(s)
+            }
+            Some(Token::Ident(s)) => {
+                let s = s.clone();
+                self.advance();
+                Ok(s)
+            }
+            _ => Err(SassError::Parse {
+                expected: "字符串".into(),
+                found: "other".into(),
+            }),
         }
     }
 
@@ -342,7 +475,10 @@ Ok(s.trim().to_string())
             self.advance();
             Ok(())
         } else {
-            Err(SassError::Parse { expected: kw.into(), found: "other".into() })
+            Err(SassError::Parse {
+                expected: kw.into(),
+                found: "other".into(),
+            })
         }
     }
 }

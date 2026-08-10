@@ -33,15 +33,15 @@ fn test_string() {
 
 #[test]
 fn test_interp() {
-    assert_eq!(
-        lex("#{1 + 2}"),
-        vec![Token::Interp("1 + 2".to_string())]
-    );
+    assert_eq!(lex("#{1 + 2}"), vec![Token::Interp("1 + 2".to_string())]);
 }
 
 #[test]
 fn test_amp() {
-    assert_eq!(lex("&:hover"), vec![Token::Amp, Token::Colon, Token::Ident("hover".to_string())]);
+    assert_eq!(
+        lex("&:hover"),
+        vec![Token::Amp, Token::Colon, Token::Ident("hover".to_string())]
+    );
 }
 
 #[test]
@@ -79,26 +79,37 @@ fn test_block_comment() {
 #[test]
 fn test_operators() {
     let tokens = lex("== != <= >=");
-    assert_eq!(tokens, vec![
-        Token::Eq, Token::NotEq, Token::LessEq, Token::GreaterEq
-    ]);
+    assert_eq!(
+        tokens,
+        vec![Token::Eq, Token::NotEq, Token::LessEq, Token::GreaterEq]
+    );
 }
 
 #[test]
 fn test_keywords() {
     let tokens = lex("true false null and or not");
-    assert_eq!(tokens, vec![
-        Token::True, Token::False, Token::Null,
-        Token::And, Token::Or, Token::Not
-    ]);
+    assert_eq!(
+        tokens,
+        vec![
+            Token::True,
+            Token::False,
+            Token::Null,
+            Token::And,
+            Token::Or,
+            Token::Not
+        ]
+    );
 }
 
 #[test]
 fn test_full_selector() {
     let tokens = lex("a:hover");
-    assert_eq!(tokens, vec![
-        Token::Ident("a".to_string()),
-        Token::Colon,
-        Token::Ident("hover".to_string()),
-    ]);
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Ident("a".to_string()),
+            Token::Colon,
+            Token::Ident("hover".to_string()),
+        ]
+    );
 }

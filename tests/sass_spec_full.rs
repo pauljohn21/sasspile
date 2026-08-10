@@ -64,17 +64,18 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
             let output_path = format!("{base}output.css");
             let error_path = format!("{base}error");
 
-            let expected_output = files.iter()
+            let expected_output = files
+                .iter()
                 .find(|(p, _)| p == &output_path)
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
             let expect_error = files.iter().any(|(p, _)| p == &error_path);
 
             // 收集所有 .scss/.css 文件（排除 sass/ 变体）
-            let case_files: Vec<(String, String)> = files.iter()
+            let case_files: Vec<(String, String)> = files
+                .iter()
                 .filter(|(p, _)| {
-                    (p.ends_with(".scss") || p.ends_with(".css"))
-                    && !p.contains("/sass/")
+                    (p.ends_with(".scss") || p.ends_with(".css")) && !p.contains("/sass/")
                 })
                 .map(|(p, c)| (p.clone(), c.clone()))
                 .collect();
@@ -139,7 +140,9 @@ fn test_import_use_forward() {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
     for subdir in &["directives/import", "directives/use", "directives/forward"] {
         let dir = spec_root.join(subdir);
-        if !dir.exists() { continue; }
+        if !dir.exists() {
+            continue;
+        }
         let mut files = Vec::new();
         collect_hrx_files(&dir, &mut files);
         let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
@@ -147,14 +150,33 @@ fn test_import_use_forward() {
             if let Ok(content) = std::fs::read_to_string(file) {
                 for case in &parse_hrx(&content) {
                     cases += 1;
-                    if case.expected_output.is_empty() && !case.expect_error { skip += 1; continue; }
-                    if run_case(case) { pass += 1; } else { fail += 1; }
+                    if case.expected_output.is_empty() && !case.expect_error {
+                        skip += 1;
+                        continue;
+                    }
+                    if run_case(case) {
+                        pass += 1;
+                    } else {
+                        fail += 1;
+                    }
                 }
             }
         }
         let evaluated = cases - skip;
-        let pct = if evaluated > 0 { pass * 100 / evaluated } else { 0 };
-        info!(subdir = subdir, pass = pass, fail = fail, skip = skip, total = cases, pct = pct, "sass-spec 子目录");
+        let pct = if evaluated > 0 {
+            pass * 100 / evaluated
+        } else {
+            0
+        };
+        info!(
+            subdir = subdir,
+            pass = pass,
+            fail = fail,
+            skip = skip,
+            total = cases,
+            pct = pct,
+            "sass-spec 子目录"
+        );
     }
 }
 
@@ -240,12 +262,28 @@ fn test_sass_spec_full_stats() {
         total_skip += skip;
         total_cases += cases;
         let evaluated = cases - skip;
-        let pct = if evaluated > 0 { pass * 100 / evaluated } else { 0 };
-        info!(subdir = subdir, pass = pass, fail = fail, skip = skip, total = cases, pct = pct, "sass-spec 子目录");
+        let pct = if evaluated > 0 {
+            pass * 100 / evaluated
+        } else {
+            0
+        };
+        info!(
+            subdir = subdir,
+            pass = pass,
+            fail = fail,
+            skip = skip,
+            total = cases,
+            pct = pct,
+            "sass-spec 子目录"
+        );
     }
 
     let evaluated = total_cases - total_skip;
-    let overall_pct = if evaluated > 0 { total_pass * 100 / evaluated } else { 0 };
+    let overall_pct = if evaluated > 0 {
+        total_pass * 100 / evaluated
+    } else {
+        0
+    };
     info!(
         pass = total_pass,
         fail = total_fail,

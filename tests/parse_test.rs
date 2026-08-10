@@ -1,6 +1,6 @@
-use sasspile::parse::{Parser, ast::*};
 use sasspile::lex::Lexer;
 use sasspile::lex::token::Token;
+use sasspile::parse::{Parser, ast::*};
 
 fn parse(input: &str) -> Ast {
     let tokens: Vec<Token> = Lexer::new(input)
@@ -45,7 +45,10 @@ fn test_parse_mixin() {
 fn test_parse_expr_precedence() {
     let ast = parse("$x: 1 + 2 * 3;");
     match &ast.nodes[0] {
-        Node::Variable { value: Value::BinOp(b), .. } => {
+        Node::Variable {
+            value: Value::BinOp(b),
+            ..
+        } => {
             assert_eq!(b.op, BinOpKind::Add);
             assert!(matches!(&b.right, Value::BinOp(rb) if rb.op == BinOpKind::Mul));
         }

@@ -13,8 +13,8 @@ mod common;
 
 use sasspile::lex::Lexer;
 use sasspile::lex::token::Token;
-use sasspile::parse::ast::Node;
 use sasspile::parse::Parser;
+use sasspile::parse::ast::Node;
 use std::path::Path;
 
 /// 失败判定——决定最小化后是否"仍然失败"。
@@ -28,28 +28,26 @@ enum FailOracle<'a> {
 impl<'a> FailOracle<'a> {
     fn still_fails(&self, input: &str) -> bool {
         match self {
-            FailOracle::Error => {
-                match sasspile::compile_expanded(input) {
-                    Ok(css) => {
-                        tracing::debug!(
-                            target: "minimize",
-                            input_len = input.len(),
-                            output_len = css.len(),
-                            "compiled OK, revert removal"
-                        );
-                        false
-                    }
-                    Err(e) => {
-                        tracing::info!(
-                            target: "minimize",
-                            error = %e,
-                            input_len = input.len(),
-                            "still errors, keep removal"
-                        );
-                        true
-                    }
+            FailOracle::Error => match sasspile::compile_expanded(input) {
+                Ok(css) => {
+                    tracing::debug!(
+                        target: "minimize",
+                        input_len = input.len(),
+                        output_len = css.len(),
+                        "compiled OK, revert removal"
+                    );
+                    false
                 }
-            }
+                Err(e) => {
+                    tracing::info!(
+                        target: "minimize",
+                        error = %e,
+                        input_len = input.len(),
+                        "still errors, keep removal"
+                    );
+                    true
+                }
+            },
             FailOracle::OutputPreserve { original_output } => {
                 match sasspile::compile_expanded(input) {
                     Ok(css) => {
@@ -115,7 +113,8 @@ fn minimize(input: &str, oracle: &FailOracle) -> String {
         let mut i = 0;
         while i < nodes.len() {
             let removed = nodes.remove(i);
-            let remaining: String = nodes.iter()
+            let remaining: String = nodes
+                .iter()
                 .map(|n| n.to_scss(0))
                 .collect::<Vec<_>>()
                 .join("\n");
@@ -150,7 +149,8 @@ fn minimize(input: &str, oracle: &FailOracle) -> String {
         }
     }
 
-    let result: String = nodes.iter()
+    let result: String = nodes
+        .iter()
         .map(|n| n.to_scss(0))
         .collect::<Vec<_>>()
         .join("\n");
@@ -175,7 +175,9 @@ fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
     let mut content_buf = String::new();
     for line in content.lines() {
         if line.starts_with("<===>") {
-            if !path.is_empty() { files.push((path.clone(), content_buf)); }
+            if !path.is_empty() {
+                files.push((path.clone(), content_buf));
+            }
             path = line.trim_start_matches("<===>").trim().to_string();
             content_buf = String::new();
         } else {
@@ -183,17 +185,27 @@ fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
             content_buf.push('\n');
         }
     }
-    if !path.is_empty() { files.push((path, content_buf)); }
+    if !path.is_empty() {
+        files.push((path, content_buf));
+    }
     let mut cases = Vec::new();
     for (p, input) in &files {
         if p.ends_with("input.scss") {
             let base = p.strip_suffix("input.scss").unwrap_or(p).to_string();
             let out_path = format!("{base}output.css");
             let err_path = format!("{base}error");
-            let output = files.iter().find(|(pp,_)| pp==&out_path).map(|(_,c)|c.clone()).unwrap_or_default();
-            let has_error = files.iter().any(|(pp,_)| pp==&err_path);
+            let output = files
+                .iter()
+                .find(|(pp, _)| pp == &out_path)
+                .map(|(_, c)| c.clone())
+                .unwrap_or_default();
+            let has_error = files.iter().any(|(pp, _)| pp == &err_path);
             if !has_error && !output.is_empty() {
-                cases.push((base.trim_end_matches('/').to_string(), input.clone(), output));
+                cases.push((
+                    base.trim_end_matches('/').to_string(),
+                    input.clone(),
+                    output,
+                ));
             }
         }
     }
@@ -204,10 +216,13 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() { collect_hrx(&path, files); }
-            else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
+            if path.is_dir() {
+                collect_hrx(&path, files);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
                 if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 50_000 { files.push(path); }
+                    if meta.len() < 50_000 {
+                        files.push(path);
+                    }
                 }
             }
         }

@@ -2,7 +2,7 @@
 //
 // 演示如何使用 sasspile 将 SCSS 编译为 CSS
 
-use sasspile::{compile_expanded, compile_compressed, OutputStyle};
+use sasspile::{OutputStyle, compile_compressed, compile_expanded};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scss = r#"

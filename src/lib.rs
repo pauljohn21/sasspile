@@ -24,7 +24,7 @@ pub mod stage;
 pub use error::{Result, SassError, Span};
 pub use eval::Evaluator;
 pub use lex::Lexer;
-pub use parse::{ast::Ast, Parser};
+pub use parse::{Parser, ast::Ast};
 pub use stage::source::Source;
 
 use std::path::PathBuf;
@@ -41,9 +41,8 @@ use std::path::PathBuf;
 /// RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test -- --nocapture
 /// ```
 pub fn init_tracing() {
-    use tracing_subscriber::{fmt, EnvFilter};
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("warn"));
+    use tracing_subscriber::{EnvFilter, fmt};
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
     let _ = fmt()
         .with_env_filter(filter)
         .with_target(true)
@@ -134,26 +133,33 @@ mod tests {
 
     #[test]
     fn test_compile_for() {
-        let css = compile_expanded("@for $i from 1 through 3 { .col-#{$i} { width: $i * 100%; } }").unwrap();
+        let css = compile_expanded("@for $i from 1 through 3 { .col-#{$i} { width: $i * 100%; } }")
+            .unwrap();
         assert!(css.contains("col-1"));
     }
 
     #[test]
     fn test_compile_mixin() {
-        let css = compile_expanded("@mixin bold { font-weight: bold; } .title { @include bold; }").unwrap();
+        let css = compile_expanded("@mixin bold { font-weight: bold; } .title { @include bold; }")
+            .unwrap();
         assert!(css.contains("font-weight: bold"));
     }
 
     #[test]
     fn test_compile_content() {
-        let css = compile_expanded("@mixin wrapper { .inner { @content; } } @include wrapper { color: red; }").unwrap();
+        let css = compile_expanded(
+            "@mixin wrapper { .inner { @content; } } @include wrapper { color: red; }",
+        )
+        .unwrap();
         assert!(css.contains(".inner"));
         assert!(css.contains("color: red"));
     }
 
     #[test]
     fn test_compile_each_map() {
-        let css = compile_expanded("@each $key, $val in (a: 1, b: 2) { .#{$key} { width: $val; } }").unwrap();
+        let css =
+            compile_expanded("@each $key, $val in (a: 1, b: 2) { .#{$key} { width: $val; } }")
+                .unwrap();
         assert!(css.contains(".a"));
         assert!(css.contains("width: 1"));
     }
@@ -166,13 +172,16 @@ mod tests {
 
     #[test]
     fn test_compile_string_slice() {
-        let css = compile_expanded("@use 'sass:string' as string; a { s: string.slice('hello', 2, 4); }").unwrap();
+        let css =
+            compile_expanded("@use 'sass:string' as string; a { s: string.slice('hello', 2, 4); }")
+                .unwrap();
         assert!(css.contains("ell"));
     }
 
     #[test]
     fn test_compile_map_get() {
-        let css = compile_expanded("@use 'sass:map' as map; $m: (a: 1); a { v: map.get($m, a); }").unwrap();
+        let css = compile_expanded("@use 'sass:map' as map; $m: (a: 1); a { v: map.get($m, a); }")
+            .unwrap();
         assert!(css.contains("v: 1"));
     }
 
@@ -185,7 +194,9 @@ mod tests {
 
     #[test]
     fn test_compile_user_function() {
-        let css = compile_expanded("@function double($x) { @return $x * 2; } a { w: double(5px); }").unwrap();
+        let css =
+            compile_expanded("@function double($x) { @return $x * 2; } a { w: double(5px); }")
+                .unwrap();
         assert!(css.contains("w: 10px"));
     }
 
@@ -200,7 +211,10 @@ mod tests {
         let main = dir.join("main.scss");
         std::fs::write(&main, "@use 'config';\na { color: config.$primary; }\n").unwrap();
         let css = compile_file(&main, OutputStyle::Expanded).unwrap();
-        assert!(css.contains("#ff0000"), "应该包含 config.$primary 的值: {css}");
+        assert!(
+            css.contains("#ff0000"),
+            "应该包含 config.$primary 的值: {css}"
+        );
         // 清理
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -220,7 +234,9 @@ mod tests {
 
     #[test]
     fn test_compile_extend() {
-        let css = compile_expanded(".btn { color: blue; } .large { @extend .btn; font-size: 20px; }").unwrap();
+        let css =
+            compile_expanded(".btn { color: blue; } .large { @extend .btn; font-size: 20px; }")
+                .unwrap();
         assert!(css.contains(".btn"), "应该包含 .btn: {css}");
         assert!(css.contains(".large"), "应该包含 .large: {css}");
         assert!(css.contains("color: blue"), "应该包含 color: blue: {css}");

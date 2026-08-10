@@ -26,34 +26,34 @@ pub enum Token {
     Not,
 
     // —— 符号 ——
-    LParen,      // (
-    RParen,      // )
-    LBrace,      // {
-    RBrace,      // }
-    LBracket,    // [
-    RBracket,    // ]
-    Colon,       // :
-    Semicolon,   // ;
-    Comma,       // ,
-    Dot,         // .
-    Plus,        // +
-    Minus,       // -
-    Star,        // *
-    Slash,       // /
-    Percent,     // %
-    Amp,         // &
-    Caret,       // ^
-    Tilde,       // ~
-    Bang,        // !
-    Assign,      // =
-    Eq,          // ==
-    NotEq,       // !=
-    Less,        // <
-    Greater,     // >
-    LessEq,      // <=
-    GreaterEq,   // >=
-    DotDotDot,   // ...
-    Pipe,        // |  (for @supports selector(|...)
+    LParen,    // (
+    RParen,    // )
+    LBrace,    // {
+    RBrace,    // }
+    LBracket,  // [
+    RBracket,  // ]
+    Colon,     // :
+    Semicolon, // ;
+    Comma,     // ,
+    Dot,       // .
+    Plus,      // +
+    Minus,     // -
+    Star,      // *
+    Slash,     // /
+    Percent,   // %
+    Amp,       // &
+    Caret,     // ^
+    Tilde,     // ~
+    Bang,      // !
+    Assign,    // =
+    Eq,        // ==
+    NotEq,     // !=
+    Less,      // <
+    Greater,   // >
+    LessEq,    // <=
+    GreaterEq, // >=
+    DotDotDot, // ...
+    Pipe,      // |  (for @supports selector(|...)
 
     // —— 特殊 ——
     /// `@规则`——`@import`, `@media`。

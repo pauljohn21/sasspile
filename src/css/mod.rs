@@ -24,7 +24,11 @@ impl Serializer {
         let mut result = Vec::new();
         for node in nodes {
             match node {
-                CssNode::Rule { selector, declarations, children } => {
+                CssNode::Rule {
+                    selector,
+                    declarations,
+                    children,
+                } => {
                     if !declarations.is_empty() {
                         result.push(CssNode::Rule {
                             selector: selector.clone(),
@@ -44,7 +48,11 @@ impl Serializer {
         let mut result = Vec::new();
         for child in children {
             match child {
-                CssNode::Rule { selector, declarations, children: nested } => {
+                CssNode::Rule {
+                    selector,
+                    declarations,
+                    children: nested,
+                } => {
                     // 选择器已由 Evaluator 合并——不再二次合并
                     if !declarations.is_empty() {
                         result.push(CssNode::Rule {
@@ -76,12 +84,20 @@ impl Serializer {
     }
 
     fn serialize_compressed(nodes: &[CssNode]) -> String {
-        nodes.iter().map(Self::serialize_node_compressed).collect::<Vec<_>>().join("")
+        nodes
+            .iter()
+            .map(Self::serialize_node_compressed)
+            .collect::<Vec<_>>()
+            .join("")
     }
 
     fn serialize_node_expanded(node: &CssNode, indent: &str, depth: usize) -> String {
         match node {
-            CssNode::Declaration { property, value, important } => {
+            CssNode::Declaration {
+                property,
+                value,
+                important,
+            } => {
                 if *important {
                     format!("{indent}{property}: {value} !important;")
                 } else {
@@ -90,13 +106,24 @@ impl Serializer {
             }
             CssNode::Comment(text) => format!("{indent}/* {text} */"),
             CssNode::AtRoot(nodes) => Self::serialize_expanded(nodes, depth),
-            CssNode::Rule { selector, declarations, children } => {
+            CssNode::Rule {
+                selector,
+                declarations,
+                children,
+            } => {
                 let selector = Self::sanitize_selector(selector);
-                if selector.is_empty() { return String::new(); }
+                if selector.is_empty() {
+                    return String::new();
+                }
                 let inner = "  ".repeat(depth + 1);
                 let mut parts = vec![format!("{indent}{selector} {{")];
                 for decl in declarations {
-                    if let CssNode::Declaration { property, value, important } = decl {
+                    if let CssNode::Declaration {
+                        property,
+                        value,
+                        important,
+                    } = decl
+                    {
                         if *important {
                             parts.push(format!("{inner}{property}: {value} !important;"));
                         } else {
@@ -113,7 +140,12 @@ impl Serializer {
                 parts.push(format!("{indent}}}"));
                 parts.join("\n")
             }
-            CssNode::AtRule { has_body: true, name, params, children } => {
+            CssNode::AtRule {
+                has_body: true,
+                name,
+                params,
+                children,
+            } => {
                 let p = params.as_deref().unwrap_or("");
                 if children.is_empty() {
                     // 空块——单行输出
@@ -136,7 +168,12 @@ impl Serializer {
                     parts.join("\n")
                 }
             }
-            CssNode::AtRule { has_body: false, name, params, .. } => {
+            CssNode::AtRule {
+                has_body: false,
+                name,
+                params,
+                ..
+            } => {
                 let p = params.as_deref().unwrap_or("");
                 if p.is_empty() {
                     format!("{indent}@{name};")
@@ -149,7 +186,11 @@ impl Serializer {
 
     fn serialize_node_compressed(node: &CssNode) -> String {
         match node {
-            CssNode::Declaration { property, value, important } => {
+            CssNode::Declaration {
+                property,
+                value,
+                important,
+            } => {
                 if *important {
                     format!("{property}:{value} !important;")
                 } else {
@@ -157,31 +198,66 @@ impl Serializer {
                 }
             }
             CssNode::Comment(_) => String::new(),
-            CssNode::AtRoot(nodes) => nodes.iter().map(Self::serialize_node_compressed).collect::<String>(),
-            CssNode::Rule { selector, declarations, children } => {
+            CssNode::AtRoot(nodes) => nodes
+                .iter()
+                .map(Self::serialize_node_compressed)
+                .collect::<String>(),
+            CssNode::Rule {
+                selector,
+                declarations,
+                children,
+            } => {
                 let sel = Self::sanitize_selector(selector);
-                if sel.is_empty() { return String::new(); }
-                let decls: String = declarations.iter().map(Self::serialize_node_compressed).collect();
-                let kids: String = children.iter().map(Self::serialize_node_compressed).collect();
+                if sel.is_empty() {
+                    return String::new();
+                }
+                let decls: String = declarations
+                    .iter()
+                    .map(Self::serialize_node_compressed)
+                    .collect();
+                let kids: String = children
+                    .iter()
+                    .map(Self::serialize_node_compressed)
+                    .collect();
                 format!("{sel}{{{decls}{kids}}}")
             }
-            CssNode::AtRule { has_body: true, name, params, children } => {
+            CssNode::AtRule {
+                has_body: true,
+                name,
+                params,
+                children,
+            } => {
                 let p = params.as_deref().unwrap_or("");
-                let kids: String = children.iter().map(Self::serialize_node_compressed).collect();
+                let kids: String = children
+                    .iter()
+                    .map(Self::serialize_node_compressed)
+                    .collect();
                 format!("@{name} {p}{{{kids}}}")
             }
-            CssNode::AtRule { has_body: false, name, params, .. } => {
+            CssNode::AtRule {
+                has_body: false,
+                name,
+                params,
+                ..
+            } => {
                 let p = params.as_deref().unwrap_or("");
-                if p.is_empty() { format!("@{name};") } else { format!("@{name} {p};") }
+                if p.is_empty() {
+                    format!("@{name};")
+                } else {
+                    format!("@{name} {p};")
+                }
             }
         }
     }
 
     /// 净化选择器——处理占位符 `%xxx` 在伪类中的移除。
     fn sanitize_selector(selector: &str) -> String {
-        if !selector.contains('%') { return selector.to_string(); }
+        if !selector.contains('%') {
+            return selector.to_string();
+        }
         // 顶层逗号分隔——移除纯占位符部分
-        let parts: Vec<&str> = selector.split(',')
+        let parts: Vec<&str> = selector
+            .split(',')
             .filter(|s| !s.trim().starts_with('%'))
             .collect();
         let mut result = parts.join(",").trim().to_string();
@@ -194,14 +270,23 @@ impl Serializer {
                 let chars: Vec<char> = result.chars().collect();
                 let mut i = paren_start + 1;
                 while i < chars.len() && depth > 0 {
-                    if chars[i] == '(' { depth += 1; }
-                    else if chars[i] == ')' { depth -= 1; }
-                    if depth > 0 { i += 1; }
+                    if chars[i] == '(' {
+                        depth += 1;
+                    } else if chars[i] == ')' {
+                        depth -= 1;
+                    }
+                    if depth > 0 {
+                        i += 1;
+                    }
                 }
                 let end = i;
                 let inner = &result[paren_start + 1..end];
                 let args: Vec<&str> = inner.split(',').filter(|s| !s.trim().is_empty()).collect();
-                let real_args: Vec<&str> = args.iter().filter(|s| !s.trim().starts_with('%')).cloned().collect();
+                let real_args: Vec<&str> = args
+                    .iter()
+                    .filter(|s| !s.trim().starts_with('%'))
+                    .cloned()
+                    .collect();
                 if real_args.is_empty() {
                     if *pseudo == "not" {
                         let before = &result[..pos];
@@ -211,7 +296,11 @@ impl Serializer {
                         return String::new();
                     }
                 } else {
-                    let new_inner = real_args.iter().map(|s| s.trim()).collect::<Vec<_>>().join(", ");
+                    let new_inner = real_args
+                        .iter()
+                        .map(|s| s.trim())
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     let before = &result[..paren_start];
                     let after = &result[end + 1..];
                     result = format!("{before}({new_inner}){after}");
@@ -229,9 +318,14 @@ mod tests {
     #[test]
     fn test_serialize_decl() {
         let nodes = vec![CssNode::Declaration {
-            property: "color".into(), value: "red".into(), important: false,
+            property: "color".into(),
+            value: "red".into(),
+            important: false,
         }];
-        assert_eq!(Serializer::serialize(&nodes, OutputStyle::Expanded), "color: red;\n");
+        assert_eq!(
+            Serializer::serialize(&nodes, OutputStyle::Expanded),
+            "color: red;\n"
+        );
     }
 
     #[test]
@@ -239,10 +333,15 @@ mod tests {
         let nodes = vec![CssNode::Rule {
             selector: "a".into(),
             declarations: vec![CssNode::Declaration {
-                property: "color".into(), value: "red".into(), important: false,
+                property: "color".into(),
+                value: "red".into(),
+                important: false,
             }],
             children: vec![],
         }];
-        assert_eq!(Serializer::serialize(&nodes, OutputStyle::Expanded), "a {\n  color: red;\n}\n");
+        assert_eq!(
+            Serializer::serialize(&nodes, OutputStyle::Expanded),
+            "a {\n  color: red;\n}\n"
+        );
     }
 }

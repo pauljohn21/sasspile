@@ -12,7 +12,9 @@ fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
     let mut content_buf = String::new();
     for line in content.lines() {
         if line.starts_with("<===>") {
-            if !path.is_empty() { files.push((path.clone(), content_buf)); }
+            if !path.is_empty() {
+                files.push((path.clone(), content_buf));
+            }
             path = line.trim_start_matches("<===>").trim().to_string();
             content_buf = String::new();
         } else {
@@ -20,17 +22,27 @@ fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
             content_buf.push('\n');
         }
     }
-    if !path.is_empty() { files.push((path, content_buf)); }
+    if !path.is_empty() {
+        files.push((path, content_buf));
+    }
     let mut cases = Vec::new();
     for (p, input) in &files {
         if p.ends_with("input.scss") {
             let base = p.strip_suffix("input.scss").unwrap_or(p).to_string();
             let out_path = format!("{base}output.css");
             let err_path = format!("{base}error");
-            let output = files.iter().find(|(pp,_)| pp==&out_path).map(|(_,c)|c.clone()).unwrap_or_default();
-            let has_error = files.iter().any(|(pp,_)| pp==&err_path);
+            let output = files
+                .iter()
+                .find(|(pp, _)| pp == &out_path)
+                .map(|(_, c)| c.clone())
+                .unwrap_or_default();
+            let has_error = files.iter().any(|(pp, _)| pp == &err_path);
             if !has_error && !output.is_empty() {
-                cases.push((base.trim_end_matches('/').to_string(), input.clone(), output));
+                cases.push((
+                    base.trim_end_matches('/').to_string(),
+                    input.clone(),
+                    output,
+                ));
             }
         }
     }
@@ -41,10 +53,13 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() { collect_hrx(&path, files); }
-            else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
+            if path.is_dir() {
+                collect_hrx(&path, files);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
                 if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 50_000 { files.push(path); }
+                    if meta.len() < 50_000 {
+                        files.push(path);
+                    }
                 }
             }
         }
@@ -61,11 +76,15 @@ fn diag(subdir: &str, max_show: usize) {
     let mut err_types: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 
     for file in &files {
-        if shown >= max_show { break; }
+        if shown >= max_show {
+            break;
+        }
         if let Ok(content) = std::fs::read_to_string(file) {
             let stem = file.file_stem().unwrap().to_string_lossy().to_string();
             for (name, input, expected) in &parse_hrx(&content) {
-                if shown >= max_show { break; }
+                if shown >= max_show {
+                    break;
+                }
                 match sasspile::compile_expanded(input) {
                     Ok(actual) => {
                         if actual.trim() != expected.trim() {
@@ -76,12 +95,17 @@ fn diag(subdir: &str, max_show: usize) {
                             println!("FAIL {stem}/{name}: {key} ({} diffs)", diff.lines.len());
                             for dl in diff.lines.iter().take(3) {
                                 match dl {
-                                    common::DiffLine::Changed { line, expected, actual } =>
-                                        println!("  L{line}: exp='{expected}' act='{actual}'"),
-                                    common::DiffLine::ExtraExpected { line, content } =>
-                                        println!("  L{line}: exp='{content}' act=(missing)"),
-                                    common::DiffLine::ExtraActual { line, content } =>
-                                        println!("  L{line}: exp=(missing) act='{content}'"),
+                                    common::DiffLine::Changed {
+                                        line,
+                                        expected,
+                                        actual,
+                                    } => println!("  L{line}: exp='{expected}' act='{actual}'"),
+                                    common::DiffLine::ExtraExpected { line, content } => {
+                                        println!("  L{line}: exp='{content}' act=(missing)")
+                                    }
+                                    common::DiffLine::ExtraActual { line, content } => {
+                                        println!("  L{line}: exp=(missing) act='{content}'")
+                                    }
                                 }
                             }
                         }
@@ -89,10 +113,15 @@ fn diag(subdir: &str, max_show: usize) {
                     Err(err) => {
                         shown += 1;
                         let err_str = format!("{err}");
-                        let key = if err_str.contains("未定义") { "undefined".to_string() }
-                            else if err_str.contains("语法错误") { "syntax".to_string() }
-                            else if err_str.contains("求值错误") { "eval".to_string() }
-                            else { "other_err".to_string() };
+                        let key = if err_str.contains("未定义") {
+                            "undefined".to_string()
+                        } else if err_str.contains("语法错误") {
+                            "syntax".to_string()
+                        } else if err_str.contains("求值错误") {
+                            "eval".to_string()
+                        } else {
+                            "other_err".to_string()
+                        };
                         *err_types.entry(key.clone()).or_default() += 1;
                         println!("ERROR {stem}/{name}: {key} [{err_str}]");
                     }
@@ -108,70 +137,114 @@ fn diag(subdir: &str, max_show: usize) {
 }
 
 #[test]
-fn diag_list() { diag("core_functions/list", 15); }
+fn diag_list() {
+    diag("core_functions/list", 15);
+}
 
 #[test]
-fn diag_selector() { diag("core_functions/selector", 15); }
+fn diag_selector() {
+    diag("core_functions/selector", 15);
+}
 
 #[test]
-fn diag_color() { diag("core_functions/color", 15); }
+fn diag_color() {
+    diag("core_functions/color", 15);
+}
 
 #[test]
-fn diag_math() { diag("core_functions/math", 15); }
+fn diag_math() {
+    diag("core_functions/math", 15);
+}
 
 #[test]
-fn diag_expressions() { diag("expressions", 15); }
+fn diag_expressions() {
+    diag("expressions", 15);
+}
 
 #[test]
-fn diag_meta() { diag("core_functions/meta", 15); }
+fn diag_meta() {
+    diag("core_functions/meta", 15);
+}
 
 #[test]
-fn diag_import() { diag("directives/import", 15); }
+fn diag_import() {
+    diag("directives/import", 15);
+}
 
 #[test]
-fn diag_use() { diag("directives/use", 15); }
+fn diag_use() {
+    diag("directives/use", 15);
+}
 
 #[test]
-fn diag_css() { diag("css", 20); }
+fn diag_css() {
+    diag("css", 20);
+}
 
 #[test]
-fn diag_non_conformant() { diag("non_conformant", 20); }
+fn diag_non_conformant() {
+    diag("non_conformant", 20);
+}
 
 #[test]
-fn diag_function() { diag("directives/function", 15); }
+fn diag_function() {
+    diag("directives/function", 15);
+}
 
 #[test]
-fn diag_extend() { diag("directives/extend", 15); }
+fn diag_extend() {
+    diag("directives/extend", 15);
+}
 
 #[test]
-fn diag_numbers() { diag("values/numbers", 20); }
+fn diag_numbers() {
+    diag("values/numbers", 20);
+}
 
 #[test]
-fn diag_libsass_closed() { diag("libsass-closed-issues", 20); }
+fn diag_libsass_closed() {
+    diag("libsass-closed-issues", 20);
+}
 
 #[test]
-fn diag_string() { diag("core_functions/string", 20); }
+fn diag_string() {
+    diag("core_functions/string", 20);
+}
 
 #[test]
-fn diag_map() { diag("core_functions/map", 15); }
+fn diag_map() {
+    diag("core_functions/map", 15);
+}
 
 #[test]
-fn diag_for() { diag("directives/for", 15); }
+fn diag_for() {
+    diag("directives/for", 15);
+}
 
 #[test]
-fn diag_each() { diag("directives/each", 15); }
+fn diag_each() {
+    diag("directives/each", 15);
+}
 
 #[test]
-fn diag_while() { diag("directives/while", 15); }
+fn diag_while() {
+    diag("directives/while", 15);
+}
 
 #[test]
-fn diag_media() { diag("directives/media", 15); }
+fn diag_media() {
+    diag("directives/media", 15);
+}
 
 #[test]
-fn diag_values_maps() { diag("values/maps", 10); }
+fn diag_values_maps() {
+    diag("values/maps", 10);
+}
 
 #[test]
-fn diag_values_colors() { diag("values/colors", 10); }
+fn diag_values_colors() {
+    diag("values/colors", 10);
+}
 
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
@@ -186,13 +259,20 @@ fn stats_subdir(subdir: &str) {
         if let Ok(content) = std::fs::read_to_string(file) {
             for (_name, input, expected) in &parse_hrx(&content) {
                 cases += 1;
-                if expected.trim().is_empty() { continue; }
+                if expected.trim().is_empty() {
+                    continue;
+                }
                 match sasspile::compile_expanded(input) {
                     Ok(actual) => {
-                        if actual.trim() == expected.trim() { pass += 1; }
-                        else { fail += 1; }
+                        if actual.trim() == expected.trim() {
+                            pass += 1;
+                        } else {
+                            fail += 1;
+                        }
                     }
-                    Err(_) => { fail += 1; }
+                    Err(_) => {
+                        fail += 1;
+                    }
                 }
             }
         }
@@ -202,7 +282,11 @@ fn stats_subdir(subdir: &str) {
 }
 
 #[test]
-fn stats_list() { stats_subdir("core_functions/list"); }
+fn stats_list() {
+    stats_subdir("core_functions/list");
+}
 
 #[test]
-fn stats_math() { stats_subdir("core_functions/math"); }
+fn stats_math() {
+    stats_subdir("core_functions/math");
+}

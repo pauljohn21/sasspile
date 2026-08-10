@@ -32,7 +32,10 @@ fn test_variable_to_scss() {
     let node = Node::Variable {
         name: "color".into(),
         value: Value::String("blue".into(), false),
-        flags: VarFlags { default: true, global: false },
+        flags: VarFlags {
+            default: true,
+            global: false,
+        },
     };
     let scss = node.to_scss(0);
     assert_eq!(scss, "$color: blue !default;");
@@ -49,11 +52,18 @@ fn test_comment_to_scss() {
 #[test]
 fn test_if_to_scss() {
     let node = Node::If {
-        branches: vec![(Value::Bool(true), vec![Node::Decl {
-            property: "color".into(), value: Value::String("red".into(), false), important: false,
-        }])],
+        branches: vec![(
+            Value::Bool(true),
+            vec![Node::Decl {
+                property: "color".into(),
+                value: Value::String("red".into(), false),
+                important: false,
+            }],
+        )],
         else_body: Some(vec![Node::Decl {
-            property: "color".into(), value: Value::String("blue".into(), false), important: false,
+            property: "color".into(),
+            value: Value::String("blue".into(), false),
+            important: false,
         }]),
     };
     let scss = node.to_scss(0);
@@ -69,7 +79,9 @@ fn test_for_to_scss() {
         to: Value::Number(10.0, None),
         inclusive: true,
         body: vec![Node::Decl {
-            property: "w".into(), value: Value::Variable("i".into()), important: false,
+            property: "w".into(),
+            value: Value::Variable("i".into()),
+            important: false,
         }],
     };
     let scss = node.to_scss(0);
@@ -88,14 +100,20 @@ fn test_include_to_scss() {
 
 #[test]
 fn test_extend_to_scss() {
-    let node = Node::Extend { selector: ".btn".into(), optional: true };
+    let node = Node::Extend {
+        selector: ".btn".into(),
+        optional: true,
+    };
     assert_eq!(node.to_scss(0), "@extend .btn !optional;");
 }
 
 #[test]
 fn test_use_to_scss() {
     let node = Node::Use {
-        url: "sass:color".into(), namespace: None, star: false, config: vec![],
+        url: "sass:color".into(),
+        namespace: None,
+        star: false,
+        config: vec![],
     };
     assert_eq!(node.to_scss(0), "@use \"sass:color\";");
 }

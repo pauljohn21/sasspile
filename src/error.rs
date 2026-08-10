@@ -21,7 +21,10 @@ impl Span {
 
     /// 单位置 Span。
     pub fn at(pos: usize) -> Self {
-        Self { start: pos, end: pos + 1 }
+        Self {
+            start: pos,
+            end: pos + 1,
+        }
     }
 }
 

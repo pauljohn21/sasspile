@@ -2,14 +2,13 @@
 //!
 //! 包含 parse_at_rule/parse_if/parse_for/parse_each/parse_while 等所有 @ 规则解析方法。
 
-use super::ast::*;
 use super::Parser;
-use tracing::{instrument, trace, warn};
+use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
+use tracing::{instrument, trace, warn};
 
 impl<'tok> Parser<'tok> {
-
     // —— @规则解析 ——
     pub(crate) fn parse_at_rule(&mut self, name: String) -> Result<Node> {
         self.advance(); // 消费 @rule
@@ -20,7 +19,13 @@ impl<'tok> Parser<'tok> {
             "while" => self.parse_while(),
             "mixin" => self.parse_mixin_def(),
             "include" => self.parse_include(),
-            "content" => { self.skip_ws(); if self.peek() == Some(&Token::Semicolon) { self.advance(); } Ok(Node::Content) }
+            "content" => {
+                self.skip_ws();
+                if self.peek() == Some(&Token::Semicolon) {
+                    self.advance();
+                }
+                Ok(Node::Content)
+            }
             "function" => self.parse_function_def(),
             "return" => self.parse_return(),
             "use" => self.parse_use(),
@@ -72,14 +77,26 @@ impl<'tok> Parser<'tok> {
                 break;
             }
         }
-        Ok(Node::If { branches, else_body })
+        Ok(Node::If {
+            branches,
+            else_body,
+        })
     }
 
     pub(crate) fn parse_for(&mut self) -> Result<Node> {
         self.skip_ws();
         let var = match self.peek() {
-            Some(Token::Dollar(n)) => { let n = n.clone(); self.advance(); n }
-            _ => return Err(SassError::Parse { expected: "$var".into(), found: "other".into() }),
+            Some(Token::Dollar(n)) => {
+                let n = n.clone();
+                self.advance();
+                n
+            }
+            _ => {
+                return Err(SassError::Parse {
+                    expected: "$var".into(),
+                    found: "other".into(),
+                });
+            }
         };
         self.skip_ws();
         self.expect_keyword("from")?;
@@ -98,7 +115,13 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         self.expect(&Token::LBrace)?;
         let body = self.parse_body()?;
-        Ok(Node::For { var, from, to, inclusive, body })
+        Ok(Node::For {
+            var,
+            from,
+            to,
+            inclusive,
+            body,
+        })
     }
 
     pub(crate) fn parse_each(&mut self) -> Result<Node> {
@@ -114,7 +137,11 @@ impl<'tok> Parser<'tok> {
                 _ => break,
             }
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) { self.advance(); } else { break; }
+            if self.peek() == Some(&Token::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
         }
         self.skip_ws();
         self.expect_keyword("in")?;
@@ -168,7 +195,11 @@ impl<'tok> Parser<'tok> {
         } else if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
-        Ok(Node::Include { name, args, content })
+        Ok(Node::Include {
+            name,
+            args,
+            content,
+        })
     }
 
     pub(crate) fn parse_function_def(&mut self) -> Result<Node> {
@@ -190,7 +221,9 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         let value = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::Return(value))
     }
 
@@ -218,8 +251,15 @@ impl<'tok> Parser<'tok> {
             config = self.parse_config()?;
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
-        Ok(Node::Use { url, namespace, star, config })
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
+        Ok(Node::Use {
+            url,
+            namespace,
+            star,
+            config,
+        })
     }
 
     pub(crate) fn parse_forward(&mut self) -> Result<Node> {
@@ -236,22 +276,33 @@ impl<'tok> Parser<'tok> {
                 prefix = Some(s.clone());
                 self.advance();
             }
-            if self.peek() == Some(&Token::Star) { self.advance(); }
+            if self.peek() == Some(&Token::Star) {
+                self.advance();
+            }
         } else if self.peek_keyword("show") {
             show = self.parse_member_list();
         } else if self.peek_keyword("hide") {
             hide = self.parse_member_list();
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
-        Ok(Node::Forward { url, show, hide, prefix })
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
+        Ok(Node::Forward {
+            url,
+            show,
+            hide,
+            prefix,
+        })
     }
 
     pub(crate) fn parse_import(&mut self) -> Result<Node> {
         self.skip_ws();
         let url = self.parse_string_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::Import { url })
     }
 
@@ -266,16 +317,30 @@ impl<'tok> Parser<'tok> {
                     self.advance();
                     self.skip_ws();
                     if let Some(Token::Ident(s)) = self.peek() {
-                        if s == "optional" { optional = true; self.advance(); }
+                        if s == "optional" {
+                            optional = true;
+                            self.advance();
+                        }
                     }
                 }
-                Token::Whitespace => { selector.push(' '); self.advance(); }
-                _ => { selector.push_str(&t.to_string()); self.advance(); }
+                Token::Whitespace => {
+                    selector.push(' ');
+                    self.advance();
+                }
+                _ => {
+                    selector.push_str(&t.to_string());
+                    self.advance();
+                }
             }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
-        Ok(Node::Extend { selector: selector.trim().to_string(), optional })
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
+        Ok(Node::Extend {
+            selector: selector.trim().to_string(),
+            optional,
+        })
     }
 
     pub(crate) fn parse_at_root(&mut self) -> Result<Node> {
@@ -284,11 +349,15 @@ impl<'tok> Parser<'tok> {
             self.advance();
             let mut q = String::new();
             while let Some(t) = self.peek() {
-                if t == &Token::RParen { break; }
+                if t == &Token::RParen {
+                    break;
+                }
                 q.push_str(&t.to_string());
                 self.advance();
             }
-            if self.peek() == Some(&Token::RParen) { self.advance(); }
+            if self.peek() == Some(&Token::RParen) {
+                self.advance();
+            }
             Some(q.trim().to_string())
         } else {
             None
@@ -310,27 +379,36 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         let v = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::Warn(v))
     }
     pub(crate) fn parse_debug(&mut self) -> Result<Node> {
         self.skip_ws();
         let v = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::Debug(v))
     }
     pub(crate) fn parse_error(&mut self) -> Result<Node> {
         self.skip_ws();
         let v = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::Error(v))
     }
 
     pub(crate) fn parse_generic_at_rule(&mut self, name: String) -> Result<Node> {
         self.skip_ws();
-        let params = if !matches!(self.peek(), Some(Token::LBrace) | Some(Token::Semicolon) | None) {
+        let params = if !matches!(
+            self.peek(),
+            Some(Token::LBrace) | Some(Token::Semicolon) | None
+        ) {
             Some(self.parse_at_params()?)
         } else {
             None
@@ -343,7 +421,9 @@ impl<'tok> Parser<'tok> {
             None
         };
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) { self.advance(); }
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::AtRule { name, params, body })
     }
 
@@ -352,9 +432,17 @@ impl<'tok> Parser<'tok> {
         while let Some(t) = self.peek() {
             match t {
                 Token::LBrace | Token::Semicolon | Token::Eof => break,
-                Token::Comment(_, _) => { self.advance(); } // 跳过注释
-                Token::Whitespace => { s.push(' '); self.advance(); }
-                _ => { s.push_str(&t.to_string()); self.advance(); }
+                Token::Comment(_, _) => {
+                    self.advance();
+                } // 跳过注释
+                Token::Whitespace => {
+                    s.push(' ');
+                    self.advance();
+                }
+                _ => {
+                    s.push_str(&t.to_string());
+                    self.advance();
+                }
             }
         }
         // 标准化冒号周围空白
