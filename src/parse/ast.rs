@@ -141,7 +141,7 @@ pub enum Value {
     /// 颜色。
     Color(Color),
     /// 列表。
-    List(Vec<Value>, Separator),
+    List(Vec<Value>, Separator, bool),
     /// Map。
     Map(Vec<(Value, Value)>),
     /// 变量引用。
@@ -263,15 +263,16 @@ impl std::fmt::Display for Value {
                     write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a)
                 }
             }
-            Value::List(elements, sep) => {
-                let sep_str = match sep {
-                    Separator::Comma => ", ",
-                    Separator::Space => " ",
-                    Separator::Slash => "/",
-                    Separator::Undecided => " ",
-                };
-                let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
-                write!(f, "{}", parts.join(sep_str))
+Value::List(elements, sep, bracketed) => {
+let sep_str = match sep {
+Separator::Comma => ", ",
+Separator::Space => " ",
+Separator::Slash => "/",
+Separator::Undecided => " ",
+};
+let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
+let inner = parts.join(sep_str);
+if *bracketed { write!(f, "[{}]", inner) } else { write!(f, "{}", inner) }
             }
             Value::Map(pairs) => {
                 let parts: Vec<String> = pairs
@@ -327,17 +328,17 @@ mod tests {
 
     #[test]
     fn test_list_display() {
-        let list = Value::List(vec![
-            Value::Number(1.0, None),
-            Value::Number(2.0, None),
-            Value::Number(3.0, None),
-        ], Separator::Comma);
+let list = Value::List(vec![
+Value::Number(1.0, None),
+Value::Number(2.0, None),
+Value::Number(3.0, None),
+], Separator::Comma, false);
         assert_eq!(list.to_string(), "1, 2, 3");
 
-        let space_list = Value::List(vec![
-            Value::String("a".into(), false),
-            Value::String("b".into(), false),
-        ], Separator::Space);
+let space_list = Value::List(vec![
+Value::String("a".into(), false),
+Value::String("b".into(), false),
+], Separator::Space, false);
         assert_eq!(space_list.to_string(), "a b");
     }
 

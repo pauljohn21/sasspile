@@ -739,7 +739,7 @@ impl<'tok> Parser<'tok> {
                 items.push(self.parse_expr(0)?);
                 self.skip_ws();
             }
-            return Ok(Value::List(items, Separator::Comma));
+            return Ok(Value::List(items, Separator::Comma, false));
         }
         Ok(first)
     }
@@ -762,7 +762,7 @@ impl<'tok> Parser<'tok> {
                             items.push(self.parse_prefix()?);
                         }
                         if items.len() > 1 {
-                            lhs = Value::List(items, Separator::Space);
+                            lhs = Value::List(items, Separator::Space, false);
                             continue; // 继续检查后续运算符（如 / ）
                         }
                     }
@@ -890,7 +890,7 @@ impl<'tok> Parser<'tok> {
                 // 空 Map 或列表
                 if self.peek() == Some(&Token::RParen) {
                     self.advance();
-                    return Ok(Value::List(vec![], Separator::Comma));
+                    return Ok(Value::List(vec![], Separator::Comma, false));
                 }
                 let first = self.parse_expr(0)?;
                 self.skip_ws();
@@ -937,7 +937,7 @@ if self.peek() == Some(&Token::RParen) { break Separator::Space; }
                     if items.len() == 1 {
                         Ok(items.into_iter().next().unwrap())
                     } else {
-                        Ok(Value::List(items, sep))
+                        Ok(Value::List(items, sep, false))
                     }
                 }
             }
@@ -964,8 +964,8 @@ if self.peek() == Some(&Token::RParen) { break Separator::Space; }
                     self.skip_ws();
                     if self.peek() == Some(&Token::Comma) { self.advance(); } else { break; }
                 }
-                if self.peek() == Some(&Token::RBracket) { self.advance(); }
-                Ok(Value::List(items, Separator::Comma))
+            if self.peek() == Some(&Token::RBracket) { self.advance(); }
+            Ok(Value::List(items, Separator::Comma, true))
             }
             Some(Token::Amp) => {
                 let v = Value::String("&".to_string(), false);

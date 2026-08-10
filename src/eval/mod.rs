@@ -447,12 +447,12 @@ Ok((vec![], env.clone()))
                     .cloned()
                     .ok_or_else(|| SassError::UndefinedVariable(name.clone()))
             }
-            Value::List(elements, sep) => {
+            Value::List(elements, sep, bracketed) => {
                 let evaluated: Vec<Value> = elements.iter()
                     .map(|e| Self::eval_value(e, env))
                     .collect::<Result<_>>()?;
                 // 空格分隔列表可能需要进一步处理
-                Ok(Value::List(evaluated, sep.clone()))
+                Ok(Value::List(evaluated, sep.clone(), *bracketed))
             }
             Value::Map(pairs) => {
                 let evaluated: Vec<(Value, Value)> = pairs.iter()
@@ -522,18 +522,18 @@ Ok((vec![], env.clone()))
             (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(format!("#{:02x}{:02x}{:02x}{b}", c.r, c.g, c.b), qb)),
             (Value::Null, Value::String(b, qb)) => Ok(Value::String(b, qb)),
             // 列表拼接
-            (Value::List(mut items, sep), Value::List(items2, _)) => {
+            (Value::List(mut items, sep, _), Value::List(items2, _, _)) => {
                 items.extend(items2);
-                Ok(Value::List(items, sep))
+                Ok(Value::List(items, sep, false))
             }
-            (Value::List(mut items, sep), other) => {
+            (Value::List(mut items, sep, _), other) => {
                 items.push(other);
-                Ok(Value::List(items, sep))
+                Ok(Value::List(items, sep, false))
             }
-            (other, Value::List(items, sep)) => {
+            (other, Value::List(items, sep, false)) => {
                 let mut new_items = vec![other];
                 new_items.extend(items);
-                Ok(Value::List(new_items, sep))
+                Ok(Value::List(new_items, sep, false))
             }
             _ => Err(SassError::Eval("不支持的 + 运算".into())),
         }
@@ -571,7 +571,7 @@ Ok((vec![], env.clone()))
                 Ok(Value::Number(a / b, u1.clone()))
             }
             // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
-            _ => Ok(Value::List(vec![l.clone(), r.clone()], Separator::Slash)),
+            _ => Ok(Value::List(vec![l.clone(), r.clone()], Separator::Slash, false)),
         }
     }
     fn modulo(l: &Value, r: &Value) -> Result<Value> {
@@ -581,9 +581,9 @@ Ok((vec![], env.clone()))
                 Ok(Value::Number(a % b, u.clone()))
             }
             // Null RHS — % 不是运算符，作为字符串保留
-            (l, Value::Null) => Ok(Value::List(vec![l.clone(), Value::String("%".to_string(), false)], Separator::Space)),
+            (l, Value::Null) => Ok(Value::List(vec![l.clone(), Value::String("%".to_string(), false)], Separator::Space, false)),
             // 非数字 % —— 作为空格分隔列表保留
-            _ => Ok(Value::List(vec![l.clone(), r.clone()], Separator::Space)),
+            _ => Ok(Value::List(vec![l.clone(), r.clone()], Separator::Space, false)),
         }
     }
     fn compare(op: &BinOpKind, l: &Value, r: &Value) -> Result<Value> {
@@ -608,7 +608,7 @@ Ok((vec![], env.clone()))
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Color(a), Value::Color(b)) => a == b,
             (Value::Null, Value::Null) => true,
-            (Value::List(a, _), Value::List(b, _)) => {
+            (Value::List(a, _, false), Value::List(b, _, false)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| Self::values_eq(x, y))
             }
             (Value::Map(a), Value::Map(b)) => {
@@ -724,9 +724,9 @@ Ok((vec![], env.clone()))
             }
             Value::Map(pairs) if vars.len() == 1 => {
                 // 单变量遍历 Map：每对作为一个子列表
-                pairs.iter().map(|(k, v)| vec![Value::List(vec![k.clone(), v.clone()], Separator::Space)]).collect()
+                pairs.iter().map(|(k, v)| vec![Value::List(vec![k.clone(), v.clone()], Separator::Space, false)]).collect()
             }
-            Value::List(es, _) => es.iter().map(|e| vec![e.clone()]).collect(),
+            Value::List(es, _, false) => es.iter().map(|e| vec![e.clone()]).collect(),
             Value::Map(pairs) => pairs.iter().flat_map(|(k, v)| vec![vec![k.clone()], vec![v.clone()]]).collect(),
             other => vec![vec![other.clone()]],
         };
@@ -798,7 +798,7 @@ Ok((vec![], env.clone()))
             let val = Self::eval_value(&arg.value, env)?;
             if arg.spread {
                 // 展开 $args... 为多个位置参数
-                if let Value::List(items, _) = val {
+                if let Value::List(items, _, false) = val {
                     positional.extend(items);
                 } else {
                     positional.push(val);
@@ -816,7 +816,7 @@ Ok((vec![], env.clone()))
             if param.rest {
                 // 剩余参数——收集剩余位置参数
                 let rest: Vec<Value> = positional[pos_idx..].to_vec();
-                new_env = new_env.bind(param.name.clone(), Value::List(rest, Separator::Comma));
+                new_env = new_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
                 pos_idx = positional.len();
                 break;
             }
@@ -1158,13 +1158,13 @@ css: module_css,
             },
             // list
             "length" | "list-length" => match args {
-                [Value::List(es, _)] => Ok(Value::Number(es.len() as f64, None)),
+                [Value::List(es, _, false)] => Ok(Value::Number(es.len() as f64, None)),
                 [Value::Map(pairs)] => Ok(Value::Number(pairs.len() as f64, None)),
                 [_] => Ok(Value::Number(1.0, None)),
                 _ => Err(SassError::Eval("length 需要 1 个参数".into())),
             },
             "nth" => match args {
-                [Value::List(es, _), Value::Number(n, _)] => {
+                [Value::List(es, _, false), Value::Number(n, _)] => {
                     let len = es.len() as i64;
                     let idx = *n as i64;
                     let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
@@ -1183,11 +1183,11 @@ css: module_css,
                 _ => Err(SassError::Eval("map-get 需要 (map, key) 参数".into())),
             },
             "map-keys" => match args {
-                [Value::Map(pairs)] => Ok(Value::List(pairs.iter().map(|(k, _)| k.clone()).collect(), Separator::Comma)),
+                [Value::Map(pairs)] => Ok(Value::List(pairs.iter().map(|(k, _)| k.clone()).collect(), Separator::Comma, false)),
                 _ => Err(SassError::Eval("map-keys 需要 1 个 map 参数".into())),
             },
             "map-values" => match args {
-                [Value::Map(pairs)] => Ok(Value::List(pairs.iter().map(|(_, v)| v.clone()).collect(), Separator::Comma)),
+                [Value::Map(pairs)] => Ok(Value::List(pairs.iter().map(|(_, v)| v.clone()).collect(), Separator::Comma, false)),
                 _ => Err(SassError::Eval("map-values 需要 1 个 map 参数".into())),
             },
             "map-has-key" => match args {
@@ -1362,12 +1362,12 @@ css: module_css,
             },
             // list (additional)
             "append" => match args {
-                [Value::List(items, sep), val] => {
+                [Value::List(items, sep, false), val] => {
                     let mut new_items = items.clone();
                     new_items.push(val.clone());
-                    Ok(Value::List(new_items, sep.clone()))
+                    Ok(Value::List(new_items, sep.clone(), false))
                 }
-                [Value::List(items, sep), val, Value::String(s, _)] => {
+                [Value::List(items, sep, false), val, Value::String(s, _)] => {
                     let new_sep = match s.as_str() {
                         "comma" => Separator::Comma,
                         "space" => Separator::Space,
@@ -1376,19 +1376,19 @@ css: module_css,
                     };
                     let mut new_items = items.clone();
                     new_items.push(val.clone());
-                    Ok(Value::List(new_items, new_sep))
+                    Ok(Value::List(new_items, new_sep, false))
                 }
-                [other, val] => Ok(Value::List(vec![other.clone(), val.clone()], Separator::Space)),
+                [other, val] => Ok(Value::List(vec![other.clone(), val.clone()], Separator::Space, false)),
                 _ => Err(SassError::Eval("append 需要 2-3 个参数".into())),
             },
             "join" => match args {
-                [Value::List(a, sa), Value::List(b, sb)] => {
+                [Value::List(a, sa, false), Value::List(b, sb, false)] => {
                     let sep = if a.is_empty() { sb.clone() } else { sa.clone() };
                     let mut items = a.clone();
                     items.extend(b.clone());
-                    Ok(Value::List(items, sep))
+                    Ok(Value::List(items, sep, false))
                 }
-                [Value::List(a, sa), Value::List(b, sb), Value::String(s, _)] => {
+                [Value::List(a, sa, false), Value::List(b, sb, false), Value::String(s, _)] => {
                     let sep = match s.as_str() {
                         "comma" => Separator::Comma,
                         "space" => Separator::Space,
@@ -1397,13 +1397,13 @@ css: module_css,
                     };
                     let mut items = a.clone();
                     items.extend(b.clone());
-                    Ok(Value::List(items, sep))
+                    Ok(Value::List(items, sep, false))
                 }
-                [a, b] => Ok(Value::List(vec![a.clone(), b.clone()], Separator::Space)),
+                [a, b] => Ok(Value::List(vec![a.clone(), b.clone()], Separator::Space, false)),
                 _ => Err(SassError::Eval("join 需要 2-4 个参数".into())),
             },
             "index" => match args {
-                [Value::List(items, _), needle] => {
+                [Value::List(items, _, false), needle] => {
                     for (i, item) in items.iter().enumerate() {
                         if Self::values_eq(item, needle) {
                             return Ok(Value::Number((i + 1) as f64, None));
@@ -1418,32 +1418,32 @@ css: module_css,
                 _ => Err(SassError::Eval("index 需要 2 个参数".into())),
             },
             "list-separator" | "separator" => match args {
-                [Value::List(_, Separator::Comma)] => Ok(Value::String("comma".into(), false)),
-                [Value::List(_, Separator::Space)] => Ok(Value::String("space".into(), false)),
-                [Value::List(_, Separator::Slash)] => Ok(Value::String("slash".into(), false)),
+                [Value::List(_, Separator::Comma, false)] => Ok(Value::String("comma".into(), false)),
+                [Value::List(_, Separator::Space, false)] => Ok(Value::String("space".into(), false)),
+                [Value::List(_, Separator::Slash, false)] => Ok(Value::String("slash".into(), false)),
                 _ => Ok(Value::String("space".into(), false)),
             },
             "set-nth" => match args {
-                [Value::List(items, sep), Value::Number(n, _), val] => {
+                [Value::List(items, sep, false), Value::Number(n, _), val] => {
                     let idx = *n as usize;
                     let mut new_items = items.clone();
                     if idx >= 1 && idx <= new_items.len() {
                         new_items[idx - 1] = val.clone();
                     }
-                    Ok(Value::List(new_items, sep.clone()))
+                    Ok(Value::List(new_items, sep.clone(), false))
                 }
                 _ => Err(SassError::Eval("set-nth 需要 3 个参数".into())),
             },
             "is-bracketed" => match args {
-                [Value::List(_, _)] => Ok(Value::Bool(false)),
+                [Value::List(_, _, true)] => Ok(Value::Bool(true)),
                 _ => Ok(Value::Bool(false)),
             },
             "zip" => match args {
-                [Value::List(a, _), Value::List(b, _)] => {
+                [Value::List(a, _, false), Value::List(b, _, false)] => {
                     let pairs: Vec<Value> = a.iter().zip(b.iter()).map(|(x, y)| {
-                        Value::List(vec![x.clone(), y.clone()], Separator::Space)
+                        Value::List(vec![x.clone(), y.clone()], Separator::Space, false)
                     }).collect();
-                    Ok(Value::List(pairs, Separator::Comma))
+                    Ok(Value::List(pairs, Separator::Comma, false))
                 }
                 _ => Err(SassError::Eval("zip 需要 2+ 个列表参数".into())),
             },
@@ -1580,7 +1580,7 @@ css: module_css,
             "selector-parse" => match args {
                 [Value::String(s, _)] => {
                     let parts: Vec<Value> = s.split(',').map(|p| Value::String(p.trim().to_string(), false)).collect();
-                    Ok(Value::List(parts, Separator::Comma))
+                    Ok(Value::List(parts, Separator::Comma, false))
                 }
                 _ => Err(SassError::Eval("selector-parse 需要 1 个参数".into())),
             }
@@ -1598,7 +1598,7 @@ css: module_css,
                         }
                     }
                     if !current.is_empty() { result.push(Value::String(current, false)); }
-                    Ok(Value::List(result, Separator::Comma))
+                    Ok(Value::List(result, Separator::Comma, false))
                 }
                 _ => Err(SassError::Eval("selector-simple-selectors 需要 1 个参数".into())),
             }
