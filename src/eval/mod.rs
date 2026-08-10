@@ -1057,6 +1057,7 @@ css: module_css,
             "list.set-nth" => "set-nth",
             "list.zip" => "zip",
             "list.is-bracketed" => "is-bracketed",
+            "list.slash" => "list-slash",
             // sass:color
             "color.adjust" => "adjust-color",
             "color.change" => "change-color",
@@ -1554,6 +1555,10 @@ Ok(Value::Number(a / b, u1.clone()))
             "is-bracketed" => match args {
                 [Value::List(_, _, true)] => Ok(Value::Bool(true)),
                 _ => Ok(Value::Bool(false)),
+            },
+            "list-slash" => match args {
+                [a, b] => Ok(Value::List(vec![a.clone(), b.clone()], Separator::Slash, false)),
+                _ => Err(SassError::Eval("list-slash 需要 2 个参数".into())),
             },
             "zip" => match args {
                 [Value::List(a, _, _), Value::List(b, _, _)] => {
