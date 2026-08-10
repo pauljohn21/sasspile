@@ -598,7 +598,7 @@ Ok((vec![], env.clone()))
                 Ok(Value::Number(a / b, u1.clone()))
             }
             // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
-            _ => Ok(Value::List(vec![l.clone(), r.clone()], Separator::Slash, false)),
+            _ => Ok(Value::String(format!("{l}/{r}"), false)),
         }
     }
     fn modulo(l: &Value, r: &Value) -> Result<Value> {
@@ -1590,7 +1590,18 @@ Ok(Value::Number(a / b, u1.clone()))
                     new_items.push(val.clone());
                     Ok(Value::List(new_items, new_sep, false))
                 }
-                [other, val] => Ok(Value::List(vec![other.clone(), val.clone()], Separator::Space, false)),
+                [other, val] => {
+                    // 处理 append(非列表, 值) 的情况
+                    let items = match other {
+                        Value::List(items, _, _) => {
+                            let mut i = items.clone();
+                            i.push(val.clone());
+                            i
+                        }
+                        _ => vec![other.clone(), val.clone()],
+                    };
+                    Ok(Value::List(items, Separator::Space, false))
+                }
                 _ => Err(SassError::Eval("append 需要 2-3 个参数".into())),
             },
             "join" => match args {

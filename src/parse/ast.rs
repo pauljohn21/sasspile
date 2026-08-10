@@ -275,7 +275,7 @@ write!(f, "{n}{unit}")
                 let sep_str = match sep {
                     Separator::Comma => ", ",
                     Separator::Space => " ",
-                    Separator::Slash => "/",
+                    Separator::Slash => " / ",
                     Separator::Undecided => " ",
                 };
                 let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
