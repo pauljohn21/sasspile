@@ -144,6 +144,12 @@ fn diag_numbers() { diag("values/numbers", 20); }
 #[test]
 fn diag_libsass_closed() { diag("libsass-closed-issues", 20); }
 
+#[test]
+fn diag_string() { diag("core_functions/string", 20); }
+
+#[test]
+fn diag_map() { diag("core_functions/map", 15); }
+
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");

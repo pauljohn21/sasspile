@@ -1036,6 +1036,8 @@ css: module_css,
             "string.insert" => "str-insert",
             "string.quote" => "quote",
             "string.unquote" => "unquote",
+            "string.split" => "str-split",
+            "string.unique-id" => "unique-id",
             // sass:map
             "map.get" => "map-get",
             "map.merge" => "map-merge",
@@ -1043,6 +1045,8 @@ css: module_css,
             "map.keys" => "map-keys",
             "map.values" => "map-values",
             "map.has-key" => "map-has-key",
+            "map.deep-remove" => "map-deep-remove",
+            "map.set" => "map-set",
             // sass:list
             "list.length" => "length",
             "list.nth" => "nth",
@@ -1314,6 +1318,21 @@ _ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
                 }
                 _ => Err(SassError::Eval("str-insert 需要 3 个参数".into())),
             },
+            "str-split" => match args {
+                [Value::String(s, _), Value::String(sep, _)] => {
+                    let parts: Vec<Value> = if sep.is_empty() {
+                        s.chars().map(|c| Value::String(c.to_string(), false)).collect()
+                    } else {
+                        s.split(sep.as_str()).map(|p| Value::String(p.to_string(), false)).collect()
+                    };
+                    Ok(Value::List(parts, Separator::Comma, false))
+                }
+                [Value::String(s, _)] => {
+                    let parts: Vec<Value> = s.chars().map(|c| Value::String(c.to_string(), false)).collect();
+                    Ok(Value::List(parts, Separator::Comma, false))
+                }
+                _ => Err(SassError::Eval("str-split 需要 1-2 个参数".into())),
+            },
             "unique-id" => Ok(Value::String(format!("id{}", std::time::SystemTime::now().elapsed().unwrap_or_default().as_nanos()), false)),
             // math (additional)
 "math.div" | "div" => match args {
@@ -1393,7 +1412,34 @@ Ok(Value::Number(a / b, u1.clone()))
                         .collect();
                     Ok(Value::Map(filtered))
                 }
+                [other] => Ok(other.clone()),
                 _ => Err(SassError::Eval("map-remove 需要至少 1 个参数".into())),
+            },
+            "map-deep-remove" => match args {
+                [Value::Map(pairs), key @ ..] => {
+                    let keys: Vec<&Value> = key.iter().collect();
+                    if keys.is_empty() { return Ok(Value::Map(pairs.clone())); }
+                    let filtered: Vec<(Value, Value)> = pairs.iter()
+                        .filter(|(k, _)| !Self::values_eq(k, keys[0]))
+                        .cloned()
+                        .collect();
+                    Ok(Value::Map(filtered))
+                }
+                [other, ..] => Ok(other.clone()),
+                _ => Err(SassError::Eval("map-deep-remove 需要至少 1 个参数".into())),
+            },
+            "map-set" => match args {
+                [Value::Map(pairs), key, val] => {
+                    let mut result = pairs.clone();
+                    if let Some(entry) = result.iter_mut().find(|(k, _)| Self::values_eq(k, key)) {
+                        entry.1 = val.clone();
+                    } else {
+                        result.push((key.clone(), val.clone()));
+                    }
+                    Ok(Value::Map(result))
+                }
+                [other, _key, _val] => Ok(other.clone()),
+                _ => Err(SassError::Eval("map-set 需要 3 个参数".into())),
             },
             // meta (additional)
             "mixin-exists" => Ok(Value::Bool(false)),
