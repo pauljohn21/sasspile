@@ -1385,6 +1385,15 @@ Ok(Value::Number(a / b, u1.clone()))
             "adjust-color" | "change-color" | "scale-color" => {
                 args.first().cloned().ok_or_else(|| SassError::Eval("颜色函数需要至少 1 个参数".into()))
             }
+            "hwb" => match args {
+                [Value::Number(h, _), Value::Number(w, _), Value::Number(b, _)] => {
+                    Ok(Value::Color(Self::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, 1.0)))
+                }
+                [Value::Number(h, _), Value::Number(w, _), Value::Number(b, _), Value::Number(a, _)] => {
+                    Ok(Value::Color(Self::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, *a as f32)))
+                }
+                _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
+            }
             "complement" => match args {
                 [Value::Color(c)] => Ok(Value::Color(Color::rgb(255 - c.r, 255 - c.g, 255 - c.b))),
                 _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
@@ -1757,6 +1766,34 @@ Ok(Value::Number(a / b, u1.clone()))
             ((r1 + m) * 255.0).round() as u8,
             ((g1 + m) * 255.0).round() as u8,
             ((b1 + m) * 255.0).round() as u8,
+        )
+    }
+
+    /// HWB → RGB 转换 (W3C CSS Color 4 算法)。
+    fn hwb_to_rgb(h: f64, w: f64, b: f64, alpha: f32) -> Color {
+        let h = (h % 360.0) / 360.0;
+        let mut w = w;
+        let mut b = b;
+        let sum = w + b;
+        if sum > 1.0 { w /= sum; b /= sum; }
+        let factor = 1.0 - w - b;
+        let hue_to_rgb = |m1: f64, m2: f64, mut hue: f64| -> f64 {
+            if hue < 0.0 { hue += 1.0; }
+            if hue > 1.0 { hue -= 1.0; }
+            if hue < 1.0 / 6.0 { m1 + (m2 - m1) * hue * 6.0 }
+            else if hue < 0.5 { m2 }
+            else if hue < 2.0 / 3.0 { m1 + (m2 - m1) * (2.0 / 3.0 - hue) * 6.0 }
+            else { m1 }
+        };
+        let to_rgb = |hue: f64| -> f64 { hue_to_rgb(0.0, 1.0, hue) * factor + w };
+        let r = to_rgb(h + 1.0 / 3.0);
+        let g = to_rgb(h);
+        let bl = to_rgb(h - 1.0 / 3.0);
+        Color::rgba(
+            (r * 255.0).round() as u8,
+            (g * 255.0).round() as u8,
+            (bl * 255.0).round() as u8,
+            alpha,
         )
     }
 
