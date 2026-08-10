@@ -48,6 +48,10 @@ pub enum CssNode {
 
     /// @at-root 输出——不嵌套在父选择器下。
     AtRoot(Vec<CssNode>),
+
+    /// @return 值——函数体中的返回标记，不会被序列化。
+    /// 在 `eval_nodes` 中传播，由 `call_user_function` 捕获。
+    Return(crate::parse::ast::Value),
 }
 
 impl std::fmt::Display for CssNode {
@@ -78,6 +82,7 @@ impl std::fmt::Display for CssNode {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
+            CssNode::Return(_) => write!(f, ""),
         }
     }
 }

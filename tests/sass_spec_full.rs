@@ -6,7 +6,7 @@
 mod spec_manifest;
 
 use spec_manifest::collect_hrx_files;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::info;
 
 /// HRX 测试用例——包含所有文件和期望输出。
@@ -73,7 +73,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
 }
 
 /// 运行单个测试用例——写入临时目录并用 compile_file 编译。
-fn run_case(case: &HrxCase) -> bool {
+fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     if case.expected_output.is_empty() && !case.expect_error {
         return true;
     }
@@ -96,7 +96,11 @@ fn run_case(case: &HrxCase) -> bool {
     }
 
     let input_file = tmp_dir.join(&case.input_path);
-    let result = sasspile::compile_file(&input_file, sasspile::OutputStyle::Expanded);
+    let result = sasspile::compile_file_with_load_paths(
+        &input_file,
+        sasspile::OutputStyle::Expanded,
+        load_paths.to_vec(),
+    );
     let _ = std::fs::remove_dir_all(&tmp_dir);
 
     if case.expect_error {
@@ -128,7 +132,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
                     skip += 1;
                     continue;
                 }
-                if run_case(case) {
+                if run_case(case, &[spec_root.to_path_buf()]) {
                     pass += 1;
                 } else {
                     fail += 1;

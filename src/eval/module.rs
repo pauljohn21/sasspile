@@ -3,14 +3,32 @@ use crate::error::{Result, SassError};
 use std::path::{Path, PathBuf};
 
 impl Evaluator {
-    pub(crate) fn resolve_file(base: Option<&PathBuf>, url: &str) -> Option<PathBuf> {
+    pub(crate) fn resolve_file(
+        base: Option<&PathBuf>,
+        url: &str,
+        load_paths: &[PathBuf],
+    ) -> Option<PathBuf> {
         let span = tracing::debug_span!("resolve_file", url = url);
         let _enter = span.enter();
         let base_dir = base
             .as_ref()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_else(|| PathBuf::from("."));
-        // 拆分路径和文件名——_ 前缀只加在文件名上
+        // 先尝试相对于当前文件目录解析
+        if let Some(path) = Self::try_resolve_dir(&base_dir, url) {
+            return Some(path);
+        }
+        // 回退到 load paths
+        for lp in load_paths {
+            if let Some(path) = Self::try_resolve_dir(lp, url) {
+                return Some(path);
+            }
+        }
+        None
+    }
+
+    /// 在指定目录下尝试解析 url 对应的文件。
+    fn try_resolve_dir(dir: &Path, url: &str) -> Option<PathBuf> {
         let url_path = std::path::Path::new(url);
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
         let filename = url_path
@@ -18,22 +36,18 @@ impl Evaluator {
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| url.to_string());
         let candidates = [
-            base_dir.join(parent).join(format!("_{filename}.scss")),
-            base_dir.join(parent).join(format!("{filename}.scss")),
-            base_dir.join(parent).join(format!("_{filename}.sass")),
-            base_dir.join(parent).join(format!("{filename}.sass")),
-            base_dir.join(parent).join(format!("_{filename}.css")),
-            base_dir.join(parent).join(format!("{filename}.css")),
-            base_dir
-                .join(parent)
-                .join(format!("_{filename}.import.scss")),
-            base_dir
-                .join(parent)
-                .join(format!("{filename}.import.scss")),
-            base_dir.join(url).join("_index.scss"),
-            base_dir.join(url).join("index.scss"),
-            base_dir.join(url).join("_index.sass"),
-            base_dir.join(url).join("index.sass"),
+            dir.join(parent).join(format!("_{filename}.scss")),
+            dir.join(parent).join(format!("{filename}.scss")),
+            dir.join(parent).join(format!("_{filename}.sass")),
+            dir.join(parent).join(format!("{filename}.sass")),
+            dir.join(parent).join(format!("_{filename}.css")),
+            dir.join(parent).join(format!("{filename}.css")),
+            dir.join(parent).join(format!("_{filename}.import.scss")),
+            dir.join(parent).join(format!("{filename}.import.scss")),
+            dir.join(url).join("_index.scss"),
+            dir.join(url).join("index.scss"),
+            dir.join(url).join("_index.sass"),
+            dir.join(url).join("index.sass"),
         ];
         for c in &candidates {
             if c.exists() {
@@ -61,7 +75,9 @@ impl Evaluator {
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Whitespace) | Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
         let ast = crate::parse::Parser::parse(&tokens)?;
-        let mut env = Env::default().with_base_path(path.to_path_buf());
+        let mut env = Env::default()
+            .with_base_path(path.to_path_buf())
+            .with_load_paths(caller_env.get_load_paths().to_vec());
         env.depth = caller_env.depth + 1;
         // 注入 with() 配置变量（求值后注入，使 !default 尊重覆盖值）
         for (name, value) in config {

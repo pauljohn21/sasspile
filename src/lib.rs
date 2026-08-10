@@ -96,6 +96,24 @@ pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
     Ok(serialized)
 }
 
+/// 编译 SCSS 文件为 CSS 字符串（带加载路径）。
+///
+/// 加载路径用于解析 `@use`/`@import` 中无法从当前文件目录找到的模块。
+pub fn compile_file_with_load_paths(
+    path: &PathBuf,
+    style: OutputStyle,
+    load_paths: Vec<PathBuf>,
+) -> Result<String> {
+    let input = std::fs::read_to_string(path)?;
+    let source = Source::new(input);
+    let lexed = source.lex()?;
+    let parsed = lexed.parse()?;
+    use crate::eval::Evaluator;
+    let nodes = Evaluator::evaluate_with_path_and_load_paths(&parsed.ast, path.clone(), load_paths)?;
+    let serialized = crate::css::Serializer::serialize(&nodes, style);
+    Ok(serialized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +330,28 @@ mod tests {
     fn test_init_tracing_shows_target() {
         init_tracing();
         tracing::info!(target: "test_target_check", "tracing target visibility test");
+    }
+
+    #[test]
+    fn test_compile_load_path() {
+        let spec_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../sass-spec-main/spec");
+        let utils_path = spec_root.join("core_functions/list/_utils.scss");
+        if !utils_path.exists() {
+            eprintln!("Skipping load path test: _utils.scss not found");
+            return;
+        }
+        let tmp = std::env::temp_dir().join("sasspile_test_loadpath");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let input = tmp.join("input.scss");
+        std::fs::write(&input, "@use \"core_functions/list/utils\";\na {b: utils.real-separator(())}\n").unwrap();
+        let result = compile_file_with_load_paths(&input, OutputStyle::Expanded, vec![spec_root]);
+        std::fs::remove_dir_all(&tmp).ok();
+        match result {
+            Ok(css) => {
+                assert!(css.contains("undecided"), "should contain undecided: {css}");
+            }
+            Err(e) => panic!("load path test failed: {e}"),
+        }
     }
 }

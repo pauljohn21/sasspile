@@ -116,11 +116,14 @@ impl Evaluator {
         }
         // 求值函数体，找 @return
         for node in &func.body {
-            if let Node::Return(v) = node {
-                return Self::eval_value(v, &func_env);
-            }
-            let (_, e) = Self::eval_node(node, &func_env)?;
+            let (out, e) = Self::eval_node(node, &func_env)?;
             func_env = e;
+            // 检查 Return 标记
+            for css in &out {
+                if let CssNode::Return(val) = css {
+                    return Ok(val.clone());
+                }
+            }
         }
         Ok(Value::Null)
     }

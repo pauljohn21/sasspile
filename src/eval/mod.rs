@@ -46,6 +46,8 @@ pub struct Env {
     extends: Rc<Vec<(String, String)>>,
     /// 当前选择器上下文（进入规则体时设置）。
     current_selector: Option<String>,
+    /// 加载路径——`@use`/`@import` 无法从当前文件解析时回退搜索。
+    load_paths: Vec<PathBuf>,
 }
 
 /// mixin 定义存储。
@@ -163,6 +165,16 @@ impl Env {
     pub fn get_selector(&self) -> Option<&str> {
         self.current_selector.as_deref()
     }
+    /// 设置加载路径。
+    pub fn with_load_paths(&self, paths: Vec<PathBuf>) -> Self {
+        let mut new = self.clone();
+        new.load_paths = paths;
+        new
+    }
+    /// 获取加载路径。
+    pub(crate) fn get_load_paths(&self) -> &[PathBuf] {
+        &self.load_paths
+    }
 }
 
 /// 求值器。
@@ -185,6 +197,23 @@ impl Evaluator {
     /// 求值 AST 入口（带基础路径，支持文件加载）。
     pub fn evaluate_with_path(ast: &Ast, base_path: PathBuf) -> Result<Vec<CssNode>> {
         let env = Env::default().with_base_path(base_path);
+        Self::evaluate_with_env(ast, env)
+    }
+
+    /// 求值 AST 入口（带基础路径和加载路径）。
+    pub fn evaluate_with_path_and_load_paths(
+        ast: &Ast,
+        base_path: PathBuf,
+        load_paths: Vec<PathBuf>,
+    ) -> Result<Vec<CssNode>> {
+        let env = Env::default()
+            .with_base_path(base_path)
+            .with_load_paths(load_paths);
+        Self::evaluate_with_env(ast, env)
+    }
+
+    /// 求值 AST 入口（带环境）。
+    fn evaluate_with_env(ast: &Ast, env: Env) -> Result<Vec<CssNode>> {
         let (mut css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
         let extends = final_env.get_extends().to_vec();
         if !extends.is_empty() {
@@ -285,7 +314,10 @@ impl Evaluator {
                 );
                 Ok((vec![], new_env))
             }
-            Node::Return(_) => Ok((vec![], env.clone())), // @return 由函数调用处理
+            Node::Return(v) => {
+                let val = Self::eval_value(v, env)?;
+                Ok((vec![CssNode::Return(val)], env.clone()))
+            }
             Node::Use {
                 url,
                 namespace,
@@ -298,7 +330,8 @@ impl Evaluator {
                 }
                 // 文件模块——解析路径并加载
                 let base = env.base_path.as_ref();
-                if let Some(path) = Self::resolve_file(base, url) {
+                let load_paths = env.get_load_paths();
+                if let Some(path) = Self::resolve_file(base, url, load_paths) {
                     let exports = Self::load_module(&path, config, env)?;
                     if *star {
                         let mut new_env = env.clone();
@@ -331,7 +364,8 @@ impl Evaluator {
             } => {
                 // @forward 'url' —— 转发模块成员到当前作用域（简化版：同 @import）
                 let base = env.base_path.as_ref();
-                if let Some(path) = Self::resolve_file(base, url) {
+                let load_paths = env.get_load_paths();
+                if let Some(path) = Self::resolve_file(base, url, load_paths) {
                     let exports = Self::load_module(&path, &[], env)?;
                     let mut new_env = env.clone();
                     for (k, v) in &exports.vars {
@@ -353,7 +387,8 @@ impl Evaluator {
                     return Ok((vec![], env.add_module(url.clone())));
                 }
                 let base = env.base_path.as_ref();
-                if let Some(path) = Self::resolve_file(base, url) {
+                let load_paths = env.get_load_paths();
+                if let Some(path) = Self::resolve_file(base, url, load_paths) {
                     let exports = Self::load_module(&path, &[], env)?;
                     let mut new_env = env.clone();
                     for (k, v) in &exports.vars {

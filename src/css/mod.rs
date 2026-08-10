@@ -181,6 +181,7 @@ impl Serializer {
                     format!("{indent}@{name} {p};")
                 }
             }
+            CssNode::Return(_) => String::new(),
         }
     }
 
@@ -247,6 +248,7 @@ impl Serializer {
                     format!("@{name} {p};")
                 }
             }
+            CssNode::Return(_) => String::new(),
         }
     }
 
