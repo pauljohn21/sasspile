@@ -1,3 +1,11 @@
+//! 内建函数分派入口。
+//!
+//! `call_builtin` 按 match 分派到各函数组。
+//! list 和 selector 函数已拆分到子模块。
+
+pub mod list;
+pub mod selector;
+
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
@@ -76,35 +84,6 @@ impl Evaluator {
                 }
                 _ => Err(SassError::Eval("grayscale 需要 1 个颜色参数".into())),
             },
-            // list
-"length" | "list-length" => match args {
-[Value::List(es, _, _)] => Ok(Value::Number(es.len() as f64, None)),
-[Value::Map(pairs)] => Ok(Value::Number(pairs.len() as f64, None)),
-[_] => Ok(Value::Number(1.0, None)),
-_ => Err(SassError::Eval("length 需要 1 个参数".into())),
-},
-"nth" => match args {
-[Value::List(es, _, _), Value::Number(n, _)] => {
-let len = es.len() as i64;
-let idx = *n as i64;
-let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
-else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
-else { return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into())); };
-es.get(actual).cloned().ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
-}
-[Value::Map(pairs), Value::Number(n, _)] => {
-let len = pairs.len() as i64;
-let idx = *n as i64;
-let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
-else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
-else { return Err(SassError::Eval("nth 索引 0 无效".into())); };
-pairs.get(actual).map(|(k, v)| Value::List(vec![k.clone(), v.clone()], Separator::Space, false))
-.ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
-}
-[other, Value::Number(1.0, _)] => Ok(other.clone()),
-[other, Value::Number(-1.0, _)] => Ok(other.clone()),
-_ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
-},
             // map
             "map-get" => match args {
                 [Value::Map(pairs), key] => pairs.iter()
@@ -345,122 +324,6 @@ Ok(Value::Number(a / b, u1.clone()))
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
             },
-            // list (additional)
-            "append" => match args {
-                [Value::List(items, sep, false), val] => {
-                    let mut new_items = items.clone();
-                    new_items.push(val.clone());
-                    Ok(Value::List(new_items, sep.clone(), false))
-                }
-                [Value::List(items, sep, false), val, Value::String(s, _)] => {
-                    let new_sep = match s.as_str() {
-                        "comma" => Separator::Comma,
-                        "space" => Separator::Space,
-                        "slash" => Separator::Slash,
-                        _ => sep.clone(),
-                    };
-                    let mut new_items = items.clone();
-                    new_items.push(val.clone());
-                    Ok(Value::List(new_items, new_sep, false))
-                }
-                [other, val] => {
-                    // 处理 append(非列表, 值) 的情况
-                    let items = match other {
-                        Value::List(items, _, _) => {
-                            let mut i = items.clone();
-                            i.push(val.clone());
-                            i
-                        }
-                        _ => vec![other.clone(), val.clone()],
-                    };
-                    Ok(Value::List(items, Separator::Space, false))
-                }
-                _ => Err(SassError::Eval("append 需要 2-3 个参数".into())),
-            },
-            "join" => match args {
-                [Value::List(a, sa, false), Value::List(b, sb, false)] => {
-                    let sep = if a.is_empty() { sb.clone() } else { sa.clone() };
-                    let mut items = a.clone();
-                    items.extend(b.clone());
-                    Ok(Value::List(items, sep, false))
-                }
-                [Value::List(a, sa, false), Value::List(b, sb, false), Value::String(s, _)] => {
-                    let sep = match s.as_str() {
-                        "comma" => Separator::Comma,
-                        "space" => Separator::Space,
-                        "slash" => Separator::Slash,
-                        _ => if a.is_empty() { sb.clone() } else { sa.clone() },
-                    };
-                    let mut items = a.clone();
-                    items.extend(b.clone());
-                    Ok(Value::List(items, sep, false))
-                }
-                [a, b] => {
-                    // 处理 join((), c) 或 join(c, ()) 的情况
-                    let (a_items, a_sep) = match a {
-                        Value::List(items, sep, _) => (items.clone(), sep.clone()),
-                        _ => (vec![a.clone()], Separator::Undecided),
-                    };
-                    let (b_items, b_sep) = match b {
-                        Value::List(items, sep, _) => (items.clone(), sep.clone()),
-                        _ => (vec![b.clone()], Separator::Undecided),
-                    };
-                    let sep = if a_items.is_empty() { b_sep } else { a_sep };
-                    let mut items = a_items;
-                    items.extend(b_items);
-                    Ok(Value::List(items, sep, false))
-                }
-                _ => Err(SassError::Eval("join 需要 2-4 个参数".into())),
-            },
-            "index" => match args {
-                [Value::List(items, _, _), needle] => {
-                    for (i, item) in items.iter().enumerate() {
-                        if Self::values_eq(item, needle) {
-                            return Ok(Value::Number((i + 1) as f64, None));
-                        }
-                    }
-                    Ok(Value::Null)
-                }
-                [other, needle] => {
-                    if Self::values_eq(other, needle) { Ok(Value::Number(1.0, None)) }
-                    else { Ok(Value::Null) }
-                }
-                _ => Err(SassError::Eval("index 需要 2 个参数".into())),
-            },
-            "list-separator" | "separator" => match args {
-                [Value::List(_, Separator::Comma, false)] => Ok(Value::String("comma".into(), false)),
-                [Value::List(_, Separator::Space, false)] => Ok(Value::String("space".into(), false)),
-                [Value::List(_, Separator::Slash, false)] => Ok(Value::String("slash".into(), false)),
-                _ => Ok(Value::String("space".into(), false)),
-            },
-            "set-nth" => match args {
-                [Value::List(items, sep, false), Value::Number(n, _), val] => {
-                    let idx = *n as usize;
-                    let mut new_items = items.clone();
-                    if idx >= 1 && idx <= new_items.len() {
-                        new_items[idx - 1] = val.clone();
-                    }
-                    Ok(Value::List(new_items, sep.clone(), false))
-                }
-                _ => Err(SassError::Eval("set-nth 需要 3 个参数".into())),
-            },
-            "is-bracketed" => match args {
-                [Value::List(_, _, true)] => Ok(Value::Bool(true)),
-                _ => Ok(Value::Bool(false)),
-            },
-            "list-slash" => match args {
-                [a, b] => Ok(Value::List(vec![a.clone(), b.clone()], Separator::Slash, false)),
-                _ => Err(SassError::Eval("list-slash 需要 2 个参数".into())),
-            },
-            "zip" => match args {
-                [Value::List(a, _, _), Value::List(b, _, _)] => {
-                    let pairs: Vec<Value> = a.iter().zip(b.iter()).map(|(x, y)| {
-                        Value::List(vec![x.clone(), y.clone()], Separator::Space, false)
-                    }).collect();
-                    Ok(Value::List(pairs, Separator::Comma, false))
-                }
-                _ => Err(SassError::Eval("zip 需要 2+ 个列表参数".into())),
-            },
             // color (additional)
             "hsl" => match args {
                 [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _)] => {
@@ -572,78 +435,25 @@ _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
                 _ => Err(SassError::Eval("unitless 需要 1 个数字参数".into())),
             },
             // CSS 原生函数——原样保留
-            "calc" | "clamp" | "env" | "var" => {
+            "calc" | "env" | "var" => {
                 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
                 Ok(Value::Calc(format!("{name}({arg_str})")))
             },
-            // selector functions
-            "selector-append" => {
-                let parts: Vec<String> = args.iter().map(|a| match a {
-                    Value::String(s, _) => s.clone(),
-                    _ => a.to_string(),
-                }).collect();
-                Ok(Value::String(parts.join(""), false))
+            // list 子模块分派
+            "length" | "list-length" | "nth" | "append" | "join" | "index"
+            | "list-separator" | "separator" | "set-nth" | "is-bracketed"
+            | "list-slash" | "zip" => {
+                if let Some(v) = list::call(name, args)? { Ok(v) }
+                else { Err(SassError::UndefinedFunction(name.to_string())) }
             }
-            "selector-nest" => {
-                let parts: Vec<String> = args.iter().map(|a| match a {
-                    Value::String(s, _) => s.clone(),
-                    _ => a.to_string(),
-                }).collect();
-                Ok(Value::String(parts.join(" "), false))
-            }
-            "selector-is-super" => match args {
-                [Value::String(a, _), Value::String(b, _)] => {
-                    Ok(Value::Bool(b.contains(a.as_str())))
-                }
-                _ => Ok(Value::Bool(false)),
-            }
-            "selector-parse" => match args {
-                [Value::String(s, _)] => {
-                    let parts: Vec<Value> = s.split(',').map(|p| Value::String(p.trim().to_string(), false)).collect();
-                    Ok(Value::List(parts, Separator::Comma, false))
-                }
-                _ => Err(SassError::Eval("selector-parse 需要 1 个参数".into())),
-            }
-            "selector-simple-selectors" => match args {
-                [Value::String(s, _)] => {
-                    // 拆分复合选择器为简单选择器
-                    let mut result = Vec::new();
-                    let mut current = String::new();
-                    for c in s.chars() {
-                        if c == '.' || c == '#' || c == ':' || c == '[' {
-                            if !current.is_empty() { result.push(Value::String(current.clone(), false)); }
-                            current = c.to_string();
-                        } else {
-                            current.push(c);
-                        }
-                    }
-                    if !current.is_empty() { result.push(Value::String(current, false)); }
-                    Ok(Value::List(result, Separator::Comma, false))
-                }
-                _ => Err(SassError::Eval("selector-simple-selectors 需要 1 个参数".into())),
-            }
-            "selector-unify" => match args {
-                [Value::String(a, _), Value::String(b, _)] => {
-                    // 简化版：如果一个是另一个的前缀，返回另一个
-                    if a.contains(b.as_str()) { Ok(Value::String(a.clone(), false)) }
-                    else if b.contains(a.as_str()) { Ok(Value::String(b.clone(), false)) }
-                    else { Ok(Value::String(format!("{a}{b}"), false)) }
-                }
-                _ => Ok(Value::Null),
-            }
-            "selector-extend" => match args {
-                [Value::String(selector, _), Value::String(target, _), Value::String(extender, _)] => {
-                    let result = if selector.contains(target.as_str()) {
-                        format!("{selector}, {extender}")
-                    } else {
-                        selector.clone()
-                    };
-                    Ok(Value::String(result, false))
-                }
-                _ => Err(SassError::Eval("selector-extend 需要 3 个参数".into())),
+            // selector 子模块分派
+            "selector-append" | "selector-nest" | "selector-is-super" | "selector-parse"
+            | "selector-simple-selectors" | "selector-unify" | "selector-extend" => {
+                if let Some(v) = selector::call(name, args)? { Ok(v) }
+                else { Err(SassError::UndefinedFunction(name.to_string())) }
             }
             // not a function → 原样输出
             _ => Err(SassError::UndefinedFunction(name.to_string())),
         }
-}
+    }
 }
