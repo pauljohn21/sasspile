@@ -272,11 +272,11 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "a[b=c i] { color: red; }";
+        let input = "@import \"config\";\n@import \"midstream\";\nb {c: $a}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), "ATTR OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "ATTR ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "IMPORT OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "IMPORT ERROR"),
         }
     }
 }

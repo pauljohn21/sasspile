@@ -255,19 +255,19 @@ impl Evaluator {
                 // 找不到文件——静默跳过
                 Ok((vec![], env.clone()))
             }
-            Node::Forward { url, show: _, hide: _, prefix: _ } => {
-                // @forward 'url' —— 转发模块成员到当前作用域（简化版：同 @import）
-                let base = env.base_path.as_ref();
-                if let Some(path) = Self::resolve_file(base, url) {
-                    let exports = Self::load_module(&path, &[], env)?;
-                    let mut new_env = env.clone();
-                    for (k, v) in &exports.vars { new_env = new_env.bind(k.clone(), v.clone()); }
-                    for (k, v) in &exports.mixins { new_env = new_env.define_mixin(k.clone(), v.clone()); }
-                    for (k, v) in &exports.functions { new_env = new_env.define_function(k.clone(), v.clone()); }
-                    return Ok((vec![], new_env));
-                }
-                Ok((vec![], env.clone()))
-            }
+Node::Forward { url, show: _, hide: _, prefix: _ } => {
+// @forward 'url' —— 转发模块成员到当前作用域（简化版：同 @import）
+let base = env.base_path.as_ref();
+if let Some(path) = Self::resolve_file(base, url) {
+let exports = Self::load_module(&path, &[], env)?;
+let mut new_env = env.clone();
+for (k, v) in &exports.vars { new_env = new_env.bind(k.clone(), v.clone()); }
+for (k, v) in &exports.mixins { new_env = new_env.define_mixin(k.clone(), v.clone()); }
+for (k, v) in &exports.functions { new_env = new_env.define_function(k.clone(), v.clone()); }
+return Ok((exports.css, new_env));
+}
+Ok((vec![], env.clone()))
+}
 Node::Import { url } => {
 // @import 'url' —— 旧版内联：加载文件内容注入当前作用域
 if url.starts_with("sass:") {
@@ -951,8 +951,14 @@ Ok((css, current_env))
             base_dir.join(parent).join(format!("{filename}.scss")),
             base_dir.join(parent).join(format!("_{filename}.sass")),
             base_dir.join(parent).join(format!("{filename}.sass")),
+            base_dir.join(parent).join(format!("_{filename}.css")),
+            base_dir.join(parent).join(format!("{filename}.css")),
+            base_dir.join(parent).join(format!("_{filename}.import.scss")),
+            base_dir.join(parent).join(format!("{filename}.import.scss")),
             base_dir.join(url).join("_index.scss"),
             base_dir.join(url).join("index.scss"),
+            base_dir.join(url).join("_index.sass"),
+            base_dir.join(url).join("index.sass"),
         ];
         for c in &candidates {
             if c.exists() {
