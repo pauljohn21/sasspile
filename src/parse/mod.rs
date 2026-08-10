@@ -918,23 +918,24 @@ impl<'tok> Parser<'tok> {
                 } else {
 // 分组或列表
 let mut items = vec![first];
+let mut saw_comma = false;
 let sep = loop {
 self.skip_ws();
 match self.peek() {
-Some(Token::Comma) => { self.advance(); }
-Some(Token::RParen) => break Separator::Comma,
+Some(Token::Comma) => { self.advance(); saw_comma = true; self.skip_ws(); if self.peek() == Some(&Token::RParen) { break Separator::Comma; } }
+Some(Token::RParen) => break if saw_comma { Separator::Comma } else { Separator::Space },
 // 空格分隔的值——继续解析
 Some(Token::Number(_)) | Some(Token::String(_, _)) | Some(Token::Ident(_)) | Some(Token::Hash(_)) | Some(Token::Dollar(_)) | Some(Token::Interp(_)) | Some(Token::LParen) => {
 items.push(self.parse_expr(0)?);
 }
-_ => break Separator::Space,
+_ => break if saw_comma { Separator::Comma } else { Separator::Space },
 }
 self.skip_ws();
-if self.peek() == Some(&Token::RParen) { break Separator::Space; }
+if self.peek() == Some(&Token::RParen) { break if saw_comma { Separator::Comma } else { Separator::Space }; }
 };
                     self.skip_ws();
                     if self.peek() == Some(&Token::RParen) { self.advance(); }
-                    if items.len() == 1 {
+                    if items.len() == 1 && !saw_comma {
                         Ok(items.into_iter().next().unwrap())
                     } else {
                         Ok(Value::List(items, sep, false))

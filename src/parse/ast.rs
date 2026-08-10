@@ -263,16 +263,20 @@ impl std::fmt::Display for Value {
                     write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a)
                 }
             }
-Value::List(elements, sep, bracketed) => {
-let sep_str = match sep {
-Separator::Comma => ", ",
-Separator::Space => " ",
-Separator::Slash => "/",
-Separator::Undecided => " ",
-};
-let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
-let inner = parts.join(sep_str);
-if *bracketed { write!(f, "[{}]", inner) } else { write!(f, "{}", inner) }
+            Value::List(elements, sep, bracketed) => {
+                if elements.is_empty() {
+                    if *bracketed { return write!(f, "[]"); }
+                    return write!(f, "");
+                }
+                let sep_str = match sep {
+                    Separator::Comma => ", ",
+                    Separator::Space => " ",
+                    Separator::Slash => "/",
+                    Separator::Undecided => " ",
+                };
+                let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
+                let inner = parts.join(sep_str);
+                if *bracketed { write!(f, "[{}]", inner) } else { write!(f, "{}", inner) }
             }
             Value::Map(pairs) => {
                 let parts: Vec<String> = pairs

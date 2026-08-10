@@ -601,6 +601,49 @@ Ok((vec![], env.clone()))
             _ => Err(SassError::Eval(format!("无法比较 {l} 和 {r}"))),
         }
     }
+
+    /// inspect() 专用格式化——比 Display 更详细。
+    fn inspect_value(v: &Value) -> String {
+        match v {
+            Value::List(elements, sep, bracketed) => {
+                if elements.is_empty() {
+                    if *bracketed { return "[]".to_string(); }
+                    if matches!(sep, Separator::Comma) { return "()".to_string(); }
+                    return String::new();
+                }
+                let sep_str = match sep {
+                    Separator::Comma => ", ",
+                    Separator::Space => " ",
+                    Separator::Slash => " / ",
+                    Separator::Undecided => " ",
+                };
+                let parts: Vec<String> = elements.iter().map(Self::inspect_value).collect();
+                let inner = if elements.len() == 1 && matches!(sep, Separator::Comma) {
+                    format!("{},", parts[0])
+                } else {
+                    parts.join(sep_str)
+                };
+                if *bracketed { format!("[{}]", inner) } else { inner }
+            }
+            Value::Map(pairs) => {
+                let parts: Vec<String> = pairs
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", Self::inspect_value(k), Self::inspect_value(v)))
+                    .collect();
+                if pairs.len() == 1 {
+                    format!("({},)", parts.join(", "))
+                } else {
+                    format!("({})", parts.join(", "))
+                }
+            }
+            Value::String(s, quoted) => {
+                if *quoted { format!("\"{s}\"") } else { s.clone() }
+            }
+            Value::Null => "null".to_string(),
+            _ => v.to_string(),
+        }
+    }
+
     fn values_eq(l: &Value, r: &Value) -> bool {
         match (l, r) {
             (Value::Number(a, _), Value::Number(b, _)) => (a - b).abs() < f64::EPSILON,
@@ -1206,7 +1249,7 @@ css: module_css,
                 _ => Ok(Value::String("unknown".into(), false)),
             },
             "inspect" => match args {
-                [v] => Ok(Value::String(v.to_string(), false)),
+                [v] => Ok(Value::String(Self::inspect_value(v), false)),
                 _ => Err(SassError::Eval("inspect 需要 1 个参数".into())),
             },
             "if" => match args {

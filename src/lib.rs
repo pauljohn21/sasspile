@@ -272,12 +272,11 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "a {\n  @if [foo bar]==[foo bar] {\n    t1: t;\n  } @else {\n    f1: f;\n  }\n  @if [foo bar]==[foo, bar] {\n    t2: t;\n  } @else {\n    f2: f;\n  }\n  @if [] == [] {\n    t4: t;\n  } @else {\n    f4: f;\n  }\n}";
-        let expected = "a {\n  t1: t;\n  f2: f;\n  t4: t;\n}";
+        let input = "a {b: inspect((c,))}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), expected = expected, "LISTS OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "LISTS ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "INSPECT OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "INSPECT ERROR"),
         }
     }
 }
