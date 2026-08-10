@@ -923,6 +923,10 @@ Ok((vec![], env.clone()))
 
     /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
     fn load_module(path: &Path, config: &[(String, Value)], caller_env: &Env) -> Result<ModuleExports> {
+        // 防止循环导入导致栈溢出
+        if caller_env.depth > 50 {
+            return Ok(ModuleExports::default());
+        }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
         let tokens: Vec<Token> = Lexer::new(&source)
@@ -930,6 +934,7 @@ Ok((vec![], env.clone()))
             .collect::<Result<Vec<_>>>()?;
         let ast = crate::parse::Parser::parse(&tokens)?;
         let mut env = Env::default().with_base_path(path.to_path_buf());
+        env.depth = caller_env.depth + 1;
         // 注入 with() 配置变量（求值后注入，使 !default 尊重覆盖值）
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
