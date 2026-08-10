@@ -137,6 +137,7 @@ fn parse_selector(&mut self) -> Result<String> {
 let mut s = String::new();
 let mut bracket_depth = 0i32;
 while let Some(t) = self.peek() {
+tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
 match t {
 Token::LBrace => break,
 Token::LBracket => { bracket_depth += 1; s.push('['); self.advance(); }

@@ -91,6 +91,8 @@ impl Serializer {
             CssNode::Comment(text) => format!("{indent}/* {text} */"),
             CssNode::AtRoot(nodes) => Self::serialize_expanded(nodes, depth),
             CssNode::Rule { selector, declarations, children } => {
+                let selector = Self::sanitize_selector(selector);
+                if selector.is_empty() { return String::new(); }
                 let inner = "  ".repeat(depth + 1);
                 let mut parts = vec![format!("{indent}{selector} {{")];
                 for decl in declarations {
@@ -157,9 +159,11 @@ impl Serializer {
             CssNode::Comment(_) => String::new(),
             CssNode::AtRoot(nodes) => nodes.iter().map(Self::serialize_node_compressed).collect::<String>(),
             CssNode::Rule { selector, declarations, children } => {
+                let sel = Self::sanitize_selector(selector);
+                if sel.is_empty() { return String::new(); }
                 let decls: String = declarations.iter().map(Self::serialize_node_compressed).collect();
                 let kids: String = children.iter().map(Self::serialize_node_compressed).collect();
-                format!("{selector}{{{decls}{kids}}}")
+                format!("{sel}{{{decls}{kids}}}")
             }
             CssNode::AtRule { has_body: true, name, params, children } => {
                 let p = params.as_deref().unwrap_or("");
@@ -171,6 +175,50 @@ impl Serializer {
                 if p.is_empty() { format!("@{name};") } else { format!("@{name} {p};") }
             }
         }
+    }
+
+    /// 净化选择器——处理占位符 `%xxx` 在伪类中的移除。
+    fn sanitize_selector(selector: &str) -> String {
+        if !selector.contains('%') { return selector.to_string(); }
+        // 顶层逗号分隔——移除纯占位符部分
+        let parts: Vec<&str> = selector.split(',')
+            .filter(|s| !s.trim().starts_with('%'))
+            .collect();
+        let mut result = parts.join(",").trim().to_string();
+        // 处理伪类内的占位符
+        for pseudo in &["is", "not", "where", "matches"] {
+            let pattern = format!(":{pseudo}(%");
+            while let Some(pos) = result.find(&pattern) {
+                let paren_start = pos + pattern.len() - 2; // pattern=":is(%" → -2 得到 ( 的位置
+                let mut depth = 1;
+                let chars: Vec<char> = result.chars().collect();
+                let mut i = paren_start + 1;
+                while i < chars.len() && depth > 0 {
+                    if chars[i] == '(' { depth += 1; }
+                    else if chars[i] == ')' { depth -= 1; }
+                    if depth > 0 { i += 1; }
+                }
+                let end = i;
+                let inner = &result[paren_start + 1..end];
+                let args: Vec<&str> = inner.split(',').filter(|s| !s.trim().is_empty()).collect();
+                let real_args: Vec<&str> = args.iter().filter(|s| !s.trim().starts_with('%')).cloned().collect();
+                if real_args.is_empty() {
+                    if *pseudo == "not" {
+                        let before = &result[..pos];
+                        let after = &result[end + 1..];
+                        result = format!("{before}{after}");
+                    } else {
+                        return String::new();
+                    }
+                } else {
+                    let new_inner = real_args.iter().map(|s| s.trim()).collect::<Vec<_>>().join(", ");
+                    let before = &result[..paren_start];
+                    let after = &result[end + 1..];
+                    result = format!("{before}({new_inner}){after}");
+                }
+            }
+        }
+        result
     }
 }
 
