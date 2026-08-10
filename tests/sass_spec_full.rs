@@ -117,7 +117,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
     }
 
     // 使用 manifest 的 collect_hrx_files（自动跳过 SKIP_DIRS）
-    let (files, skipped) = collect_hrx_files(&dir);
+    let (files, skipped) = collect_hrx_files(&dir, spec_root);
 
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
     for file in &files {

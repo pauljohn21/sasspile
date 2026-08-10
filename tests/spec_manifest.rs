@@ -41,33 +41,42 @@ pub const SKIP_DIRS: &[&str] = &[
     "directives/forward/error",
 ];
 
-/// 检查路径是否在跳过列表中。
-fn should_skip(path: &Path, spec_root: &Path) -> bool {
-    let rel = path.strip_prefix(spec_root).unwrap_or(path);
-    let rel_str = rel.to_string_lossy();
+/// 检查文件相对 spec_root 的路径是否在跳过列表中。
+fn should_skip(rel_path: &str) -> bool {
     SKIP_DIRS
         .iter()
-        .any(|skip| rel_str.starts_with(skip) || rel_str == *skip)
+        .any(|skip| rel_path.starts_with(skip) || rel_path == *skip)
 }
 
 /// 收集 spec 目录下所有 HRX 文件，跳过 `SKIP_DIRS` 和 >100KB 的文件。
 ///
+/// 参数：`dir` 要扫描的目录，`spec_root` spec 根目录（用于计算相对路径）。
 /// 返回 (files, skipped_count)。
-pub fn collect_hrx_files(spec_root: &Path) -> (Vec<PathBuf>, usize) {
+pub fn collect_hrx_files(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) {
     let mut files = Vec::new();
     let mut skipped = 0;
-    collect_recursive(spec_root, spec_root, &mut files, &mut skipped);
+    collect_recursive(dir, spec_root, &mut files, &mut skipped);
     (files, skipped)
 }
 
-fn collect_recursive(dir: &Path, spec_root: &Path, files: &mut Vec<PathBuf>, skipped: &mut usize) {
+fn collect_recursive(
+    dir: &Path,
+    spec_root: &Path,
+    files: &mut Vec<PathBuf>,
+    skipped: &mut usize,
+) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
                 collect_recursive(&path, spec_root, files, skipped);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
-                if should_skip(&path, spec_root) {
+                let rel = path
+                    .strip_prefix(spec_root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
+                if should_skip(&rel) {
                     *skipped += 1;
                     continue;
                 }
@@ -108,7 +117,8 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
 /// 按一级目录统计 HRX 文件分布。
 pub fn stats_by_dir(spec_root: &Path) -> Vec<(String, usize)> {
     let all = collect_all_hrx(spec_root);
-    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut counts: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
     for path in &all {
         let rel = path.strip_prefix(spec_root).unwrap_or(path);
         let first = rel
