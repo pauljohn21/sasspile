@@ -14,9 +14,11 @@ use std::rc::Rc;
 /// 模块导出——加载的文件模块的成员。
 #[derive(Debug, Clone, Default)]
 struct ModuleExports {
-    vars: HashMap<String, Value>,
-    mixins: HashMap<String, MixinDef>,
-    functions: HashMap<String, FunctionDef>,
+vars: HashMap<String, Value>,
+mixins: HashMap<String, MixinDef>,
+functions: HashMap<String, FunctionDef>,
+#[allow(dead_code)]
+css: Vec<CssNode>,
 }
 
 /// 不可变求值环境。
@@ -266,22 +268,22 @@ impl Evaluator {
                 }
                 Ok((vec![], env.clone()))
             }
-            Node::Import { url } => {
-                // @import 'url' —— 旧版内联：加载文件内容注入当前作用域
-                if url.starts_with("sass:") {
-                    return Ok((vec![], env.add_module(url.clone())));
-                }
-                let base = env.base_path.as_ref();
-                if let Some(path) = Self::resolve_file(base, url) {
-                    let exports = Self::load_module(&path, &[], env)?;
-                    let mut new_env = env.clone();
-                    for (k, v) in &exports.vars { new_env = new_env.bind(k.clone(), v.clone()); }
-                    for (k, v) in &exports.mixins { new_env = new_env.define_mixin(k.clone(), v.clone()); }
-                    for (k, v) in &exports.functions { new_env = new_env.define_function(k.clone(), v.clone()); }
-                    return Ok((vec![], new_env));
-                }
-                Ok((vec![], env.clone()))
-            }
+Node::Import { url } => {
+// @import 'url' —— 旧版内联：加载文件内容注入当前作用域
+if url.starts_with("sass:") {
+return Ok((vec![], env.add_module(url.clone())));
+}
+let base = env.base_path.as_ref();
+if let Some(path) = Self::resolve_file(base, url) {
+let exports = Self::load_module(&path, &[], env)?;
+let mut new_env = env.clone();
+for (k, v) in &exports.vars { new_env = new_env.bind(k.clone(), v.clone()); }
+for (k, v) in &exports.mixins { new_env = new_env.define_mixin(k.clone(), v.clone()); }
+for (k, v) in &exports.functions { new_env = new_env.define_function(k.clone(), v.clone()); }
+return Ok((exports.css, new_env));
+}
+Ok((vec![], env.clone()))
+}
             Node::Extend { selector, optional: _ } => {
                 // @extend selector —— 收集继承关系
                 if let Some(extender) = env.get_selector() {
@@ -606,6 +608,14 @@ impl Evaluator {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Color(a), Value::Color(b)) => a == b,
             (Value::Null, Value::Null) => true,
+            (Value::List(a, _), Value::List(b, _)) => {
+                a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| Self::values_eq(x, y))
+            }
+            (Value::Map(a), Value::Map(b)) => {
+                a.len() == b.len() && a.iter().all(|(k, v)| {
+                    b.iter().any(|(k2, v2)| Self::values_eq(k, k2) && Self::values_eq(v, v2))
+                })
+            }
             _ => false,
         }
     }
@@ -925,12 +935,13 @@ impl Evaluator {
             let val = Self::eval_value(value, caller_env)?;
             env = env.bind(name.clone(), val);
         }
-        let (_, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
-        Ok(ModuleExports {
-            vars: final_env.vars,
-            mixins: final_env.mixins,
-            functions: final_env.functions,
-        })
+let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
+Ok(ModuleExports {
+vars: final_env.vars,
+mixins: final_env.mixins,
+functions: final_env.functions,
+css: module_css,
+})
     }
 
     /// 模块限定函数调用。
@@ -980,6 +991,16 @@ impl Evaluator {
             "map.keys" => "map-keys",
             "map.values" => "map-values",
             "map.has-key" => "map-has-key",
+            // sass:list
+            "list.length" => "length",
+            "list.nth" => "nth",
+            "list.append" => "append",
+            "list.join" => "join",
+            "list.index" => "index",
+            "list.separator" => "separator",
+            "list.set-nth" => "set-nth",
+            "list.zip" => "zip",
+            "list.is-bracketed" => "is-bracketed",
             // sass:color
             "color.adjust" => "adjust-color",
             "color.change" => "change-color",
@@ -999,6 +1020,14 @@ impl Evaluator {
             "meta.function-exists" => "function-exists",
             "meta.global-variable-exists" => "global-variable-exists",
             "meta.variable-exists" => "variable-exists",
+            // sass:selector
+            "selector.append" => "selector-append",
+            "selector.nest" => "selector-nest",
+            "selector.is-super" => "selector-is-super",
+            "selector.parse" => "selector-parse",
+            "selector.simple-selectors" => "selector-simple-selectors",
+            "selector.unify" => "selector-unify",
+            "selector.extend" => "selector-extend",
             _ => name,
         };
         Self::call_builtin(builtin_name, args, env)
@@ -1131,8 +1160,12 @@ impl Evaluator {
             },
             "nth" => match args {
                 [Value::List(es, _), Value::Number(n, _)] => {
-                    let idx = *n as usize;
-                    es.get(idx - 1).cloned().ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
+                    let len = es.len() as i64;
+                    let idx = *n as i64;
+                    let actual = if idx > 0 { (idx as usize).saturating_sub(1) }
+                        else if idx < 0 { ((len + idx) as usize).saturating_sub(1) }
+                        else { return Err(SassError::Eval("nth 索引 0 无效（从 1 开始）".into())); };
+                    es.get(actual).cloned().ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))
                 }
                 _ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
             },
@@ -1271,7 +1304,6 @@ impl Evaluator {
                 _ => Err(SassError::Eval("color-channel 需要 (color, channel) 参数".into())),
             },
             "adjust-color" | "change-color" | "scale-color" => {
-                // 简化：直接返回原色（待完善）
                 args.first().cloned().ok_or_else(|| SassError::Eval("颜色函数需要至少 1 个参数".into()))
             }
             "complement" => match args {
@@ -1525,6 +1557,66 @@ impl Evaluator {
                 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
                 Ok(Value::Calc(format!("{name}({arg_str})")))
             },
+            // selector functions
+            "selector-append" => {
+                let parts: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                Ok(Value::String(parts.join(""), false))
+            }
+            "selector-nest" => {
+                let parts: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                Ok(Value::String(parts.join(" "), false))
+            }
+            "selector-is-super" => match args {
+                [Value::String(a, _), Value::String(b, _)] => {
+                    Ok(Value::Bool(b.contains(a.as_str())))
+                }
+                _ => Ok(Value::Bool(false)),
+            }
+            "selector-parse" => match args {
+                [Value::String(s, _)] => {
+                    let parts: Vec<Value> = s.split(',').map(|p| Value::String(p.trim().to_string(), false)).collect();
+                    Ok(Value::List(parts, Separator::Comma))
+                }
+                _ => Err(SassError::Eval("selector-parse 需要 1 个参数".into())),
+            }
+            "selector-simple-selectors" => match args {
+                [Value::String(s, _)] => {
+                    // 拆分复合选择器为简单选择器
+                    let mut result = Vec::new();
+                    let mut current = String::new();
+                    for c in s.chars() {
+                        if c == '.' || c == '#' || c == ':' || c == '[' {
+                            if !current.is_empty() { result.push(Value::String(current.clone(), false)); }
+                            current = c.to_string();
+                        } else {
+                            current.push(c);
+                        }
+                    }
+                    if !current.is_empty() { result.push(Value::String(current, false)); }
+                    Ok(Value::List(result, Separator::Comma))
+                }
+                _ => Err(SassError::Eval("selector-simple-selectors 需要 1 个参数".into())),
+            }
+            "selector-unify" => match args {
+                [Value::String(a, _), Value::String(b, _)] => {
+                    // 简化版：如果一个是另一个的前缀，返回另一个
+                    if a.contains(b.as_str()) { Ok(Value::String(a.clone(), false)) }
+                    else if b.contains(a.as_str()) { Ok(Value::String(b.clone(), false)) }
+                    else { Ok(Value::String(format!("{a}{b}"), false)) }
+                }
+                _ => Ok(Value::Null),
+            }
+            "selector-extend" => match args {
+                [Value::String(selector, _), Value::String(target, _), Value::String(extender, _)] => {
+                    let result = if selector.contains(target.as_str()) {
+                        format!("{selector}, {extender}")
+                    } else {
+                        selector.clone()
+                    };
+                    Ok(Value::String(result, false))
+                }
+                _ => Err(SassError::Eval("selector-extend 需要 3 个参数".into())),
+            }
             // not a function → 原样输出
             _ => Err(SassError::UndefinedFunction(name.to_string())),
         }
