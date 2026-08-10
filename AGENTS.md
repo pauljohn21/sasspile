@@ -138,7 +138,45 @@ apply_extends (n_extends) → 递归遍历 CSS 树
 
 - **CSS Diff 模块** (`tests/common/mod.rs`)：逐行对比期望 vs 实际 CSS，分类统计（content_diff/missing_output/extra_output）
 - **sass-spec 最小化工具** (`tests/minimize.rs`)：Delta debugging 自动最小化失败用例到最小复现代码
-- **Node::to_scss()** (`src/parse/ast.rs`)：AST → SCSS 序列化，支持最小化工具
+- **Node::to_scss()** (`src/parse/ast_impl.rs`)：AST → SCSS 序列化，支持最小化工具
+
+### 源文件结构
+
+全部源文件 ≤ 500 行（最大 `eval/builtin.rs` 459 行）。
+
+```
+src/
+├── lib.rs           (300)  公共 API + init_tracing
+├── main.rs          (36)
+├── error.rs         (77)
+├── css/
+│   ├── mod.rs       (248)  Serializer
+│   └── node.rs      (73)   CssNode
+├── lex/
+│   ├── mod.rs       (404)  Lexer + Iterator impl
+│   └── token.rs     (131)  Token 定义
+├── parse/
+│   ├── mod.rs       (75)   Parser 结构 + parse() 入口
+│   ├── nodes.rs     (348)  节点解析 + 参数解析
+│   ├── at_rules.rs  (364)  @规则解析
+│   ├── expr.rs      (350)  Pratt 表达式 + 数值/颜色解析
+│   ├── ast.rs       (310)  AST 类型定义
+│   └── ast_impl.rs  (201)  Display + to_scss 实现
+├── eval/
+│   ├── mod.rs       (319)  Env + Evaluator + eval_nodes/eval_node
+│   ├── rule.rs      (117)  eval_rule + combine_selectors
+│   ├── value.rs     (356)  eval_value + binop + 算术运算
+│   ├── control_flow.rs(111)eval_if/for/each/while
+│   ├── mixin.rs     (138)  eval_include + call_function
+│   ├── extend.rs    (72)   apply_extends
+│   ├── module.rs    (169)  resolve_file + load_module
+│   ├── color.rs     (241)  颜色转换 + builtin 颜色函数
+│   ├── builtin.rs   (459)  call_builtin 分派入口
+│   └── builtin/
+│       ├── list.rs  (154)  list 内建函数
+│       └── selector.rs(75) selector 内建函数
+└── stage/                  管线阶段类型
+```
 
 ## Git 规范
 
@@ -151,6 +189,7 @@ apply_extends (n_extends) → 递归遍历 CSS 树
 
 - sass-spec: 2322/10632 (21.9%)
 - 77 lib 测试 + 5 diff 测试全通过
+- 全部源文件 ≤ 500 行（文件拆分完成）
 - 调试工具链：CSS diff + 最小化 + 值快照 events
 - 已删除 libsass/non_conformant 目录
 - OpenSpec change: v2-rewrite-from-scratch

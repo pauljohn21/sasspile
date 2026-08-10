@@ -190,7 +190,7 @@ result.map_err(|e| {
 |----------|------|---------|
 | `未定义函数: xxx` | 函数未注册或映射缺失 | 检查 `call_module_function` 映射表 |
 | `未定义变量: $xxx` | 变量作用域问题 | 检查 `env.lookup` 和 `@use` 命名空间 |
-| `求值错误: xxx 需要 N 个参数` | 参数数量不匹配 | 检查 `call_builtin` 的 match 分支 |
+| `求值错误: xxx 需要 N 个参数` | 参数数量不匹配 | 检查 `eval/builtin.rs` 的 match 分支 |
 | `语法错误: 期望 X, 实际 Y` | 解析器不支持该语法 | 检查 `parse_value` / `parse_args` |
 | `词法错误: 无效字符` | 词法分析器不支持该字符 | 检查 `Lexer` 字符处理 |
 | `模块加载: 无法读取` | 文件路径解析失败 | 检查 `resolve_file` 候选路径 |
@@ -243,7 +243,7 @@ RUST_LOG="minimize=info" cargo test --test minimize minimize_extend_error -- --n
 - `Error` — 编译仍然报错
 - `OutputPreserve` — 输出与原始（错误）输出相同
 
-### Node::to_scss() (`src/parse/ast.rs`)
+### Node::to_scss() (`src/parse/ast_impl.rs`)
 
 AST → SCSS 序列化方法，支持最小化工具将修改后的 AST 转回可编译的 SCSS 源码。
 
