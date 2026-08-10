@@ -228,7 +228,7 @@ impl<'tok> Parser<'tok> {
                 // 空 Map 或列表
                 if self.peek() == Some(&Token::RParen) {
                     self.advance();
-                    return Ok(Value::List(vec![], Separator::Comma, false));
+                    return Ok(Value::List(vec![], Separator::Undecided, false));
                 }
                 let first = self.parse_expr(0)?;
                 self.skip_ws();
@@ -331,6 +331,7 @@ impl<'tok> Parser<'tok> {
                 // bracketed list
                 self.advance();
                 let mut items = Vec::new();
+                let mut saw_comma = false;
                 loop {
                     self.skip_ws();
                     if self.peek() == Some(&Token::RBracket) {
@@ -340,6 +341,7 @@ impl<'tok> Parser<'tok> {
                     self.skip_ws();
                     if self.peek() == Some(&Token::Comma) {
                         self.advance();
+                        saw_comma = true;
                     } else {
                         break;
                     }
@@ -347,7 +349,10 @@ impl<'tok> Parser<'tok> {
                 if self.peek() == Some(&Token::RBracket) {
                     self.advance();
                 }
-                Ok(Value::List(items, Separator::Comma, true))
+                let sep = if saw_comma { Separator::Comma }
+                    else if items.len() <= 1 { Separator::Undecided }
+                    else { Separator::Space };
+                Ok(Value::List(items, sep, true))
             }
             Some(Token::Amp) => {
                 let v = Value::String("&".to_string(), false);

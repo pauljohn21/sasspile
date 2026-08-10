@@ -1,55 +1,81 @@
 //! core_functions 诊断——显示前 N 个失败的摘要。
 //! 集成 CSS diff 模块，逐行显示差异。
+//! 支持跨文件 @use——写入临时目录后用 compile_file_with_load_paths 编译。
 
 mod common;
 use common::diff_css;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
+/// HRX 测试用例——包含所有文件和期望输出。
+struct HrxCase {
+    /// 所有文件（路径 → 内容），用于写入临时目录。
+    files: Vec<(String, String)>,
+    /// input.scss 的路径。
+    input_path: String,
+    /// 期望输出 CSS。
+    expected_output: String,
+    /// 是否期望错误。
+    expect_error: bool,
+}
+
+/// 解析 HRX——提取所有文件和测试用例。
+fn parse_hrx(content: &str) -> Vec<HrxCase> {
     let mut files: Vec<(String, String)> = Vec::new();
-    let mut path = String::new();
-    let mut content_buf = String::new();
+    let mut current_path = String::new();
+    let mut current_content = String::new();
+
     for line in content.lines() {
         if line.starts_with("<===>") {
-            if !path.is_empty() {
-                files.push((path.clone(), content_buf));
+            if !current_path.is_empty() {
+                files.push((current_path.clone(), current_content));
             }
-            path = line.trim_start_matches("<===>").trim().to_string();
-            content_buf = String::new();
+            current_path = line.trim_start_matches("<===>").trim().to_string();
+            current_content = String::new();
         } else {
-            content_buf.push_str(line);
-            content_buf.push('\n');
+            current_content.push_str(line);
+            current_content.push('\n');
         }
     }
-    if !path.is_empty() {
-        files.push((path, content_buf));
+    if !current_path.is_empty() {
+        files.push((current_path, current_content));
     }
+
     let mut cases = Vec::new();
-    for (p, input) in &files {
-        if p.ends_with("input.scss") {
-            let base = p.strip_suffix("input.scss").unwrap_or(p).to_string();
-            let out_path = format!("{base}output.css");
-            let err_path = format!("{base}error");
-            let output = files
+    for (path, _input) in &files {
+        if path.ends_with("input.scss") {
+            let base = path.strip_suffix("input.scss").unwrap_or(path).to_string();
+            let output_path = format!("{base}output.css");
+            let error_path = format!("{base}error");
+
+            let expected_output = files
                 .iter()
-                .find(|(pp, _)| pp == &out_path)
+                .find(|(p, _)| p == &output_path)
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
-            let has_error = files.iter().any(|(pp, _)| pp == &err_path);
-            if !has_error && !output.is_empty() {
-                cases.push((
-                    base.trim_end_matches('/').to_string(),
-                    input.clone(),
-                    output,
-                ));
-            }
+            let expect_error = files.iter().any(|(p, _)| p == &error_path);
+
+            // 收集所有 .scss/.css 文件（排除 sass: 内置模块引用）
+            let case_files: Vec<(String, String)> = files
+                .iter()
+                .filter(|(p, _)| {
+                    (p.ends_with(".scss") || p.ends_with(".css")) && !p.contains("/sass/")
+                })
+                .map(|(p, c)| (p.clone(), c.clone()))
+                .collect();
+
+            cases.push(HrxCase {
+                files: case_files,
+                input_path: path.clone(),
+                expected_output,
+                expect_error,
+            });
         }
     }
     cases
 }
 
-fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
+fn collect_hrx(dir: &Path, files: &mut Vec<PathBuf>) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -64,6 +90,62 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
             }
         }
     }
+}
+
+/// 编译单个测试用例——写入临时目录后用 compile_file_with_load_paths 编译。
+/// hrx_dir 是 HRX 文件所在目录，hrx_stem 是 HRX 文件名（不含扩展名）。
+/// 将 HRX 内容写入 tmp_dir/<hrx_stem>/，同时复制 hrx_dir 下的 .scss 文件到 tmp_dir/，
+/// 使 @use '../test-hue' 能正确解析到 tmp_dir/_test-hue.scss。
+fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str) -> Result<String, String> {
+    let tmp_dir = std::env::temp_dir().join(format!("cf-diag-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    std::fs::create_dir_all(&tmp_dir).ok();
+
+    // 将 HRX 中的文件写入 tmp_dir/<hrx_stem>/
+    let case_subdir = tmp_dir.join(hrx_stem);
+    std::fs::create_dir_all(&case_subdir).ok();
+    for (path, content) in &case.files {
+        // 如果 path 本身就包含 hrx_stem/ 前缀，直接用 tmp_dir；否则用 case_subdir
+        let target = if path.starts_with(&format!("{hrx_stem}/")) {
+            tmp_dir.join(path)
+        } else {
+            case_subdir.join(path)
+        };
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        std::fs::write(&target, content).ok();
+    }
+
+    // 复制 hrx_dir 下的所有 .scss/.css 文件到 tmp_dir/（支持 @use '../xxx' 解析）
+    if let Ok(entries) = std::fs::read_dir(hrx_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) == Some("scss")
+                || p.extension().and_then(|s| s.to_str()) == Some("css")
+            {
+                if let Ok(content) = std::fs::read_to_string(&p) {
+                    let filename = p.file_name().unwrap().to_string_lossy().to_string();
+                    std::fs::write(tmp_dir.join(&filename), content).ok();
+                }
+            }
+        }
+    }
+
+    // input_path 在 HRX 中可能只是 "input.scss"，需要映射到 case_subdir
+    let input_file = if case.input_path.starts_with(&format!("{hrx_stem}/")) {
+        tmp_dir.join(&case.input_path)
+    } else {
+        case_subdir.join(&case.input_path)
+    };
+
+    let result = sasspile::compile_file_with_load_paths(
+        &input_file,
+        sasspile::OutputStyle::Expanded,
+        vec![spec_root.to_path_buf()],
+    );
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    result.map_err(|e| format!("{e}"))
 }
 
 fn diag(subdir: &str, max_show: usize) {
@@ -81,15 +163,29 @@ fn diag(subdir: &str, max_show: usize) {
         }
         if let Ok(content) = std::fs::read_to_string(file) {
             let stem = file.file_stem().unwrap().to_string_lossy().to_string();
-            for (name, input, expected) in &parse_hrx(&content) {
+            for case in &parse_hrx(&content) {
                 if shown >= max_show {
                     break;
                 }
-                match sasspile::compile_expanded(input) {
+                if case.expected_output.is_empty() && !case.expect_error {
+                    continue;
+                }
+                let name = case
+                    .input_path
+                    .strip_suffix("input.scss")
+                    .unwrap_or(&case.input_path)
+                    .trim_end_matches('/')
+                    .to_string();
+                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
                     Ok(actual) => {
-                        if actual.trim() != expected.trim() {
+                        if case.expect_error {
+                            // 期望错误但实际成功了
                             shown += 1;
-                            let diff = diff_css(expected.trim(), actual.trim());
+                            *err_types.entry("expected_error_but_ok".to_string()).or_default() += 1;
+                            println!("FAIL {stem}/{name}: expected_error_but_ok");
+                        } else if actual.trim() != case.expected_output.trim() {
+                            shown += 1;
+                            let diff = diff_css(case.expected_output.trim(), actual.trim());
                             let key = diff.classify();
                             *err_types.entry(key.to_string()).or_default() += 1;
                             println!("FAIL {stem}/{name}: {key} ({} diffs)", diff.lines.len());
@@ -110,20 +206,23 @@ fn diag(subdir: &str, max_show: usize) {
                             }
                         }
                     }
-                    Err(err) => {
-                        shown += 1;
-                        let err_str = format!("{err}");
-                        let key = if err_str.contains("未定义") {
-                            "undefined".to_string()
-                        } else if err_str.contains("语法错误") {
-                            "syntax".to_string()
-                        } else if err_str.contains("求值错误") {
-                            "eval".to_string()
+                    Err(err_str) => {
+                        if case.expect_error {
+                            // 期望错误且确实出错了——通过
                         } else {
-                            "other_err".to_string()
-                        };
-                        *err_types.entry(key.clone()).or_default() += 1;
-                        println!("ERROR {stem}/{name}: {key} [{err_str}]");
+                            shown += 1;
+                            let key = if err_str.contains("未定义") {
+                                "undefined".to_string()
+                            } else if err_str.contains("语法错误") {
+                                "syntax".to_string()
+                            } else if err_str.contains("求值错误") {
+                                "eval".to_string()
+                            } else {
+                                "other_err".to_string()
+                            };
+                            *err_types.entry(key.clone()).or_default() += 1;
+                            println!("ERROR {stem}/{name}: {key} [{err_str}]");
+                        }
                     }
                 }
             }
@@ -257,21 +356,28 @@ fn stats_subdir(subdir: &str) {
     let mut cases = 0;
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            for (_name, input, expected) in &parse_hrx(&content) {
+            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            for case in &parse_hrx(&content) {
                 cases += 1;
-                if expected.trim().is_empty() {
+                if case.expected_output.is_empty() && !case.expect_error {
                     continue;
                 }
-                match sasspile::compile_expanded(input) {
+                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
                     Ok(actual) => {
-                        if actual.trim() == expected.trim() {
+                        if case.expect_error {
+                            fail += 1;
+                        } else if actual.trim() == case.expected_output.trim() {
                             pass += 1;
                         } else {
                             fail += 1;
                         }
                     }
                     Err(_) => {
-                        fail += 1;
+                        if case.expect_error {
+                            pass += 1;
+                        } else {
+                            fail += 1;
+                        }
                     }
                 }
             }

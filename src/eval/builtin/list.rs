@@ -56,18 +56,41 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             [Value::List(items, sep, bracketed), val] => {
                 let mut new_items = items.clone();
                 new_items.push(val.clone());
-                Ok(Some(Value::List(new_items, sep.clone(), *bracketed)))
+                // Undecided separator → Space when appending
+                let new_sep = match sep {
+                    Separator::Undecided => Separator::Space,
+                    other => other.clone(),
+                };
+                Ok(Some(Value::List(new_items, new_sep, *bracketed)))
             }
             [Value::List(items, sep, bracketed), val, Value::String(s, _)] => {
                 let new_sep = match s.as_str() {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
-                    _ => sep.clone(),
+                    _ => match sep {
+                        Separator::Undecided => Separator::Space,
+                        other => other.clone(),
+                    },
                 };
                 let mut new_items = items.clone();
                 new_items.push(val.clone());
                 Ok(Some(Value::List(new_items, new_sep, *bracketed)))
+            }
+            [Value::Map(pairs), val] => {
+                if pairs.is_empty() {
+                    // 空映射 = 空列表 → 返回单元素 space 列表
+                    Ok(Some(Value::List(vec![val.clone()], Separator::Space, false)))
+                } else {
+                    // 非空 Map → comma-separated list of space-separated pairs
+                    let items: Vec<Value> = pairs
+                        .iter()
+                        .map(|(k, v)| Value::List(vec![k.clone(), v.clone()], Separator::Space, false))
+                        .collect();
+                    let mut new_items = items;
+                    new_items.push(val.clone());
+                    Ok(Some(Value::List(new_items, Separator::Comma, false)))
+                }
             }
             [other, val] => {
                 let items = match other {
@@ -82,50 +105,59 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             }
             _ => Err(SassError::Eval("append 需要 2-3 个参数".into())),
         },
-        "join" => match args {
-            [Value::List(a, sa, false), Value::List(b, sb, false)] => {
-                let sep = if a.is_empty() { sb.clone() } else { sa.clone() };
-                let mut items = a.clone();
-                items.extend(b.clone());
-                Ok(Some(Value::List(items, sep, false)))
+        "join" => {
+            if args.len() < 2 || args.len() > 4 {
+                return Err(SassError::Eval("join 需要 2-4 个参数".into()));
             }
-            [
-                Value::List(a, sa, false),
-                Value::List(b, sb, false),
-                Value::String(s, _),
-            ] => {
-                let sep = match s.as_str() {
+            // 提取 list1 的 items 和 separator
+            let (a_items, a_sep, a_bracketed) = match &args[0] {
+                Value::List(items, sep, br) => (items.clone(), sep.clone(), *br),
+                Value::Map(pairs) => {
+                    let items: Vec<Value> = pairs.iter().map(|(k, v)| {
+                        Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                    }).collect();
+                    (items, Separator::Comma, false)
+                }
+                other => (vec![other.clone()], Separator::Undecided, false),
+            };
+            // 提取 list2 的 items 和 separator
+            let (b_items, b_sep, _) = match &args[1] {
+                Value::List(items, sep, _) => (items.clone(), sep.clone(), false),
+                Value::Map(pairs) => {
+                    let items: Vec<Value> = pairs.iter().map(|(k, v)| {
+                        Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                    }).collect();
+                    (items, Separator::Comma, false)
+                }
+                other => (vec![other.clone()], Separator::Undecided, false),
+            };
+            // 解析 separator 参数
+            let sep = if let Some(Value::String(s, _)) = args.get(2) {
+                match s.as_str() {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
-                    _ => {
-                        if a.is_empty() {
-                            sb.clone()
-                        } else {
-                            sa.clone()
-                        }
+                    "auto" | _ => {
+                        if a_sep == Separator::Undecided { b_sep } else { a_sep }
                     }
-                };
-                let mut items = a.clone();
-                items.extend(b.clone());
-                Ok(Some(Value::List(items, sep, false)))
-            }
-            [a, b] => {
-                let (a_items, a_sep) = match a {
-                    Value::List(items, sep, _) => (items.clone(), sep.clone()),
-                    _ => (vec![a.clone()], Separator::Undecided),
-                };
-                let (b_items, b_sep) = match b {
-                    Value::List(items, sep, _) => (items.clone(), sep.clone()),
-                    _ => (vec![b.clone()], Separator::Undecided),
-                };
-                let sep = if a_items.is_empty() { b_sep } else { a_sep };
-                let mut items = a_items;
-                items.extend(b_items);
-                Ok(Some(Value::List(items, sep, false)))
-            }
-            _ => Err(SassError::Eval("join 需要 2-4 个参数".into())),
-        },
+                }
+            } else {
+                // 无 separator 参数 → auto
+                if a_sep == Separator::Undecided { b_sep } else { a_sep }
+            };
+            // 解析 bracketed 参数
+            let bracketed = if let Some(Value::Bool(b)) = args.get(3) {
+                *b
+            } else if let Some(Value::String(s, _)) = args.get(3) {
+                s == "auto"
+            } else {
+                // auto → 使用 list1 的 bracketed
+                a_bracketed
+            };
+            let mut items = a_items;
+            items.extend(b_items);
+            Ok(Some(Value::List(items, sep, bracketed)))
+        }
         "index" => match args {
             [Value::List(items, _, _), needle] => {
                 for (i, item) in items.iter().enumerate() {
@@ -144,18 +176,36 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             }
             _ => Err(SassError::Eval("index 需要 2 个参数".into())),
         },
-        "list-separator" | "separator" => match args {
-            [Value::List(_, Separator::Comma, _)] => {
-                Ok(Some(Value::String("comma".into(), false)))
+        "list-separator" | "separator" => {
+            if args.len() != 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
             }
-            [Value::List(_, Separator::Space, _)] => {
-                Ok(Some(Value::String("space".into(), false)))
+            match &args[0] {
+                Value::List(_, Separator::Comma, _) => {
+                    Ok(Some(Value::String("comma".into(), false)))
+                }
+                Value::List(_, Separator::Space, _) => {
+                    Ok(Some(Value::String("space".into(), false)))
+                }
+                Value::List(_, Separator::Slash, _) => {
+                    Ok(Some(Value::String("slash".into(), false)))
+                }
+                Value::List(_, Separator::Undecided, _) => {
+                    Ok(Some(Value::String("space".into(), false)))
+                }
+                Value::Map(pairs) => {
+                    if pairs.is_empty() {
+                        Ok(Some(Value::String("space".into(), false)))
+                    } else {
+                        Ok(Some(Value::String("comma".into(), false)))
+                    }
+                }
+                _ => Ok(Some(Value::String("space".into(), false))),
             }
-            [Value::List(_, Separator::Slash, _)] => {
-                Ok(Some(Value::String("slash".into(), false)))
-            }
-            [Value::Map(_)] => Ok(Some(Value::String("comma".into(), false))),
-            _ => Ok(Some(Value::String("space".into(), false))),
         },
         "set-nth" => match args {
             [Value::List(items, sep, false), Value::Number(n, _), val] => {

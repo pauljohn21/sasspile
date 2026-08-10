@@ -55,7 +55,7 @@ RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --lib -- --noc
 
 ### 5. 测试规范
 
-- lib 测试：77 个，必须全通过 `cargo test --lib`
+- lib 测试：37 个，必须全通过 `cargo test --lib`
 - diff 测试：5 个，`cargo test --test common_test`
 - sass-spec 全量：`cargo test --test sass_spec_full test_sass_spec_full_stats`
 - 诊断测试：`cargo test --test cf_diag diag_<subdir> -- --nocapture`
@@ -68,7 +68,7 @@ RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --lib -- --noc
 # 编译检查
 cargo check
 
-# 运行 lib 测试（77 个）
+# 运行 lib 测试（37 个）
 cargo test --lib
 
 # 运行 diff 测试（5 个）
@@ -112,7 +112,12 @@ eval_nodes → eval_node_item → eval_node
 
 文件加载：
 ```
-load_module (path, depth) → resolve_file (url)
+load_module (path, depth) → resolve_file (url, load_paths)
+```
+
+@return 控制流：
+```
+eval_node(Return) → CssNode::Return(Value) → call_user_function 捕获
 ```
 
 @extend 后处理：
@@ -144,39 +149,42 @@ apply_extends (n_extends) → 递归遍历 CSS 树
 
 ### 源文件结构
 
-全部源文件 ≤ 500 行（最大 `eval/builtin.rs` 459 行）。
+全部源文件 ≤ 500 行（最大 `parse/nodes.rs` 484 行）。
 
 ```
 src/
-├── lib.rs           (300)  公共 API + init_tracing
-├── main.rs          (36)
-├── error.rs         (77)
+├── lib.rs            (357)  公共 API + init_tracing
+├── main.rs           (36)
+├── error.rs          (80)
 ├── css/
-│   ├── mod.rs       (248)  Serializer
-│   └── node.rs      (73)   CssNode
+│   ├── mod.rs        (349)  Serializer
+│   └── node.rs       (88)   CssNode（含 Return 变体）
 ├── lex/
-│   ├── mod.rs       (404)  Lexer + Iterator impl
-│   └── token.rs     (131)  Token 定义
+│   ├── mod.rs        (460)  Lexer + Iterator impl
+│   └── token.rs      (131)  Token 定义
 ├── parse/
-│   ├── mod.rs       (75)   Parser 结构 + parse() 入口
-│   ├── nodes.rs     (348)  节点解析 + 参数解析
-│   ├── at_rules.rs  (364)  @规则解析
-│   ├── expr.rs      (350)  Pratt 表达式 + 数值/颜色解析
-│   ├── ast.rs       (310)  AST 类型定义
-│   └── ast_impl.rs  (201)  Display + to_scss 实现
+│   ├── mod.rs        (86)   Parser 结构 + parse() 入口
+│   ├── nodes.rs      (484)  节点解析 + 参数解析
+│   ├── at_rules.rs   (451)  @规则解析
+│   ├── expr.rs       (470)  Pratt 表达式 + 数值/颜色解析
+│   ├── ast.rs        (326)  AST 类型定义
+│   └── ast_impl.rs   (281)  Display + to_scss 实现
 ├── eval/
-│   ├── mod.rs       (319)  Env + Evaluator + eval_nodes/eval_node
-│   ├── rule.rs      (117)  eval_rule + combine_selectors
-│   ├── value.rs     (356)  eval_value + binop + 算术运算
-│   ├── control_flow.rs(111)eval_if/for/each/while
-│   ├── mixin.rs     (138)  eval_include + call_function
-│   ├── extend.rs    (72)   apply_extends
-│   ├── module.rs    (169)  resolve_file + load_module
-│   ├── color.rs     (241)  颜色转换 + builtin 颜色函数
-│   ├── builtin.rs   (459)  call_builtin 分派入口
+│   ├── mod.rs        (437)  Env + Evaluator + eval_nodes/eval_node
+│   ├── rule.rs       (136)  eval_rule + combine_selectors
+│   ├── value.rs      (456)  eval_value + binop + 算术运算
+│   ├── control_flow.rs(146) eval_if/for/each/while
+│   ├── mixin.rs      (168)  eval_include + call_function + call_user_function
+│   ├── extend.rs     (77)   apply_extends
+│   ├── module.rs     (191)  resolve_file + load_module（支持 load_paths）
+│   ├── color.rs      (266)  颜色转换 + builtin 颜色函数
+│   ├── builtin.rs    (247)  call_builtin 分派入口
 │   └── builtin/
-│       ├── list.rs  (154)  list 内建函数
-│       └── selector.rs(75) selector 内建函数
+│       ├── color.rs    (206)  invert/grayscale/hwb/complement/adjust-hue/...
+│       ├── list.rs     (196)  length/nth/append/join/index/zip/...
+│       ├── map.rs      (271)  map-get/keys/values/has-key/merge/remove/set + 嵌套辅助
+│       ├── string.rs   (182)  str-length/slice/index/insert/split/unquote/quote/...
+│       └── selector.rs  (98)  selector-append/nest/is-super/parse/...
 └── stage/                  管线阶段类型
 ```
 
@@ -189,9 +197,11 @@ src/
 
 ## 当前状态
 
-- sass-spec: 2322/10632 (21.9%)
-- 77 lib 测试 + 5 diff 测试全通过
-- 全部源文件 ≤ 500 行（文件拆分完成）
+- sass-spec: 2003/5069 (39%)
+- 37 lib 测试 + 5 diff 测试全通过
+- 全部源文件 ≤ 500 行（文件拆分完成，最大 `parse/nodes.rs` 484 行）
 - 调试工具链：CSS diff + 最小化 + 值快照 events
 - 已删除 libsass/non_conformant 目录
+- 已实现：load path 支持 + @return 控制流传播 + map 嵌套操作 + str-split + compatible + 字符串转义（非 ASCII → CSS hex escape，引号选择规则）+ str-split/slice/insert/unique-id 参数验证 + list separator 修复（()→Undecided, [1]→Undecided, join 2-4 参数, append Map 支持, list.separator 空映射→space）+ hwb 空格分隔列表展开 + hwb 单位验证 + @charset UTF-8 前缀 + color.hwb 模块映射 + cf_diag 跨文件 @use 支持
+- 剩余瓶颈：oklch/oklab 未实现；@extend 选择器引擎需结构化类型；css 目录失败需选择器组合器修复；list-slash 函数路由问题；quote(\0) 标识符转义保留问题
 - OpenSpec change: v2-rewrite-from-scratch

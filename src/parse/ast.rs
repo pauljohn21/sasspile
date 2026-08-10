@@ -271,7 +271,10 @@ impl std::fmt::Display for Value {
                     write!(f, "{n}{unit}")
                 }
             }
-            Value::String(s, true) => write!(f, "\"{s}\""),
+            Value::String(s, true) => {
+                let (quote, escaped) = Self::escape_quoted_string(s);
+                write!(f, "{quote}{escaped}{quote}")
+            }
             Value::String(s, false) => write!(f, "{s}"),
             Value::Color(c) => {
                 if (c.a - 1.0).abs() < f32::EPSILON {
@@ -322,5 +325,46 @@ impl std::fmt::Display for Value {
             Value::Calc(s) => write!(f, "{s}"),
             Value::Spread(v) => write!(f, "{v}..."),
         }
+    }
+}
+
+impl Value {
+    /// 转义引用字符串中的特殊字符为 CSS 转义序列。
+    ///
+    /// 返回 (quote_char, escaped_content)。
+    /// - 如果字符串包含 `"` 但不包含 `'`，用单引号包裹，避免转义
+    /// - 否则用双引号包裹，转义 `"`
+    /// - `\` → `\\`
+    /// - NULL (U+0000) → `\0 ` (with trailing space if needed)
+    /// - 控制字符和私有区字符 → `\XXXX` (lowercase hex)
+    /// - 其他非 ASCII 字符保持原样（会触发 @charset 前缀）
+    fn escape_quoted_string(s: &str) -> (char, String) {
+        let has_double = s.contains('"');
+        let has_single = s.contains("'");
+        // 如果包含双引号但不含单引号，用单引号包裹
+        let quote = if has_double && !has_single { '\'' } else { '"' };
+
+        let chars: Vec<char> = s.chars().collect();
+        let mut result = String::new();
+        for (i, &c) in chars.iter().enumerate() {
+            match c {
+                '\\' => result.push_str("\\\\"),
+                '"' if quote == '"' => result.push_str("\\\""),
+                '\'' if quote == '\'' => result.push_str("\\'"),
+                '\0' => result.push_str("\\0 "),
+                c if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) => {
+                    let hex = format!("{:x}", c as u32);
+                    result.push('\\');
+                    result.push_str(&hex);
+                    // 仅在下一个字符是十六进制数字或空白时添加空格终止转义
+                    let next = chars.get(i + 1).copied();
+                    if next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                        result.push(' ');
+                    }
+                }
+                _ => result.push(c),
+            }
+        }
+        (quote, result)
     }
 }

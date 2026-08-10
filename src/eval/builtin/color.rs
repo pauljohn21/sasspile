@@ -42,30 +42,68 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             .cloned()
             .map(Some)
             .ok_or_else(|| SassError::Eval("颜色函数需要至少 1 个参数".into())),
-        "hwb" => match args {
-            [
-                Value::Number(h, _),
-                Value::Number(w, _),
-                Value::Number(b, _),
-            ] => Ok(Some(Value::Color(Evaluator::hwb_to_rgb(
-                *h,
-                *w / 100.0,
-                *b / 100.0,
-                1.0,
-            )))),
-            [
-                Value::Number(h, _),
-                Value::Number(w, _),
-                Value::Number(b, _),
-                Value::Number(a, _),
-            ] => Ok(Some(Value::Color(Evaluator::hwb_to_rgb(
-                *h,
-                *w / 100.0,
-                *b / 100.0,
-                *a as f32,
-            )))),
-            _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
-        },
+        "hwb" => {
+            // 展开空格分隔的 List（CSS hwb() 语法：hwb(0deg 30% 40%)）
+            // 仅接受非 bracketed、恰好 3 元素的 space-separated list
+            let flat = if args.len() == 1 {
+                if let Value::List(items, Separator::Space, false) = &args[0] {
+                    if items.len() == 3 {
+                        items.clone()
+                    } else {
+                        return Err(SassError::Eval("hwb 需要 3-4 个参数".into()));
+                    }
+                } else {
+                    return Err(SassError::Eval("hwb 需要 3-4 个参数".into()));
+                }
+            } else {
+                args.to_vec()
+            };
+            match &flat[..] {
+                [Value::Number(h, _), Value::Number(w, wu), Value::Number(b, bu)] => {
+                    // whiteness 和 blackness 必须有 % 单位
+                    if wu.as_deref() != Some("%") {
+                        return Err(SassError::Eval(
+                            format!("Expected whiteness to have unit \"%\", was {}", w),
+                        ));
+                    }
+                    if bu.as_deref() != Some("%") {
+                        return Err(SassError::Eval(
+                            format!("Expected blackness to have unit \"%\", was {}", b),
+                        ));
+                    }
+                    Ok(Some(Value::Color(Evaluator::hwb_to_rgb(
+                        *h,
+                        *w / 100.0,
+                        *b / 100.0,
+                        1.0,
+                    ))))
+                }
+                [Value::Number(h, _), Value::Number(w, wu), Value::Number(b, bu), Value::Number(a, au)] => {
+                    if wu.as_deref() != Some("%") {
+                        return Err(SassError::Eval(
+                            format!("Expected whiteness to have unit \"%\", was {}", w),
+                        ));
+                    }
+                    if bu.as_deref() != Some("%") {
+                        return Err(SassError::Eval(
+                            format!("Expected blackness to have unit \"%\", was {}", b),
+                        ));
+                    }
+                    if au.is_some() && au.as_deref() != Some("%") {
+                        return Err(SassError::Eval(
+                            format!("Expected alpha to have unit \"%\" or no units, was {}", a),
+                        ));
+                    }
+                    Ok(Some(Value::Color(Evaluator::hwb_to_rgb(
+                        *h,
+                        *w / 100.0,
+                        *b / 100.0,
+                        *a as f32,
+                    ))))
+                }
+                _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
+            }
+        }
         "complement" => match args {
             [Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
                 255 - c.r,

@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../bootstrap-5.3.8"
+		},
+		{
+			"path": "../rxweb"
 		}
 	],
 	"settings": {}

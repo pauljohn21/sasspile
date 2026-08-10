@@ -13,9 +13,18 @@ impl Serializer {
     /// 序列化 CssNode 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
         let flattened = Self::flatten_nodes(nodes);
-        match style {
+        let css = match style {
             OutputStyle::Expanded => Self::serialize_expanded(&flattened, 0),
             OutputStyle::Compressed => Self::serialize_compressed(&flattened),
+        };
+        // 当输出包含非 ASCII 字符时，Dart Sass 在 expanded 模式下添加 @charset 前缀
+        if css.chars().any(|c| !c.is_ascii()) {
+            match style {
+                OutputStyle::Expanded => format!("@charset \"UTF-8\";\n{css}"),
+                OutputStyle::Compressed => format!("@charset\"UTF-8\";{css}"),
+            }
+        } else {
+            css
         }
     }
 

@@ -6,31 +6,33 @@
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| **lib.rs** | 316 | 公共 API（compile/compile_expanded）+ init_tracing |
+| **lib.rs** | 357 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing |
 | **main.rs** | 36 | CLI 入口 |
-| **error.rs** | 77 | SassError 定义 |
+| **error.rs** | 80 | SassError 定义 |
 | **lex/token.rs** | 131 | Token 枚举定义 |
-| **lex/mod.rs** | 459 | Lexer + Iterator impl（scan_* 方法） |
-| **parse/ast.rs** | 327 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等） |
+| **lex/mod.rs** | 460 | Lexer + Iterator impl（scan_* 方法） |
+| **parse/ast.rs** | 326 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等） |
 | **parse/ast_impl.rs** | 281 | Display for Value + Node::to_scss() |
-| **parse/mod.rs** | 75 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
+| **parse/mod.rs** | 86 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
 | **parse/nodes.rs** | 484 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
-| **parse/at_rules.rs** | 463 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
-| **parse/expr.rs** | 471 | Pratt 表达式解析 + parse_number/parse_hash_color |
-| **eval/mod.rs** | 402 | Env + ModuleExports + MixinDef + Evaluator + evaluate/eval_nodes/eval_node |
-| **eval/rule.rs** | 138 | eval_rule + combine_selectors |
-| **eval/value.rs** | 461 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str |
-| **eval/control_flow.rs** | 148 | eval_if/eval_for/eval_each/eval_while |
+| **parse/at_rules.rs** | 451 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
+| **parse/expr.rs** | 470 | Pratt 表达式解析 + parse_number/parse_hash_color |
+| **eval/mod.rs** | 437 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node |
+| **eval/rule.rs** | 136 | eval_rule + combine_selectors |
+| **eval/value.rs** | 456 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible |
+| **eval/control_flow.rs** | 146 | eval_if/eval_for/eval_each/eval_while |
 | **eval/mixin.rs** | 168 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
-| **eval/extend.rs** | 78 | apply_extends |
-| **eval/module.rs** | 177 | resolve_file + load_module + call_module_function |
-| **eval/color.rs** | 268 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 464 | call_builtin 分派入口（match 骨架 + math/string/map/meta inline arms） |
-| **eval/builtin/list.rs** | 195 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
+| **eval/extend.rs** | 77 | apply_extends |
+| **eval/module.rs** | 191 | resolve_file（含 load_paths） + load_module + call_module_function |
+| **eval/color.rs** | 266 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
+| **eval/builtin.rs** | 247 | call_builtin 分派入口（match 骨架 → 子模块分派） |
 | **eval/builtin/color.rs** | 206 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness |
-| **eval/builtin/selector.rs** | 82 | selector-append/nest/is-super/parse/simple-selectors/unify/extend |
-| **css/mod.rs** | 347 | Serializer（CSS 树 → 字符串） |
-| **css/node.rs** | 74 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment） |
+| **eval/builtin/list.rs** | 196 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
+| **eval/builtin/map.rs** | 271 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
+| **eval/builtin/string.rs** | 182 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id |
+| **eval/builtin/selector.rs** | 98 | selector-append/nest/is-super/parse/simple-selectors/unify/extend |
+| **css/mod.rs** | 349 | Serializer（CSS 树 → 字符串，含 Return 忽略） |
+| **css/node.rs** | 88 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Return） |
 | **stage/*.rs** | 14-89 | 管线阶段类型（Source/Lexed/Parsed/Evaluated/Serialized） |
 
 ## 函数 → 文件定位
@@ -39,10 +41,10 @@
 
 | 函数 | 文件 |
 |------|------|
-| `evaluate` / `evaluate_with_path` | `eval/mod.rs` |
+| `evaluate` / `evaluate_with_path` / `evaluate_with_path_and_load_paths` | `eval/mod.rs` |
 | `eval_nodes` / `eval_node` | `eval/mod.rs` |
 | `eval_rule` / `combine_selectors` | `eval/rule.rs` |
-| `eval_value` / `eval_binop` | `eval/value.rs` |
+| `eval_value` / `eval_binop` / `units_compatible` | `eval/value.rs` |
 | `add` / `sub` / `mul` / `div` / `modulo` / `compare` | `eval/value.rs` |
 | `values_eq` / `inspect_value` / `is_truthy` | `eval/value.rs` |
 | `eval_interp_str` / `eval_simple_expr` | `eval/value.rs` |
@@ -52,6 +54,8 @@
 | `apply_extends` | `eval/extend.rs` |
 | `resolve_file` / `load_module` / `call_module_function` | `eval/module.rs` |
 | `call_builtin` | `eval/builtin.rs` |
+| `call_map_builtin` / `value_to_map` / `nested_map_merge` / `nested_map_set` | `eval/builtin/map.rs` |
+| `call_string_builtin` / `str_slice` / `str_insert` / `str_split` | `eval/builtin/string.rs` |
 | `hsl_to_rgb` / `hwb_to_rgb` / `rgb_to_hsl` / `simple_random` | `eval/color.rs` |
 | `builtin_rgba` / `builtin_darken` / `builtin_lighten` / `builtin_mix` | `eval/color.rs` |
 
@@ -99,6 +103,7 @@
 | `ModuleExports` | `eval/mod.rs` |
 | `MixinDef` / `FunctionDef` | `eval/mod.rs` |
 | `Evaluator` | `eval/mod.rs` |
+| `CssNode` (含 `Return(Value)`) | `css/node.rs` |
 | `CssNode` | `css/node.rs` |
 | `SassError` | `error.rs` |
 
@@ -106,11 +111,12 @@
 
 | 概念 | 相关文件 |
 |------|----------|
-| SCSS 编译入口 | `lib.rs` → `compile_expanded()` |
-| 变量作用域 | `eval/mod.rs` → `Env` (vars/mixins/functions/namespaces) |
+| SCSS 编译入口 | `lib.rs` → `compile_expanded()` / `compile_file_with_load_paths()` |
+| 变量作用域 | `eval/mod.rs` → `Env` (vars/mixins/functions/namespaces/load_paths) |
 | @use 模块系统 | `eval/module.rs` → `load_module` / `call_module_function` |
 | @extend 继承 | `eval/extend.rs` → `apply_extends` |
 | @mixin/@include | `eval/mixin.rs` → `eval_include` / `bind_params` |
+| @return 控制流 | `eval/mixin.rs` → `call_user_function` (捕获 CssNode::Return) |
 | 控制流 (@if/@for/@each/@while) | `eval/control_flow.rs` |
 | 颜色转换 | `eval/color.rs` → `hsl_to_rgb` / `rgb_to_hsl` / `hwb_to_rgb` |
 | 内建函数注册 | `eval/builtin.rs` → `call_builtin` match 分派 |

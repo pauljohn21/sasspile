@@ -115,63 +115,93 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// 扫描引号字符串。
+    /// 扫描引号字符串（处理转义序列）。
     fn scan_string(&mut self, quote: char) -> Result<Token> {
         self.next_char(); // 消费起始引号
-        let start = self.pos;
+        let mut content = String::new();
         while let Some(c) = self.peek() {
             if c == '\\' {
-                self.next_char();
-                self.next_char(); // 跳过转义字符
+                self.next_char(); // 消费 \
+                if let Some(next) = self.peek() {
+                    if next.is_ascii_hexdigit() {
+                        // 十六进制转义：\XXXX（1-6 位十六进制）
+                        let mut hex = String::new();
+                        for _ in 0..6 {
+                            if let Some(h) = self.peek() {
+                                if h.is_ascii_hexdigit() {
+                                    hex.push(h);
+                                    self.next_char();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                        // 跳过尾部一个空白字符
+                        if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') {
+                            self.next_char();
+                        }
+                        if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                            if let Some(ch) = char::from_u32(code) {
+                                content.push(ch);
+                            }
+                        }
+                    } else {
+                        // 非十六进制转义：\X → X（如 \" → ", \\ → \）
+                        self.next_char();
+                        content.push(next);
+                    }
+                }
                 continue;
             }
             if c == quote {
                 break;
             }
+            content.push(c);
             self.next_char();
         }
-        let content = self.source[start..self.pos].to_string();
         if self.peek().is_some() {
             self.next_char(); // 消费结束引号
         }
         Ok(Token::String(content, quote))
     }
 
-    /// 扫描 `#{...}` 插值——递归匹配大括号。
-    #[allow(dead_code)]
-    fn scan_interp(&mut self) -> Result<Token> {
-        self.next_char(); // 消费 #
-        self.next_char(); // 消费 {
-        let start = self.pos;
-        let mut depth = 1;
-        while depth > 0 {
-            match self.peek() {
-                Some('{') => {
-                    depth += 1;
-                    self.next_char();
+    /// 扫描反斜杠转义标识符（CSS 转义，如 \: \. 等）。
+    fn scan_escape_ident(&mut self) -> Token {
+        let mut text = String::new();
+        self.next_char();
+        if let Some(next) = self.peek() {
+            if next.is_ascii_hexdigit() {
+                let mut hex = String::new();
+                for _ in 0..6 {
+                    if let Some(h) = self.peek().filter(|c| c.is_ascii_hexdigit()) {
+                        hex.push(h);
+                        self.next_char();
+                    } else { break; }
                 }
-                Some('}') => {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
-                    }
-                    self.next_char();
+                if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') { self.next_char(); }
+                if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                    if let Some(ch) = char::from_u32(code) { text.push(ch); }
                 }
-                Some('"') | Some('\'') => {
-                    let q = self.peek().unwrap();
-                    let _ = self.scan_string(q)?;
-                }
-                Some(_) => {
-                    self.next_char();
-                }
-                None => break,
+            } else { self.next_char(); text.push(next); }
+        }
+        // 继续扫描后续标识符字符
+        while let Some(c) = self.peek() {
+            if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
+                self.next_char();
+                text.push(c);
+            } else {
+                break;
             }
         }
-        let content = self.source[start..self.pos].to_string();
-        if self.peek() == Some('}') {
-            self.next_char(); // 消费 }
+        match text.as_str() {
+            "true" => Token::True,
+            "false" => Token::False,
+            "null" => Token::Null,
+            "and" => Token::And,
+            "or" => Token::Or,
+            "not" => Token::Not,
+            _ => Token::Ident(text),
         }
-        Ok(Token::Interp(content))
     }
 
     /// 扫描 @规则。
@@ -438,6 +468,8 @@ impl<'src> Iterator for Lexer<'src> {
             }
             // 字符串
             '"' | '\'' => return Some(self.scan_string(c)),
+            // 反斜杠转义标识符（CSS 转义，如 \: \. 等）
+            '\\' => self.scan_escape_ident(),
             // @规则
             '@' => self.scan_at(),
             // $变量
