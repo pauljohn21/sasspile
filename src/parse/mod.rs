@@ -143,7 +143,13 @@ Token::LBracket => { bracket_depth += 1; s.push('['); self.advance(); }
 Token::RBracket => { bracket_depth -= 1; s.push(']'); self.advance(); }
 Token::Whitespace => {
 if bracket_depth > 0 {
-self.advance(); // 跳过括号内空白
+// 括号内：标准化为单空格（而非跳过）
+if s.ends_with('[') || s.ends_with('=') {
+self.advance(); // = 或 [ 后的空白跳过
+} else {
+s.push(' ');
+self.advance();
+}
 } else {
 s.push(' ');
 self.advance();
