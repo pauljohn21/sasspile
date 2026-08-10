@@ -272,11 +272,11 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "@import \"config\";\n@import \"midstream\";\nb {c: $a}";
+        let input = "a {b: if(else: c)}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), "IMPORT OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "IMPORT ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "IF OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "IF ERROR"),
         }
     }
 }

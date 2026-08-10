@@ -634,10 +634,18 @@ Ok(s.trim().to_string())
         loop {
             self.skip_ws();
             if self.peek() == Some(&Token::RParen) { break; }
-            // 检查关键字参数 $name: value
-            // 检查关键字参数 $name: value
+            // 检查关键字参数 $name: value 或 name: value（如 if(else: c)）
             let is_kwarg = match self.peek() {
                 Some(Token::Dollar(_)) => {
+                    let next = self.tokens.get(self.pos + 1);
+                    let after_ws = if matches!(next, Some(Token::Whitespace)) {
+                        self.tokens.get(self.pos + 2)
+                    } else {
+                        next
+                    };
+                    matches!(after_ws, Some(Token::Colon))
+                }
+                Some(Token::Ident(s)) if !matches!(s.as_str(), "true" | "false" | "null" | "and" | "or" | "not") => {
                     let next = self.tokens.get(self.pos + 1);
                     let after_ws = if matches!(next, Some(Token::Whitespace)) {
                         self.tokens.get(self.pos + 2)
@@ -651,6 +659,7 @@ Ok(s.trim().to_string())
             let (name, value) = if is_kwarg {
                 let n = match self.peek() {
                     Some(Token::Dollar(n)) => { let n = n.clone(); self.advance(); n }
+                    Some(Token::Ident(n)) => { let n = n.clone(); self.advance(); n }
                     _ => unreachable!(),
                 };
                 self.skip_ws();
