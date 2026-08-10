@@ -670,7 +670,11 @@ Ok((vec![], env.clone()))
 
     fn values_eq(l: &Value, r: &Value) -> bool {
         match (l, r) {
-            (Value::Number(a, _), Value::Number(b, _)) => (a - b).abs() < f64::EPSILON,
+            (Value::Number(a, _), Value::Number(b, _)) => {
+                if a.is_nan() && b.is_nan() { return true; }
+                if a.is_infinite() && b.is_infinite() && a.signum() == b.signum() { return true; }
+                (a - b).abs() < f64::EPSILON
+            }
             (Value::String(a, _), Value::String(b, _)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Color(a), Value::Color(b)) => a == b,

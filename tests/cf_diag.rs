@@ -162,6 +162,12 @@ fn diag_while() { diag("directives/while", 15); }
 #[test]
 fn diag_media() { diag("directives/media", 15); }
 
+#[test]
+fn diag_values_maps() { diag("values/maps", 10); }
+
+#[test]
+fn diag_values_colors() { diag("values/colors", 10); }
+
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
