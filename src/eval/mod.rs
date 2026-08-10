@@ -606,6 +606,26 @@ Ok((vec![], env.clone()))
         }
     }
 
+    /// 检查两个单位是否兼容（属于同一物理量类别）。
+    fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
+        if u1 == u2 { return true; }
+        if u1.is_none() || u2.is_none() { return true; }
+        // 单位兼容组——同组的单位互相兼容
+        const GROUPS: &[&[&str]] = &[
+            &["px", "in", "cm", "mm", "pt", "pc", "q"],  // 长度
+            &["deg", "grad", "rad", "turn"],              // 角度
+            &["s", "ms"],                                  // 时间
+            &["hz", "khz"],                               // 频率
+            &["dpi", "dpcm", "dppx"],                     // 分辨率
+        ];
+        for group in GROUPS {
+            let has1 = group.contains(&u1.unwrap());
+            let has2 = group.contains(&u2.unwrap());
+            if has1 && has2 { return true; }
+        }
+        false
+    }
+
     /// inspect() 专用格式化——比 Display 更详细。
     fn inspect_value(v: &Value) -> String {
         match v {
@@ -1668,12 +1688,12 @@ Ok(Value::Number(a / b, u1.clone()))
                 }
                 _ => Err(SassError::Eval("clamp 需要 3 个数字参数".into())),
             },
-            "comparable" => match args {
-                [Value::Number(_, u1), Value::Number(_, u2)] => {
-                    Ok(Value::Bool(u1 == u2 || u1.is_none() || u2.is_none()))
-                }
-                _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
-            },
+"comparable" => match args {
+[Value::Number(_, u1), Value::Number(_, u2)] => {
+Ok(Value::Bool(Self::units_compatible(u1.as_deref(), u2.as_deref())))
+}
+_ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
+},
             "unitless" => match args {
                 [Value::Number(_, None)] => Ok(Value::Bool(true)),
                 [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),

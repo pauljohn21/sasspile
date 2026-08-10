@@ -241,8 +241,8 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
 Value::Number(n, None) => {
-if n.is_infinite() { return write!(f, "{}Infinity", if *n < 0.0 { "-" } else { "" }); }
-if n.is_nan() { return write!(f, "NaN"); }
+if n.is_infinite() { return write!(f, "calc(infinity)"); }
+if n.is_nan() { return write!(f, "calc(NaN)"); }
 if (n.fract() == 0.0) {
 write!(f, "{}", *n as i64)
 } else {
@@ -250,8 +250,8 @@ write!(f, "{n}")
 }
 }
 Value::Number(n, Some(unit)) => {
-if n.is_infinite() { return write!(f, "{}Infinity{unit}", if *n < 0.0 { "-" } else { "" }); }
-if n.is_nan() { return write!(f, "NaN{unit}"); }
+if n.is_infinite() { return write!(f, "calc(infinity * 1{unit})"); }
+if n.is_nan() { return write!(f, "calc(NaN * 1{unit})"); }
 if (n.fract() == 0.0) {
 write!(f, "{}{unit}", *n as i64)
 } else {
