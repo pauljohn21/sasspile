@@ -1,4 +1,8 @@
 //! core_functions 诊断——显示前 N 个失败的摘要。
+//! 集成 CSS diff 模块，逐行显示差异。
+
+mod common;
+use common::diff_css;
 
 use std::path::Path;
 
@@ -66,18 +70,19 @@ fn diag(subdir: &str, max_show: usize) {
                     Ok(actual) => {
                         if actual.trim() != expected.trim() {
                             shown += 1;
-                            let a = actual.trim();
-                            let e = expected.trim();
-                            let a_line = a.lines().next().unwrap_or("");
-                            let e_line = e.lines().next().unwrap_or("");
-                            let key = if a.is_empty() { "empty_output".to_string() }
-                                else if a_line != e_line { "first_line_diff".to_string() }
-                                else { "other_diff".to_string() };
-                            *err_types.entry(key.clone()).or_default() += 1;
-                            println!("FAIL {stem}/{name}: {key}");
-                            if key == "first_line_diff" {
-                                println!("  exp: {e_line}");
-                                println!("  act: {a_line}");
+                            let diff = diff_css(expected.trim(), actual.trim());
+                            let key = diff.classify();
+                            *err_types.entry(key.to_string()).or_default() += 1;
+                            println!("FAIL {stem}/{name}: {key} ({} diffs)", diff.lines.len());
+                            for dl in diff.lines.iter().take(3) {
+                                match dl {
+                                    common::DiffLine::Changed { line, expected, actual } =>
+                                        println!("  L{line}: exp='{expected}' act='{actual}'"),
+                                    common::DiffLine::ExtraExpected { line, content } =>
+                                        println!("  L{line}: exp='{content}' act=(missing)"),
+                                    common::DiffLine::ExtraActual { line, content } =>
+                                        println!("  L{line}: exp=(missing) act='{content}'"),
+                                }
                             }
                         }
                     }
