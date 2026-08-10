@@ -272,11 +272,11 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "a {b: if(else: c)}";
+        let input = "a {b: inspect((1,))}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), "IF OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "IF ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "INSPECT OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "INSPECT ERROR"),
         }
     }
 }

@@ -643,7 +643,7 @@ Ok((vec![], env.clone()))
                 };
                 let parts: Vec<String> = elements.iter().map(Self::inspect_value).collect();
                 let inner = if elements.len() == 1 && matches!(sep, Separator::Comma) {
-                    format!("{},", parts[0])
+                    if *bracketed { format!("{},", parts[0]) } else { format!("({},)", parts[0]) }
                 } else {
                     parts.join(sep_str)
                 };
