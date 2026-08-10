@@ -11,6 +11,8 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
          (lex/)   (parse/)  (eval/)     (css/)
 ```
 
+> **查找函数/类型/概念在哪个文件？** 见 [`docs/CODE_INDEX.md`](docs/CODE_INDEX.md)。
+
 ## 强制规则
 
 ### 1. Tracing 优先（最高优先级）
