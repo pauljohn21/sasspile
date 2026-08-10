@@ -1611,7 +1611,21 @@ Ok(Value::Number(a / b, u1.clone()))
                     items.extend(b.clone());
                     Ok(Value::List(items, sep, false))
                 }
-                [a, b] => Ok(Value::List(vec![a.clone(), b.clone()], Separator::Space, false)),
+                [a, b] => {
+                    // 处理 join((), c) 或 join(c, ()) 的情况
+                    let (a_items, a_sep) = match a {
+                        Value::List(items, sep, _) => (items.clone(), sep.clone()),
+                        _ => (vec![a.clone()], Separator::Undecided),
+                    };
+                    let (b_items, b_sep) = match b {
+                        Value::List(items, sep, _) => (items.clone(), sep.clone()),
+                        _ => (vec![b.clone()], Separator::Undecided),
+                    };
+                    let sep = if a_items.is_empty() { b_sep } else { a_sep };
+                    let mut items = a_items;
+                    items.extend(b_items);
+                    Ok(Value::List(items, sep, false))
+                }
                 _ => Err(SassError::Eval("join 需要 2-4 个参数".into())),
             },
             "index" => match args {

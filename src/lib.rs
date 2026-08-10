@@ -284,11 +284,11 @@ mod tests {
     #[test]
     fn test_debug_bs_close() {
         init_tracing();
-        let input = "a:is(%b, c) {x: y}";
+        let input = "@use \"sass:list\";\na {b: list.nth(list.join((), c), 1)}";
         let result = compile_expanded(input);
         match &result {
-            Ok(css) => tracing::info!(css = css.as_str(), "SELECTOR OUTPUT"),
-            Err(e) => tracing::error!(error = %e, "SELECTOR ERROR"),
+            Ok(css) => tracing::info!(css = css.as_str(), "NTH OUTPUT"),
+            Err(e) => tracing::error!(error = %e, "NTH ERROR"),
         }
     }
 
