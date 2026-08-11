@@ -74,6 +74,51 @@
 //! - Element Plus：121/121 (100%) 全量通过 ✅
 //! - sass-spec：1843/5069 (36%)
 
+/// 内部 tracing 桥接模块——当 `tracing` feature 启用时重导出 tracing crate，
+/// 关闭时提供 no-op 宏替代。
+///
+/// src/ 代码统一使用 `use crate::__tracing::*` 而非 `use tracing::*`，
+/// 使 tracing 成为可选依赖。
+/// `#[instrument]` 属性用 `#[cfg_attr(feature = "tracing", tracing::instrument)]` 处理。
+#[cfg(feature = "tracing")]
+pub(crate) mod __tracing {
+    pub use tracing::{
+        debug, debug_span, error, info, info_span, trace, trace_span, warn,
+    };
+}
+
+#[cfg(not(feature = "tracing"))]
+pub(crate) mod __tracing {
+    /// No-op span 类型——使 `span.enter()` 有效。
+    pub struct DummySpan;
+    impl DummySpan {
+        pub fn enter(&self) -> DummyGuard { DummyGuard }
+    }
+    pub struct DummyGuard;
+
+    /// No-op span 宏——返回 DummySpan 实例。
+    #[macro_export]
+    macro_rules! __noop_span {
+        ($($args:tt)*) => { $crate::__tracing::DummySpan };
+    }
+
+    pub use crate::__noop_span as debug_span;
+    pub use crate::__noop_span as info_span;
+    pub use crate::__noop_span as trace_span;
+
+    /// No-op 日志宏——编译时完全消除。
+    #[macro_export]
+    macro_rules! __noop_log {
+        ($($args:tt)*) => {};
+    }
+
+    pub use crate::__noop_log as debug;
+    pub use crate::__noop_log as error;
+    pub use crate::__noop_log as info;
+    pub use crate::__noop_log as trace;
+    pub use crate::__noop_log as warn;
+}
+
 pub mod css;
 pub mod error;
 pub mod eval;
@@ -91,6 +136,8 @@ use std::path::PathBuf;
 
 /// 初始化 tracing 日志——用 `RUST_LOG` 环境变量控制级别和 target。
 ///
+/// 当 `tracing` feature 未启用时，此函数为 no-op。
+///
 /// # Target 过滤
 ///
 /// ```bash
@@ -100,6 +147,7 @@ use std::path::PathBuf;
 /// # 组合多个 target
 /// RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test -- --nocapture
 /// ```
+#[cfg(feature = "tracing")]
 pub fn init_tracing() {
     use tracing_subscriber::{EnvFilter, fmt};
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
@@ -114,6 +162,10 @@ pub fn init_tracing() {
         .compact()
         .try_init();
 }
+
+/// No-op `init_tracing`——当 `tracing` feature 未启用时。
+#[cfg(not(feature = "tracing"))]
+pub fn init_tracing() {}
 
 /// 输出风格。
 ///

@@ -8,7 +8,7 @@ impl Evaluator {
         url: &str,
         load_paths: &[PathBuf],
     ) -> Option<PathBuf> {
-        let span = tracing::debug_span!("resolve_file", url = url);
+        let span = crate::__tracing::debug_span!("resolve_file", url = url);
         let _enter = span.enter();
         let base_dir = base
             .as_ref()
@@ -63,7 +63,7 @@ impl Evaluator {
         config: &[(String, Value)],
         caller_env: &Env,
     ) -> Result<ModuleExports> {
-        let span = tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
+        let span = crate::__tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
         let _enter = span.enter();
         // 防止循环导入导致栈溢出
         if caller_env.depth > 50 {
@@ -71,6 +71,10 @@ impl Evaluator {
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+
+        // `.css` 文件——以 plain CSS 模式解析，保留嵌套不展开选择器
+        let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
+
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
@@ -79,17 +83,24 @@ impl Evaluator {
             .with_base_path(path.to_path_buf())
             .with_load_paths(caller_env.get_load_paths().to_vec());
         env.depth = caller_env.depth + 1;
+        env.plain_css = is_plain_css;
         // 注入 with() 配置变量（求值后注入，使 !default 尊重覆盖值）
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
             env = env.bind(name.clone(), val);
         }
         let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
+        // plain CSS 输出用 AtRoot 包裹，防止序列化器展平嵌套
+        let css = if is_plain_css {
+            vec![crate::css::node::CssNode::AtRoot(module_css)]
+        } else {
+            module_css
+        };
         Ok(ModuleExports {
             vars: final_env.vars,
             mixins: final_env.mixins,
             functions: final_env.functions,
-            css: module_css,
+            css,
         })
     }
 
@@ -99,7 +110,7 @@ impl Evaluator {
     /// 能看到之前定义的所有变量/mixin/函数，且定义的成员在导入后可见。
     pub(crate) fn load_import(path: &Path, caller_env: &Env) -> Result<(Vec<CssNode>, Env)> {
         let span =
-            tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
+            crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
         let _enter = span.enter();
         // 防止循环导入导致栈溢出
         if caller_env.depth > 50 {
@@ -107,6 +118,10 @@ impl Evaluator {
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+
+        // `.css` 文件——以 plain CSS 模式解析
+        let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
+
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
@@ -115,16 +130,23 @@ impl Evaluator {
         let mut env = caller_env.clone();
         env.base_path = Some(path.to_path_buf());
         env.depth = caller_env.depth + 1;
+        env.plain_css = is_plain_css;
         let (css, mut final_env) = Self::eval_nodes(&ast.nodes, &env)?;
         // 恢复调用者的 base_path 和 depth，使父作用域后续 @import 使用正确的基准目录
         final_env.base_path = caller_env.base_path.clone();
         final_env.depth = caller_env.depth;
+        // plain CSS 输出用 AtRoot 包裹
+        let css = if is_plain_css {
+            vec![crate::css::node::CssNode::AtRoot(css)]
+        } else {
+            css
+        };
         Ok((css, final_env))
     }
 
     /// 模块限定函数调用。
     pub(crate) fn call_module_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
-        let span = tracing::info_span!("call_module_function", name = name);
+        let span = crate::__tracing::info_span!("call_module_function", name = name);
         let _enter = span.enter();
         // 先检查文件加载的命名空间
         if let Some(dot) = name.find('.') {

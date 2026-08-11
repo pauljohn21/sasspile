@@ -7,11 +7,11 @@ use super::Parser;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
-use tracing::{instrument, trace, warn};
+use crate::__tracing::{trace, warn};
 
 impl<'tok> Parser<'tok> {
     // —— 节点解析 ——
-    #[instrument(skip(self), fields(pos = self.pos))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(pos = self.pos)))]
     pub(crate) fn parse_node(&mut self) -> Result<Node> {
         self.skip_ws();
         let peek_str = self
@@ -67,7 +67,7 @@ impl<'tok> Parser<'tok> {
         true
     }
 
-    #[instrument(skip(self), fields(pos = self.pos))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(pos = self.pos)))]
     pub(crate) fn parse_rule_or_decl(&mut self) -> Result<Node> {
         let is_r = self.is_rule();
         trace!(is_rule = is_r, "parse_rule_or_decl");
@@ -90,7 +90,7 @@ impl<'tok> Parser<'tok> {
         let mut s = String::new();
         let mut bracket_depth = 0i32;
         while let Some(t) = self.peek() {
-            tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
+            crate::__tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
             match t {
                 Token::LBrace => break,
                 Token::LBracket => {

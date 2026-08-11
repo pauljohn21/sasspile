@@ -9,7 +9,7 @@ impl Evaluator {
         body: &[Node],
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = tracing::info_span!("eval_rule", selector = selector);
+        let span = crate::__tracing::info_span!("eval_rule", selector = selector);
         let _enter = span.enter();
         // 对选择器中的 #{...} 插值求值
         let selector = if selector.contains("#{") {
@@ -18,6 +18,35 @@ impl Evaluator {
             selector.to_string()
         };
         let (css, new_env) = Self::eval_nodes(body, &env.with_selector(selector.clone()))?;
+
+        // plain CSS 模式——不合并选择器，保留嵌套结构
+        if env.plain_css {
+            let mut declarations = Vec::new();
+            let mut children = Vec::new();
+            let mut root_nodes = Vec::new();
+            for node in css {
+                match &node {
+                    CssNode::Declaration { .. } => declarations.push(node.clone()),
+                    CssNode::AtRoot(nodes) => root_nodes.extend(nodes.clone()),
+                    CssNode::AtRule { name, .. }
+                        if matches!(name.as_str(), "media" | "supports" | "container") =>
+                    {
+                        root_nodes.push(node.clone())
+                    }
+                    other => children.push(other.clone()),
+                }
+            }
+            let mut result = Vec::new();
+            if !declarations.is_empty() || !children.is_empty() {
+                result.push(CssNode::Rule {
+                    selector: selector.clone(),
+                    declarations,
+                    children,
+                });
+            }
+            result.extend(root_nodes);
+            return Ok((result, new_env));
+        }
 
         let mut result = Vec::new();
         let mut current_decls = Vec::new();

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.1] — 2026-08-11
+
+### Added
+
+- `tracing` 和 `tracing-subscriber` 改为可选 feature（`default = ["tracing"]`）
+- 支持 `default-features = false` 编译，仅依赖 `thiserror` + `im`
+- `.css` 文件以 plain CSS 模式加载（保留嵌套不展开选择器）
+- `@media` / `@supports` / `@container` 在规则内部时自动提升到外层
+- 带前缀 `-` 的未知 CSS 函数自动透传（如 `-c-type(2)`）
+- `@use` 加载模块时正确包含 CSS 输出
+
+### Fixed
+
+- `@use` 丢弃模块 CSS 输出的 bug
+- `.css` 文件被当作 SCSS 求值导致嵌套展开的 bug
+
 ## [0.3.0] — 2026-08-11
 
 ### Added

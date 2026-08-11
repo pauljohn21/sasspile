@@ -2,7 +2,7 @@ use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
-use tracing::{instrument, warn};
+use crate::__tracing::warn;
 
 impl Evaluator {
     pub(crate) fn eval_variable(
@@ -19,7 +19,7 @@ impl Evaluator {
     }
 
     /// 求值值表达式。
-    #[instrument(skip(value, env), fields(depth = env.depth), level = "trace")]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(value, env), fields(depth = env.depth), level = "trace"))]
     pub(crate) fn eval_value(value: &Value, env: &Env) -> Result<Value> {
         match value {
             Value::Number(..)
@@ -105,11 +105,11 @@ impl Evaluator {
                         pos_args.push(val);
                     }
                 }
-                // 尝试作为 Sass 函数调用
+                // 尝试作为 Sass 函数调用，未定义时 CSS 透传
                 match Self::call_function(name, &pos_args, &kw_args, env) {
                     Ok(result) => Ok(result),
-                    Err(SassError::UndefinedFunction(_)) if !kw_args.is_empty() => {
-                        // 未定义函数且有关键字参数 → CSS 透传（如 alpha(opacity=0)）
+                    Err(SassError::UndefinedFunction(_)) if name.starts_with('-') || !kw_args.is_empty() => {
+                        // 带前缀 - 的未知函数（如 -c-type）或带关键字参数的未知函数 → CSS 透传
                         let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
                         for (k, v) in &kw_args {
                             parts.push(format!("{k}={v}"));
@@ -166,7 +166,7 @@ impl Evaluator {
         }
         let l = Self::eval_value(left, env)?;
         let r = Self::eval_value(right, env)?;
-        tracing::trace!(
+        crate::__tracing::trace!(
             target: "sasspile::binop",
             op = ?op,
             left = %l, right = %r,
@@ -187,7 +187,7 @@ impl Evaluator {
             }
         };
         if let Ok(v) = &result {
-            tracing::trace!(
+            crate::__tracing::trace!(
                 target: "sasspile::binop",
                 op = ?op,
                 result = %v,

@@ -311,7 +311,7 @@ impl Evaluator {
 
     pub(crate) fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Color {
         let h = h.rem_euclid(360.0);
-        tracing::trace!(
+        crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "hsl_to_rgb",
             h = h, s = s, l = l,
@@ -338,7 +338,7 @@ impl Evaluator {
             ((g1 + m) * 255.0).round() as u8,
             ((b1 + m) * 255.0).round() as u8,
         );
-        tracing::trace!(
+        crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "hsl_to_rgb",
             r = result.r, g = result.g, b = result.b,
@@ -349,7 +349,7 @@ impl Evaluator {
 
     /// HWB → RGB 转换 (W3C CSS Color 4 算法)。
     pub(crate) fn hwb_to_rgb(h: f64, w: f64, b: f64, alpha: f32) -> Color {
-        tracing::trace!(
+        crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "hwb_to_rgb",
             h = h, w = w, b = b, alpha = alpha,
@@ -395,7 +395,7 @@ impl Evaluator {
 
     /// RGB → HSL 转换。
     pub(crate) fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
-        tracing::trace!(
+        crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "rgb_to_hsl",
             r = r, g = g, b = b,
@@ -424,7 +424,7 @@ impl Evaluator {
             ((r - g) / d + 4.0) * 60.0
         };
         let result = (h, s, l);
-        tracing::trace!(
+        crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "rgb_to_hsl",
             h = result.0, s = result.1, l = result.2,
@@ -450,7 +450,7 @@ impl Evaluator {
                 Value::Number(g, _),
                 Value::Number(b, _),
             ] => {
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
                     r = *r, g = *g, b = *b,
@@ -469,7 +469,7 @@ impl Evaluator {
                 } else {
                     *a as f32
                 };
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
                     r = *r, g = *g, b = *b, a = *a,
@@ -502,7 +502,7 @@ impl Evaluator {
     pub(crate) fn builtin_darken(args: &[Value]) -> Result<Value> {
         match args {
             [Value::Color(c), Value::Number(amount, _)] => {
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "darken",
                     input_r = c.r, input_g = c.g, input_b = c.b, input_a = c.a,
@@ -516,7 +516,7 @@ impl Evaluator {
                     (c.b as f32 * factor) as u8,
                     c.a,
                 ));
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "darken",
                     result = %result,
@@ -531,7 +531,7 @@ impl Evaluator {
     pub(crate) fn builtin_lighten(args: &[Value]) -> Result<Value> {
         match args {
             [Value::Color(c), Value::Number(amount, _)] => {
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "lighten",
                     input_r = c.r, input_g = c.g, input_b = c.b, input_a = c.a,
@@ -545,7 +545,7 @@ impl Evaluator {
                     (c.b as f32 + (255.0 - c.b as f32) * factor) as u8,
                     c.a,
                 ));
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "lighten",
                     result = %result,
@@ -560,7 +560,7 @@ impl Evaluator {
     pub(crate) fn builtin_mix(args: &[Value]) -> Result<Value> {
         match args {
             [Value::Color(a), Value::Color(b)] => {
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "mix",
                     color_a = ?a, color_b = ?b, weight = 50.0_f64,
@@ -574,7 +574,7 @@ impl Evaluator {
                 )))
             }
             [Value::Color(a), Value::Color(b), Value::Number(w, _)] => {
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "mix",
                     color_a = ?a, color_b = ?b, weight = *w,
@@ -589,7 +589,7 @@ impl Evaluator {
                 )))
             }
             _ => {
-                tracing::debug!(
+                crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "mix",
                     n_args = args.len(),

@@ -9,7 +9,7 @@ impl Evaluator {
         content: &Option<Vec<Node>>,
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = tracing::info_span!("eval_include", name = name, n_args = args.len());
+        let span = crate::__tracing::info_span!("eval_include", name = name, n_args = args.len());
         let _enter = span.enter();
         // 命名空间限定 mixin（如 midstream.b-a）
         if let Some(dot) = name.find('.') {
@@ -116,7 +116,7 @@ for (ns, exports) in &mixin.captured_namespaces {
 
     /// 调用函数（内建或用户定义）。
     pub(crate) fn call_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
-        let span = tracing::info_span!("call_function", name = name, n_args = pos_args.len());
+        let span = crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
         let _enter = span.enter();
         // 用户函数
         if let Some(func) = env.get_function(name) {
@@ -136,7 +136,7 @@ for (ns, exports) in &mixin.captured_namespaces {
         kw_args: &HashMap<String, Value>,
         env: &Env,
     ) -> Result<Value> {
-        let span = tracing::info_span!(
+        let span = crate::__tracing::info_span!(
             "call_user_function",
             n_params = func.params.len(),
             n_args = pos_args.len()
@@ -206,6 +206,49 @@ for (ns, exports) in &mixin.captured_namespaces {
             Some(nodes) => (Self::eval_nodes(nodes, env)?.0, true),
             None => (Vec::new(), false),
         };
+
+        // 当 @media/@supports/@container 在规则内部时，提升到外层：
+        // 将声明包裹在当前选择器的规则中，嵌套规则保持原样（选择器已合并）。
+        if matches!(name, "media" | "supports" | "container") {
+            if let Some(sel) = env.get_selector() {
+                if !sel.is_empty() {
+                    let mut new_children = Vec::new();
+                    let mut current_decls = Vec::new();
+                    for child in children {
+                        match &child {
+                            CssNode::Declaration { .. } => current_decls.push(child),
+                            _ => {
+                                if !current_decls.is_empty() {
+                                    new_children.push(CssNode::Rule {
+                                        selector: sel.to_string(),
+                                        declarations: std::mem::take(&mut current_decls),
+                                        children: vec![],
+                                    });
+                                }
+                                new_children.push(child);
+                            }
+                        }
+                    }
+                    if !current_decls.is_empty() {
+                        new_children.push(CssNode::Rule {
+                            selector: sel.to_string(),
+                            declarations: current_decls,
+                            children: vec![],
+                        });
+                    }
+                    return Ok((
+                        vec![CssNode::AtRule {
+                            name: name.to_string(),
+                            params: params.clone(),
+                            children: new_children,
+                            has_body,
+                        }],
+                        env.clone(),
+                    ));
+                }
+            }
+        }
+
         Ok((
             vec![CssNode::AtRule {
                 name: name.to_string(),

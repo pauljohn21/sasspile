@@ -6,7 +6,7 @@ mod ast_impl;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use ast::*;
-use tracing::warn;
+use crate::__tracing::warn;
 
 /// 语法分析器。
 pub struct Parser<'tok> {

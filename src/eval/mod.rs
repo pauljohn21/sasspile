@@ -5,7 +5,7 @@ use crate::error::{Result, SassError};
 use crate::lex::Lexer;
 use crate::lex::token::Token;
 use crate::parse::ast::*;
-use tracing::{instrument, warn};
+use crate::__tracing::warn;
 
 use im::HashMap;
 use std::path::PathBuf;
@@ -17,7 +17,6 @@ pub(crate) struct ModuleExports {
     vars: HashMap<String, Value>,
     mixins: HashMap<String, MixinDef>,
     functions: HashMap<String, FunctionDef>,
-    #[allow(dead_code)]
     css: Vec<CssNode>,
 }
 
@@ -48,6 +47,8 @@ pub struct Env {
     current_selector: Option<String>,
     /// 加载路径——`@use`/`@import` 无法从当前文件解析时回退搜索。
     load_paths: Vec<PathBuf>,
+    /// plain CSS 模式——`.css` 文件加载时设为 true，不展开选择器。
+    plain_css: bool,
 }
 
 /// mixin 定义存储。
@@ -231,17 +232,17 @@ impl Evaluator {
     }
 
     /// 求值节点列表——try_fold。
-    #[instrument(skip(nodes, env), fields(depth = env.depth, n = nodes.len()))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(nodes, env), fields(depth = env.depth, n = nodes.len())))]
     fn eval_nodes(nodes: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
         if env.depth > MAX_DEPTH {
             warn!(depth = env.depth, "recursion limit exceeded");
             return Err(SassError::Eval("递归深度超过限制（可能是无限循环）".into()));
         }
         nodes.iter().try_fold((Vec::new(), env.clone()), |(mut css, env), node| {
-            let node_span = tracing::debug_span!("eval_node_item", node = ?std::mem::discriminant(node));
+            let node_span = crate::__tracing::debug_span!("eval_node_item", node = ?std::mem::discriminant(node));
             let _enter = node_span.enter();
             let (mut out, new_env) = Self::eval_node(node, &env).map_err(|e| {
-                tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
+                crate::__tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
                 e
             })?;
             css.append(&mut out);
@@ -250,7 +251,7 @@ impl Evaluator {
     }
 
     /// 求值单个节点。
-    #[instrument(skip(node, env), fields(depth = env.depth))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(node, env), fields(depth = env.depth)))]
     fn eval_node(node: &Node, env: &Env) -> Result<(Vec<CssNode>, Env)> {
         match node {
             Node::Rule { selector, body } => Self::eval_rule(selector, body, env),
@@ -354,14 +355,17 @@ impl Evaluator {
                         for (k, v) in &exports.functions {
                             new_env = new_env.define_function(k.clone(), v.clone());
                         }
-                        return Ok((vec![], new_env));
+                        // @use * 包含模块 CSS 输出（Dart Sass 语义）
+                        return Ok((exports.css, new_env));
                     }
                     let ns = namespace.clone().unwrap_or_else(|| {
                         // 默认命名空间 = 文件名（不含扩展名和前缀 _）
                         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(url);
                         stem.trim_start_matches('_').to_string()
                     });
-                    return Ok((vec![], env.add_namespace(ns, exports)));
+                    // @use namespace 包含模块 CSS 输出（Dart Sass 语义）
+                    let css = exports.css.clone();
+                    return Ok((css, env.add_namespace(ns, exports)));
                 }
                 // 找不到文件——静默跳过
                 Ok((vec![], env.clone()))

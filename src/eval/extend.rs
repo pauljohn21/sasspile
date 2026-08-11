@@ -3,14 +3,14 @@ use crate::css::node::CssNode;
 
 impl Evaluator {
     pub(crate) fn apply_extends(nodes: &mut [CssNode], extends: &[(String, String)]) {
-        let span = tracing::info_span!("apply_extends", n_extends = extends.len());
+        let span = crate::__tracing::info_span!("apply_extends", n_extends = extends.len());
         let _enter = span.enter();
         for node in nodes.iter_mut() {
             match node {
                 CssNode::Rule {
                     selector, children, ..
                 } => {
-                    tracing::debug!(
+                    crate::__tracing::debug!(
                         target: "sasspile::extend",
                         selector = %selector,
                         "processing rule for extends"
@@ -19,7 +19,7 @@ impl Evaluator {
                     for (extender, target) in extends {
                         let target_trimmed = target.trim();
                         if selector.contains(target_trimmed) {
-                            tracing::info!(
+                            crate::__tracing::info!(
                                 target: "sasspile::extend",
                                 extender = %extender,
                                 target = %target_trimmed,
@@ -29,7 +29,7 @@ impl Evaluator {
                             if target_trimmed.starts_with('%') {
                                 // 占位符：直接替换为目标
                                 *selector = selector.replace(target_trimmed, extender);
-                                tracing::debug!(
+                                crate::__tracing::debug!(
                                     target: "sasspile::extend",
                                     new_selector = %selector,
                                     "placeholder replaced"
@@ -41,7 +41,7 @@ impl Evaluator {
                                     if !selector.contains(&new_sel) {
                                         selector.push_str(", ");
                                         selector.push_str(&new_sel);
-                                        tracing::debug!(
+                                        crate::__tracing::debug!(
                                             target: "sasspile::extend",
                                             final_selector = %selector,
                                             "extender appended"

@@ -29,7 +29,7 @@ impl Evaluator {
         body: &[Node],
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = tracing::info_span!("eval_for", var = var, inclusive = inclusive);
+        let span = crate::__tracing::info_span!("eval_for", var = var, inclusive = inclusive);
         let _enter = span.enter();
         let from_val = Self::eval_value(from, env)?;
         let to_val = Self::eval_value(to, env)?;
@@ -63,7 +63,7 @@ impl Evaluator {
         body: &[Node],
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = tracing::info_span!("eval_each", n_vars = vars.len());
+        let span = crate::__tracing::info_span!("eval_each", n_vars = vars.len());
         let _enter = span.enter();
         let evaluated = Self::eval_value(list, env)?;
         // 对 Map，按 (key, value) 对迭代
@@ -125,14 +125,14 @@ impl Evaluator {
         loop {
             iteration += 1;
             if iteration > MAX_DEPTH {
-                tracing::error!(iteration, cond_ast = %cond, "@while 超过 MAX_DEPTH");
+                crate::__tracing::error!(iteration, cond_ast = %cond, "@while 超过 MAX_DEPTH");
                 return Err(SassError::Eval(
                     "@while 循环次数超过限制（可能是无限循环）".into(),
                 ));
             }
             let c = Self::eval_value(cond, &current_env)?;
             let truthy = Self::is_truthy(&c);
-            tracing::trace!(iteration, cond_value = %c, is_truthy = truthy, "@while 条件求值");
+            crate::__tracing::trace!(iteration, cond_value = %c, is_truthy = truthy, "@while 条件求值");
             if !truthy {
                 break;
             }

@@ -16,7 +16,7 @@ impl Evaluator {
     pub(crate) fn call_builtin(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
         // CSS 函数名大小写不敏感（如 RGBA == rgba）
         let name = name.to_lowercase();
-        let span = tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
+        let span = crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
         match name.as_str() {
             // ── math ──

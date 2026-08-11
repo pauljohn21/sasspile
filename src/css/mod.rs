@@ -190,6 +190,7 @@ impl Serializer {
                     format!("{indent}@{name} {p};")
                 }
             }
+            CssNode::Raw(text) => format!("{text}"),
             CssNode::Return(_) => String::new(),
         }
     }
@@ -257,6 +258,7 @@ impl Serializer {
                     format!("@{name} {p};")
                 }
             }
+            CssNode::Raw(text) => text.clone(),
             CssNode::Return(_) => String::new(),
         }
     }
