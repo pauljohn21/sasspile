@@ -57,6 +57,8 @@ RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --lib -- --noc
 
 - lib 测试：37 个，必须全通过 `cargo test --lib`
 - diff 测试：5 个，`cargo test --test common_test`
+- Bootstrap 全量：`cargo test --test bs_spec -- --nocapture`（15 个测试，`bootstrap.scss` 全量编译通过）
+- Element Plus 全量：`cargo test --test ep_full -- --nocapture`（121/121 100% 通过）
 - sass-spec 全量：`cargo test --test sass_spec_full test_sass_spec_full_stats`
 - 诊断测试：`cargo test --test cf_diag diag_<subdir> -- --nocapture`
 - 最小化工具：`cargo test --test minimize minimize_<subdir>_error -- --nocapture`
@@ -73,6 +75,12 @@ cargo test --lib
 
 # 运行 diff 测试（5 个）
 cargo test --test common_test
+
+# 运行 Bootstrap 全量编译验证（15 个测试）
+cargo test --test bs_spec -- --nocapture
+
+# 运行 Element Plus 全量编译验证（121 个文件）
+cargo test --test ep_full -- --nocapture
 
 # 运行 sass-spec 全量统计
 RUST_LOG=info cargo test --test sass_spec_full test_sass_spec_full_stats -- --nocapture
@@ -197,11 +205,33 @@ src/
 
 ## 当前状态
 
-- sass-spec: 2003/5069 (39%)
+- sass-spec: 1843/5069 (36%)
 - 37 lib 测试 + 5 diff 测试全通过
+- Bootstrap 5.3.8：`bootstrap.scss` 全量编译通过 ✅
+- Element Plus：121/121 (100%) 全量通过 ✅
 - 全部源文件 ≤ 500 行（文件拆分完成，最大 `parse/nodes.rs` 484 行）
 - 调试工具链：CSS diff + 最小化 + 值快照 events
 - 已删除 libsass/non_conformant 目录
-- 已实现：load path 支持 + @return 控制流传播 + map 嵌套操作 + str-split + compatible + 字符串转义（非 ASCII → CSS hex escape，引号选择规则）+ str-split/slice/insert/unique-id 参数验证 + list separator 修复（()→Undecided, [1]→Undecided, join 2-4 参数, append Map 支持, list.separator 空映射→space）+ hwb 空格分隔列表展开 + hwb 单位验证 + @charset UTF-8 前缀 + color.hwb 模块映射 + cf_diag 跨文件 @use 支持
-- 剩余瓶颈：oklch/oklab 未实现；@extend 选择器引擎需结构化类型；css 目录失败需选择器组合器修复；list-slash 函数路由问题；quote(\0) 标识符转义保留问题
+- 已实现：load path 支持 + @return 控制流传播 + map 嵌套操作 + str-split + compatible + 字符串转义 + @import 环境继承 (load_import) + and/or 短路求值 (is_truthy) + @while/@each 环境传播 + 插值拼接 (#{...}ident) + bind_params spread Map → 关键字参数 + url() 分流（字符串参数走正常解析，裸 URL 走 raw）+ CSS 函数名大小写不敏感 (to_lowercase) + CSS transform/filter 白名单 + zip 非列表参数视为单元素列表 + MAX_DEPTH=100000（内存爆炸兜底）+ 命名颜色反向查找 (reverse_lookup_named_color) + invert/grayscale CSS 透传 + call 内建函数支持用户函数
+- 剩余瓶颈：oklch/oklab 未实现；@extend 选择器引擎需结构化类型；sass-spec 回归需排查（2003→1843）
 - OpenSpec change: v2-rewrite-from-scratch
+
+## 验证清单
+
+修复后必须运行以下全部验证，确认无回归：
+
+```bash
+# 1. lib 测试（37 个，秒级）
+cargo test --lib
+
+# 2. diff 测试（5 个，秒级）
+cargo test --test common_test
+
+# 3. Bootstrap 全量编译（15 个测试，秒级）
+cargo test --test bs_spec -- --nocapture
+
+# 4. Element Plus 全量编译（121 个文件，约 25 秒）
+cargo test --test ep_full -- --nocapture
+```
+
+**全部通过标准**：lib 37/37 + diff 5/5 + BS 15/15 + EP 121/121
