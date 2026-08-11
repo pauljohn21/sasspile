@@ -359,6 +359,28 @@ pub struct CompositeWidget {
 }
 ```
 
+### 属性值类型
+
+```rust
+/// 属性值——支持静态、动态、事件绑定
+pub enum AttrValue {
+    /// 静态属性值
+    Static(Cow<'static, str>),
+    /// 动态属性值（绑定 Behavior，值变化时自动更新）
+    Dynamic(Behavior<String>),
+    /// 事件绑定（DOM 事件 → Emitter 触发）
+    Event(EventBinding),
+    /// 动态样式（Behavior<Style> 驱动）
+    StyleDyn(Behavior<Style>),
+}
+
+/// 事件绑定信息
+pub struct EventBinding {
+    pub emitter_id: NodeId,
+    pub payload: Box<dyn Any>,
+}
+```
+
 ### 内置元素函数
 
 所有 HTML 元素是内置函数，返回 `WidgetBuilder`，链式调用统一视图和样式：
