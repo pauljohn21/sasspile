@@ -279,14 +279,11 @@ impl Evaluator {
             | "hsl" | "hsla" | "lab" | "lch" | "oklab" | "oklch"
             | "color" | "color-mix" | "color-contrast"
             | "gradient" | "icrgb" | "device-cmyk"
-            // CSS transform 函数
-            | "matrix" | "matrix3d" | "translate" | "translatex" | "translatey" | "translatez"
-            | "translate3d" | "scale" | "scalex" | "scaley" | "scalez" | "scale3d"
-            | "rotate" | "rotatex" | "rotatey" | "rotatez" | "rotate3d"
-            | "skew" | "skewx" | "skewy" | "perspective"
-            // CSS filter 函数
-            | "blur" | "brightness" | "contrast" | "drop-shadow" | "grayscale"
-            | "hue-rotate" | "invert" | "opacity" | "saturate" | "sepia"
+            // CSS transform 函数（小写变体）
+            | "translatex" | "translatey" | "translatez"
+            | "scalex" | "scaley" | "scalez"
+            | "rotatex" | "rotatey" | "rotatez"
+            | "skewx" | "skewy"
             // CSS shape 函数
             | "circle" | "ellipse" | "inset" | "polygon" | "rect" | "xywh" | "ray"
             // CSS 网格函数

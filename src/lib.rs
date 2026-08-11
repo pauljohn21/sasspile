@@ -1,18 +1,78 @@
-//! sasspile v2 —— 纯 Rust 函数式 SCSS 编译器。
+//! # sasspile
+//!
+//! 纯 Rust 函数式 SCSS 编译器，从零实现。
 //!
 //! ## 架构
 //!
 //! ```text
-//! Source → Lexed → Parsed → Evaluated → Serialized
+//! Source → Lexer → Parser → Evaluator → Serializer → CSS
+//!          (lex/)   (parse/)  (eval/)     (css/)
 //! ```
 //!
-//! ## 用法
+//! 每个阶段通过类型状态机（Type-State Pattern）确保编译时类型安全：
+//! 必须先词法分析后语法分析，先语法分析后求值，先求值后序列化。
+//!
+//! ## 快速开始
 //!
 //! ```rust
 //! use sasspile::compile_expanded;
 //!
 //! let css = compile_expanded("a { color: red; }").unwrap();
+//! assert_eq!(css, "a {\n  color: red;\n}\n");
 //! ```
+//!
+//! ## 变量与嵌套
+//!
+//! ```rust
+//! use sasspile::compile_expanded;
+//!
+//! let scss = r#"
+//!     $primary: #3498db;
+//!     .btn {
+//!         background: $primary;
+//!         &:hover { background: darken($primary, 10%); }
+//!     }
+//! "#;
+//! let css = compile_expanded(scss).unwrap();
+//! assert!(css.contains("#3498db"));
+//! assert!(css.contains(".btn:hover"));
+//! ```
+//!
+//! ## 压缩输出
+//!
+//! ```rust
+//! use sasspile::compile_compressed;
+//!
+//! let css = compile_compressed("a { color: red; }").unwrap();
+//! assert_eq!(css, "a{color:red;}");
+//! ```
+//!
+//! ## 文件编译
+//!
+//! ```rust,no_run
+//! use sasspile::{compile_file, OutputStyle};
+//! use std::path::PathBuf;
+//!
+//! let css = compile_file(&PathBuf::from("input.scss"), OutputStyle::Expanded).unwrap();
+//! println!("{}", css);
+//! ```
+//!
+//! ## 支持的 SCSS 特性
+//!
+//! - 变量（`$var`）、`!default`、`!important`
+//! - 嵌套规则、父选择器引用（`&`）
+//! - Mixin（`@mixin`/`@include`/`@content`）
+//! - 用户函数（`@function`/`@return`）
+//! - 控制流（`@if`/`@for`/`@each`/`@while`）
+//! - 模块系统（`@use`/`@forward`/`@import`）
+//! - 继承（`@extend`）
+//! - 内建函数：颜色、字符串、列表、Map、数学、选择器
+//!
+//! ## 兼容性
+//!
+//! - Bootstrap 5.3.8：全量编译通过 ✅
+//! - Element Plus：121/121 (100%) 全量通过 ✅
+//! - sass-spec：1843/5069 (36%)
 
 pub mod css;
 pub mod error;
@@ -56,6 +116,20 @@ pub fn init_tracing() {
 }
 
 /// 输出风格。
+///
+/// 控制编译器生成的 CSS 格式。
+///
+/// # 示例
+///
+/// ```rust
+/// use sasspile::{compile, OutputStyle};
+///
+/// let expanded = compile("a { color: red; }", OutputStyle::Expanded).unwrap();
+/// assert_eq!(expanded, "a {\n  color: red;\n}\n");
+///
+/// let compressed = compile("a { color: red; }", OutputStyle::Compressed).unwrap();
+/// assert_eq!(compressed, "a{color:red;}");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputStyle {
     /// 展开式——带缩进和换行。
@@ -65,6 +139,24 @@ pub enum OutputStyle {
 }
 
 /// 编译 SCSS 源码为 CSS 字符串。
+///
+/// # 参数
+///
+/// - `input`: SCSS 源码字符串
+/// - `style`: 输出风格（展开式或压缩式）
+///
+/// # 示例
+///
+/// ```rust
+/// use sasspile::{compile, OutputStyle};
+///
+/// let css = compile("a { color: red; }", OutputStyle::Expanded).unwrap();
+/// assert!(css.contains("color: red"));
+/// ```
+///
+/// # 错误
+///
+/// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
     let source = Source::new(input.to_string());
     let lexed = source.lex()?;
@@ -75,16 +167,67 @@ pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
 }
 
 /// 编译 SCSS 为展开式 CSS。
+///
+/// 等价于 `compile(input, OutputStyle::Expanded)`。
+///
+/// # 示例
+///
+/// ```rust
+/// use sasspile::compile_expanded;
+///
+/// let css = compile_expanded("a { color: red; }").unwrap();
+/// assert_eq!(css, "a {\n  color: red;\n}\n");
+/// ```
+///
+/// # 错误
+///
+/// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile_expanded(input: &str) -> Result<String> {
     compile(input, OutputStyle::Expanded)
 }
 
 /// 编译 SCSS 为压缩式 CSS。
+///
+/// 等价于 `compile(input, OutputStyle::Compressed)`。
+///
+/// # 示例
+///
+/// ```rust
+/// use sasspile::compile_compressed;
+///
+/// let css = compile_compressed("a { color: red; }").unwrap();
+/// assert_eq!(css, "a{color:red;}");
+/// ```
+///
+/// # 错误
+///
+/// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile_compressed(input: &str) -> Result<String> {
     compile(input, OutputStyle::Compressed)
 }
 
 /// 编译 SCSS 文件为 CSS 字符串。
+///
+/// 从文件读取 SCSS 源码，编译为 CSS。`@use`/`@import` 的解析基于文件所在目录。
+///
+/// # 参数
+///
+/// - `path`: SCSS 文件路径
+/// - `style`: 输出风格
+///
+/// # 示例
+///
+/// ```rust,no_run
+/// use sasspile::{compile_file, OutputStyle};
+/// use std::path::PathBuf;
+///
+/// let css = compile_file(&PathBuf::from("style.scss"), OutputStyle::Expanded).unwrap();
+/// println!("{}", css);
+/// ```
+///
+/// # 错误
+///
+/// 返回 [`SassError`] 如果文件不存在或编译失败。
 pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
     let input = std::fs::read_to_string(path)?;
     let source = Source::new(input);
@@ -99,6 +242,30 @@ pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
 /// 编译 SCSS 文件为 CSS 字符串（带加载路径）。
 ///
 /// 加载路径用于解析 `@use`/`@import` 中无法从当前文件目录找到的模块。
+///
+/// # 参数
+///
+/// - `path`: SCSS 文件路径
+/// - `style`: 输出风格
+/// - `load_paths`: 额外的模块搜索路径
+///
+/// # 示例
+///
+/// ```rust,no_run
+/// use sasspile::{compile_file_with_load_paths, OutputStyle};
+/// use std::path::PathBuf;
+///
+/// let css = compile_file_with_load_paths(
+///     &PathBuf::from("main.scss"),
+///     OutputStyle::Expanded,
+///     vec![PathBuf::from("./node_modules")],
+/// ).unwrap();
+/// println!("{}", css);
+/// ```
+///
+/// # 错误
+///
+/// 返回 [`SassError`] 如果文件不存在或编译失败。
 pub fn compile_file_with_load_paths(
     path: &PathBuf,
     style: OutputStyle,

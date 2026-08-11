@@ -69,6 +69,7 @@ pub(crate) struct FunctionDef {
 }
 
 impl Env {
+    /// 创建空环境。
     pub fn new_env() -> Self {
         Self::default()
     }
@@ -78,14 +79,17 @@ impl Env {
         new.depth += 1;
         new
     }
+    /// 不可变插入变量绑定，返回新环境。
     pub fn bind(&self, name: String, value: Value) -> Self {
         let mut new = self.clone();
         new.vars.insert(name, value);
         new
     }
+    /// 按名查找变量引用。
     pub fn lookup(&self, name: &str) -> Option<&Value> {
         self.vars.get(name)
     }
+    /// 判断变量是否已定义。
     pub fn has_var(&self, name: &str) -> bool {
         self.vars.contains_key(name)
     }

@@ -1,16 +1,33 @@
 [package]
 name = "sasspile"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.97"
 description = "A pure Rust SCSS compiler — functional style, type-safe pipeline"
 license = "MIT"
 repository = "https://github.com/pauljohn21/sasspile"
+homepage = "https://github.com/pauljohn21/sasspile"
 documentation = "https://docs.rs/sasspile"
 readme = "README.md"
 authors = ["pauljohn21"]
-keywords = ["sass", "scss", "css", "compiler"]
-categories = ["parser-implementations", "text-processing"]
+keywords = ["sass", "scss", "css", "compiler", "transpiler"]
+categories = ["parser-implementations", "text-processing", "development-tools"]
+exclude = [
+    "tests/fixtures/**",
+    "tests/sass-spec/**",
+    "tests/element-plus/**",
+    "tests/bootstrap/**",
+    "book/",
+    "rust/",
+    "examples/",
+    "DESIGN.md",
+    "docs/",
+    "openspec/",
+    ".github/",
+    ".claude/",
+    ".codegraph/",
+    "*.code-workspace",
+]
 
 [dependencies]
 thiserror = "2"

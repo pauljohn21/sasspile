@@ -36,98 +36,161 @@ pub struct Arg {
 pub enum Node {
     /// 样式规则——`selector { ... }`。
     Rule {
+        /// 选择器文本。
         selector: String,
+        /// 规则体内的子节点列表。
         body: Vec<Node>,
     },
     /// 属性声明——`property: value;`。
     Decl {
+        /// CSS 属性名。
         property: String,
+        /// 属性值表达式。
         value: Value,
+        /// 是否标记 `!important`。
         important: bool,
     },
     /// 变量声明——`$name: value;`。
     Variable {
+        /// 变量名（不含 `$`）。
         name: String,
+        /// 变量值表达式。
         value: Value,
+        /// `!default` / `!global` 标志。
         flags: VarFlags,
     },
     /// 注释。
     Comment(String, bool), // (text, is_silent)
 
     // —— 控制流 ——
+    /// `@if` / `@else if` / `@else` 条件分支。
     If {
-        branches: Vec<(Value, Vec<Node>)>, // (condition, body)
+        /// 条件分支列表，每项为 `(条件, 体)`。
+        branches: Vec<(Value, Vec<Node>)>,
+        /// `@else` 体（无条件分支）。
         else_body: Option<Vec<Node>>,
     },
+    /// `@for` 循环。
     For {
+        /// 循环变量名。
         var: String,
+        /// 起始值表达式。
         from: Value,
+        /// 结束值表达式。
         to: Value,
-        inclusive: bool, // through=true, to=false
+        /// `through` = true（含上界），`to` = false（不含）。
+        inclusive: bool,
+        /// 循环体节点列表。
         body: Vec<Node>,
     },
+    /// `@each` 遍历。
     Each {
+        /// 解构变量名列表。
         vars: Vec<String>,
+        /// 待遍历的列表/Map 表达式。
         list: Value,
+        /// 循环体节点列表。
         body: Vec<Node>,
     },
+    /// `@while` 循环。
     While {
+        /// 循环条件表达式。
         cond: Value,
+        /// 循环体节点列表。
         body: Vec<Node>,
     },
 
     // —— Mixin / Function ——
+    /// mixin 定义——`@mixin name(params) { ... }`。
     MixinDef {
+        /// mixin 名称。
         name: String,
+        /// 参数定义列表。
         params: Vec<Param>,
+        /// mixin 体节点列表。
         body: Vec<Node>,
     },
+    /// mixin 包含——`@include name(args)`。
     Include {
+        /// 要包含的 mixin 名称。
         name: String,
+        /// 调用参数列表。
         args: Vec<Arg>,
+        /// `@content` 块内容。
         content: Option<Vec<Node>>,
     },
+    /// `@content` 占位——mixin 体中标记调用者内容块插入位置。
     Content,
+    /// 函数定义——`@function name(params) { ... }`。
     FunctionDef {
+        /// 函数名称。
         name: String,
+        /// 参数定义列表。
         params: Vec<Param>,
+        /// 函数体节点列表。
         body: Vec<Node>,
     },
+    /// `@return` 返回语句。
     Return(Value),
 
     // —— 模块系统 ——
+    /// `@use` 模块加载。
     Use {
+        /// 模块 URL。
         url: String,
+        /// `as` 指定的命名空间。
         namespace: Option<String>,
-        star: bool,                   // as *
-        config: Vec<(String, Value)>, // with ($x: val)
+        /// `as *` 通配导入标志。
+        star: bool,
+        /// `with ($x: val)` 配置参数列表。
+        config: Vec<(String, Value)>,
     },
+    /// `@forward` 模块转发。
     Forward {
+        /// 要转发的模块 URL。
         url: String,
+        /// `show` 白名单成员。
         show: Vec<String>,
+        /// `hide` 黑名单成员。
         hide: Vec<String>,
-        prefix: Option<String>, // as prefix-*
+        /// `as prefix-*` 前缀重映射。
+        prefix: Option<String>,
     },
+    /// `@import` 导入。
     Import {
+        /// 要导入的文件 URL。
         url: String,
     },
 
     // —— 其他指令 ——
+    /// `@extend` 继承。
     Extend {
+        /// 要继承的选择器。
         selector: String,
+        /// `!optional` 标志——不存在匹配时不报错。
         optional: bool,
     },
+    /// `@at-root` 根级输出。
     AtRoot {
+        /// 查询条件（如 `(without: media)`）。
         query: Option<String>,
+        /// 体节点列表。
         body: Vec<Node>,
     },
+    /// 通用 @规则。
     AtRule {
+        /// @规则名称。
         name: String,
+        /// @规则参数文本。
         params: Option<String>,
+        /// @规则体（`None` 表示无 body）。
         body: Option<Vec<Node>>,
     },
+    /// `@warn` 警告指令。
     Warn(Value),
+    /// `@debug` 调试指令。
     Debug(Value),
+    /// `@error` 错误指令。
     Error(Value),
 }
 
@@ -167,41 +230,64 @@ pub enum Value {
 /// 二元运算。
 #[derive(Debug, Clone, PartialEq)]
 pub struct BinOp {
+    /// 运算符类型。
     pub op: BinOpKind,
+    /// 左操作数。
     pub left: Value,
+    /// 右操作数。
     pub right: Value,
 }
 
+/// 二元运算符类型。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinOpKind {
+    /// 加法 `+`。
     Add,
+    /// 减法 `-`。
     Sub,
+    /// 乘法 `*`。
     Mul,
+    /// 除法 `/`。
     Div,
+    /// 取模 `%`。
     Mod,
+    /// 等于比较 `==`。
     Eq,
+    /// 不等于比较 `!=`。
     NotEq,
+    /// 小于比较 `<`。
     Lt,
+    /// 大于比较 `>`。
     Gt,
+    /// 小于等于比较 `<=`。
     LtEq,
+    /// 大于等于比较 `>=`。
     GtEq,
+    /// 逻辑与 `and`（短路求值）。
     And,
+    /// 逻辑或 `or`（短路求值）。
     Or,
 }
 
 /// 一元运算。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOp {
+    /// 一元负号 `-`。
     Neg,
+    /// 逻辑非 `not`。
     Not,
 }
 
 /// 颜色。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Color {
+    /// 红色通道（0-255）。
     pub r: u8,
+    /// 绿色通道（0-255）。
     pub g: u8,
+    /// 蓝色通道（0-255）。
     pub b: u8,
+    /// Alpha 通道（0.0-1.0）。
     pub a: f32,
 }
 
@@ -230,15 +316,20 @@ impl Color {
 /// 列表分隔符。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Separator {
+    /// 逗号分隔——`(a, b, c)`。
     Comma,
+    /// 空格分隔——`(a b c)`。
     Space,
+    /// 斜杠分隔——`(a / b / c)`。
     Slash,
+    /// 未确定——单元素或待推断。
     Undecided,
 }
 
 /// AST 容器。
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Ast {
+    /// 顶层语法树节点列表。
     pub nodes: Vec<Node>,
 }
 

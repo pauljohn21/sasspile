@@ -10,28 +10,28 @@
 | **main.rs** | 36 | CLI 入口 |
 | **error.rs** | 80 | SassError 定义 |
 | **lex/token.rs** | 131 | Token 枚举定义 |
-| **lex/mod.rs** | 460 | Lexer + Iterator impl（scan_* 方法） |
-| **parse/ast.rs** | 326 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等） |
+| **lex/mod.rs** | 492 | Lexer + Iterator impl（scan_* 方法） |
+| **parse/ast.rs** | 375 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等） |
 | **parse/ast_impl.rs** | 281 | Display for Value + Node::to_scss() |
-| **parse/mod.rs** | 86 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
-| **parse/nodes.rs** | 484 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
+| **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
+| **parse/nodes.rs** | 488 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
 | **parse/at_rules.rs** | 451 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
-| **parse/expr.rs** | 470 | Pratt 表达式解析 + parse_number/parse_hash_color |
-| **eval/mod.rs** | 437 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node |
+| **parse/expr.rs** | 623 | Pratt 表达式解析 + parse_number/parse_hash_color |
+| **eval/mod.rs** | 454 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node |
 | **eval/rule.rs** | 136 | eval_rule + combine_selectors |
-| **eval/value.rs** | 456 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible |
-| **eval/control_flow.rs** | 146 | eval_if/eval_for/eval_each/eval_while |
-| **eval/mixin.rs** | 168 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
+| **eval/value.rs** | 524 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible |
+| **eval/control_flow.rs** | 149 | eval_if/eval_for/eval_each/eval_while |
+| **eval/mixin.rs** | 192 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 77 | apply_extends |
-| **eval/module.rs** | 191 | resolve_file（含 load_paths） + load_module + call_module_function |
-| **eval/color.rs** | 266 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 247 | call_builtin 分派入口（match 骨架 → 子模块分派） |
-| **eval/builtin/color.rs** | 206 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness |
-| **eval/builtin/list.rs** | 196 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
-| **eval/builtin/map.rs** | 271 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
-| **eval/builtin/string.rs** | 182 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id |
+| **eval/module.rs** | 241 | resolve_file（含 load_paths） + load_module + call_module_function |
+| **eval/color.rs** | 604 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
+| **eval/builtin.rs** | 298 | call_builtin 分派入口（match 骨架 → 子模块分派） |
+| **eval/builtin/color.rs** | 253 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness |
+| **eval/builtin/list.rs** | 259 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
+| **eval/builtin/map.rs** | 301 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
+| **eval/builtin/string.rs** | 281 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id |
 | **eval/builtin/selector.rs** | 98 | selector-append/nest/is-super/parse/simple-selectors/unify/extend |
-| **css/mod.rs** | 349 | Serializer（CSS 树 → 字符串，含 Return 忽略） |
+| **css/mod.rs** | 358 | Serializer（CSS 树 → 字符串，含 Return 忽略） |
 | **css/node.rs** | 88 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Return） |
 | **stage/*.rs** | 14-89 | 管线阶段类型（Source/Lexed/Parsed/Evaluated/Serialized） |
 

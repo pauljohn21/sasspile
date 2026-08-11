@@ -18,42 +18,76 @@ pub enum Token {
     Comment(String, bool), // (text, is_silent)  is_silent = //
 
     // —— 关键字 ——
+    /// 布尔字面量 `true`。
     True,
+    /// 布尔字面量 `false`。
     False,
+    /// 空值字面量 `null`。
     Null,
+    /// 逻辑与关键字 `and`。
     And,
+    /// 逻辑或关键字 `or`。
     Or,
+    /// 逻辑非关键字 `not`。
     Not,
 
     // —— 符号 ——
-    LParen,    // (
-    RParen,    // )
-    LBrace,    // {
-    RBrace,    // }
-    LBracket,  // [
-    RBracket,  // ]
-    Colon,     // :
-    Semicolon, // ;
-    Comma,     // ,
-    Dot,       // .
-    Plus,      // +
-    Minus,     // -
-    Star,      // *
-    Slash,     // /
-    Percent,   // %
-    Amp,       // &
-    Caret,     // ^
-    Tilde,     // ~
-    Bang,      // !
-    Assign,    // =
-    Eq,        // ==
-    NotEq,     // !=
-    Less,      // <
-    Greater,   // >
-    LessEq,    // <=
-    GreaterEq, // >=
-    DotDotDot, // ...
-    Pipe,      // |  (for @supports selector(|...)
+    /// 左圆括号 `(`。
+    LParen,
+    /// 右圆括号 `)`。
+    RParen,
+    /// 左花括号 `{`。
+    LBrace,
+    /// 右花括号 `}`。
+    RBrace,
+    /// 左方括号 `[`。
+    LBracket,
+    /// 右方括号 `]`。
+    RBracket,
+    /// 冒号 `:`——声明分隔符。
+    Colon,
+    /// 分号 `;`——语句终止符。
+    Semicolon,
+    /// 逗号 `,`——列表/参数分隔符。
+    Comma,
+    /// 点 `.`——小数点或类选择器。
+    Dot,
+    /// 加号 `+`。
+    Plus,
+    /// 减号 `-`。
+    Minus,
+    /// 星号 `*`——乘法或通配选择器。
+    Star,
+    /// 斜杠 `/`——除法或路径分隔符。
+    Slash,
+    /// 百分号 `%`——取模或百分比单位。
+    Percent,
+    /// & 符号——父选择器引用。
+    Amp,
+    /// 脱字符 `^`。
+    Caret,
+    /// 波浪号 `~`——同级选择器。
+    Tilde,
+    /// 感叹号 `!`——`!important` / `!default` / `!global`。
+    Bang,
+    /// 赋值号 `=`。
+    Assign,
+    /// 等于比较 `==`。
+    Eq,
+    /// 不等于比较 `!=`。
+    NotEq,
+    /// 小于比较 `<`。
+    Less,
+    /// 大于比较 `>`。
+    Greater,
+    /// 小于等于比较 `<=`。
+    LessEq,
+    /// 大于等于比较 `>=`。
+    GreaterEq,
+    /// 剩余参数展开符 `...`。
+    DotDotDot,
+    /// 竖线 `|`——`@supports selector(|...)` 语法。
+    Pipe,
 
     // —— 特殊 ——
     /// `@规则`——`@import`, `@media`。

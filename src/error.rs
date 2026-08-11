@@ -33,11 +33,21 @@ impl Span {
 pub enum SassError {
     /// 词法错误——扫描阶段遇到无效字符。
     #[error("词法错误: {message} (位置 {pos})")]
-    Lex { message: String, pos: usize },
+    Lex {
+        /// 错误描述信息。
+        message: String,
+        /// 错误发生的源码字节偏移位置。
+        pos: usize,
+    },
 
     /// 语法错误——解析阶段结构不匹配。
     #[error("语法错误: 期望 {expected}, 实际 {found}")]
-    Parse { expected: String, found: String },
+    Parse {
+        /// 期望的 token 或结构描述。
+        expected: String,
+        /// 实际遇到的 token 或结构描述。
+        found: String,
+    },
 
     /// 求值错误——运行时问题。
     #[error("求值错误: {0}")]
@@ -45,7 +55,12 @@ pub enum SassError {
 
     /// 类型错误——类型不匹配。
     #[error("类型错误: 期望 {expected}, 实际 {actual}")]
-    Type { expected: String, actual: String },
+    Type {
+        /// 期望的类型描述。
+        expected: String,
+        /// 实际的类型描述。
+        actual: String,
+    },
 
     /// 单位错误——不兼容单位运算。
     #[error("单位错误: {0}")]

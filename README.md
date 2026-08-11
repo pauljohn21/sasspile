@@ -5,17 +5,19 @@
 [![License](https://img.shields.io/crates/l/sasspile)](LICENSE)
 [![CI](https://github.com/pauljohn21/sasspile/workflows/CI/badge.svg)](https://github.com/pauljohn21/sasspile/actions)
 
-纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 新特性构建。
+纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-sasspile 是一个学习 Rust 的实战项目，采用纯函数式风格实现 SCSS 编译管线。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
+sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
 ## 特性
 
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖**: 纯 Rust 实现，无外部 C 库
-- **sass-spec 兼容**: 通过官方测试套件验证
-- **Bootstrap 5.3.8 验证**: 核心功能测试通过
+- **sass-spec 兼容**: 1843/5069 (36%) 通过
+- **Bootstrap 5.3.8**: 全量编译通过 ✅
+- **Element Plus**: 121/121 (100%) 全量通过 ✅
+- **tracing 调试**: 内建 span + event 追踪链路
 
 ## 快速开始
 
@@ -23,7 +25,7 @@ sasspile 是一个学习 Rust 的实战项目，采用纯函数式风格实现 S
 
 ```toml
 [dependencies]
-sasspile = "0.2"
+sasspile = "0.3"
 ```
 
 最小示例：
@@ -120,11 +122,20 @@ println!("{}", css);
 - `abs`, `ceil`, `floor`, `round`, `min`, `max`
 - `percentage`, `sqrt`, `sin`, `cos`, `tan`, `pow`
 
+### Mixin 与函数
+
+- `@mixin` / `@include` / `@content`
+- `@function` / `@return`
+- `@if` / `@else` / `@for` / `@each` / `@while`
+- `@import` / `@use` / `@forward`
+- `@extend` / `@at-root` / `@warn` / `@debug` / `@error`
+
 ### 指令
 
 - `@media` 媒体查询
 - `//` 单行注释
 - `/* */` 多行注释
+- `!default` / `!important` 标记
 
 ### 选择器
 
@@ -135,13 +146,13 @@ println!("{}", css);
 ## 测试
 
 ```bash
-cargo test
+cargo test --lib          # 37 lib 测试
+cargo test --test common_test  # 5 diff 测试
+cargo test --test bs_spec     # 15 Bootstrap 测试
+cargo test --test ep_full     # 121 Element Plus 测试
 ```
 
-110+ 测试全部通过，包括：
-- 75 单元测试
-- 21 sass-spec 合规测试
-- 13 Bootstrap 5.3.8 验证测试
+全部通过：**lib 37/37 + diff 5/5 + BS 15/15 + EP 121/121**
 
 ## 架构设计
 

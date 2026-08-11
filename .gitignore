@@ -18,7 +18,10 @@ Thumbs.db
 Cargo.lock
 
 # mdBook build output
-book/book/
+book/
+
+# Docs
+docs/superpowers/
 
 # Project-specific (not for version control)
 .claude/

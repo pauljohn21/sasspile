@@ -157,7 +157,7 @@ apply_extends (n_extends) → 递归遍历 CSS 树
 
 ### 源文件结构
 
-全部源文件 ≤ 500 行（最大 `parse/nodes.rs` 484 行）。
+最大源文件 `parse/expr.rs` 623 行，3 个文件超过 500 行（待拆分）。
 
 ```
 src/
@@ -165,41 +165,41 @@ src/
 ├── main.rs           (36)
 ├── error.rs          (80)
 ├── css/
-│   ├── mod.rs        (349)  Serializer
+│   ├── mod.rs        (358)  Serializer
 │   └── node.rs       (88)   CssNode（含 Return 变体）
 ├── lex/
-│   ├── mod.rs        (460)  Lexer + Iterator impl
+│   ├── mod.rs        (492)  Lexer + Iterator impl
 │   └── token.rs      (131)  Token 定义
 ├── parse/
-│   ├── mod.rs        (86)   Parser 结构 + parse() 入口
-│   ├── nodes.rs      (484)  节点解析 + 参数解析
+│   ├── mod.rs        (92)   Parser 结构 + parse() 入口
+│   ├── nodes.rs      (488)  节点解析 + 参数解析
 │   ├── at_rules.rs   (451)  @规则解析
-│   ├── expr.rs       (470)  Pratt 表达式 + 数值/颜色解析
-│   ├── ast.rs        (326)  AST 类型定义
+│   ├── expr.rs       (623)  Pratt 表达式 + 数值/颜色解析
+│   ├── ast.rs        (375)  AST 类型定义
 │   └── ast_impl.rs   (281)  Display + to_scss 实现
 ├── eval/
-│   ├── mod.rs        (437)  Env + Evaluator + eval_nodes/eval_node
+│   ├── mod.rs        (454)  Env + Evaluator + eval_nodes/eval_node
 │   ├── rule.rs       (136)  eval_rule + combine_selectors
-│   ├── value.rs      (456)  eval_value + binop + 算术运算
-│   ├── control_flow.rs(146) eval_if/for/each/while
-│   ├── mixin.rs      (168)  eval_include + call_function + call_user_function
+│   ├── value.rs      (524)  eval_value + binop + 算术运算
+│   ├── control_flow.rs(149) eval_if/for/each/while
+│   ├── mixin.rs      (192)  eval_include + call_function + call_user_function
 │   ├── extend.rs     (77)   apply_extends
-│   ├── module.rs     (191)  resolve_file + load_module（支持 load_paths）
-│   ├── color.rs      (266)  颜色转换 + builtin 颜色函数
-│   ├── builtin.rs    (247)  call_builtin 分派入口
+│   ├── module.rs     (241)  resolve_file + load_module（支持 load_paths）
+│   ├── color.rs      (604)  颜色转换 + builtin 颜色函数
+│   ├── builtin.rs    (298)  call_builtin 分派入口
 │   └── builtin/
-│       ├── color.rs    (206)  invert/grayscale/hwb/complement/adjust-hue/...
-│       ├── list.rs     (196)  length/nth/append/join/index/zip/...
-│       ├── map.rs      (271)  map-get/keys/values/has-key/merge/remove/set + 嵌套辅助
-│       ├── string.rs   (182)  str-length/slice/index/insert/split/unquote/quote/...
+│       ├── color.rs    (253)  invert/grayscale/hwb/complement/adjust-hue/...
+│       ├── list.rs     (259)  length/nth/append/join/index/zip/...
+│       ├── map.rs      (301)  map-get/keys/values/has-key/merge/remove/set + 嵌套辅助
+│       ├── string.rs   (281)  str-length/slice/index/insert/split/unquote/quote/...
 │       └── selector.rs  (98)  selector-append/nest/is-super/parse/...
 └── stage/                  管线阶段类型
 ```
 
 ## Git 规范
 
-- 分支：`v2-rewrite-from-scratch`（开发）/ `perf/optimization`（优化）
-- 推送：`git push gitee v2-rewrite-from-scratch`
+- 分支：`main`（发布）/ `v2-rewrite-from-scratch`（开发）/ `perf/optimization`（优化）
+- 推送：`git push gitee main`
 - Commit 格式：`feat: 描述 — 总计 N/M`
 - 不主动 commit/push 除非用户要求
 
@@ -209,12 +209,13 @@ src/
 - 37 lib 测试 + 5 diff 测试全通过
 - Bootstrap 5.3.8：`bootstrap.scss` 全量编译通过 ✅
 - Element Plus：121/121 (100%) 全量通过 ✅
-- 全部源文件 ≤ 500 行（文件拆分完成，最大 `parse/nodes.rs` 484 行）
+- 最大源文件 623 行（`parse/expr.rs`），3 个文件超 500 行（expr.rs/color.rs/value.rs 待拆分）
 - 调试工具链：CSS diff + 最小化 + 值快照 events
 - 已删除 libsass/non_conformant 目录
 - 已实现：load path 支持 + @return 控制流传播 + map 嵌套操作 + str-split + compatible + 字符串转义 + @import 环境继承 (load_import) + and/or 短路求值 (is_truthy) + @while/@each 环境传播 + 插值拼接 (#{...}ident) + bind_params spread Map → 关键字参数 + url() 分流（字符串参数走正常解析，裸 URL 走 raw）+ CSS 函数名大小写不敏感 (to_lowercase) + CSS transform/filter 白名单 + zip 非列表参数视为单元素列表 + MAX_DEPTH=100000（内存爆炸兜底）+ 命名颜色反向查找 (reverse_lookup_named_color) + invert/grayscale CSS 透传 + call 内建函数支持用户函数
 - 剩余瓶颈：oklch/oklab 未实现；@extend 选择器引擎需结构化类型；sass-spec 回归需排查（2003→1843）
-- OpenSpec change: v2-rewrite-from-scratch
+- 版本：v0.3.0
+- OpenSpec change: v2-rewrite-from-scratch (已归档到 main)
 
 ## 验证清单
 
