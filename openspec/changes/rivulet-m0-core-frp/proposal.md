@@ -1,4 +1,12 @@
-## Why
+## ⚠️ 已废弃
+
+此 change 已废弃。经过 FRP vs Signal 性能和新手友好度对比分析，决定放弃 Rivulet 新项目，转向直接优化 banyan。banyan 已有 Signal/Memo/Effect + slotmap + SSR + 小程序 + 路由 + SCSS，Signal 版 Rivulet 与其高度重复。
+
+设计文档保留在 `docs/superpowers/specs/2026-08-11-rivulet-design.md` 作为参考。后续将选择性将 Rivulet 设计中的 Flutter Style 对象、Builder 链式 API、Diff LIS 优化等想法应用到 banyan。
+
+---
+
+## Why（原始——已废弃）
 
 Rivulet 是一个受 sasspile 启发的纯 Rust 函数式 FRP Web 框架。M0 是整个框架的地基——Arena-based FRP 核心抽象（Event/Behavior/Runtime），所有后续里程碑（Widget、Diff、Renderer、路由、小程序）都依赖此核心。需要先实现核心 FRP 逻辑，才能构建上层 UI 系统。
 
