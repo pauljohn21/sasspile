@@ -74,13 +74,61 @@ impl Evaluator {
             }
             Value::Call(name, args) => {
                 // if() 惰性求值：只求值选中的分支，避免副作用和类型错误
-                if name == "if" && args.len() == 3 && args.iter().all(|a| a.name.is_none()) {
+                if name == "if" && args.len() == 3 && args.iter().all(|a| a.name.is_none() && a.condition.is_none()) {
                     let cond = Self::eval_value(&args[0].value, env)?;
                     if Self::is_truthy(&cond) {
                         return Self::eval_value(&args[1].value, env);
                     } else {
                         return Self::eval_value(&args[2].value, env);
                     }
+                }
+                // if() 冒号语法：if(condition: value; else: other)
+                // condition 为 CSS 函数时透传，为 Sass 表达式时求值
+                if name == "if" && args.iter().any(|a| a.condition.is_some()) {
+                    let cond_arg = args.iter().find(|a| a.condition.is_some()).expect("已检查");
+                    let condition = cond_arg.condition.as_ref().expect("已检查");
+                    let value = &cond_arg.value;
+                    let else_arg = args.iter().find(|a| a.name.as_deref() == Some("else"));
+                    // 尝试求值条件
+                    match Self::eval_value(condition, env) {
+                        Ok(Value::Calc(..)) => {
+                            // 条件为 CSS 原生函数（如 css()），不可求值为布尔 → CSS 透传
+                            let mut parts: Vec<String> = Vec::new();
+                            parts.push(format!("{condition}: {value}"));
+                            if let Some(else_a) = else_arg {
+                                parts.push(format!("else: {}", else_a.value));
+                            }
+                            return Ok(Value::String(
+                                format!("if({})", parts.join("; ")),
+                                false,
+                            ));
+                        }
+                        Ok(cond) => {
+                            if Self::is_truthy(&cond) {
+                                return Self::eval_value(value, env);
+                            } else if let Some(else_a) = else_arg {
+                                return Self::eval_value(&else_a.value, env);
+                            } else {
+                                return Ok(Value::Null);
+                            }
+                        }
+                        Err(_) => {
+                            // 条件包含 CSS 函数（如 css()），无法求值 → CSS 透传
+                            let mut parts: Vec<String> = Vec::new();
+                            parts.push(format!("{condition}: {value}"));
+                            if let Some(else_a) = else_arg {
+                                parts.push(format!("else: {}", else_a.value));
+                            }
+                            return Ok(Value::String(
+                                format!("if({})", parts.join("; ")),
+                                false,
+                            ));
+                        }
+                    }
+                }
+                // if(else: value) — else-only 语法，始终返回 value
+                if name == "if" && !args.is_empty() && args.iter().all(|a| a.name.as_deref() == Some("else")) {
+                    return Self::eval_value(&args[0].value, env);
                 }
                 // 分离位置参数和关键字参数，展开 spread
                 let mut pos_args: Vec<Value> = Vec::new();

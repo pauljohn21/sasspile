@@ -347,7 +347,62 @@ impl<'tok> Parser<'tok> {
                 self.skip_ws();
                 (Some(n), self.parse_expr(0)?)
             } else {
-                (None, self.parse_expr(0)?)
+                // 解析位置参数表达式
+                let expr = self.parse_expr(0)?;
+                // 检查 if() 冒号语法：expression : value
+                // 例如 if(css(): c) 或 if(sass(true): c; else: d)
+                self.skip_ws();
+                if self.peek() == Some(&Token::Colon) {
+                    // 消费 :
+                    self.advance();
+                    self.skip_ws();
+                    let val = self.parse_expr(0)?;
+                    let spread = if self.peek() == Some(&Token::DotDotDot) {
+                        self.advance();
+                        true
+                    } else {
+                        false
+                    };
+                    args.push(Arg {
+                        name: None,
+                        value: val,
+                        spread,
+                        condition: Some(expr),
+                    });
+                    // 检查 ; else: other 语法
+                    self.skip_ws();
+                    if self.peek() == Some(&Token::Semicolon) {
+                        self.advance();
+                        self.skip_ws();
+                        // 期望 else : value
+                        if let Some(Token::Ident(s)) = self.peek() {
+                            if s == "else" {
+                                self.advance();
+                                self.skip_ws();
+                                if self.peek() == Some(&Token::Colon) {
+                                    self.advance();
+                                    self.skip_ws();
+                                }
+                                let else_val = self.parse_expr(0)?;
+                                args.push(Arg {
+                                    name: Some("else".to_string()),
+                                    value: else_val,
+                                    spread: false,
+                                    condition: None,
+                                });
+                            }
+                        }
+                    }
+                    // 跳过后续处理
+                    self.skip_ws();
+                    if self.peek() == Some(&Token::Comma) {
+                        self.advance();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                (None, expr)
             };
             let spread = if self.peek() == Some(&Token::DotDotDot) {
                 self.advance();
@@ -359,6 +414,7 @@ impl<'tok> Parser<'tok> {
                 name,
                 value,
                 spread,
+                condition: None,
             });
             self.skip_ws();
             if self.peek() == Some(&Token::Comma) {

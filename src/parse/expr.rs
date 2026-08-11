@@ -241,7 +241,7 @@ impl<'tok> Parser<'tok> {
                         let next = self.tokens.get(self.pos + 1);
                         matches!(next, Some(Token::String(_, _)))
                     };
-                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url")
+                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url" | "css")
                         && !is_url_with_string
                     {
                         self.advance(); // 消费 (
@@ -305,10 +305,10 @@ impl<'tok> Parser<'tok> {
                             }
                             let mut args: Vec<Arg> = items
                                 .into_iter()
-                                .map(|v| Arg { name: None, value: v, spread: false })
+                                .map(|v| Arg { name: None, value: v, spread: false, condition: None })
                                 .collect();
                             if let Some(a) = alpha {
-                                args.push(Arg { name: None, value: a, spread: false });
+                                args.push(Arg { name: None, value: a, spread: false, condition: None });
                             }
                             return Ok(Value::Call(name, args));
                         }

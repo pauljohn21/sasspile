@@ -29,6 +29,9 @@ pub struct Arg {
     pub value: Value,
     /// 是否展开剩余参数。
     pub spread: bool,
+    /// `if()` 冒号语法的条件表达式——`if(condition: value; else: other)`。
+    /// 当此字段有值时，`value` 是条件为真时的返回值，`name` 为 `Some("else")` 表示 else 分支。
+    pub condition: Option<Value>,
 }
 
 /// 语法树节点。
@@ -413,7 +416,24 @@ impl std::fmt::Display for Value {
                 write!(f, "{}({})", name, parts.join(", "))
             }
             Value::Interp(s) => write!(f, "#{{{s}}}"),
-            Value::BinOp(b) => write!(f, "{}", b.left),
+            Value::BinOp(b) => {
+                let op_str = match b.op {
+                    BinOpKind::Add => " + ",
+                    BinOpKind::Sub => " - ",
+                    BinOpKind::Mul => " * ",
+                    BinOpKind::Div => " / ",
+                    BinOpKind::Mod => " % ",
+                    BinOpKind::Eq => " == ",
+                    BinOpKind::NotEq => " != ",
+                    BinOpKind::Lt => " < ",
+                    BinOpKind::Gt => " > ",
+                    BinOpKind::LtEq => " <= ",
+                    BinOpKind::GtEq => " >= ",
+                    BinOpKind::And => " and ",
+                    BinOpKind::Or => " or ",
+                };
+                write!(f, "{}{}{}", b.left, op_str, b.right)
+            }
             Value::UnaryOp(op, v) => match op {
                 UnaryOp::Neg => write!(f, "-{v}"),
                 UnaryOp::Not => write!(f, "not {v}"),

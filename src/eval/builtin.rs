@@ -19,6 +19,18 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
         match name.as_str() {
+            // ── sass-spec 测试辅助函数 ──
+            // sass(expr) 将参数作为 Sass 表达式求值（测试专用，实际就是 identity 函数）
+            // 在 plain CSS 模式下不允许使用
+            "sass" => {
+                if env.plain_css {
+                    return Err(SassError::Eval("sass() conditions aren't allowed in plain CSS".into()));
+                }
+                if pos_args.is_empty() {
+                    return Err(SassError::Eval("sass() 需要至少 1 个参数".into()));
+                }
+                Ok(pos_args[0].clone())
+            }
             // ── math ──
             "abs" => match pos_args {
                 [Value::Number(n, u)] => Ok(Value::Number(n.abs(), u.clone())),
