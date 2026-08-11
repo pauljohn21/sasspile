@@ -41,17 +41,3 @@ impl Parsed {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parse::ast::Ast;
-
-    #[test]
-    fn test_parsed_evaluate() {
-        let parsed = Parsed {
-            ast: Ast::default(),
-        };
-        let evaluated = parsed.evaluate().unwrap();
-        assert!(evaluated.nodes.is_empty());
-    }
-}

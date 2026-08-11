@@ -235,7 +235,11 @@ fn test_sass_spec_summary() {
     } else {
         0.0
     };
-    eprintln!(
-        "\n=== sass-spec 合规快报（前 {total} 个）===\n通过: {passed}\n失败: {failed}\n合规率: {compliance:.1}%"
+    tracing::info!(
+        passed = passed,
+        failed = failed,
+        total = total,
+        compliance = format!("{compliance:.1}%"),
+        "sass-spec 合规快报（前 {total} 个）"
     );
 }

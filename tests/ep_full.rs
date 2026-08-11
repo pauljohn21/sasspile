@@ -1,4 +1,6 @@
 //! element-plus 全量编译验证测试。
+//!
+//! 使用 tracing 进行问题追踪，不使用 eprintln!/println!。
 
 use sasspile::*;
 use std::path::PathBuf;
@@ -23,22 +25,21 @@ fn test_ep_full_stats() {
         match compile_file(&entry.path(), OutputStyle::Expanded) {
             Ok(css) => {
                 ok += 1;
-                eprintln!("OK   {} ({} bytes)", name, css.len());
+                tracing::info!(file = %name, bytes = css.len(), "OK");
             }
             Err(e) => {
                 fail += 1;
                 let msg = format!("{e}");
                 errors.push((name.clone(), msg.clone()));
-                eprintln!("FAIL {} : {}", name, msg);
+                tracing::warn!(file = %name, error = %msg, "FAIL");
             }
         }
     }
 
-    eprintln!("\n=== 统计 ===");
-    eprintln!("通过: {} / {}", ok, ok + fail);
-    eprintln!("失败: {}", fail);
+    tracing::info!("=== 统计 ===");
+    tracing::info!(ok = ok, total = ok + fail, fail = fail, "通过/失败");
 
-    eprintln!("\n=== 错误分类 ===");
+    tracing::info!("=== 错误分类 ===");
     let mut categories: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
     for (name, err) in &errors {
@@ -60,8 +61,8 @@ fn test_ep_full_stats() {
         categories.entry(cat).or_default().push(name.clone());
     }
     for (cat, files) in &categories {
-        eprintln!("{} ({}): {}", cat, files.len(), files.join(", "));
+        tracing::info!(category = %cat, count = files.len(), files = %files.join(", "), "错误分类");
     }
 
-    println!("EP 通过: {}/{}", ok, ok + fail);
+    tracing::info!(ok = ok, total = ok + fail, "EP 通过");
 }

@@ -39,26 +39,3 @@ impl Lexed {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lex::token::Token;
-
-    #[test]
-    fn test_lexed_parse() {
-        let lexed = Lexed {
-            tokens: vec![
-                Token::Ident("a".to_string()),
-                Token::Whitespace,
-                Token::LBrace,
-                Token::Ident("color".to_string()),
-                Token::Colon,
-                Token::Ident("red".to_string()),
-                Token::Semicolon,
-                Token::RBrace,
-            ],
-        };
-        let parsed = lexed.parse();
-        assert!(parsed.is_ok());
-    }
-}

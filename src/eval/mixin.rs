@@ -11,10 +11,30 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = tracing::info_span!("eval_include", name = name, n_args = args.len());
         let _enter = span.enter();
+        // 命名空间限定 mixin（如 midstream.b-a）
+        if let Some(dot) = name.find('.') {
+            let ns = &name[..dot];
+            let mixin_name = &name[dot + 1..];
+            if let Some(module) = env.get_namespace(ns) {
+                if let Some(mixin) = module.mixins.get(mixin_name) {
+                    return Self::exec_mixin(mixin, args, content, env);
+                }
+            }
+        }
         let mixin = env
             .get_mixin(name)
             .ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?
             .clone();
+        Self::exec_mixin(&mixin, args, content, env)
+    }
+
+    /// 执行 mixin——绑定参数、注入 @content、求值 body。
+    fn exec_mixin(
+        mixin: &MixinDef,
+        args: &[Arg],
+        content: &Option<Vec<Node>>,
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
 // 绑定参数
 let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
 // 合并 mixin 定义时捕获的命名空间
@@ -95,30 +115,31 @@ for (ns, exports) in &mixin.captured_namespaces {
     }
 
     /// 调用函数（内建或用户定义）。
-    pub(crate) fn call_function(name: &str, args: &[Value], env: &Env) -> Result<Value> {
-        let span = tracing::info_span!("call_function", name = name, n_args = args.len());
+    pub(crate) fn call_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
+        let span = tracing::info_span!("call_function", name = name, n_args = pos_args.len());
         let _enter = span.enter();
         // 用户函数
         if let Some(func) = env.get_function(name) {
-            return Self::call_user_function(func, args, env);
+            return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // 模块限定函数 (math.abs, map.get, etc.)
         if name.contains('.') {
-            return Self::call_module_function(name, args, env);
+            return Self::call_module_function(name, pos_args, kw_args, env);
         }
         // 内建函数
-        Self::call_builtin(name, args, env)
+        Self::call_builtin(name, pos_args, kw_args, env)
     }
 
     pub(crate) fn call_user_function(
         func: &FunctionDef,
-        args: &[Value],
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
         env: &Env,
     ) -> Result<Value> {
         let span = tracing::info_span!(
             "call_user_function",
             n_params = func.params.len(),
-            n_args = args.len()
+            n_args = pos_args.len()
         );
         let _enter = span.enter();
         let mut func_env = env.incr_depth();
@@ -128,15 +149,26 @@ for (ns, exports) in &mixin.captured_namespaces {
                 func_env.namespaces.insert(ns.clone(), exports.clone());
             }
         }
-        for (i, param) in func.params.iter().enumerate() {
-            let val = if let Some(arg) = args.get(i) {
-                arg.clone()
+        let mut pos_idx = 0;
+        for param in func.params.iter() {
+            if param.rest {
+                // 剩余参数——收集剩余位置参数
+                let rest: Vec<Value> = pos_args[pos_idx..].to_vec();
+                func_env = func_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
+                break;
+            }
+            // 优先用关键字参数
+            if let Some(val) = kw_args.get(&param.name) {
+                func_env = func_env.bind(param.name.clone(), val.clone());
+            } else if pos_idx < pos_args.len() {
+                func_env = func_env.bind(param.name.clone(), pos_args[pos_idx].clone());
+                pos_idx += 1;
             } else if let Some(default) = &param.default {
-                Self::eval_value(default, &func_env)?
+                let val = Self::eval_value(default, &func_env)?;
+                func_env = func_env.bind(param.name.clone(), val);
             } else {
-                Value::Null
-            };
-            func_env = func_env.bind(param.name.clone(), val);
+                func_env = func_env.bind(param.name.clone(), Value::Null);
+            }
         }
         // 求值函数体，找 @return
         for node in &func.body {

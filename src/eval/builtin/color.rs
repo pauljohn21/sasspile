@@ -7,8 +7,9 @@
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
+use im::HashMap;
 
-pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
+pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
 "invert" => match args {
 [Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
@@ -46,11 +47,147 @@ _ if !args.is_empty() => {
                 "color-channel 需要 (color, channel) 参数".into(),
             )),
         },
-        "adjust-color" | "change-color" | "scale-color" => args
-            .first()
-            .cloned()
-            .map(Some)
-            .ok_or_else(|| SassError::Eval("颜色函数需要至少 1 个参数".into())),
+        "adjust-color" => {
+            let c = match args.first() {
+                Some(Value::Color(c)) => c.clone(),
+                _ => return Err(SassError::Eval("adjust-color 需要 1 个颜色参数".into())),
+            };
+            let mut r = c.r as f64;
+            let mut g = c.g as f64;
+            let mut b = c.b as f64;
+            let mut a = c.a as f64;
+            let mut has_hsl = false;
+            let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+
+            if let Some(v) = kw_args.get("red") {
+                if let Value::Number(n, _) = v { r += *n; } else { return Err(SassError::Eval("red 需要数字".into())); }
+            }
+            if let Some(v) = kw_args.get("green") {
+                if let Value::Number(n, _) = v { g += *n; } else { return Err(SassError::Eval("green 需要数字".into())); }
+            }
+            if let Some(v) = kw_args.get("blue") {
+                if let Value::Number(n, _) = v { b += *n; } else { return Err(SassError::Eval("blue 需要数字".into())); }
+            }
+            if let Some(v) = kw_args.get("alpha") {
+                if let Value::Number(n, _) = v { a += *n; } else { return Err(SassError::Eval("alpha 需要数字".into())); }
+            }
+            if let Some(v) = kw_args.get("hue") {
+                if let Value::Number(n, _) = v { h = (h + *n).rem_euclid(360.0); has_hsl = true; }
+            }
+            if let Some(v) = kw_args.get("saturation") {
+                if let Value::Number(n, _) = v { s = (s + *n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
+            }
+            if let Some(v) = kw_args.get("lightness") {
+                if let Value::Number(n, _) = v { l = (l + *n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
+            }
+            if has_hsl {
+                let new_c = Evaluator::hsl_to_rgb(h, s, l);
+                r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+            }
+            Ok(Some(Value::Color(Color::rgba(
+                r.round().clamp(0.0, 255.0) as u8,
+                g.round().clamp(0.0, 255.0) as u8,
+                b.round().clamp(0.0, 255.0) as u8,
+                a.clamp(0.0, 1.0) as f32,
+            ))))
+        }
+        "change-color" => {
+            let c = match args.first() {
+                Some(Value::Color(c)) => c.clone(),
+                _ => return Err(SassError::Eval("change-color 需要 1 个颜色参数".into())),
+            };
+            let mut r = c.r as f64;
+            let mut g = c.g as f64;
+            let mut b = c.b as f64;
+            let mut a = c.a as f64;
+            let mut has_hsl = false;
+            let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+
+            if let Some(v) = kw_args.get("red") {
+                if let Value::Number(n, _) = v { r = *n; }
+            }
+            if let Some(v) = kw_args.get("green") {
+                if let Value::Number(n, _) = v { g = *n; }
+            }
+            if let Some(v) = kw_args.get("blue") {
+                if let Value::Number(n, _) = v { b = *n; }
+            }
+            if let Some(v) = kw_args.get("alpha") {
+                if let Value::Number(n, _) = v { a = *n; }
+            }
+            if let Some(v) = kw_args.get("hue") {
+                if let Value::Number(n, _) = v { h = (*n).rem_euclid(360.0); has_hsl = true; }
+            }
+            if let Some(v) = kw_args.get("saturation") {
+                if let Value::Number(n, _) = v { s = (*n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
+            }
+            if let Some(v) = kw_args.get("lightness") {
+                if let Value::Number(n, _) = v { l = (*n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
+            }
+            if has_hsl {
+                let new_c = Evaluator::hsl_to_rgb(h, s, l);
+                r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+            }
+            Ok(Some(Value::Color(Color::rgba(
+                r.round().clamp(0.0, 255.0) as u8,
+                g.round().clamp(0.0, 255.0) as u8,
+                b.round().clamp(0.0, 255.0) as u8,
+                a.clamp(0.0, 1.0) as f32,
+            ))))
+        }
+        "scale-color" => {
+            let c = match args.first() {
+                Some(Value::Color(c)) => c.clone(),
+                _ => return Err(SassError::Eval("scale-color 需要 1 个颜色参数".into())),
+            };
+            let mut r = c.r as f64;
+            let mut g = c.g as f64;
+            let mut b = c.b as f64;
+            let mut a = c.a as f64;
+            let mut has_hsl = false;
+            let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+
+            let scale_fn = |val: f64, max: f64, kw: &str, kw_args: &HashMap<String, Value>| -> Result<f64> {
+                if let Some(Value::Number(n, _)) = kw_args.get(kw) {
+                    let pct = *n / 100.0;
+                    if pct >= 0.0 {
+                        Ok(val + (max - val) * pct)
+                    } else {
+                        Ok(val + val * pct)
+                    }
+                } else {
+                    Ok(val)
+                }
+            };
+            r = scale_fn(r, 255.0, "red", kw_args)?;
+            g = scale_fn(g, 255.0, "green", kw_args)?;
+            b = scale_fn(b, 255.0, "blue", kw_args)?;
+            a = scale_fn(a, 1.0, "alpha", kw_args)?;
+            if kw_args.contains_key("hue") {
+                // hue 的 scale 是调整角度，但 Sass 中 hue 不支持 scale（会报错）
+                // 这里简单处理：忽略 hue scale
+            }
+            if kw_args.contains_key("saturation") {
+                s = scale_fn(s * 100.0, 100.0, "saturation", kw_args)? / 100.0;
+                s = s.clamp(0.0, 1.0);
+                has_hsl = true;
+            }
+            if kw_args.contains_key("lightness") {
+                l = scale_fn(l * 100.0, 100.0, "lightness", kw_args)? / 100.0;
+                l = l.clamp(0.0, 1.0);
+                has_hsl = true;
+            }
+            if has_hsl {
+                let new_c = Evaluator::hsl_to_rgb(h, s, l);
+                r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+            }
+            Ok(Some(Value::Color(Color::rgba(
+                r.round().clamp(0.0, 255.0) as u8,
+                g.round().clamp(0.0, 255.0) as u8,
+                b.round().clamp(0.0, 255.0) as u8,
+                a.clamp(0.0, 1.0) as f32,
+            ))))
+        }
         "hwb" => {
             // 展开空格分隔的 List（CSS hwb() 语法：hwb(0deg 30% 40%)）
             // 仅接受非 bracketed、恰好 3 元素的 space-separated list

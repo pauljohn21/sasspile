@@ -16,8 +16,9 @@ fn test_string_display() {
 
 #[test]
 fn test_color_display() {
-    assert_eq!(Value::Color(Color::rgb(255, 0, 0)).to_string(), "#ff0000");
-    assert_eq!(Value::Color(Color::rgb(0, 0, 0)).to_string(), "#000000");
+    // 命名颜色反向查找：rgb(255,0,0) → "red", rgb(0,0,0) → "black"
+    assert_eq!(Value::Color(Color::rgb(255, 0, 0)).to_string(), "red");
+    assert_eq!(Value::Color(Color::rgb(0, 0, 0)).to_string(), "black");
     assert_eq!(
         Value::Color(Color::rgba(0, 0, 0, 0.5)).to_string(),
         "rgba(0, 0, 0, 0.5)"

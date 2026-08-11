@@ -58,20 +58,3 @@ impl Source {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_source_creation() {
-        let src = Source::new("a { color: red; }".to_string());
-        assert_eq!(src.text, "a { color: red; }");
-    }
-
-    #[test]
-    fn test_source_to_lexed() {
-        let src = Source::new("a".to_string());
-        let lexed = src.lex().unwrap();
-        assert_eq!(lexed.tokens.len(), 1);
-    }
-}

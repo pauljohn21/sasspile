@@ -12,6 +12,112 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
 ```
 
 > **查找函数/类型/概念在哪个文件？** 见 [`docs/CODE_INDEX.md`](docs/CODE_INDEX.md)。
+> **动态查询调用关系/源码/影响范围？** 用 CodeGraph（见下方 [CodeGraph 代码导航](#codegraph-代码导航)）。
+
+## CodeGraph 代码导航
+
+项目已集成 [CodeGraph](https://github.com/the-codegraph-project/codegraph)——一个基于 SQLite 的代码知识图谱，索引了全部 56 个源文件的 700 个符号和 2,792 条调用边。
+
+> **何时用 CodeGraph vs `docs/CODE_INDEX.md`？**
+> - CODE_INDEX.md = 静态速查表（函数→文件映射），快速定位。
+> - CodeGraph = **动态查询**（调用者/被调用者/影响分析/源码查看），支持追溯和影响分析。
+> - **优先使用 CodeGraph** 进行调用链路追踪和修改影响分析，避免手动逐文件读取。
+
+### 索引管理
+
+```bash
+# 查看索引状态（文件数/节点数/边数/是否最新）
+codegraph status
+
+# 修改源码后同步增量索引
+codegraph sync
+
+# 从零重建完整索引（大改动后推荐）
+codegraph index -v
+```
+
+### 查询命令
+
+```bash
+# 搜索符号（按名称模糊匹配）
+codegraph query eval_value
+codegraph query -k function "parse_"     # 按类型过滤（function/method/struct/enum/...）
+codegraph query -l 20 "color"            # 增加结果上限
+
+# 查看符号源码 + 调用者/被调用者链路（一站式，无需 Read 文件）
+codegraph node eval_node                 # 直接输出源码 + Calls→ / Called-by← 链路
+codegraph node -f src/eval/mod.rs       # 文件模式：带行号读取文件 + 依赖列表
+codegraph node -f src/eval/mod.rs --offset 250 --limit 30  # 读取指定行范围
+
+# 查找调用者（谁调了这个函数？）
+codegraph callers apply_extends          # 修改函数前先看影响面
+
+# 查找被调用者（这个函数调了谁？）
+codegraph callees eval_node
+
+# 影响分析（修改某符号会影响哪些代码？——推荐修改前运行）
+codegraph impact eval_value              # 默认深度 2
+codegraph impact -d 3 eval_value         # 增加深度
+
+# 一次性探索某个领域（源码 + 调用路径）
+codegraph explore "color conversion functions"
+codegraph explore "module loading and file resolution"
+
+# 查看项目文件结构（含符号数量）
+codegraph files
+
+# 查找受影响的测试文件（修改源码后跑哪些测试？）
+codegraph affected src/eval/color.rs src/eval/value.rs
+```
+
+### 典型工作流
+
+#### 1. 修 bug 前的链路追踪
+
+```bash
+# Step 1: 找到目标函数的位置和源码
+codegraph node eval_value
+
+# Step 2: 查看谁调了它（上游影响面）
+codegraph callers eval_value
+
+# Step 3: 查看它调了谁（下游依赖）
+codegraph callees eval_value
+
+# Step 4: 完整影响分析
+codegraph impact eval_value
+```
+
+#### 2. 重构前的影响评估
+
+```bash
+# 评估修改某函数的波及范围
+codegraph impact -d 3 call_builtin
+
+# 找到需要回归测试的测试文件
+codegraph affected src/eval/builtin.rs
+```
+
+#### 3. 探索不熟悉的代码区域
+
+```bash
+# 用自然语言描述探索目标
+codegraph explore "extend selector inheritance"
+# 输出：相关符号源码 + 调用路径，一站式获取上下文
+```
+
+### 索引统计（2026-08-11）
+
+| 指标 | 数值 |
+|------|------|
+| 文件数 | 56 |
+| 节点数 | 700 |
+| 边数 | 2,792 |
+| 函数 | 201 |
+| 方法 | 182 |
+| 枚举成员 | 123 |
+| 结构体 | 22 |
+| 枚举 | 11 |
 
 ## 强制规则
 
@@ -21,16 +127,16 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
 
 ```bash
 # 追踪错误链路
-RUST_LOG=info cargo test --lib test_debug_bs_close -- --nocapture
+RUST_LOG=info cargo test --test compile_test test_debug_bs_close -- --nocapture
 
 # 完整 span 嵌套
-RUST_LOG=debug cargo test --lib test_debug_bs_close -- --nocapture
+RUST_LOG=debug cargo test --test compile_test test_debug_bs_close -- --nocapture
 
 # Per-target 过滤（只看颜色相关 events）
-RUST_LOG="sasspile::color=debug" cargo test --lib -- --nocapture
+RUST_LOG="sasspile::color=debug" cargo test --test compile_test -- --nocapture
 
 # 组合多个 target
-RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --lib -- --nocapture
+RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --test compile_test -- --nocapture
 ```
 
 详见 `.claude/skills/tracing-debug/SKILL.md`。
@@ -52,11 +158,19 @@ RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --lib -- --noc
 - 模块用 `//!` 文档注释
 - 禁止 `unwrap()` 生产代码——用 `?` / `expect()` / `unwrap_or()`
 - 关键函数用 `#[instrument]` 或手动 span 追踪
+- **禁止 `eprintln!`/`println!`**——所有代码（含 src/ 和 tests/）一律用 `tracing` 宏
+- **禁止 `#[cfg(test)]` 内联测试**——所有测试放在 `tests/` 目录，`src/` 保持纯生产代码
 
 ### 5. 测试规范
 
-- lib 测试：37 个，必须全通过 `cargo test --lib`
-- diff 测试：5 个，`cargo test --test common_test`
+**物理隔离原则**：所有测试代码放在 `tests/` 目录，`src/` 中不包含 `#[cfg(test)]` 块。
+
+**Tracing 原则**：测试和 CLI 中禁止使用 `eprintln!`/`println!`，一律用 `tracing` 宏（`info!`/`warn!`/`error!`/`debug!`）。
+
+- compile 测试：28 个，`cargo test --test compile_test`（编译管线端到端测试）
+- stage 测试：10 个，`cargo test --test stage_test`（阶段类型 + CSS Serializer 单元测试）
+- ast 测试：8 个，`cargo test --test ast_test`（AST Display 测试）
+- diff 测试：5 个，`cargo test --test common_test`（CSS diff 工具测试）
 - Bootstrap 全量：`cargo test --test bs_spec -- --nocapture`（15 个测试，`bootstrap.scss` 全量编译通过）
 - Element Plus 全量：`cargo test --test ep_full -- --nocapture`（121/121 100% 通过）
 - sass-spec 全量：`cargo test --test sass_spec_full test_sass_spec_full_stats`
@@ -70,8 +184,14 @@ RUST_LOG="sasspile::color=trace,sasspile::extend=info" cargo test --lib -- --noc
 # 编译检查
 cargo check
 
-# 运行 lib 测试（37 个）
-cargo test --lib
+# 运行 compile 测试（28 个，秒级）
+cargo test --test compile_test
+
+# 运行 stage 测试（10 个，秒级）
+cargo test --test stage_test
+
+# 运行 ast 测试（8 个，秒级）
+cargo test --test ast_test
 
 # 运行 diff 测试（5 个）
 cargo test --test common_test
@@ -95,11 +215,11 @@ RUST_LOG="cssdiff=debug" cargo test --test cf_diag diag_<subdir> -- --nocapture
 RUST_LOG="minimize=info" cargo test --test minimize minimize_color_error -- --nocapture
 
 # 追踪错误链路
-RUST_LOG=debug cargo test --lib test_debug_bs_close -- --nocapture
+RUST_LOG=debug cargo test --test compile_test test_debug_bs_close -- --nocapture
 
 # Per-target 过滤
-RUST_LOG="sasspile::color=trace" cargo test --lib -- --nocapture
-RUST_LOG="sasspile::extend=debug,sasspile::binop=trace" cargo test --lib -- --nocapture
+RUST_LOG="sasspile::color=trace" cargo test --test compile_test -- --nocapture
+RUST_LOG="sasspile::extend=debug,sasspile::binop=trace" cargo test --test compile_test -- --nocapture
 ```
 
 ## Tracing 架构
@@ -161,8 +281,8 @@ apply_extends (n_extends) → 递归遍历 CSS 树
 
 ```
 src/
-├── lib.rs            (357)  公共 API + init_tracing
-├── main.rs           (36)
+├── lib.rs            (283)  公共 API + init_tracing（无内联测试）
+├── main.rs           (29)
 ├── error.rs          (80)
 ├── css/
 │   ├── mod.rs        (358)  Serializer
@@ -206,7 +326,7 @@ src/
 ## 当前状态
 
 - sass-spec: 1843/5069 (36%)
-- 37 lib 测试 + 5 diff 测试全通过
+- 28 compile + 10 stage + 8 ast + 5 diff 测试全通过（物理隔离，全部在 tests/ 目录）
 - Bootstrap 5.3.8：`bootstrap.scss` 全量编译通过 ✅
 - Element Plus：121/121 (100%) 全量通过 ✅
 - 最大源文件 623 行（`parse/expr.rs`），3 个文件超 500 行（expr.rs/color.rs/value.rs 待拆分）
@@ -222,17 +342,23 @@ src/
 修复后必须运行以下全部验证，确认无回归：
 
 ```bash
-# 1. lib 测试（37 个，秒级）
-cargo test --lib
+# 1. compile 测试（28 个，秒级）
+cargo test --test compile_test
 
-# 2. diff 测试（5 个，秒级）
+# 2. stage 测试（10 个，秒级）
+cargo test --test stage_test
+
+# 3. ast 测试（8 个，秒级）
+cargo test --test ast_test
+
+# 4. diff 测试（5 个，秒级）
 cargo test --test common_test
 
-# 3. Bootstrap 全量编译（15 个测试，秒级）
+# 5. Bootstrap 全量编译（15 个测试，秒级）
 cargo test --test bs_spec -- --nocapture
 
-# 4. Element Plus 全量编译（121 个文件，约 25 秒）
+# 6. Element Plus 全量编译（121 个文件，约 25 秒）
 cargo test --test ep_full -- --nocapture
 ```
 
-**全部通过标准**：lib 37/37 + diff 5/5 + BS 15/15 + EP 121/121
+**全部通过标准**：compile 28/28 + stage 10/10 + ast 8/8 + diff 5/5 + BS 15/15 + EP 121/121

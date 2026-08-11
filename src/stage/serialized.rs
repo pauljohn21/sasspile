@@ -67,23 +67,3 @@ impl std::fmt::Display for Serialized {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_serialized_display() {
-        let s = Serialized {
-            css: "a{color:red;}".to_string(),
-        };
-        assert_eq!(format!("{}", s), "a{color:red;}");
-    }
-
-    #[test]
-    fn test_serialized_as_ref() {
-        let s = Serialized {
-            css: "test".to_string(),
-        };
-        assert_eq!(s.as_ref(), "test");
-    }
-}

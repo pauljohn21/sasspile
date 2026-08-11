@@ -370,22 +370,37 @@ impl Evaluator {
                 url,
                 show: _,
                 hide: _,
-                prefix: _,
+                prefix,
             } => {
-                // @forward 'url' —— 转发模块成员到当前作用域（简化版：同 @import）
+                // @forward 'url' —— 转发模块成员到当前作用域
+                // as prefix-* 时，成员名加前缀（如 c → d-c）
                 let base = env.base_path.as_ref();
                 let load_paths = env.get_load_paths();
                 if let Some(path) = Self::resolve_file(base, url, load_paths) {
                     let exports = Self::load_module(&path, &[], env)?;
                     let mut new_env = env.clone();
-                    for (k, v) in &exports.vars {
-                        new_env = new_env.bind(k.clone(), v.clone());
-                    }
-                    for (k, v) in &exports.mixins {
-                        new_env = new_env.define_mixin(k.clone(), v.clone());
-                    }
-                    for (k, v) in &exports.functions {
-                        new_env = new_env.define_function(k.clone(), v.clone());
+                    if let Some(prefix) = prefix {
+                        // 带前缀重映射：c → prefix-c
+                        for (k, v) in &exports.vars {
+                            new_env = new_env.bind(format!("{prefix}{k}"), v.clone());
+                        }
+                        for (k, v) in &exports.mixins {
+                            new_env = new_env.define_mixin(format!("{prefix}{k}"), v.clone());
+                        }
+                        for (k, v) in &exports.functions {
+                            new_env = new_env.define_function(format!("{prefix}{k}"), v.clone());
+                        }
+                    } else {
+                        // 无前缀：原样绑定
+                        for (k, v) in &exports.vars {
+                            new_env = new_env.bind(k.clone(), v.clone());
+                        }
+                        for (k, v) in &exports.mixins {
+                            new_env = new_env.define_mixin(k.clone(), v.clone());
+                        }
+                        for (k, v) in &exports.functions {
+                            new_env = new_env.define_function(k.clone(), v.clone());
+                        }
                     }
                     return Ok((exports.css, new_env));
                 }

@@ -1,4 +1,6 @@
 //! core_functions/color 诊断——显示错误模式统计。
+//!
+//! 使用 tracing 进行问题追踪，不使用 println!。
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -116,11 +118,12 @@ fn color_error_patterns() {
         }
     }
 
-    println!("color: {pass} pass / {fail} fail");
-    println!("\n错误模式 (top 20):");
+    sasspile::init_tracing();
+    tracing::info!(pass = pass, fail = fail, "color 诊断");
+    tracing::info!("错误模式 (top 20):");
     let mut sorted: Vec<_> = patterns.into_iter().collect();
     sorted.sort_by(|a, b| b.1.cmp(&a.1));
     for (k, v) in sorted.iter().take(20) {
-        println!("  {v:5} {k}");
+        tracing::info!(count = *v, pattern = %k, "错误模式");
     }
 }

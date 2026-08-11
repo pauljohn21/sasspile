@@ -13,30 +13,30 @@ use super::*;
 use crate::error::{Result, SassError};
 
 impl Evaluator {
-    pub(crate) fn call_builtin(name: &str, args: &[Value], env: &Env) -> Result<Value> {
+    pub(crate) fn call_builtin(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
         // CSS 函数名大小写不敏感（如 RGBA == rgba）
         let name = name.to_lowercase();
-        let span = tracing::info_span!("call_builtin", name = %name, n_args = args.len());
+        let span = tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
         match name.as_str() {
             // ── math ──
-            "abs" => match args {
+            "abs" => match pos_args {
                 [Value::Number(n, u)] => Ok(Value::Number(n.abs(), u.clone())),
                 _ => Err(SassError::Eval("abs 需要 1 个数字参数".into())),
             },
-            "ceil" => match args {
+            "ceil" => match pos_args {
                 [Value::Number(n, u)] => Ok(Value::Number(n.ceil(), u.clone())),
                 _ => Err(SassError::Eval("ceil 需要 1 个数字参数".into())),
             },
-            "floor" => match args {
+            "floor" => match pos_args {
                 [Value::Number(n, u)] => Ok(Value::Number(n.floor(), u.clone())),
                 _ => Err(SassError::Eval("floor 需要 1 个数字参数".into())),
             },
-            "round" => match args {
+            "round" => match pos_args {
                 [Value::Number(n, u)] => Ok(Value::Number(n.round(), u.clone())),
                 _ => Err(SassError::Eval("round 需要 1 个数字参数".into())),
             },
-            "min" => args
+            "min" => pos_args
                 .iter()
                 .try_fold(Value::Number(f64::INFINITY, None), |acc, v| {
                     match (acc, v) {
@@ -46,7 +46,7 @@ impl Evaluator {
                         _ => Err(SassError::Eval("min 需要数字参数".into())),
                     }
                 }),
-            "max" => args
+            "max" => pos_args
                 .iter()
                 .try_fold(Value::Number(f64::NEG_INFINITY, None), |acc, v| {
                     match (acc, v) {
@@ -56,11 +56,11 @@ impl Evaluator {
                         _ => Err(SassError::Eval("max 需要数字参数".into())),
                     }
                 }),
-            "percentage" => match args {
+            "percentage" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n * 100.0, Some("%".into()))),
                 _ => Err(SassError::Eval("percentage 需要 1 个数字参数".into())),
             },
-            "math.div" | "div" => match args {
+            "math.div" | "div" => match pos_args {
                 [Value::Number(a, u1), Value::Number(b, _)] => {
                     if *b == 0.0 {
                         if *a == 0.0 {
@@ -72,31 +72,56 @@ impl Evaluator {
                 }
                 _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
             },
-            "pow" => match args {
-                [Value::Number(a, _), Value::Number(b, _)] => Ok(Value::Number(a.powf(*b), None)),
-                _ => Err(SassError::Eval("pow 需要 2 个数字参数".into())),
+            "pow" => {
+                let (a, b) = if pos_args.len() == 2 {
+                    match (&pos_args[0], &pos_args[1]) {
+                        (Value::Number(a, _), Value::Number(b, _)) => (*a, *b),
+                        _ => return Err(SassError::Eval("pow 需要 2 个数字参数".into())),
+                    }
+                } else if pos_args.len() == 1 {
+                    let a = match &pos_args[0] {
+                        Value::Number(a, _) => *a,
+                        _ => return Err(SassError::Eval("pow 需要 2 个数字参数".into())),
+                    };
+                    let b = match kw_args.get("exponent") {
+                        Some(Value::Number(b, _)) => *b,
+                        _ => return Err(SassError::Eval("pow 需要 exponent 参数".into())),
+                    };
+                    (a, b)
+                } else {
+                    let a = match kw_args.get("base") {
+                        Some(Value::Number(a, _)) => *a,
+                        _ => return Err(SassError::Eval("pow 需要 base 参数".into())),
+                    };
+                    let b = match kw_args.get("exponent") {
+                        Some(Value::Number(b, _)) => *b,
+                        _ => return Err(SassError::Eval("pow 需要 exponent 参数".into())),
+                    };
+                    (a, b)
+                };
+                Ok(Value::Number(a.powf(b), None))
             },
-            "sqrt" => match args {
+            "sqrt" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n.sqrt(), None)),
                 _ => Err(SassError::Eval("sqrt 需要 1 个数字参数".into())),
             },
-            "sin" => match args {
+            "sin" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n.sin(), None)),
                 _ => Err(SassError::Eval("sin 需要 1 个参数".into())),
             },
-            "cos" => match args {
+            "cos" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n.cos(), None)),
                 _ => Err(SassError::Eval("cos 需要 1 个参数".into())),
             },
-            "tan" => match args {
+            "tan" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n.tan(), None)),
                 _ => Err(SassError::Eval("tan 需要 1 个参数".into())),
             },
-            "log" => match args {
+            "log" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n.ln(), None)),
                 _ => Err(SassError::Eval("log 需要 1 个数字参数".into())),
             },
-            "random" => match args {
+            "random" => match pos_args {
                 [] => Ok(Value::Number(Self::simple_random(), None)),
                 [Value::Number(n, _)] => Ok(Value::Number(
                     (Self::simple_random() * n).floor() + 1.0,
@@ -104,7 +129,7 @@ impl Evaluator {
                 )),
                 _ => Err(SassError::Eval("random 需要 0-1 个参数".into())),
             },
-            "clamp" => match args {
+            "clamp" => match pos_args {
                 [
                     Value::Number(min, _),
                     Value::Number(val, _),
@@ -112,28 +137,28 @@ impl Evaluator {
                 ] => Ok(Value::Number(val.max(*min).min(*max), None)),
                 _ => Err(SassError::Eval("clamp 需要 3 个数字参数".into())),
             },
-            "unit" => match args {
+            "unit" => match pos_args {
                 [Value::Number(_, Some(u))] => Ok(Value::String(u.clone(), false)),
                 [Value::Number(_, None)] => Ok(Value::String("".into(), false)),
                 _ => Err(SassError::Eval("unit 需要 1 个数字参数".into())),
             },
-            "is-unitless" => match args {
+            "is-unitless" => match pos_args {
                 [Value::Number(_, None)] => Ok(Value::Bool(true)),
                 [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),
                 _ => Err(SassError::Eval("is-unitless 需要 1 个数字参数".into())),
             },
-            "unitless" => match args {
+            "unitless" => match pos_args {
                 [Value::Number(_, None)] => Ok(Value::Bool(true)),
                 [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),
                 _ => Err(SassError::Eval("unitless 需要 1 个数字参数".into())),
             },
-            "compatible" => match args {
+            "compatible" => match pos_args {
                 [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
                     Self::units_compatible(u1.as_deref(), u2.as_deref()),
                 )),
                 _ => Err(SassError::Eval("compatible 需要 2 个数字参数".into())),
             },
-            "comparable" => match args {
+            "comparable" => match pos_args {
                 [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
                     Self::units_compatible(u1.as_deref(), u2.as_deref()),
                 )),
@@ -141,34 +166,34 @@ impl Evaluator {
             },
 
             // ── color ──
-            "rgba" => Self::builtin_rgba(args),
-            "rgb" => Self::builtin_rgba(args),
-            "darken" => Self::builtin_darken(args),
-            "lighten" => Self::builtin_lighten(args),
-            "mix" => Self::builtin_mix(args),
+            "rgba" => Self::builtin_rgba(pos_args),
+            "rgb" => Self::builtin_rgba(pos_args),
+            "darken" => Self::builtin_darken(pos_args),
+            "lighten" => Self::builtin_lighten(pos_args),
+            "mix" => Self::builtin_mix(pos_args),
             "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
             | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue" | "saturate"
             | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
             | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness" => {
-                color::call(&name, args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
+                color::call(&name, pos_args, kw_args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── map ──
             "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge" | "map-remove"
             | "map-set" | "map-deep-merge" | "map-deep-remove" => {
-                Self::call_map_builtin(&name, args, env)?
+                Self::call_map_builtin(&name, pos_args, env)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── string ──
             "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
             | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id" => {
-                Self::call_string_builtin(&name, args)?
+                Self::call_string_builtin(&name, pos_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── meta ──
-            "type-of" => match args {
+            "type-of" => match pos_args {
                 [Value::Number(..)] => Ok(Value::String("number".into(), false)),
                 [Value::String(..)] => Ok(Value::String("string".into(), false)),
                 [Value::Color(..)] => Ok(Value::String("color".into(), false)),
@@ -178,11 +203,11 @@ impl Evaluator {
                 [Value::Null] => Ok(Value::String("null".into(), false)),
                 _ => Ok(Value::String("unknown".into(), false)),
             },
-            "inspect" => match args {
+            "inspect" => match pos_args {
                 [v] => Ok(Value::String(Self::inspect_value(v), false)),
                 _ => Err(SassError::Eval("inspect 需要 1 个参数".into())),
             },
-            "if" => match args {
+            "if" => match pos_args {
                 [cond, t, f] => Ok(if Self::is_truthy(cond) {
                     t.clone()
                 } else {
@@ -191,34 +216,37 @@ impl Evaluator {
                 _ => Err(SassError::Eval("if 需要 3 个参数".into())),
             },
             "mixin-exists" => Ok(Value::Bool(false)),
-            "function-exists" => match args {
+            "function-exists" => match pos_args {
                 [Value::String(name, _)] => Ok(Value::Bool(env.get_function(name).is_some())),
                 _ => Ok(Value::Bool(false)),
             },
-            "global-variable-exists" => match args {
+            "global-variable-exists" => match pos_args {
                 [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
                 _ => Ok(Value::Bool(false)),
             },
-            "variable-exists" => match args {
+            "variable-exists" => match pos_args {
                 [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
                 _ => Ok(Value::Bool(false)),
             },
-            "get-function" => match args {
+            "get-function" => match pos_args {
                 [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
                 _ => Err(SassError::Eval("get-function 需要 1 个参数".into())),
             },
-            "call" => match args {
-                [Value::String(fname, _), rest @ ..] => Self::call_function(fname, rest, env),
+            "call" => match pos_args {
+                [Value::String(fname, _), rest @ ..] => {
+                    let empty_kw = HashMap::new();
+                    Self::call_function(fname, rest, &empty_kw, env)
+                }
                 _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
             },
-            "keywords" => match args {
+            "keywords" => match pos_args {
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
             },
 
             // ── CSS 原生函数——原样保留 ──
             "calc" | "env" | "var" => {
-                let arg_str = args
+                let arg_str = pos_args
                     .iter()
                     .map(|a| a.to_string())
                     .collect::<Vec<_>>()
@@ -229,7 +257,7 @@ impl Evaluator {
             // ── list 子模块分派 ──
             "length" | "list-length" | "nth" | "append" | "join" | "index" | "list-separator"
             | "separator" | "set-nth" | "is-bracketed" | "list-slash" | "zip" => {
-                list::call(&name, args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
+                list::call(&name, pos_args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── selector 子模块分派 ──
@@ -239,12 +267,12 @@ impl Evaluator {
             | "selector-parse"
             | "selector-simple-selectors"
             | "selector-unify"
-            | "selector-extend" => selector::call(&name, args)?
+            | "selector-extend" => selector::call(&name, pos_args)?
                 .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
 
             // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
             _ if Self::is_css_function(&name) => {
-                let arg_str = args
+                let arg_str = pos_args
                     .iter()
                     .map(|a| a.to_string())
                     .collect::<Vec<_>>()

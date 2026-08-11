@@ -244,15 +244,15 @@ fn minimize_color_error() {
             for (name, input, _expected) in &parse_hrx(&content) {
                 if sasspile::compile_expanded(input).is_err() {
                     let minimized = minimize(input, &FailOracle::Error);
-                    println!("=== {stem}/{name} ===");
-                    println!("原始 ({} bytes):\n{input}", input.len());
-                    println!("最小化 ({} bytes):\n{minimized}", minimized.len());
+                    tracing::info!(test = %format!("{stem}/{name}"), "=== 最小化结果 ===");
+                    tracing::info!(original_bytes = input.len(), input = %input, "原始");
+                    tracing::info!(minimized_bytes = minimized.len(), minimized = %minimized, "最小化");
                     return; // 只处理第一个错误用例
                 }
             }
         }
     }
-    println!("no error cases found in core_functions/color");
+    tracing::info!("no error cases found in core_functions/color");
 }
 
 #[test]
@@ -269,13 +269,13 @@ fn minimize_extend_error() {
             for (name, input, _expected) in &parse_hrx(&content) {
                 if sasspile::compile_expanded(input).is_err() {
                     let minimized = minimize(input, &FailOracle::Error);
-                    println!("=== {stem}/{name} ===");
-                    println!("原始 ({} bytes):\n{input}", input.len());
-                    println!("最小化 ({} bytes):\n{minimized}", minimized.len());
+                    tracing::info!(test = %format!("{stem}/{name}"), "=== 最小化结果 ===");
+                    tracing::info!(original_bytes = input.len(), input = %input, "原始");
+                    tracing::info!(minimized_bytes = minimized.len(), minimized = %minimized, "最小化");
                     return;
                 }
             }
         }
     }
-    println!("no error cases found in directives/extend");
+    tracing::info!("no error cases found in directives/extend");
 }

@@ -1,6 +1,8 @@
 //! core_functions 诊断——显示前 N 个失败的摘要。
 //! 集成 CSS diff 模块，逐行显示差异。
 //! 支持跨文件 @use——写入临时目录后用 compile_file_with_load_paths 编译。
+//!
+//! 使用 tracing 进行问题追踪，不使用 println!。
 
 mod common;
 use common::diff_css;
@@ -182,25 +184,23 @@ fn diag(subdir: &str, max_show: usize) {
                             // 期望错误但实际成功了
                             shown += 1;
                             *err_types.entry("expected_error_but_ok".to_string()).or_default() += 1;
-                            println!("FAIL {stem}/{name}: expected_error_but_ok");
+                            tracing::warn!(test = %format!("{stem}/{name}"), "FAIL: expected_error_but_ok");
                         } else if actual.trim() != case.expected_output.trim() {
                             shown += 1;
                             let diff = diff_css(case.expected_output.trim(), actual.trim());
                             let key = diff.classify();
                             *err_types.entry(key.to_string()).or_default() += 1;
-                            println!("FAIL {stem}/{name}: {key} ({} diffs)", diff.lines.len());
+                            tracing::warn!(test = %format!("{stem}/{name}"), kind = %key, n_diffs = diff.lines.len(), "FAIL");
                             for dl in diff.lines.iter().take(3) {
                                 match dl {
-                                    common::DiffLine::Changed {
-                                        line,
-                                        expected,
-                                        actual,
-                                    } => println!("  L{line}: exp='{expected}' act='{actual}'"),
+                                    common::DiffLine::Changed { line, expected, actual } => {
+                                        tracing::debug!(line = line, expected = %expected, actual = %actual, "diff: changed");
+                                    }
                                     common::DiffLine::ExtraExpected { line, content } => {
-                                        println!("  L{line}: exp='{content}' act=(missing)")
+                                        tracing::debug!(line = line, expected = %content, actual = "(missing)", "diff: extra_expected");
                                     }
                                     common::DiffLine::ExtraActual { line, content } => {
-                                        println!("  L{line}: exp=(missing) act='{content}'")
+                                        tracing::debug!(line = line, expected = "(missing)", actual = %content, "diff: extra_actual");
                                     }
                                 }
                             }
@@ -221,7 +221,7 @@ fn diag(subdir: &str, max_show: usize) {
                                 "other_err".to_string()
                             };
                             *err_types.entry(key.clone()).or_default() += 1;
-                            println!("ERROR {stem}/{name}: {key} [{err_str}]");
+                            tracing::warn!(test = %format!("{stem}/{name}"), kind = %key, error = %err_str, "ERROR");
                         }
                     }
                 }
@@ -229,9 +229,9 @@ fn diag(subdir: &str, max_show: usize) {
         }
     }
 
-    println!("\n错误类型统计 ({subdir}):");
+    tracing::info!(subdir = %subdir, "错误类型统计");
     for (k, v) in &err_types {
-        println!("  {k}: {v}");
+        tracing::info!(error_type = %k, count = *v, "错误类型");
     }
 }
 
@@ -384,7 +384,7 @@ fn stats_subdir(subdir: &str) {
         }
     }
     let pct = if cases > 0 { pass * 100 / cases } else { 0 };
-    println!("{subdir}: {pass}/{cases} ({pct}%) fail={fail}");
+    tracing::info!(subdir = %subdir, pass = pass, total = cases, pct = pct, fail = fail, "子目录统计");
 }
 
 #[test]

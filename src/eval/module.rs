@@ -123,7 +123,7 @@ impl Evaluator {
     }
 
     /// 模块限定函数调用。
-    pub(crate) fn call_module_function(name: &str, args: &[Value], env: &Env) -> Result<Value> {
+    pub(crate) fn call_module_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
         let span = tracing::info_span!("call_module_function", name = name);
         let _enter = span.enter();
         // 先检查文件加载的命名空间
@@ -132,7 +132,7 @@ impl Evaluator {
             let func_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns) {
                 if let Some(func) = module.functions.get(func_name) {
-                    return Self::call_user_function(func, args, env);
+                    return Self::call_user_function(func, pos_args, kw_args, env);
                 }
             }
         }
@@ -236,6 +236,6 @@ impl Evaluator {
             "selector.extend" => "selector-extend",
             _ => name,
         };
-        Self::call_builtin(builtin_name, args, env)
+        Self::call_builtin(builtin_name, pos_args, kw_args, env)
     }
 }

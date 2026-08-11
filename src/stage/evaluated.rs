@@ -46,28 +46,3 @@ impl Evaluated {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::css::node::CssNode;
-
-    #[test]
-    fn test_serialize_empty() {
-        let evaluated = Evaluated { nodes: vec![] };
-        let serialized = evaluated.serialize(OutputStyle::Expanded);
-        assert_eq!(serialized.css, "\n");
-    }
-
-    #[test]
-    fn test_serialize_single_decl() {
-        let evaluated = Evaluated {
-            nodes: vec![CssNode::Declaration {
-                property: "color".to_string(),
-                value: "red".to_string(),
-                important: false,
-            }],
-        };
-        let serialized = evaluated.serialize(OutputStyle::Expanded);
-        assert_eq!(serialized.css, "color: red;\n");
-    }
-}

@@ -1,6 +1,15 @@
 # sasspile 代码索引
 
 > 查找函数/类型/概念在哪个文件？查这张表。
+>
+> **动态查询**（调用者/被调用者/影响分析/源码查看）请用 CodeGraph：
+> ```bash
+> codegraph node eval_node           # 查看符号源码 + 调用链路
+> codegraph callers apply_extends   # 谁调了这个函数？
+> codegraph impact eval_value       # 修改影响范围分析
+> codegraph explore "color conversion"  # 探索某领域
+> ```
+> 详见 [`AGENTS.md`](../AGENTS.md#codegraph-代码导航) CodeGraph 章节。
 
 ## 文件 → 职责速查
 

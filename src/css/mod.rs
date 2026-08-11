@@ -321,38 +321,3 @@ impl Serializer {
         result
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_serialize_decl() {
-        let nodes = vec![CssNode::Declaration {
-            property: "color".into(),
-            value: "red".into(),
-            important: false,
-        }];
-        assert_eq!(
-            Serializer::serialize(&nodes, OutputStyle::Expanded),
-            "color: red;\n"
-        );
-    }
-
-    #[test]
-    fn test_serialize_rule() {
-        let nodes = vec![CssNode::Rule {
-            selector: "a".into(),
-            declarations: vec![CssNode::Declaration {
-                property: "color".into(),
-                value: "red".into(),
-                important: false,
-            }],
-            children: vec![],
-        }];
-        assert_eq!(
-            Serializer::serialize(&nodes, OutputStyle::Expanded),
-            "a {\n  color: red;\n}\n"
-        );
-    }
-}

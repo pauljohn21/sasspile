@@ -179,6 +179,14 @@ impl<'tok> Parser<'tok> {
     pub(crate) fn parse_include(&mut self) -> Result<Node> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
+        // 命名空间限定 mixin（如 midstream.b-a）
+        let name = if self.peek() == Some(&Token::Dot) {
+            self.advance();
+            let rest = self.parse_ident_name()?;
+            format!("{name}.{rest}")
+        } else {
+            name
+        };
         self.skip_ws();
         let args = if self.peek() == Some(&Token::LParen) {
             self.parse_args()?
@@ -269,6 +277,7 @@ impl<'tok> Parser<'tok> {
         let mut prefix = None;
         self.skip_ws();
         if self.peek_keyword("as") {
+            self.advance(); // 消费 as
             self.skip_ws();
             // as prefix-*
             if let Some(Token::Ident(s)) = self.peek() {
@@ -278,9 +287,13 @@ impl<'tok> Parser<'tok> {
             if self.peek() == Some(&Token::Star) {
                 self.advance();
             }
-        } else if self.peek_keyword("show") {
+            self.skip_ws();
+        }
+        if self.peek_keyword("show") {
+            self.advance(); // 消费 show
             show = self.parse_member_list();
         } else if self.peek_keyword("hide") {
+            self.advance(); // 消费 hide
             hide = self.parse_member_list();
         }
         self.skip_ws();

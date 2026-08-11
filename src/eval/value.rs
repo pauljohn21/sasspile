@@ -73,23 +73,8 @@ impl Evaluator {
                 Ok(Value::Map(evaluated))
             }
             Value::Call(name, args) => {
-                // CSS 函数透传：带命名参数的调用（如 alpha(opacity=0)）作为 CSS 原样输出
-                if args.iter().any(|a| a.name.is_some()) {
-                    let parts: Vec<String> = args
-                        .iter()
-                        .map(|a| {
-                            let v = Self::eval_value(&a.value, env)?;
-                            Ok(if let Some(n) = &a.name {
-                                format!("{n}={v}")
-                            } else {
-                                v.to_string()
-                            })
-                        })
-                        .collect::<Result<_>>()?;
-                    return Ok(Value::String(format!("{name}({})", parts.join(", ")), false));
-                }
                 // if() 惰性求值：只求值选中的分支，避免副作用和类型错误
-                if name == "if" && args.len() == 3 {
+                if name == "if" && args.len() == 3 && args.iter().all(|a| a.name.is_none()) {
                     let cond = Self::eval_value(&args[0].value, env)?;
                     if Self::is_truthy(&cond) {
                         return Self::eval_value(&args[1].value, env);
@@ -97,28 +82,42 @@ impl Evaluator {
                         return Self::eval_value(&args[2].value, env);
                     }
                 }
-                let evaluated_args: Vec<Value> = args
-                    .iter()
-                    .map(|a| Self::eval_value(&a.value, env))
-                    .collect::<Result<_>>()?;
-                // 展开 spread 参数（arg.spread=true 的参数展开为多个位置参数）
-                let mut final_args: Vec<Value> = Vec::new();
-                for (i, arg) in args.iter().enumerate() {
+                // 分离位置参数和关键字参数，展开 spread
+                let mut pos_args: Vec<Value> = Vec::new();
+                let mut kw_args: HashMap<String, Value> = HashMap::new();
+                for arg in args {
+                    let val = Self::eval_value(&arg.value, env)?;
                     if arg.spread {
-                        match &evaluated_args[i] {
-                            Value::List(items, _, _) => final_args.extend(items.iter().cloned()),
+                        match &val {
+                            Value::List(items, _, _) => pos_args.extend(items.iter().cloned()),
                             Value::Map(pairs) => {
                                 for (k, v) in pairs {
-                                    final_args.push(Value::List(vec![k.clone(), v.clone()], Separator::Space, false));
+                                    if let Value::String(key, _) = k {
+                                        kw_args.insert(key.clone(), v.clone());
+                                    }
                                 }
                             }
-                            other => final_args.push(other.clone()),
+                            other => pos_args.push(other.clone()),
                         }
+                    } else if let Some(n) = &arg.name {
+                        kw_args.insert(n.clone(), val);
                     } else {
-                        final_args.push(evaluated_args[i].clone());
+                        pos_args.push(val);
                     }
                 }
-                Self::call_function(name, &final_args, env)
+                // 尝试作为 Sass 函数调用
+                match Self::call_function(name, &pos_args, &kw_args, env) {
+                    Ok(result) => Ok(result),
+                    Err(SassError::UndefinedFunction(_)) if !kw_args.is_empty() => {
+                        // 未定义函数且有关键字参数 → CSS 透传（如 alpha(opacity=0)）
+                        let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
+                        for (k, v) in &kw_args {
+                            parts.push(format!("{k}={v}"));
+                        }
+                        Ok(Value::String(format!("{name}({})", parts.join(", ")), false))
+                    }
+                    Err(e) => Err(e),
+                }
             }
             Value::Interp(s) => Ok(Value::String(Self::eval_interp_str(s, env), false)),
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),

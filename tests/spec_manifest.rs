@@ -12,10 +12,10 @@ use std::path::{Path, PathBuf};
 pub const SKIP_DIRS: &[&str] = &[
     // —— 颜色空间转换（257 文件）—— sasspile 不支持 lab/lch/oklab/oklch 等色彩空间
     "core_functions/color/to_space",
-    // —— 颜色函数（183 文件）—— scale/adjust/change/channel/to_gamut/is_powerless/lab
-    "core_functions/color/scale",
-    "core_functions/color/adjust",
-    "core_functions/color/change",
+    // —— 颜色函数（已实现 scale/adjust/change）——
+    // "core_functions/color/scale",
+    // "core_functions/color/adjust",
+    // "core_functions/color/change",
     "core_functions/color/channel",
     "core_functions/color/to_gamut",
     "core_functions/color/is_powerless",
