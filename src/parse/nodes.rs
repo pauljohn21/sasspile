@@ -301,6 +301,7 @@ impl<'tok> Parser<'tok> {
                 break;
             }
             // 检查关键字参数 $name: value 或 name: value（如 if(else: c)）
+            // 也支持 CSS 函数语法 name=value（如 alpha(opacity=0)）
             let is_kwarg = match self.peek() {
                 Some(Token::Dollar(_)) => {
                     let next = self.tokens.get(self.pos + 1);
@@ -320,7 +321,7 @@ impl<'tok> Parser<'tok> {
                     } else {
                         next
                     };
-                    matches!(after_ws, Some(Token::Colon))
+                    matches!(after_ws, Some(Token::Colon) | Some(Token::Assign))
                 }
                 _ => false,
             };
@@ -339,7 +340,10 @@ impl<'tok> Parser<'tok> {
                     _ => unreachable!(),
                 };
                 self.skip_ws();
-                self.advance(); // 消费 :
+                // 消费 : 或 = （CSS 函数语法如 alpha(opacity=0)）
+                if matches!(self.peek(), Some(Token::Colon) | Some(Token::Assign)) {
+                    self.advance();
+                }
                 self.skip_ws();
                 (Some(n), self.parse_expr(0)?)
             } else {

@@ -111,7 +111,7 @@ impl Evaluator {
             css.append(&mut out);
             current_env = e;
         }
-        Ok((css, env.clone()))
+        Ok((css, current_env))
     }
 
     pub(crate) fn eval_while(
@@ -125,12 +125,15 @@ impl Evaluator {
         loop {
             iteration += 1;
             if iteration > MAX_DEPTH {
+                tracing::error!(iteration, cond_ast = %cond, "@while 超过 MAX_DEPTH");
                 return Err(SassError::Eval(
                     "@while 循环次数超过限制（可能是无限循环）".into(),
                 ));
             }
             let c = Self::eval_value(cond, &current_env)?;
-            if !Self::is_truthy(&c) {
+            let truthy = Self::is_truthy(&c);
+            tracing::trace!(iteration, cond_value = %c, is_truthy = truthy, "@while 条件求值");
+            if !truthy {
                 break;
             }
             let (mut out, e) = Self::eval_nodes(body, &current_env)?;
@@ -141,6 +144,6 @@ impl Evaluator {
                 return Err(SassError::Eval("@while 输出节点过多".into()));
             }
         }
-        Ok((css, env.clone()))
+        Ok((css, current_env))
     }
 }

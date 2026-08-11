@@ -229,10 +229,10 @@ mod tests {
         let main = dir.join("main.scss");
         std::fs::write(&main, "@use 'config';\na { color: config.$primary; }\n").unwrap();
         let css = compile_file(&main, OutputStyle::Expanded).unwrap();
-        assert!(
-            css.contains("#ff0000"),
-            "应该包含 config.$primary 的值: {css}"
-        );
+assert!(
+    css.contains("red") || css.contains("#ff0000"),
+    "应该包含 config.$primary 的值: {css}"
+);
         // 清理
         std::fs::remove_dir_all(&dir).ok();
     }

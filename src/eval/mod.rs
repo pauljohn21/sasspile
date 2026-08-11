@@ -55,6 +55,8 @@ pub struct Env {
 pub(crate) struct MixinDef {
     params: Vec<Param>,
     body: Vec<Node>,
+    /// mixin 定义时捕获的命名空间（使 mixin 体可访问定义模块的 @use 命名空间）。
+    captured_namespaces: HashMap<String, Rc<ModuleExports>>,
 }
 
 /// 函数定义存储。
@@ -62,6 +64,8 @@ pub(crate) struct MixinDef {
 pub(crate) struct FunctionDef {
     params: Vec<Param>,
     body: Vec<Node>,
+    /// 函数定义时捕获的命名空间（使函数体可访问定义模块的 @use 命名空间）。
+    captured_namespaces: HashMap<String, Rc<ModuleExports>>,
 }
 
 impl Env {
@@ -288,6 +292,7 @@ impl Evaluator {
                     MixinDef {
                         params: params.clone(),
                         body: body.clone(),
+                        captured_namespaces: env.namespaces.clone(),
                     },
                 );
                 Ok((vec![], new_env))
@@ -310,6 +315,7 @@ impl Evaluator {
                     FunctionDef {
                         params: params.clone(),
                         body: body.clone(),
+                        captured_namespaces: env.namespaces.clone(),
                     },
                 );
                 Ok((vec![], new_env))
@@ -386,23 +392,34 @@ impl Evaluator {
                 if url.starts_with("sass:") {
                     return Ok((vec![], env.add_module(url.clone())));
                 }
+                // CSS @import 透传：以 .css 结尾或 url() 包裹
+                if url.ends_with(".css") || url.starts_with("http://") || url.starts_with("https://") || url.starts_with("url(") {
+                    return Ok((
+                        vec![CssNode::AtRule {
+                            name: "import".to_string(),
+                            params: Some(format!("\"{url}\"")),
+                            children: vec![],
+                            has_body: false,
+                        }],
+                        env.clone(),
+                    ));
+                }
                 let base = env.base_path.as_ref();
                 let load_paths = env.get_load_paths();
                 if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    let exports = Self::load_module(&path, &[], env)?;
-                    let mut new_env = env.clone();
-                    for (k, v) in &exports.vars {
-                        new_env = new_env.bind(k.clone(), v.clone());
-                    }
-                    for (k, v) in &exports.mixins {
-                        new_env = new_env.define_mixin(k.clone(), v.clone());
-                    }
-                    for (k, v) in &exports.functions {
-                        new_env = new_env.define_function(k.clone(), v.clone());
-                    }
-                    return Ok((exports.css, new_env));
+                    // @import 内联：继承当前环境（变量/mixin/函数），使被导入文件能看到之前定义的成员
+                    return Self::load_import(&path, env);
                 }
-                Ok((vec![], env.clone()))
+                // 文件未找到——输出 CSS @import 透传
+                Ok((
+                    vec![CssNode::AtRule {
+                        name: "import".to_string(),
+                        params: Some(format!("\"{url}\"")),
+                        children: vec![],
+                        has_body: false,
+                    }],
+                    env.clone(),
+                ))
             }
             Node::Extend {
                 selector,

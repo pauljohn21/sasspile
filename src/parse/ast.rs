@@ -278,7 +278,12 @@ impl std::fmt::Display for Value {
             Value::String(s, false) => write!(f, "{s}"),
             Value::Color(c) => {
                 if (c.a - 1.0).abs() < f32::EPSILON {
-                    write!(f, "#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+                    // 检查是否为命名颜色，优先输出名称（如 red 而非 #ff0000）
+                    if let Some(name) = crate::eval::Evaluator::reverse_lookup_named_color(c) {
+                        write!(f, "{name}")
+                    } else {
+                        write!(f, "#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+                    }
                 } else {
                     write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a)
                 }

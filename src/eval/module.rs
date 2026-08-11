@@ -32,7 +32,7 @@ impl Evaluator {
         let url_path = std::path::Path::new(url);
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
         let filename = url_path
-            .file_name()
+            .file_stem() // file_stem 自动去除扩展名
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| url.to_string());
         let candidates = [
@@ -72,7 +72,7 @@ impl Evaluator {
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
         let tokens: Vec<Token> = Lexer::new(&source)
-            .filter(|t| !matches!(t.as_ref(), Ok(Token::Whitespace) | Ok(Token::Eof)))
+            .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
         let ast = crate::parse::Parser::parse(&tokens)?;
         let mut env = Env::default()
@@ -93,6 +93,35 @@ impl Evaluator {
         })
     }
 
+    /// 加载 @import 文件——内联模式：继承当前环境的所有成员。
+    ///
+    /// SCSS @import 语义：被导入文件在当前作用域执行，
+    /// 能看到之前定义的所有变量/mixin/函数，且定义的成员在导入后可见。
+    pub(crate) fn load_import(path: &Path, caller_env: &Env) -> Result<(Vec<CssNode>, Env)> {
+        let span =
+            tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
+        let _enter = span.enter();
+        // 防止循环导入导致栈溢出
+        if caller_env.depth > 50 {
+            return Ok((vec![], caller_env.clone()));
+        }
+        let source = std::fs::read_to_string(path)
+            .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+        let tokens: Vec<Token> = Lexer::new(&source)
+            .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
+            .collect::<Result<Vec<_>>>()?;
+        let ast = crate::parse::Parser::parse(&tokens)?;
+        // 继承当前环境的所有成员（变量、mixin、函数、命名空间）
+        let mut env = caller_env.clone();
+        env.base_path = Some(path.to_path_buf());
+        env.depth = caller_env.depth + 1;
+        let (css, mut final_env) = Self::eval_nodes(&ast.nodes, &env)?;
+        // 恢复调用者的 base_path 和 depth，使父作用域后续 @import 使用正确的基准目录
+        final_env.base_path = caller_env.base_path.clone();
+        final_env.depth = caller_env.depth;
+        Ok((css, final_env))
+    }
+
     /// 模块限定函数调用。
     pub(crate) fn call_module_function(name: &str, args: &[Value], env: &Env) -> Result<Value> {
         let span = tracing::info_span!("call_module_function", name = name);
@@ -111,6 +140,7 @@ impl Evaluator {
         let builtin_name = match name {
             // sass:math
             "math.abs" => "abs",
+            "math.div" => "div",
             "math.ceil" => "ceil",
             "math.floor" => "floor",
             "math.round" => "round",

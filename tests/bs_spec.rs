@@ -92,3 +92,13 @@ fn bs_variables() {
         Err(e) => tracing::error!(error = %e, "_variables.scss 编译失败"),
     }
 }
+
+#[test]
+fn bs_mixins() {
+    init_tracing();
+    let path = PathBuf::from("/Users/pauljohn/rust/bootstrap-5.3.8/scss/_mixins.scss");
+    match compile_file(&path, OutputStyle::Expanded) {
+        Ok(css) => tracing::info!(bytes = css.len(), "_mixins.scss 编译成功"),
+        Err(e) => tracing::error!(error = %e, "_mixins.scss 编译失败"),
+    }
+}

@@ -10,21 +10,30 @@ use crate::parse::ast::*;
 
 pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
     match name {
-        "invert" => match args {
-            [Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
-                255 - c.r,
-                255 - c.g,
-                255 - c.b,
-            )))),
-            _ => Err(SassError::Eval("invert 需要 1 个颜色参数".into())),
-        },
-        "grayscale" => match args {
-            [Value::Color(c)] => {
-                let avg = ((c.r as u16 + c.g as u16 + c.b as u16) / 3) as u8;
+"invert" => match args {
+[Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
+255 - c.r,
+255 - c.g,
+255 - c.b,
+)))),
+// CSS 滤镜函数透传：invert(number) 非颜色参数
+_ if !args.is_empty() => {
+let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+Ok(Some(Value::String(format!("invert({arg_str})"), false)))
+},
+_ => Err(SassError::Eval("invert 需要 1 个参数".into())),
+},
+"grayscale" => match args {
+[Value::Color(c)] => {
+let avg = ((c.r as u16 + c.g as u16 + c.b as u16) / 3) as u8;
                 Ok(Some(Value::Color(Color::rgba(avg, avg, avg, c.a))))
             }
-            _ => Err(SassError::Eval("grayscale 需要 1 个颜色参数".into())),
-        },
+_ if !args.is_empty() => {
+ let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+ Ok(Some(Value::String(format!("grayscale({arg_str})"), false)))
+ },
+ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
+ },
         "color-channel" => match args {
             [Value::Color(c), Value::String(ch, _)] => match ch.as_str() {
                 "red" => Ok(Some(Value::Number(c.r as f64, None))),

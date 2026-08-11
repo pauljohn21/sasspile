@@ -72,7 +72,13 @@ impl<'tok> Parser<'tok> {
             Ok(())
         } else {
             let found = self.peek().map(|t| t.to_string()).unwrap_or("EOF".into());
-            warn!(expected = %tok, found = %found, pos = self.pos, "expect failed");
+            let ctx_start = self.pos.saturating_sub(5);
+            let ctx_end = (self.pos + 5).min(self.tokens.len());
+            let context: Vec<String> = self.tokens[ctx_start..ctx_end]
+                .iter()
+                .map(|t| t.to_string())
+                .collect();
+            warn!(expected = %tok, found = %found, pos = self.pos, context = ?context, "expect failed");
             Err(SassError::Parse {
                 expected: tok.to_string(),
                 found,

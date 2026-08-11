@@ -206,10 +206,10 @@ impl Evaluator {
                 [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
                 _ => Err(SassError::Eval("get-function 需要 1 个参数".into())),
             },
-            "call" => match args {
-                [Value::String(fname, _), rest @ ..] => Self::call_builtin(fname, rest, env),
-                _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
-            },
+"call" => match args {
+[Value::String(fname, _), rest @ ..] => Self::call_function(fname, rest, env),
+_ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
+},
             "keywords" => match args {
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
@@ -244,8 +244,49 @@ impl Evaluator {
                     .ok_or_else(|| SassError::UndefinedFunction(name.to_string()))
             }
 
-            // ── 未匹配 → 原样输出 ──
+            // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
+            _ if Self::is_css_function(name) => {
+                let arg_str = args
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Ok(Value::String(format!("{name}({arg_str})"), false))
+            }
             _ => Err(SassError::UndefinedFunction(name.to_string())),
         }
+    }
+
+    /// 检查函数名是否为已知 CSS 原生函数（应原样输出，不求值）。
+    fn is_css_function(name: &str) -> bool {
+        matches!(
+            name,
+            // CSS 变换函数
+            "rotate" | "rotateX" | "rotateY" | "rotateZ" | "rotate3d"
+            | "translate" | "translateX" | "translateY" | "translateZ" | "translate3d"
+            | "scale" | "scaleX" | "scaleY" | "scaleZ" | "scale3d"
+            | "skew" | "skewX" | "skewY" | "matrix" | "matrix3d" | "perspective"
+            // CSS 滤镜函数
+            | "blur" | "brightness" | "contrast" | "drop-shadow"
+            | "grayscale" | "hue-rotate" | "invert" | "opacity" | "saturate" | "sepia"
+            // CSS 渐变函数
+            | "linear-gradient" | "radial-gradient" | "conic-gradient"
+            | "repeating-linear-gradient" | "repeating-radial-gradient"
+            | "repeating-conic-gradient"
+            // CSS 其他函数
+            | "cubic-bezier" | "steps" | "frames" | "path" | "paint" | "image"
+            | "cross-fade" | "element" | "counter" | "counters" | "symbols"
+            | "attr" | "fit-content" | "min-content" | "max-content"
+            | "repeat" | "minmax" | "clamp" | "calc" | "env" | "var" | "url"
+            | "hsl" | "hsla" | "lab" | "lch" | "oklab" | "oklch"
+            | "color" | "color-mix" | "color-contrast"
+            | "gradient" | "icrgb" | "device-cmyk"
+            // CSS 形状函数
+            | "circle" | "ellipse" | "inset" | "polygon" | "rect" | "xywh" | "ray"
+            // CSS 网格函数
+            | "grid" | "subgrid"
+            // CSS 动画函数
+            | "spring" | "scroll" | "view"
+        )
     }
 }

@@ -41,10 +41,17 @@ impl<'tok> Parser<'tok> {
                         let mut items = vec![lhs.clone()];
                         loop {
                             self.skip_ws();
-                            if !self.is_value_start() {
-                                break;
+                            // 先检查二元运算符——仅算术运算符（+,-,*,/,%）才在列表内消费
+                            // 低优先级运算符（or,and,==,!=,<,>,<=,>=）不在此消费
+                            if let Some((_, bp)) = self.peek_binding_power() {
+                                if bp >= 4 {
+                                    let last = items.pop().unwrap();
+                                    let binop_result = self.parse_expr_rest(last, 4)?;
+                                    items.push(binop_result);
+                                    continue;
+                                }
                             }
-                            if self.peek_binding_power().is_some() {
+                            if !self.is_value_start() {
                                 break;
                             }
                             items.push(self.parse_prefix()?);
@@ -61,6 +68,29 @@ impl<'tok> Parser<'tok> {
                 break;
             }
             self.advance(); // 消费运算符
+            self.skip_ws();
+            let rhs = self.parse_expr(bp + 1)?;
+            lhs = Value::BinOp(Box::new(BinOp {
+                op,
+                left: lhs,
+                right: rhs,
+            }));
+        }
+        Ok(lhs)
+    }
+
+    /// 从已有的 lhs 继续解析二元运算符表达式（不构建空格列表）。
+    fn parse_expr_rest(&mut self, mut lhs: Value, min_bp: u8) -> Result<Value> {
+        loop {
+            self.skip_ws();
+            let (op, bp) = match self.peek_binding_power() {
+                Some(v) => v,
+                None => break,
+            };
+            if bp < min_bp {
+                break;
+            }
+            self.advance();
             self.skip_ws();
             let rhs = self.parse_expr(bp + 1)?;
             lhs = Value::BinOp(Box::new(BinOp {
@@ -115,6 +145,39 @@ impl<'tok> Parser<'tok> {
     pub(crate) fn parse_prefix(&mut self) -> Result<Value> {
         self.skip_ws();
         match self.peek() {
+            Some(Token::Minus) => {
+                // 一元负号：当后面是数字、变量、括号表达式时
+                // 标识符前的 - 是 CSS 厂商前缀（如 -webkit-inline-box）
+                let next = self.tokens.get(self.pos + 1);
+                if matches!(
+                    next,
+                    Some(Token::Number(_))
+                        | Some(Token::Dollar(_))
+                        | Some(Token::LParen)
+                        | Some(Token::Hash(_))
+                ) {
+                    self.advance();
+                    self.skip_ws();
+                    let val = self.parse_prefix()?;
+                    Ok(Value::UnaryOp(UnaryOp::Neg, Box::new(val)))
+                } else {
+                    // 厂商前缀标识符——作为字符串保留
+                    let mut name = String::from("-");
+                    self.advance();
+                    if let Some(Token::Ident(s)) = self.peek() {
+                        name.push_str(s);
+                        self.advance();
+                    }
+                    // 检查是否是函数调用
+                    self.skip_ws();
+                    if self.peek() == Some(&Token::LParen) {
+                        let args = self.parse_args()?;
+                        Ok(Value::Call(name, args))
+                    } else {
+                        Ok(Value::String(name, false))
+                    }
+                }
+            }
             Some(Token::Number(s)) => {
                 let v = parse_number(s)?;
                 self.advance();
@@ -164,7 +227,7 @@ impl<'tok> Parser<'tok> {
                 }
                 if self.peek() == Some(&Token::LParen) {
                     // CSS 原生函数——原样保留内容，不解析参数
-                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var") {
+                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url") {
                         self.advance(); // 消费 (
                         let mut content = String::new();
                         let mut depth = 1;
@@ -198,6 +261,43 @@ impl<'tok> Parser<'tok> {
                             self.advance();
                         }
                         return Ok(Value::Calc(format!("{name}({content})")));
+                    }
+                    // CSS Level 4: rgb(R G B / A) — 空格分隔 + / alpha 分隔符
+                    if matches!(name.as_str(), "rgb" | "rgba") {
+                        let save_pos = self.pos;
+                        self.advance(); // 消费 (
+                        self.skip_ws();
+                        let first = self.parse_prefix()?;
+                        self.skip_ws();
+                        // 检测是否为空格分隔语法（非逗号、非右括号）
+                        if self.is_value_start() || self.peek() == Some(&Token::Slash) {
+                            let mut items = vec![first];
+                            while self.is_value_start() {
+                                items.push(self.parse_prefix()?);
+                                self.skip_ws();
+                            }
+                            let alpha = if self.peek() == Some(&Token::Slash) {
+                                self.advance();
+                                self.skip_ws();
+                                Some(self.parse_prefix()?)
+                            } else {
+                                None
+                            };
+                            self.skip_ws();
+                            if self.peek() == Some(&Token::RParen) {
+                                self.advance();
+                            }
+                            let mut args: Vec<Arg> = items
+                                .into_iter()
+                                .map(|v| Arg { name: None, value: v, spread: false })
+                                .collect();
+                            if let Some(a) = alpha {
+                                args.push(Arg { name: None, value: a, spread: false });
+                            }
+                            return Ok(Value::Call(name, args));
+                        }
+                        // 不是空格分隔语法——回退到标准 parse_args
+                        self.pos = save_pos;
                     }
                     let args = self.parse_args()?;
                     Ok(Value::Call(name, args))
@@ -315,12 +415,6 @@ impl<'tok> Parser<'tok> {
                     }
                 }
             }
-            Some(Token::Minus) => {
-                self.advance();
-                self.skip_ws();
-                let v = self.parse_prefix()?;
-                Ok(Value::UnaryOp(UnaryOp::Neg, Box::new(v)))
-            }
             Some(Token::Not) => {
                 self.advance();
                 self.skip_ws();
@@ -406,7 +500,18 @@ impl<'tok> Parser<'tok> {
             Some(Token::LessEq) => Some((BinOpKind::LtEq, 3)),
             Some(Token::GreaterEq) => Some((BinOpKind::GtEq, 3)),
             Some(Token::Plus) => Some((BinOpKind::Add, 4)),
-            Some(Token::Minus) => Some((BinOpKind::Sub, 4)),
+            Some(Token::Minus) => {
+                // Sass 规则：space-before + no-space-after + Number = 一元负号
+                let has_ws_before = self.pos > 0
+                    && matches!(self.tokens.get(self.pos - 1), Some(Token::Whitespace));
+                let next = self.tokens.get(self.pos + 1);
+                let has_ws_after = matches!(next, Some(Token::Whitespace) | None);
+                if has_ws_before && !has_ws_after && matches!(next, Some(Token::Number(_))) {
+                    None // 一元负号，不是二元运算符
+                } else {
+                    Some((BinOpKind::Sub, 4))
+                }
+            }
             Some(Token::Star) => Some((BinOpKind::Mul, 5)),
             Some(Token::Slash) => Some((BinOpKind::Div, 5)),
             Some(Token::Percent) => Some((BinOpKind::Mod, 5)),

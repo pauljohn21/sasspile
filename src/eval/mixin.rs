@@ -15,9 +15,16 @@ impl Evaluator {
             .get_mixin(name)
             .ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?
             .clone();
-        // 绑定参数
-        let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
-        // 注入 @content 块
+// 绑定参数
+let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
+// 合并 mixin 定义时捕获的命名空间
+let mut mixin_env = mixin_env;
+for (ns, exports) in &mixin.captured_namespaces {
+    if !mixin_env.namespaces.contains_key(ns) {
+        mixin_env.namespaces.insert(ns.clone(), exports.clone());
+    }
+}
+// 注入 @content 块
         let mixin_env = if let Some(content_nodes) = content {
             mixin_env.set_content(content_nodes.clone(), env.clone())
         } else {
@@ -104,6 +111,12 @@ impl Evaluator {
         );
         let _enter = span.enter();
         let mut func_env = env.incr_depth();
+        // 合并函数定义时捕获的命名空间（使函数体可访问定义模块的 @use 命名空间）
+        for (ns, exports) in &func.captured_namespaces {
+            if !func_env.namespaces.contains_key(ns) {
+                func_env.namespaces.insert(ns.clone(), exports.clone());
+            }
+        }
         for (i, param) in func.params.iter().enumerate() {
             let val = if let Some(arg) = args.get(i) {
                 arg.clone()

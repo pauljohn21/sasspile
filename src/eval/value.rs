@@ -31,6 +31,13 @@ impl Evaluator {
                 // 处理插值在字符串中
                 if s.contains('#') && s.contains('{') {
                     Ok(Value::String(Self::eval_interp_str(s, env), *quoted))
+                } else if !*quoted {
+                    // 非引号字符串：检查是否为 CSS 命名颜色（white, black, red 等）
+                    if let Some(color) = Self::lookup_named_color(s) {
+                        Ok(Value::Color(color))
+                    } else {
+                        Ok(value.clone())
+                    }
                 } else {
                     Ok(value.clone())
                 }
@@ -66,11 +73,52 @@ impl Evaluator {
                 Ok(Value::Map(evaluated))
             }
             Value::Call(name, args) => {
+                // CSS 函数透传：带命名参数的调用（如 alpha(opacity=0)）作为 CSS 原样输出
+                if args.iter().any(|a| a.name.is_some()) {
+                    let parts: Vec<String> = args
+                        .iter()
+                        .map(|a| {
+                            let v = Self::eval_value(&a.value, env)?;
+                            Ok(if let Some(n) = &a.name {
+                                format!("{n}={v}")
+                            } else {
+                                v.to_string()
+                            })
+                        })
+                        .collect::<Result<_>>()?;
+                    return Ok(Value::String(format!("{name}({})", parts.join(", ")), false));
+                }
+                // if() 惰性求值：只求值选中的分支，避免副作用和类型错误
+                if name == "if" && args.len() == 3 {
+                    let cond = Self::eval_value(&args[0].value, env)?;
+                    if Self::is_truthy(&cond) {
+                        return Self::eval_value(&args[1].value, env);
+                    } else {
+                        return Self::eval_value(&args[2].value, env);
+                    }
+                }
                 let evaluated_args: Vec<Value> = args
                     .iter()
                     .map(|a| Self::eval_value(&a.value, env))
                     .collect::<Result<_>>()?;
-                Self::call_function(name, &evaluated_args, env)
+                // 展开 spread 参数（arg.spread=true 的参数展开为多个位置参数）
+                let mut final_args: Vec<Value> = Vec::new();
+                for (i, arg) in args.iter().enumerate() {
+                    if arg.spread {
+                        match &evaluated_args[i] {
+                            Value::List(items, _, _) => final_args.extend(items.iter().cloned()),
+                            Value::Map(pairs) => {
+                                for (k, v) in pairs {
+                                    final_args.push(Value::List(vec![k.clone(), v.clone()], Separator::Space, false));
+                                }
+                            }
+                            other => final_args.push(other.clone()),
+                        }
+                    } else {
+                        final_args.push(evaluated_args[i].clone());
+                    }
+                }
+                Self::call_function(name, &final_args, env)
             }
             Value::Interp(s) => Ok(Value::String(Self::eval_interp_str(s, env), false)),
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),
@@ -98,6 +146,25 @@ impl Evaluator {
         right: &Value,
         env: &Env,
     ) -> Result<Value> {
+        // 短路求值：and / or 先求值左侧，根据结果决定是否求值右侧
+        match op {
+            BinOpKind::And => {
+                let l = Self::eval_value(left, env)?;
+                if !Self::is_truthy(&l) {
+                    return Ok(l);  // falsy → 返回左侧
+                }
+                let r = Self::eval_value(right, env)?;
+                return Ok(r);  // truthy → 返回右侧
+            }
+            BinOpKind::Or => {
+                let l = Self::eval_value(left, env)?;
+                if Self::is_truthy(&l) {
+                    return Ok(l);  // truthy → 返回左侧
+                }
+                return Self::eval_value(right, env);  // falsy → 返回右侧
+            }
+            _ => {}
+        }
         let l = Self::eval_value(left, env)?;
         let r = Self::eval_value(right, env)?;
         tracing::trace!(
@@ -114,14 +181,8 @@ impl Evaluator {
             BinOpKind::Mod => Self::modulo(&l, &r),
             BinOpKind::Eq => Ok(Value::Bool(Self::values_eq(&l, &r))),
             BinOpKind::NotEq => Ok(Value::Bool(!Self::values_eq(&l, &r))),
-            BinOpKind::And => match l {
-                Value::Bool(false) => Ok(Value::Bool(false)),
-                _ => Ok(r),
-            },
-            BinOpKind::Or => match l {
-                Value::Bool(true) => Ok(Value::Bool(true)),
-                _ => Ok(r),
-            },
+            BinOpKind::And => Ok(r),
+            BinOpKind::Or => Ok(r),
             BinOpKind::Lt | BinOpKind::Gt | BinOpKind::LtEq | BinOpKind::GtEq => {
                 Self::compare(op, &l, &r)
             }
@@ -165,6 +226,13 @@ impl Evaluator {
                 qb,
             )),
             (Value::Null, Value::String(b, qb)) => Ok(Value::String(b, qb)),
+            // String + Calc / Calc + String — 拼接字符串表示
+            (Value::String(a, qa), Value::Calc(c)) => Ok(Value::String(format!("{a}{c}"), qa)),
+            (Value::Calc(c), Value::String(b, qb)) => Ok(Value::String(format!("{c}{b}"), qb)),
+            (Value::Calc(a), Value::Calc(b)) => Ok(Value::String(format!("{a}{b}"), false)),
+            // String + Bool / Bool + String
+            (Value::String(a, qa), Value::Bool(b)) => Ok(Value::String(format!("{a}{b}"), qa)),
+            (Value::Bool(a), Value::String(b, qb)) => Ok(Value::String(format!("{a}{b}"), qb)),
             // 列表拼接
             (Value::List(mut items, sep, _), Value::List(items2, _, _)) => {
                 items.extend(items2);
