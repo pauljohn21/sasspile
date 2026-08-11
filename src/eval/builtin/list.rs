@@ -230,17 +230,30 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             ))),
             _ => Err(SassError::Eval("list-slash 需要 2 个参数".into())),
         },
-        "zip" => match args {
-            [Value::List(a, _, _), Value::List(b, _, _)] => {
-                let pairs: Vec<Value> = a
-                    .iter()
-                    .zip(b.iter())
-                    .map(|(x, y)| Value::List(vec![x.clone(), y.clone()], Separator::Space, false))
-                    .collect();
-                Ok(Some(Value::List(pairs, Separator::Comma, false)))
+        "zip" => {
+            if args.len() < 2 {
+                return Err(SassError::Eval("zip 需要 2+ 个列表参数".into()));
             }
-            _ => Err(SassError::Eval("zip 需要 2+ 个列表参数".into())),
-        },
+            // 将每个参数转为列表（非列表值视为单元素列表）
+            let lists: Vec<Vec<Value>> = args
+                .iter()
+                .map(|v| match v {
+                    Value::List(items, _, _) => items.clone(),
+                    other => vec![other.clone()],
+                })
+                .collect();
+            let min_len = lists.iter().map(|l| l.len()).min().unwrap_or(0);
+            let pairs: Vec<Value> = (0..min_len)
+                .map(|i| {
+                    Value::List(
+                        lists.iter().map(|l| l[i].clone()).collect(),
+                        Separator::Space,
+                        false,
+                    )
+                })
+                .collect();
+            Ok(Some(Value::List(pairs, Separator::Comma, false)))
+        }
         _ => Ok(None),
     }
 }

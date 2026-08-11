@@ -14,9 +14,11 @@ use crate::error::{Result, SassError};
 
 impl Evaluator {
     pub(crate) fn call_builtin(name: &str, args: &[Value], env: &Env) -> Result<Value> {
-        let span = tracing::info_span!("call_builtin", name = name, n_args = args.len());
+        // CSS 函数名大小写不敏感（如 RGBA == rgba）
+        let name = name.to_lowercase();
+        let span = tracing::info_span!("call_builtin", name = %name, n_args = args.len());
         let _enter = span.enter();
-        match name {
+        match name.as_str() {
             // ── math ──
             "abs" => match args {
                 [Value::Number(n, u)] => Ok(Value::Number(n.abs(), u.clone())),
@@ -148,22 +150,21 @@ impl Evaluator {
             | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue" | "saturate"
             | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
             | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness" => {
-                color::call(name, args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.to_string()))
+                color::call(&name, args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── map ──
             "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge" | "map-remove"
             | "map-set" | "map-deep-merge" | "map-deep-remove" => {
-                Self::call_map_builtin(name, args, env)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.to_string()))
+                Self::call_map_builtin(&name, args, env)?
+                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── string ──
             "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
             | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id" => {
-                Self::call_string_builtin(name, args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.to_string()))
+                Self::call_string_builtin(&name, args)?
+                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── meta ──
@@ -206,10 +207,10 @@ impl Evaluator {
                 [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
                 _ => Err(SassError::Eval("get-function 需要 1 个参数".into())),
             },
-"call" => match args {
-[Value::String(fname, _), rest @ ..] => Self::call_function(fname, rest, env),
-_ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
-},
+            "call" => match args {
+                [Value::String(fname, _), rest @ ..] => Self::call_function(fname, rest, env),
+                _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
+            },
             "keywords" => match args {
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
@@ -228,8 +229,7 @@ _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
             // ── list 子模块分派 ──
             "length" | "list-length" | "nth" | "append" | "join" | "index" | "list-separator"
             | "separator" | "set-nth" | "is-bracketed" | "list-slash" | "zip" => {
-                list::call(name, args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.to_string()))
+                list::call(&name, args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── selector 子模块分派 ──
@@ -239,13 +239,11 @@ _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
             | "selector-parse"
             | "selector-simple-selectors"
             | "selector-unify"
-            | "selector-extend" => {
-                selector::call(name, args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.to_string()))
-            }
+            | "selector-extend" => selector::call(&name, args)?
+                .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
 
             // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
-            _ if Self::is_css_function(name) => {
+            _ if Self::is_css_function(&name) => {
                 let arg_str = args
                     .iter()
                     .map(|a| a.to_string())
@@ -253,7 +251,7 @@ _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
                     .join(", ");
                 Ok(Value::String(format!("{name}({arg_str})"), false))
             }
-            _ => Err(SassError::UndefinedFunction(name.to_string())),
+            _ => Err(SassError::UndefinedFunction(name.clone())),
         }
     }
 
@@ -281,7 +279,15 @@ _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
             | "hsl" | "hsla" | "lab" | "lch" | "oklab" | "oklch"
             | "color" | "color-mix" | "color-contrast"
             | "gradient" | "icrgb" | "device-cmyk"
-            // CSS 形状函数
+            // CSS transform 函数
+            | "matrix" | "matrix3d" | "translate" | "translatex" | "translatey" | "translatez"
+            | "translate3d" | "scale" | "scalex" | "scaley" | "scalez" | "scale3d"
+            | "rotate" | "rotatex" | "rotatey" | "rotatez" | "rotate3d"
+            | "skew" | "skewx" | "skewy" | "perspective"
+            // CSS filter 函数
+            | "blur" | "brightness" | "contrast" | "drop-shadow" | "grayscale"
+            | "hue-rotate" | "invert" | "opacity" | "saturate" | "sepia"
+            // CSS shape 函数
             | "circle" | "ellipse" | "inset" | "polygon" | "rect" | "xywh" | "ray"
             // CSS 网格函数
             | "grid" | "subgrid"

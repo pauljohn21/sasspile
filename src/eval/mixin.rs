@@ -42,11 +42,22 @@ for (ns, exports) in &mixin.captured_namespaces {
         for arg in args {
             let val = Self::eval_value(&arg.value, env)?;
             if arg.spread {
-                // 展开 $args... 为多个位置参数
-                if let Value::List(items, _, _) = val {
-                    positional.extend(items);
-                } else {
-                    positional.push(val);
+                // 展开 $args... 为多个参数
+                match &val {
+                    Value::List(items, _, _) => {
+                        positional.extend(items.iter().cloned());
+                    }
+                    Value::Map(pairs) => {
+                        // Map spread → 关键字参数（key=value 对）
+                        for (k, v) in pairs {
+                            if let Value::String(key, _) = k {
+                                keyword.insert(key.clone(), v.clone());
+                            }
+                        }
+                    }
+                    _ => {
+                        positional.push(val);
+                    }
                 }
             } else if let Some(name) = &arg.name {
                 keyword.insert(name.clone(), val);

@@ -102,6 +102,15 @@ impl<'tok> Parser<'tok> {
         Ok(lhs)
     }
 
+    /// 检查字符串是否为 SCSS 关键字（不应被拼接进字符串）。
+    fn is_keyword(&self, s: &str) -> bool {
+        matches!(
+            s,
+            "through" | "from" | "to" | "and" | "or" | "not" | "in" | "with"
+                | "show" | "hide" | "as" | "using" | "else"
+        )
+    }
+
     /// 检查当前 token 是否是值起始 token（排除关键字）。
     pub(crate) fn is_value_start(&self) -> bool {
         if let Some(Token::Ident(s)) = self.peek() {
@@ -227,7 +236,14 @@ impl<'tok> Parser<'tok> {
                 }
                 if self.peek() == Some(&Token::LParen) {
                     // CSS 原生函数——原样保留内容，不解析参数
-                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url") {
+                    // url() 特殊处理：字符串参数走正常解析（支持插值），裸 URL 走 raw
+                    let is_url_with_string = name == "url" && {
+                        let next = self.tokens.get(self.pos + 1);
+                        matches!(next, Some(Token::String(_, _)))
+                    };
+                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url")
+                        && !is_url_with_string
+                    {
                         self.advance(); // 消费 (
                         let mut content = String::new();
                         let mut depth = 1;
@@ -306,9 +322,36 @@ impl<'tok> Parser<'tok> {
                 }
             }
             Some(Token::Interp(s)) => {
-                let v = Value::Interp(s.clone());
+                let mut parts = vec![s.clone()];
                 self.advance();
-                Ok(v)
+                // 相邻的标识符/数字/插值/Hash（无空格分隔）应拼接为字符串
+                // 例如 #{divide(...)}rem → "divide(...)rem"
+                loop {
+                    match self.peek() {
+                        Some(Token::Ident(t)) if !self.is_keyword(t) => {
+                            parts.push(t.clone());
+                            self.advance();
+                        }
+                        Some(Token::Number(n)) => {
+                            parts.push(n.clone());
+                            self.advance();
+                        }
+                        Some(Token::Interp(t)) => {
+                            parts.push(t.clone());
+                            self.advance();
+                        }
+                        Some(Token::Hash(h)) => {
+                            parts.push(format!("#{h}"));
+                            self.advance();
+                        }
+                        _ => break,
+                    }
+                }
+                if parts.len() == 1 {
+                    Ok(Value::Interp(parts.into_iter().next().unwrap()))
+                } else {
+                    Ok(Value::Interp(parts.join("")))
+                }
             }
             Some(Token::True) => {
                 self.advance();
