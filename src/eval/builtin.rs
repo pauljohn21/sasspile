@@ -256,11 +256,17 @@ impl Evaluator {
             "lighten" => Self::builtin_lighten(pos_args),
             "mix" => Self::builtin_mix(pos_args),
             "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
-| "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue" | "saturate"
+| "scale-color" | "hwb" | "complement" | "adjust-hue" | "saturate"
 | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
 | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness"
-| "whiteness" | "blackness" => {
+| "whiteness" | "blackness" | "is-powerless" | "is-in-gamut" | "is-legacy"
+| "channel" | "to-space" | "to-gamut" => {
 color::call(&name, pos_args, kw_args)?
+                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
+            }
+            // hsl/hsla 颜色构造函数——分派到 color::call 处理
+            "hsl" | "hsla" => {
+                color::call(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
@@ -416,6 +422,7 @@ color::call(&name, pos_args, kw_args)?
 | "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
 | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
 | "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
+| "is-powerless" | "is-in-gamut" | "is-legacy" | "channel" | "to-space" | "to-gamut"
             // ── map ──
             | "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge"
             | "map-remove" | "map-set" | "map-deep-merge" | "map-deep-remove"

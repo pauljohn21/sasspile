@@ -433,7 +433,10 @@ impl std::fmt::Display for Value {
                 let (quote, escaped) = Self::escape_quoted_string(s);
                 write!(f, "{quote}{escaped}{quote}")
             }
-            Value::String(s, false) => write!(f, "{s}"),
+            Value::String(s, false) => {
+                // 未加引号的标识符也需要转义控制字符和加引号字符
+                write!(f, "{}", Self::escape_css_ident(s))
+            }
             Value::Color(c) => {
                 match &c.format {
                     ColorFormat::Hsl(h, s, l) => {
@@ -582,22 +585,40 @@ impl Value {
     /// - 如果字符串包含 `"` 但不包含 `'`，用单引号包裹，避免转义
     /// - 否则用双引号包裹，转义 `"`
     /// - `\` → `\\`
+    /// 对加引号的字符串进行转义并选择引号字符。
     /// - NULL (U+0000) → `\0 ` (with trailing space if needed)
     /// - 控制字符和私有区字符 → `\XXXX` (lowercase hex)
     /// - 其他非 ASCII 字符保持原样（会触发 @charset 前缀）
-    fn escape_quoted_string(s: &str) -> (char, String) {
+    pub(crate) fn escape_quoted_string(s: &str) -> (char, String) {
         let has_double = s.contains('"');
         let has_single = s.contains("'");
         // 如果包含双引号但不含单引号，用单引号包裹
         let quote = if has_double && !has_single { '\'' } else { '"' };
 
+        let escaped = Self::escape_css_chars(s, |c| {
+            (c == '"' && quote == '"') || (c == '\'' && quote == '\'')
+        });
+        (quote, escaped)
+    }
+
+    /// 对未加引号的 CSS 标识符进行转义。
+    /// 反斜杠 → `\\`，控制字符 → `\XXXX`，NULL → `\0 `。
+    pub(crate) fn escape_css_ident(s: &str) -> String {
+        Self::escape_css_chars(s, |_| false)
+    }
+
+    /// 核心转义逻辑——遍历字符并转义特殊字符。
+    /// `is_quote` 判断当前字符是否为需要转义的引号。
+    fn escape_css_chars(s: &str, is_quote: impl Fn(char) -> bool) -> String {
         let chars: Vec<char> = s.chars().collect();
         let mut result = String::new();
         for (i, &c) in chars.iter().enumerate() {
             match c {
                 '\\' => result.push_str("\\\\"),
-                '"' if quote == '"' => result.push_str("\\\""),
-                '\'' if quote == '\'' => result.push_str("\\'"),
+                c if is_quote(c) => {
+                    result.push('\\');
+                    result.push(c);
+                }
                 '\0' => result.push_str("\\0 "),
                 c if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) => {
                     let hex = format!("{:x}", c as u32);
@@ -612,6 +633,6 @@ impl Value {
                 _ => result.push(c),
             }
         }
-        (quote, result)
+        result
     }
 }

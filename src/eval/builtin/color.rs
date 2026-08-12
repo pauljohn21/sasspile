@@ -512,6 +512,57 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 _ => Err(SassError::Eval("lightness 需要 1 个颜色参数".into())),
             }
         }
+        // ── sass:color 模块函数（Level 4 颜色空间支持）──
+        "is-powerless" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let channel = args.get(1).or_else(|| kw_args.get("$channel"));
+            match (color_arg, channel) {
+                (Some(Value::Color(c)), Some(Value::String(ch, _))) => {
+                    let powerless = is_channel_powerless(c, ch);
+                    Ok(Some(Value::Bool(powerless)))
+                }
+                _ => Err(SassError::Eval(
+                    "is-powerless 需要 $color 和 $channel 参数".into(),
+                )),
+            }
+        }
+        "is-in-gamut" => {
+            // sasspile 存储的 sRGB 颜色始终在色域内（u8 范围 + alpha 0-1）
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(_c)) => Ok(Some(Value::Bool(true))),
+                _ => Err(SassError::Eval("is-in-gamut 需要 $color 参数".into())),
+            }
+        }
+        "is-legacy" => {
+            // sasspile 所有颜色都是 sRGB（legacy 空间）
+            Ok(Some(Value::Bool(true)))
+        }
         _ => Ok(None),
+    }
+}
+
+/// 检查颜色通道是否"无效"（powerless）。
+/// 参考 dart-sass 实现：
+/// - HSL: hue 在 saturation ≈ 0 时无效；saturation 在 lightness = 0%/100% 时无效
+///   （注意：CSS 规范已更新，lightness 极端值不再使 hue/saturation 无效）
+/// - HWB: hue 在 whiteness + blackness >= 100%（归一化后）时无效
+/// - LCH/OKLCH: hue 在 chroma ≈ 0 时无效
+fn is_channel_powerless(c: &Color, channel: &str) -> bool {
+    let (_h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+    let max = c.r.max(c.g).max(c.b) as f64 / 255.0;
+    let min = c.r.min(c.g).min(c.b) as f64 / 255.0;
+    let w = min;
+    let b = 1.0 - max;
+    let w_b_sum = (w + b).min(1.0);
+    let eps = 0.0001;
+    match channel {
+        "hue" => s < eps || w_b_sum >= 1.0 - eps,
+        "saturation" => l < eps || (1.0 - l) < eps,
+        "lightness" => false,
+        "whiteness" => false,
+        "blackness" => false,
+        "a" | "b" => false,
+        _ => false,
     }
 }

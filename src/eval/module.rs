@@ -248,6 +248,11 @@ impl Evaluator {
             "color.hue" => "hue",
             "color.saturation" => "saturation",
             "color.lightness" => "lightness",
+            "color.is-powerless" => "is-powerless",
+            "color.is-in-gamut" => "is-in-gamut",
+            "color.is-legacy" => "is-legacy",
+            "color.to-space" => "to-space",
+            "color.to-gamut" => "to-gamut",
             // sass:meta
             "meta.type-of" => "type-of",
             "meta.inspect" => "inspect",

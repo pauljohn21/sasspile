@@ -151,6 +151,7 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
 }
 
 fn diag(subdir: &str, max_show: usize) {
+    sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
     let dir = spec_root.join(subdir);
     let mut files = Vec::new();

@@ -167,7 +167,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// 扫描反斜杠转义标识符（CSS 转义，如 \: \. 等）。
-    fn scan_escape_ident(&mut self) -> Token {
+    fn scan_escape_ident(&mut self) -> Result<Token> {
         let mut text = String::new();
         self.next_char();
         if let Some(next) = self.peek() {
@@ -181,7 +181,14 @@ impl<'src> Lexer<'src> {
                 }
                 if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') { self.next_char(); }
                 if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                    if let Some(ch) = char::from_u32(code) { text.push(ch); }
+                    if let Some(ch) = char::from_u32(code) {
+                        text.push(ch);
+                    } else {
+                        return Err(SassError::Lex {
+                            message: "Invalid Unicode code point.".into(),
+                            pos: self.pos,
+                        });
+                    }
                 }
             } else { self.next_char(); text.push(next); }
         }
@@ -194,7 +201,7 @@ impl<'src> Lexer<'src> {
                 break;
             }
         }
-        match text.as_str() {
+        Ok(match text.as_str() {
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,
@@ -202,7 +209,7 @@ impl<'src> Lexer<'src> {
             "or" => Token::Or,
             "not" => Token::Not,
             _ => Token::Ident(text),
-        }
+        })
     }
 
     /// 扫描 @规则。
@@ -470,7 +477,7 @@ impl<'src> Iterator for Lexer<'src> {
             // 字符串
             '"' | '\'' => return Some(self.scan_string(c)),
             // 反斜杠转义标识符（CSS 转义，如 \: \. 等）
-            '\\' => self.scan_escape_ident(),
+            '\\' => return Some(self.scan_escape_ident()),
             // @规则
             '@' => self.scan_at(),
             // $变量
