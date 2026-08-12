@@ -9,6 +9,18 @@ use crate::OutputStyle;
 /// 序列化器。
 pub struct Serializer;
 
+/// 选择器 token——用于组合器验证。
+#[derive(Debug)]
+enum SelToken {
+    /// 普通选择器片段。
+    Selector(String),
+    /// 组合器（>, +, ~）。
+    Combinator(char),
+    /// 伪类内部的选择器列表（需递归检查）。
+    /// (伪类名, 内部选择器字符串, 是否允许前导组合器)
+    PseudoInner(String, String, bool),
+}
+
 impl Serializer {
     /// 序列化 CssNode 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
@@ -349,10 +361,16 @@ impl Serializer {
         }
     }
 
-    /// 净化选择器——处理占位符 `%xxx` 在伪类中的移除。
+    /// 净化选择器——处理占位符 `%xxx` 在伪类中的移除 + 组合器验证 + 相邻复合选择器规范化。
     fn sanitize_selector(selector: &str) -> String {
         // 先规范化属性选择器（引号去除、修饰符空格）
         let selector = Self::normalize_attr_selectors(selector);
+        // 处理相邻复合选择器（[a]b → [a] b）
+        let selector = Self::normalize_adjacent_compounds(&selector);
+        // 组合器验证——无效组合器返回空字符串
+        if Self::has_bogus_combinators(&selector) {
+            return String::new();
+        }
         if !selector.contains('%') {
             return selector;
         }
@@ -390,10 +408,16 @@ impl Serializer {
                     .collect();
                 if real_args.is_empty() {
                     if *pseudo == "not" {
-                        // :not(%placeholder) → *（因为占位符不存在，:not 匹配所有元素）
+                        // :not(%placeholder) → 移除 :not()
+                        // 如果前面有选择器（如 a:not(%b)），直接移除 :not → a
+                        // 如果 :not 是整个选择器（如 :not(%b)），替换为 *（匹配所有元素）
                         let before = &result[..pos];
                         let after = &result[end + 1..];
-                        result = format!("{before}*{after}");
+                        if before.trim().is_empty() {
+                            result = format!("*{after}");
+                        } else {
+                            result = format!("{before}{after}");
+                        }
                     } else {
                         return String::new();
                     }
@@ -408,6 +432,210 @@ impl Serializer {
                     result = format!("{before}({new_inner}){after}");
                 }
             }
+        }
+        result
+    }
+
+    /// 检查选择器是否包含无效组合器（bogus combinators）。
+    ///
+    /// 规则：
+    /// - 顶层/:has() 内：允许单个前导组合器（`> a`），但禁止多个前导组合器、连续组合器、尾部组合器
+    /// - :is/:where/:not/matches 内：禁止任何前导组合器（只能有完整选择器）
+    /// - 所有上下文：禁止连续组合器和尾部组合器
+    fn has_bogus_combinators(selector: &str) -> bool {
+        Self::check_bogus_in_selector(selector, true)
+    }
+
+    /// 递归检查选择器中的无效组合器。
+    /// `allow_leading_combinator` 控制是否允许单个前导组合器。
+    fn check_bogus_in_selector(selector: &str, allow_leading_combinator: bool) -> bool {
+        // 对逗号分隔的每个选择器部分单独检查
+        for part in selector.split(',') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            // 将选择器分解为 token 序列，同时提取伪类内部内容
+            let tokens = Self::tokenize_selector_with_pseudo(part);
+            if Self::tokens_have_bogus(&tokens, allow_leading_combinator) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 将选择器字符串分解为 token 向量，识别伪类内部内容。
+    fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
+        let mut tokens = Vec::new();
+        let chars: Vec<char> = selector.chars().collect();
+        let mut i = 0;
+        let mut current = String::new();
+        let mut in_brackets = false;
+
+        while i < chars.len() {
+            let c = chars[i];
+            if c == '[' {
+                in_brackets = true;
+                current.push(c);
+            } else if c == ']' {
+                in_brackets = false;
+                current.push(c);
+            } else if c == '(' && !in_brackets {
+                // 找到伪类内部——提取完整内容
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
+                }
+                // 向前查看伪类名（向前回看）
+                let pseudo_name = Self::find_pseudo_name(&tokens);
+                // 提取括号内容
+                let mut depth = 1;
+                let mut inner = String::new();
+                i += 1;
+                while i < chars.len() && depth > 0 {
+                    if chars[i] == '(' {
+                        depth += 1;
+                    } else if chars[i] == ')' {
+                        depth -= 1;
+                    }
+                    if depth > 0 {
+                        inner.push(chars[i]);
+                    }
+                    i += 1;
+                }
+                // :is/:where/:not/matches 不允许前导组合器
+                // :has 允许前导组合器（同顶层）
+                let allow_leading = pseudo_name.as_deref() == Some("has");
+                tokens.push(SelToken::PseudoInner(
+                    pseudo_name.unwrap_or_default(),
+                    inner,
+                    allow_leading,
+                ));
+                continue; // 已经推进了 i
+            } else if in_brackets {
+                current.push(c);
+            } else if c == '>' || c == '+' || c == '~' {
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
+                }
+                tokens.push(SelToken::Combinator(c));
+            } else if c.is_whitespace() {
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
+                }
+            } else {
+                current.push(c);
+            }
+            i += 1;
+        }
+        if !current.trim().is_empty() {
+            tokens.push(SelToken::Selector(current.trim().to_string()));
+        }
+        tokens
+    }
+
+    /// 从 token 序列中找出最近伪类的名称。
+    fn find_pseudo_name(tokens: &[SelToken]) -> Option<String> {
+        // 回看 token 序列，找到 :pseudoName 模式
+        for window in tokens.windows(2) {
+            if let SelToken::Selector(name) = &window[0] {
+                if let SelToken::Selector(colon) = &window[1] {
+                    if colon == ":" {
+                        return Some(name.clone());
+                    }
+                }
+            }
+        }
+        // 检查最后一个 token 是否是 `:name` 形式
+        if let Some(SelToken::Selector(last)) = tokens.last() {
+            if last.starts_with(':') {
+                return Some(last[1..].to_string());
+            }
+        }
+        None
+    }
+
+    /// 检查 token 序列是否包含无效组合器。
+    fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> bool {
+        if tokens.is_empty() {
+            return false;
+        }
+        // 检查尾部组合器
+        if matches!(tokens.last(), Some(SelToken::Combinator(_))) {
+            return true;
+        }
+        // 检查前导组合器
+        if let Some(SelToken::Combinator(_)) = tokens.first() {
+            if !allow_leading_combinator {
+                return true;
+            }
+            // 单个前导组合器允许，但第二个不能是组合器
+            if tokens.len() >= 2 {
+                if let SelToken::Combinator(_) = tokens[1] {
+                    return true; // 连续组合器
+                }
+            }
+        }
+        // 检查中间连续组合器
+        for window in tokens.windows(2) {
+            if let (SelToken::Combinator(_), SelToken::Combinator(_)) = (&window[0], &window[1]) {
+                return true;
+            }
+        }
+        // 递归检查伪类内部
+        for token in tokens {
+            if let SelToken::PseudoInner(name, inner, allow_leading) = token {
+                // 处理逗号分隔的多个选择器
+                for part in inner.split(',') {
+                    let part = part.trim();
+                    if part.is_empty() {
+                        continue;
+                    }
+                    let inner_tokens = Self::tokenize_selector_with_pseudo(part);
+                    if Self::tokens_have_bogus(&inner_tokens, *allow_leading) {
+                        return true;
+                    }
+                }
+                // 多个逗号分隔的伪类选择器之间也需要有完整的选择器
+                let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                if parts.len() > 1 {
+                    for part in &parts {
+                        let inner_tokens = Self::tokenize_selector_with_pseudo(part);
+                        if Self::tokens_have_bogus(&inner_tokens, *allow_leading) {
+                            return true;
+                        }
+                    }
+                }
+                let _ = name; // 仅 :has 允许前导组合器
+            }
+        }
+        false
+    }
+
+    /// 规范化相邻复合选择器——在属性选择器后跟类型选择器时添加空格。
+    /// 例如：`[a]b` → `[a] b`（属性选择器后紧跟类型选择器/通配符需加空格）
+    /// 但 `[a].b` `[a]#b` `[a]:hover` 不需要加空格（单复合选择器内）
+    fn normalize_adjacent_compounds(selector: &str) -> String {
+        let chars: Vec<char> = selector.chars().collect();
+        let mut result = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            result.push(chars[i]);
+            // 检查是否需要插入空格
+            if i + 1 < chars.len() {
+                let curr = chars[i];
+                let next = chars[i + 1];
+                if curr == ']' && !next.is_whitespace() {
+                    // ] 后紧跟类型选择器（字母）或通配符 * 时加空格
+                    // 但 . # : [ 后是同一复合选择器的延续，不加空格
+                    if next == '*' || next.is_ascii_alphabetic() {
+                        result.push(' ');
+                    }
+                }
+            }
+            i += 1;
         }
         result
     }

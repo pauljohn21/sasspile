@@ -104,7 +104,7 @@ fn css_fail_details() {
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
             for case in &parse_hrx(&content) {
-                if let Some(diff) = run_case(case, &[spec_root.to_path_buf()]) {
+                    if let Some(diff) = run_case(case, &[spec_root.to_path_buf()]) {
                     fail_count += 1;
                     if shown < 30 {
                         tracing::info!("\n{diff}");
