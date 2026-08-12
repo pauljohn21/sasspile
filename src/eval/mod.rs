@@ -265,9 +265,11 @@ impl Evaluator {
                 if matches!(val, Value::Null) {
                     return Ok((vec![], env.clone()));
                 }
+                // 求值属性名（支持 $var 和 #{...} 插值）
+                let property = Self::eval_property_name(property, env);
                 Ok((
                     vec![CssNode::Declaration {
-                        property: property.clone(),
+                        property,
                         value: val.to_string(),
                         important: *important,
                     }],

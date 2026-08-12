@@ -13,9 +13,10 @@ impl Serializer {
     /// 序列化 CssNode 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
         let flattened = Self::flatten_nodes(nodes);
+        let merged = Self::merge_at_rules(flattened);
         let css = match style {
-            OutputStyle::Expanded => Self::serialize_expanded(&flattened, 0),
-            OutputStyle::Compressed => Self::serialize_compressed(&flattened),
+            OutputStyle::Expanded => Self::serialize_expanded(&merged, 0),
+            OutputStyle::Compressed => Self::serialize_compressed(&merged),
         };
         // 当输出包含非 ASCII 字符时，Dart Sass 在 expanded 模式下添加 @charset 前缀
         if css.chars().any(|c| !c.is_ascii()) {
@@ -26,6 +27,50 @@ impl Serializer {
         } else {
             css
         }
+    }
+
+    /// 合并相邻的 @media/@supports 块（相同 query）。
+    fn merge_at_rules(nodes: Vec<CssNode>) -> Vec<CssNode> {
+        let mut result: Vec<CssNode> = Vec::new();
+        for node in nodes {
+            match &node {
+                CssNode::AtRule {
+                    name,
+                    params,
+                    children,
+                    has_body: true,
+                } => {
+                    // 检查是否与 result 中最后一个节点同名同 query
+                    if let Some(last) = result.last() {
+                        if let CssNode::AtRule {
+                            name: last_name,
+                            params: last_params,
+                            children: last_children,
+                            has_body: true,
+                        } = last
+                        {
+                            if last_name == name && last_params == params {
+                                // 合并 children
+                                let mut merged = last_children.clone();
+                                merged.extend(children.clone());
+                                if let Some(last_mut) = result.last_mut() {
+                                    *last_mut = CssNode::AtRule {
+                                        name: name.clone(),
+                                        params: params.clone(),
+                                        children: merged,
+                                        has_body: true,
+                                    };
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                    result.push(node);
+                }
+                _ => result.push(node),
+            }
+        }
+        result
     }
 
     /// 展平嵌套规则。

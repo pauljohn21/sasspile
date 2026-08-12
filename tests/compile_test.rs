@@ -221,6 +221,130 @@ fn test_lib_adjust_color() {
 }
 
 #[test]
+fn test_compile_property_interpolation() {
+    // 插值在属性名中：border-#{$side} → border-left
+    let css = compile_expanded("$side: left; .x { border-#{$side}: 1px solid; }").unwrap();
+    assert!(
+        css.contains("border-left: 1px solid"),
+        "应输出 border-left: {css}"
+    );
+}
+
+#[test]
+fn test_compile_selector_list_with_amp() {
+    // 选择器列表 + &
+    let css = compile_expanded(".a, .b { &:hover { color: red; } }").unwrap();
+    assert!(css.contains(".a:hover"), "应包含 .a:hover: {css}");
+    assert!(css.contains(".b:hover"), "应包含 .b:hover: {css}");
+}
+
+#[test]
+fn test_compile_css_custom_property() {
+    // CSS 自定义属性 --var 和 var()
+    let css = compile_expanded(":root { --main-color: red; } .foo { color: var(--main-color); }").unwrap();
+    assert!(
+        css.contains("--main-color: red"),
+        "应定义 CSS 变量: {css}"
+    );
+    assert!(
+        css.contains("color: var(--main-color)"),
+        "应使用 var(): {css}"
+    );
+}
+
+#[test]
+fn test_compile_media_nesting() {
+    // @media 嵌套展开
+    let css = compile_expanded(".container { width: 100%; @media (min-width: 768px) { max-width: 720px; } }").unwrap();
+    assert!(css.contains("@media"), "应输出 @media: {css}");
+    assert!(css.contains("max-width: 720px"), "应包含 max-width: {css}");
+}
+
+#[test]
+fn test_compile_supports() {
+    // @supports 输出
+    let css = compile_expanded(".foo { @supports (display: grid) { display: grid; } }").unwrap();
+    assert!(
+        css.contains("@supports (display: grid)"),
+        "应输出 @supports: {css}"
+    );
+}
+
+#[test]
+fn test_compile_font_face() {
+    // @font-face
+    let css = compile_expanded("@font-face { font-family: 'MyFont'; src: url('font.woff'); }").unwrap();
+    assert!(css.contains("@font-face"), "应输出 @font-face: {css}");
+    assert!(
+        css.contains("font-family: \"MyFont\""),
+        "应包含 font-family: {css}"
+    );
+}
+
+#[test]
+fn test_compile_selector_nesting_deep() {
+    // 多层选择器嵌套展开
+    let css = compile_expanded(".a { .b { .c { color: red; } } }").unwrap();
+    assert!(css.contains(".a .b .c"), "应输出 .a .b .c: {css}");
+    assert!(css.contains("color: red"), "应包含 color: red: {css}");
+}
+
+#[test]
+fn test_compile_css_calc() {
+    // CSS calc 函数
+    let css = compile_expanded(".foo { width: calc(100% - 20px); }").unwrap();
+    assert!(
+        css.contains("width: calc(100% - 20px)"),
+        "应输出 calc: {css}"
+    );
+}
+
+#[test]
+fn test_compile_css_url() {
+    // CSS url 函数
+    let css = compile_expanded(".foo { background: url('test.png'); }").unwrap();
+    assert!(
+        css.contains("background: url(\"test.png\")"),
+        "应输出 url: {css}"
+    );
+}
+
+#[test]
+fn test_compile_keyframes() {
+    // @keyframes
+    let css = compile_expanded("@keyframes fade { from { opacity: 0; } to { opacity: 1; } }").unwrap();
+    assert!(css.contains("@keyframes fade"), "应输出 @keyframes: {css}");
+    assert!(css.contains("from"), "应包含 from: {css}");
+    assert!(css.contains("to"), "应包含 to: {css}");
+}
+
+#[test]
+fn test_compile_layer() {
+    // @layer
+    let css = compile_expanded("@layer base { .foo { color: red; } }").unwrap();
+    assert!(css.contains("@layer base"), "应输出 @layer: {css}");
+}
+
+#[test]
+fn test_compile_media_merge() {
+    // 相同 query 的 @media 应合并
+    let css = compile_expanded(".a { @media (min-width: 768px) { color: red; } } .b { @media (min-width: 768px) { color: blue; } }").unwrap();
+    // 应该只有一个 @media 块
+    let media_count = css.matches("@media (min-width: 768px)").count();
+    assert_eq!(media_count, 1, "应只输出 1 个 @media 块: {css}");
+    assert!(css.contains(".a"), "应包含 .a: {css}");
+    assert!(css.contains(".b"), "应包含 .b: {css}");
+}
+
+#[test]
+fn test_compile_supports_merge() {
+    // 相同 query 的 @supports 应合并
+    let css = compile_expanded(".a { @supports (display: grid) { display: grid; } } .b { @supports (display: grid) { display: grid; } }").unwrap();
+    let count = css.matches("@supports (display: grid)").count();
+    assert_eq!(count, 1, "应只输出 1 个 @supports 块: {css}");
+}
+
+#[test]
 fn test_cli_compile() {
     let input = "a { color: red; }";
     let css = compile_expanded(input).unwrap();

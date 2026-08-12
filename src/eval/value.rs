@@ -674,6 +674,65 @@ impl Evaluator {
         }
     }
 
+    /// 求值属性名——支持 $var 和 #{...} 插值。
+    ///
+    /// 例如 `$prop: color; .foo { $prop: red; }` → `.foo { color: red; }`
+    /// `border-#{$side}: 1px;` → `border-left: 1px;`
+    pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
+        // 快速路径：不含 $ 或 #{} 的属性名直接返回
+        if !property.contains('$') && !property.contains("#{") {
+            return property.to_string();
+        }
+        // 处理 #{} 插值
+        let mut result = String::new();
+        let mut chars = property.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '#' && chars.peek() == Some(&'{') {
+                chars.next(); // 消费 {
+                let mut expr = String::new();
+                let mut depth = 1;
+                while let Some(ch) = chars.next() {
+                    if ch == '{' {
+                        depth += 1;
+                        expr.push(ch);
+                    } else if ch == '}' {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                        expr.push(ch);
+                    } else {
+                        expr.push(ch);
+                    }
+                }
+                if let Ok(val) = Self::eval_simple_expr(&expr, env) {
+                    result.push_str(&val.to_string());
+                } else {
+                    result.push_str(&expr);
+                }
+            } else if c == '$' {
+                // 读取变量名
+                let mut var_name = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(val) = env.lookup(&var_name) {
+                    result.push_str(&val.to_string());
+                } else {
+                    result.push_str(&format!("${var_name}"));
+                }
+            } else {
+                result.push(c);
+            }
+        }
+        result
+    }
+
     /// 求值插值字符串 #{...}。
     pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
         let mut result = String::new();
