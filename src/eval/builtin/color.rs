@@ -407,10 +407,15 @@ _ if !args.is_empty() => {
             [Value::Color(c)] => {
                 Ok(Some(Value::Number(c.a, None)))
             }
-            // CSS 透传：非颜色参数原样输出
+            // CSS 透传：旧 IE filter 语法 alpha(opacity=0) — 关键字参数直接透传
+            _ if !kw_args.is_empty() => {
+                let kw_str = kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(", ");
+                Ok(Some(Value::String(format!("{name}({kw_str})"), false)))
+            }
+            // CSS 透传：非颜色位置参数原样输出（如 alpha(var(--x))）
             _ if !args.is_empty() && !matches!(args[0], Value::Color(_)) => {
                 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
-                Ok(Some(Value::String(format!("alpha({arg_str})"), false)))
+                Ok(Some(Value::String(format!("{name}({arg_str})"), false)))
             }
             _ => Err(SassError::Eval("alpha 需要 1 个颜色参数".into())),
         },
