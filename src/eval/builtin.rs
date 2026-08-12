@@ -13,10 +13,16 @@ use super::*;
 use crate::error::{Result, SassError};
 
 impl Evaluator {
-    pub(crate) fn call_builtin(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
+    pub(crate) fn call_builtin(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        env: &Env,
+    ) -> Result<Value> {
         // CSS 函数名大小写不敏感（如 RGBA == rgba）
         let name = name.to_lowercase();
-        let span = crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
+        let span =
+            crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
         match name.as_str() {
             // ── sass-spec 测试辅助函数 ──
@@ -24,7 +30,9 @@ impl Evaluator {
             // 在 plain CSS 模式下不允许使用
             "sass" => {
                 if env.plain_css {
-                    return Err(SassError::Eval("sass() conditions aren't allowed in plain CSS".into()));
+                    return Err(SassError::Eval(
+                        "sass() conditions aren't allowed in plain CSS".into(),
+                    ));
                 }
                 if pos_args.is_empty() {
                     return Err(SassError::Eval("sass() 需要至少 1 个参数".into()));
@@ -112,7 +120,7 @@ impl Evaluator {
                     (a, b)
                 };
                 Ok(Value::Number(a.powf(b), None))
-            },
+            }
             "sqrt" => match pos_args {
                 [Value::Number(n, _)] => Ok(Value::Number(n.sqrt(), None)),
                 _ => Err(SassError::Eval("sqrt 需要 1 个数字参数".into())),
@@ -129,9 +137,73 @@ impl Evaluator {
                 [Value::Number(n, _)] => Ok(Value::Number(n.tan(), None)),
                 _ => Err(SassError::Eval("tan 需要 1 个参数".into())),
             },
+            "atan2" => match pos_args {
+                [Value::Number(y, yu), Value::Number(x, xu)] => {
+                    // 检查单位兼容性
+                    if let (Some(yu), Some(xu)) = (yu, xu) {
+                        if yu != xu {
+                            // 尝试兼容转换（如 cm 和 mm）
+                            // 简化处理：如果单位不同但都是长度单位，比值消去单位
+                        }
+                    }
+                    let result = y.atan2(*x).to_degrees();
+                    Ok(Value::Number(result, Some("deg".to_string())))
+                }
+                _ => Err(SassError::Eval("atan2 需要 2 个数字参数".into())),
+            },
+            "asin" => match pos_args {
+                [Value::Number(n, _)] => {
+                    let result = n.asin().to_degrees();
+                    Ok(Value::Number(result, Some("deg".to_string())))
+                }
+                _ => Err(SassError::Eval("asin 需要 1 个参数".into())),
+            },
+            "acos" => match pos_args {
+                [Value::Number(n, _)] => {
+                    let result = n.acos().to_degrees();
+                    Ok(Value::Number(result, Some("deg".to_string())))
+                }
+                _ => Err(SassError::Eval("acos 需要 1 个参数".into())),
+            },
+            "atan" => match pos_args {
+                [Value::Number(n, _)] => {
+                    let result = n.atan().to_degrees();
+                    Ok(Value::Number(result, Some("deg".to_string())))
+                }
+                _ => Err(SassError::Eval("atan 需要 1 个参数".into())),
+            },
+            "hypot" => {
+                if pos_args.is_empty() {
+                    return Err(SassError::Eval("hypot 需要 1+ 个参数".into()));
+                }
+                let sum: f64 = pos_args.iter()
+                    .map(|a| match a {
+                        Value::Number(n, _) => n * n,
+                        _ => 0.0,
+                    })
+                    .sum();
+                Ok(Value::Number(sum.sqrt(), None))
+            },
             "log" => match pos_args {
-                [Value::Number(n, _)] => Ok(Value::Number(n.ln(), None)),
-                _ => Err(SassError::Eval("log 需要 1 个数字参数".into())),
+                [Value::Number(n, _)] => {
+                    if *n < 0.0 {
+                        return Ok(Value::String("calc(NaN)".to_string(), false));
+                    }
+                    if *n == 0.0 {
+                        return Ok(Value::String("calc(-infinity)".to_string(), false));
+                    }
+                    Ok(Value::Number(n.ln(), None))
+                }
+                [Value::Number(n, _), Value::Number(base, _)] => {
+                    if *n < 0.0 {
+                        return Ok(Value::String("calc(NaN)".to_string(), false));
+                    }
+                    if *n == 0.0 {
+                        return Ok(Value::String("calc(-infinity)".to_string(), false));
+                    }
+                    Ok(Value::Number(n.log(*base), None))
+                }
+                _ => Err(SassError::Eval("log 需要 1-2 个数字参数".into())),
             },
             "random" => match pos_args {
                 [] => Ok(Value::Number(Self::simple_random(), None)),
@@ -184,10 +256,12 @@ impl Evaluator {
             "lighten" => Self::builtin_lighten(pos_args),
             "mix" => Self::builtin_mix(pos_args),
             "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
-            | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue" | "saturate"
-            | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
-            | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness" => {
-                color::call(&name, pos_args, kw_args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
+| "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue" | "saturate"
+| "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
+| "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness"
+| "whiteness" | "blackness" => {
+color::call(&name, pos_args, kw_args)?
+                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── map ──
@@ -226,6 +300,25 @@ impl Evaluator {
                     f.clone()
                 }),
                 _ => Err(SassError::Eval("if 需要 3 个参数".into())),
+            },
+            "content-exists" => {
+                // 检查当前环境是否有 @content 内容块
+                Ok(Value::Bool(env.content.is_some()))
+            },
+            "feature-exists" => match pos_args {
+                [Value::String(name, _)] => {
+                    // 支持的特性列表
+                    let supported = matches!(
+                        name.as_str(),
+                        "global-variable-shadowing"
+                            | "extend-selector-pseudoclass"
+                            | "units-level-3"
+                            | "at-error"
+                            | "custom-property"
+                    );
+                    Ok(Value::Bool(supported))
+                }
+                _ => Ok(Value::Bool(false)),
             },
             "mixin-exists" => Ok(Value::Bool(false)),
             "function-exists" => match pos_args {
@@ -269,7 +362,8 @@ impl Evaluator {
             // ── list 子模块分派 ──
             "length" | "list-length" | "nth" | "append" | "join" | "index" | "list-separator"
             | "separator" | "set-nth" | "is-bracketed" | "list-slash" | "zip" => {
-                list::call(&name, pos_args)?.ok_or_else(|| SassError::UndefinedFunction(name.clone()))
+                list::call(&name, pos_args)?
+                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
             // ── selector 子模块分派 ──
@@ -279,7 +373,8 @@ impl Evaluator {
             | "selector-parse"
             | "selector-simple-selectors"
             | "selector-unify"
-            | "selector-extend" => selector::call(&name, pos_args)?
+            | "selector-extend"
+            | "selector-replace" => selector::call(&name, pos_args)?
                 .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
 
             // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
@@ -302,16 +397,16 @@ impl Evaluator {
             name,
             // ── math ──
             "abs" | "ceil" | "floor" | "round" | "min" | "max" | "percentage"
-            | "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
-            | "random" | "clamp" | "unit" | "is-unitless" | "unitless"
+| "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
+| "atan2" | "asin" | "acos" | "atan" | "hypot" | "random" | "clamp" | "unit" | "is-unitless" | "unitless"
             | "compatible" | "comparable"
             // ── color ──
             | "rgba" | "rgb" | "darken" | "lighten" | "mix"
             | "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
             | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue"
-            | "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
-            | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
-            | "hue" | "saturation" | "lightness"
+| "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
+| "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
+| "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
             // ── map ──
             | "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge"
             | "map-remove" | "map-set" | "map-deep-merge" | "map-deep-remove"
@@ -319,7 +414,7 @@ impl Evaluator {
             | "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
             | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id"
             // ── meta ──
-            | "type-of" | "inspect" | "if" | "mixin-exists" | "function-exists"
+            | "type-of" | "inspect" | "if" | "feature-exists" | "content-exists" | "mixin-exists" | "function-exists"
             | "global-variable-exists" | "variable-exists" | "get-function" | "call"
             | "keywords"
             // ── list ──
@@ -329,7 +424,7 @@ impl Evaluator {
             // ── selector ──
             | "selector-append" | "selector-nest" | "selector-is-super"
             | "selector-parse" | "selector-simple-selectors" | "selector-unify"
-            | "selector-extend"
+            | "selector-extend" | "selector-replace"
             // ── CSS 原生（在 call_builtin 中有专门分支）──
             | "calc" | "env" | "var"
         )

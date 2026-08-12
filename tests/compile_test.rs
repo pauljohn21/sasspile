@@ -153,8 +153,8 @@ fn test_compile_extend_placeholder() {
 
 #[test]
 fn test_compile_hsl() {
-    let css = compile_expanded("a { color: hsl(120, 50%, 50%); }").unwrap();
-    assert!(css.contains("#"), "应该包含 hex 颜色: {css}");
+let css = compile_expanded("a { color: hsl(120, 50%, 50%); }").unwrap();
+assert!(css.contains("hsl(120, 50%, 50%)"), "应该保持 HSL 格式: {css}");
 }
 
 #[test]

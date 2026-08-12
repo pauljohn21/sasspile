@@ -71,7 +71,7 @@ fn test_color_rgb() {
     assert_eq!(c.r, 255);
     assert_eq!(c.g, 128);
     assert_eq!(c.b, 0);
-    assert!((c.a - 1.0).abs() < f32::EPSILON);
+    assert!((c.a - 1.0).abs() < f64::EPSILON);
 }
 
 #[test]

@@ -93,6 +93,18 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             }
             _ => Err(SassError::Eval("selector-extend 需要 3 个参数".into())),
         },
+        "selector-replace" => match args {
+            [
+                Value::String(selector, _),
+                Value::String(original, _),
+                Value::String(replacement, _),
+            ] => {
+                // 简化实现：在整个选择器中替换 original 为 replacement
+                let result = selector.replace(original.as_str(), replacement.as_str());
+                Ok(Some(Value::String(result, false)))
+            }
+            _ => Err(SassError::Eval("selector-replace 需要 3 个参数".into())),
+        },
         _ => Ok(None),
     }
 }

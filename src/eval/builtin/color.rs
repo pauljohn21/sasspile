@@ -9,6 +9,17 @@ use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 use im::HashMap;
 
+/// 展开空格分隔的 List 参数——用于 color.hsl(0 100% 50%) 等 CSS Level 4 语法。
+/// 当参数只有一个且为 space-separated list 时，展开为独立参数。
+fn flatten_space_list(args: &[Value]) -> Vec<Value> {
+    if args.len() == 1 {
+        if let Value::List(items, Separator::Space, false) = &args[0] {
+            return items.clone();
+        }
+    }
+    args.to_vec()
+}
+
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
 "invert" => match args {
@@ -58,6 +69,13 @@ _ if !args.is_empty() => {
             let mut a = c.a as f64;
             let mut has_hsl = false;
             let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+            let mut has_hwb = false;
+            let (mut hw, mut hb) = {
+                let r = c.r as f64 / 255.0;
+                let g = c.g as f64 / 255.0;
+                let b = c.b as f64 / 255.0;
+                (r.min(g).min(b), 1.0 - r.max(g).max(b))
+            };
 
             if let Some(v) = kw_args.get("red") {
                 if let Value::Number(n, _) = v { r += *n; } else { return Err(SassError::Eval("red 需要数字".into())); }
@@ -72,7 +90,7 @@ _ if !args.is_empty() => {
                 if let Value::Number(n, _) = v { a += *n; } else { return Err(SassError::Eval("alpha 需要数字".into())); }
             }
             if let Some(v) = kw_args.get("hue") {
-                if let Value::Number(n, _) = v { h = (h + *n).rem_euclid(360.0); has_hsl = true; }
+                if let Value::Number(n, _) = v { h = (h + *n).rem_euclid(360.0); has_hsl = true; has_hwb = true; }
             }
             if let Some(v) = kw_args.get("saturation") {
                 if let Value::Number(n, _) = v { s = (s + *n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
@@ -80,15 +98,25 @@ _ if !args.is_empty() => {
             if let Some(v) = kw_args.get("lightness") {
                 if let Value::Number(n, _) = v { l = (l + *n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
             }
-            if has_hsl {
+            if let Some(v) = kw_args.get("whiteness") {
+                if let Value::Number(n, _) = v { hw = (hw + *n / 100.0).clamp(0.0, 1.0); has_hwb = true; }
+            }
+            if let Some(v) = kw_args.get("blackness") {
+                if let Value::Number(n, _) = v { hb = (hb + *n / 100.0).clamp(0.0, 1.0); has_hwb = true; }
+            }
+            if has_hwb {
+                let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
+                r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+            } else if has_hsl {
                 let new_c = Evaluator::hsl_to_rgb(h, s, l);
                 r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
             }
-            Ok(Some(Value::Color(Color::rgba(
+            Ok(Some(Value::Color(Color::rgba_fmt(
                 r.round().clamp(0.0, 255.0) as u8,
                 g.round().clamp(0.0, 255.0) as u8,
                 b.round().clamp(0.0, 255.0) as u8,
-                a.clamp(0.0, 1.0) as f32,
+                a.clamp(0.0, 1.0) as f64,
+                c.format.clone(),
             ))))
         }
         "change-color" => {
@@ -102,6 +130,13 @@ _ if !args.is_empty() => {
             let mut a = c.a as f64;
             let mut has_hsl = false;
             let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+            let mut has_hwb = false;
+            let (mut hw, mut hb) = {
+                let r = c.r as f64 / 255.0;
+                let g = c.g as f64 / 255.0;
+                let b = c.b as f64 / 255.0;
+                (r.min(g).min(b), 1.0 - r.max(g).max(b))
+            };
 
             if let Some(v) = kw_args.get("red") {
                 if let Value::Number(n, _) = v { r = *n; }
@@ -116,7 +151,7 @@ _ if !args.is_empty() => {
                 if let Value::Number(n, _) = v { a = *n; }
             }
             if let Some(v) = kw_args.get("hue") {
-                if let Value::Number(n, _) = v { h = (*n).rem_euclid(360.0); has_hsl = true; }
+                if let Value::Number(n, _) = v { h = (*n).rem_euclid(360.0); has_hsl = true; has_hwb = true; }
             }
             if let Some(v) = kw_args.get("saturation") {
                 if let Value::Number(n, _) = v { s = (*n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
@@ -124,15 +159,25 @@ _ if !args.is_empty() => {
             if let Some(v) = kw_args.get("lightness") {
                 if let Value::Number(n, _) = v { l = (*n / 100.0).clamp(0.0, 1.0); has_hsl = true; }
             }
-            if has_hsl {
+            if let Some(v) = kw_args.get("whiteness") {
+                if let Value::Number(n, _) = v { hw = (*n / 100.0).clamp(0.0, 1.0); has_hwb = true; }
+            }
+            if let Some(v) = kw_args.get("blackness") {
+                if let Value::Number(n, _) = v { hb = (*n / 100.0).clamp(0.0, 1.0); has_hwb = true; }
+            }
+            if has_hwb {
+                let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
+                r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+            } else if has_hsl {
                 let new_c = Evaluator::hsl_to_rgb(h, s, l);
                 r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
             }
-            Ok(Some(Value::Color(Color::rgba(
+            Ok(Some(Value::Color(Color::rgba_fmt(
                 r.round().clamp(0.0, 255.0) as u8,
                 g.round().clamp(0.0, 255.0) as u8,
                 b.round().clamp(0.0, 255.0) as u8,
-                a.clamp(0.0, 1.0) as f32,
+                a.clamp(0.0, 1.0) as f64,
+                c.format.clone(),
             ))))
         }
         "scale-color" => {
@@ -185,28 +230,14 @@ _ if !args.is_empty() => {
                 r.round().clamp(0.0, 255.0) as u8,
                 g.round().clamp(0.0, 255.0) as u8,
                 b.round().clamp(0.0, 255.0) as u8,
-                a.clamp(0.0, 1.0) as f32,
+                a.clamp(0.0, 1.0) as f64,
             ))))
         }
         "hwb" => {
             // 展开空格分隔的 List（CSS hwb() 语法：hwb(0deg 30% 40%)）
-            // 仅接受非 bracketed、恰好 3 元素的 space-separated list
-            let flat = if args.len() == 1 {
-                if let Value::List(items, Separator::Space, false) = &args[0] {
-                    if items.len() == 3 {
-                        items.clone()
-                    } else {
-                        return Err(SassError::Eval("hwb 需要 3-4 个参数".into()));
-                    }
-                } else {
-                    return Err(SassError::Eval("hwb 需要 3-4 个参数".into()));
-                }
-            } else {
-                args.to_vec()
-            };
+            let flat = flatten_space_list(args);
             match &flat[..] {
                 [Value::Number(h, _), Value::Number(w, wu), Value::Number(b, bu)] => {
-                    // whiteness 和 blackness 必须有 % 单位
                     if wu.as_deref() != Some("%") {
                         return Err(SassError::Eval(
                             format!("Expected whiteness to have unit \"%\", was {}", w),
@@ -217,12 +248,8 @@ _ if !args.is_empty() => {
                             format!("Expected blackness to have unit \"%\", was {}", b),
                         ));
                     }
-                    Ok(Some(Value::Color(Evaluator::hwb_to_rgb(
-                        *h,
-                        *w / 100.0,
-                        *b / 100.0,
-                        1.0,
-                    ))))
+                    let c = Evaluator::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, 1.0);
+                    Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, 1.0, ColorFormat::Hwb(*h, *w / 100.0, *b / 100.0)))))
                 }
                 [Value::Number(h, _), Value::Number(w, wu), Value::Number(b, bu), Value::Number(a, au)] => {
                     if wu.as_deref() != Some("%") {
@@ -240,16 +267,31 @@ _ if !args.is_empty() => {
                             format!("Expected alpha to have unit \"%\" or no units, was {}", a),
                         ));
                     }
-                    Ok(Some(Value::Color(Evaluator::hwb_to_rgb(
-                        *h,
-                        *w / 100.0,
-                        *b / 100.0,
-                        *a as f32,
-                    ))))
+                    let c = Evaluator::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, *a as f64);
+                    Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a as f64, ColorFormat::Hwb(*h, *w / 100.0, *b / 100.0)))))
+                }
+                // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
+                _ if flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                    let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" ");
+                    Ok(Some(Value::String(format!("hwb({arg_str})"), false)))
                 }
                 _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
             }
         }
+        "whiteness" => match args {
+            [Value::Color(c)] => {
+                let w = c.r.min(c.g).min(c.b) as f64 / 255.0 * 100.0;
+                Ok(Some(Value::Number(w, Some("%".to_string()))))
+            }
+            _ => Err(SassError::Eval("whiteness 需要 1 个颜色参数".into())),
+        },
+        "blackness" => match args {
+            [Value::Color(c)] => {
+                let b = (1.0 - c.r.max(c.g).max(c.b) as f64 / 255.0) * 100.0;
+                Ok(Some(Value::Number(b, Some("%".to_string()))))
+            }
+            _ => Err(SassError::Eval("blackness 需要 1 个颜色参数".into())),
+        },
         "complement" => match args {
             [Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
                 255 - c.r,
@@ -258,40 +300,53 @@ _ if !args.is_empty() => {
             )))),
             _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
         },
-        "hsl" => match args {
+        "hsl" => {
+            let flat = flatten_space_list(args);
+            match &flat[..] {
             [
                 Value::Number(h, _),
                 Value::Number(s, _),
                 Value::Number(l, _),
-            ] => Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
-                *h,
-                *s / 100.0,
-                *l / 100.0,
-            )))),
+            ] => {
+                let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
+                Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, 1.0, ColorFormat::Hsl(*h, *s / 100.0, *l / 100.0)))))
+            }
             [
                 Value::Number(h, _),
                 Value::Number(s, _),
                 Value::Number(l, _),
                 Value::Number(a, _),
             ] => {
-                let mut c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                c.a = *a as f32;
-                Ok(Some(Value::Color(c)))
+                let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
+                Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a as f64, ColorFormat::Hsl(*h, *s / 100.0, *l / 100.0)))))
+            }
+            // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
+            _ if flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+                Ok(Some(Value::String(format!("hsl({arg_str})"), false)))
             }
             _ => Err(SassError::Eval("hsl 需要 3-4 个参数".into())),
+            }
         },
-        "hsla" => match args {
+        "hsla" => {
+            let flat = flatten_space_list(args);
+            match &flat[..] {
             [
                 Value::Number(h, _),
                 Value::Number(s, _),
                 Value::Number(l, _),
                 Value::Number(a, _),
             ] => {
-                let mut c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                c.a = *a as f32;
-                Ok(Some(Value::Color(c)))
+                let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
+                Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a as f64, ColorFormat::Hsl(*h, *s / 100.0, *l / 100.0)))))
+            }
+            // CSS 透传
+            _ if flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+                Ok(Some(Value::String(format!("hsla({arg_str})"), false)))
             }
             _ => Err(SassError::Eval("hsla 需要 4 个参数".into())),
+            }
         },
         "adjust-hue" => match args {
             [Value::Color(c), Value::Number(deg, _)] => {
@@ -333,7 +388,7 @@ _ if !args.is_empty() => {
                 c.r,
                 c.g,
                 c.b,
-                (c.a - *amount as f32).max(0.0),
+                (c.a - *amount as f64).max(0.0),
             )))),
             _ => Err(SassError::Eval(
                 "transparentize 需要 (color, amount) 参数".into(),
@@ -344,12 +399,19 @@ _ if !args.is_empty() => {
                 c.r,
                 c.g,
                 c.b,
-                (c.a + *amount as f32).min(1.0),
+                (c.a + *amount as f64).min(1.0),
             )))),
             _ => Err(SassError::Eval("opacify 需要 (color, amount) 参数".into())),
         },
         "alpha" | "opacity" => match args {
-            [Value::Color(c)] => Ok(Some(Value::Number(c.a as f64, None))),
+            [Value::Color(c)] => {
+                Ok(Some(Value::Number(c.a, None)))
+            }
+            // CSS 透传：非颜色参数原样输出
+            _ if !args.is_empty() && !matches!(args[0], Value::Color(_)) => {
+                let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+                Ok(Some(Value::String(format!("alpha({arg_str})"), false)))
+            }
             _ => Err(SassError::Eval("alpha 需要 1 个颜色参数".into())),
         },
         "red" => match args {

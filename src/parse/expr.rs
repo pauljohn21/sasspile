@@ -283,8 +283,9 @@ impl<'tok> Parser<'tok> {
                         }
                         return Ok(Value::Calc(format!("{name}({content})")));
                     }
-                    // CSS Level 4: rgb(R G B / A) — 空格分隔 + / alpha 分隔符
-                    if matches!(name.as_str(), "rgb" | "rgba") {
+                    // CSS Level 4: rgb(R G B / A), hsl(H S L / A), hwb(H W B / A)
+                    // — 空格分隔 + / alpha 分隔符
+                    if matches!(name.as_str(), "rgb" | "rgba" | "hsl" | "hsla" | "hwb") {
                         let save_pos = self.pos;
                         self.advance(); // 消费 (
                         self.skip_ws();
@@ -613,7 +614,7 @@ pub(crate) fn parse_hash_color(s: &str) -> Color {
             hex2(bytes[1], bytes[1]),
             hex2(bytes[2], bytes[2]),
             hex2(bytes[3], bytes[3]),
-            hex1(bytes[0]) as f32 / 15.0,
+            hex1(bytes[0]) as f64 / 15.0,
         ),
         6 => Color::rgb(
             hex2(bytes[0], bytes[1]),
@@ -624,7 +625,7 @@ pub(crate) fn parse_hash_color(s: &str) -> Color {
             hex2(bytes[0], bytes[1]),
             hex2(bytes[2], bytes[3]),
             hex2(bytes[4], bytes[5]),
-            hex2(bytes[6], bytes[7]) as f32 / 255.0,
+            hex2(bytes[6], bytes[7]) as f64 / 255.0,
         ),
         _ => Color::default(),
     }

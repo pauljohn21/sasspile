@@ -348,7 +348,7 @@ impl Evaluator {
     }
 
     /// HWB → RGB 转换 (W3C CSS Color 4 算法)。
-    pub(crate) fn hwb_to_rgb(h: f64, w: f64, b: f64, alpha: f32) -> Color {
+    pub(crate) fn hwb_to_rgb(h: f64, w: f64, b: f64, alpha: f64) -> Color {
         crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "hwb_to_rgb",
@@ -444,30 +444,47 @@ impl Evaluator {
     }
 
     pub(crate) fn builtin_rgba(args: &[Value]) -> Result<Value> {
-        match args {
+        // 展开空格分隔的 List（CSS Level 4 语法：rgb(R G B / A)）
+        let args: Vec<Value> = if args.len() == 1 {
+            if let Value::List(items, Separator::Space, false) = &args[0] {
+                items.clone()
+            } else {
+                args.to_vec()
+            }
+        } else {
+            args.to_vec()
+        };
+        match &args[..] {
             [
-                Value::Number(r, _),
-                Value::Number(g, _),
-                Value::Number(b, _),
+                Value::Number(r, ru),
+                Value::Number(g, gu),
+                Value::Number(b, bu),
             ] => {
+                // 百分比参数转换为 0-255
+                let r_val = if ru.as_deref() == Some("%") { (r * 255.0 / 100.0).round() as u8 } else { *r as u8 };
+                let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
+                let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
                     r = *r, g = *g, b = *b,
                     "rgba 3-arg input"
                 );
-                Ok(Value::Color(Color::rgb(*r as u8, *g as u8, *b as u8)))
+                Ok(Value::Color(Color::rgba_fmt(r_val, g_val, b_val, 1.0, ColorFormat::Rgb)))
             }
             [
-                Value::Number(r, _),
-                Value::Number(g, _),
-                Value::Number(b, _),
+                Value::Number(r, ru),
+                Value::Number(g, gu),
+                Value::Number(b, bu),
                 Value::Number(a, ua),
             ] => {
+                let r_val = if ru.as_deref() == Some("%") { (r * 255.0 / 100.0).round() as u8 } else { *r as u8 };
+                let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
+                let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
                 let alpha = if ua.as_deref() == Some("%") {
-                    (*a / 100.0) as f32
+                    (*a / 100.0) as f64
                 } else {
-                    *a as f32
+                    *a as f64
                 };
                 crate::__tracing::debug!(
                     target: "sasspile::color",
@@ -475,13 +492,13 @@ impl Evaluator {
                     r = *r, g = *g, b = *b, a = *a,
                     "rgba 4-arg input"
                 );
-                Ok(Value::Color(Color::rgba(
-                    *r as u8, *g as u8, *b as u8, alpha,
+                Ok(Value::Color(Color::rgba_fmt(
+                    r_val, g_val, b_val, alpha, ColorFormat::Rgb,
                 )))
             }
             // rgba($color, $alpha) — 修改颜色的 alpha 通道
             [Value::Color(c), Value::Number(a, _)] => {
-                Ok(Value::Color(Color::rgba(c.r, c.g, c.b, *a as f32)))
+                Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a as f64, c.format.clone())))
             }
             // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
             _ if args.iter().any(|a| {
@@ -509,11 +526,11 @@ impl Evaluator {
                     amount = *amount,
                     "darken input"
                 );
-                let factor = 1.0 - (*amount as f32 / 100.0);
+                let factor = 1.0 - (*amount as f64 / 100.0);
                 let result = Value::Color(Color::rgba(
-                    (c.r as f32 * factor) as u8,
-                    (c.g as f32 * factor) as u8,
-                    (c.b as f32 * factor) as u8,
+                    (c.r as f64 * factor) as u8,
+                    (c.g as f64 * factor) as u8,
+                    (c.b as f64 * factor) as u8,
                     c.a,
                 ));
                 crate::__tracing::debug!(
@@ -538,11 +555,11 @@ impl Evaluator {
                     amount = *amount,
                     "lighten input"
                 );
-                let factor = *amount as f32 / 100.0;
+                let factor = *amount as f64 / 100.0;
                 let result = Value::Color(Color::rgba(
-                    (c.r as f32 + (255.0 - c.r as f32) * factor) as u8,
-                    (c.g as f32 + (255.0 - c.g as f32) * factor) as u8,
-                    (c.b as f32 + (255.0 - c.b as f32) * factor) as u8,
+                    (c.r as f64 + (255.0 - c.r as f64) * factor) as u8,
+                    (c.g as f64 + (255.0 - c.g as f64) * factor) as u8,
+                    (c.b as f64 + (255.0 - c.b as f64) * factor) as u8,
                     c.a,
                 ));
                 crate::__tracing::debug!(
@@ -580,11 +597,11 @@ impl Evaluator {
                     color_a = ?a, color_b = ?b, weight = *w,
                     "mix 3-arg input"
                 );
-                let weight = *w as f32 / 100.0;
+                let weight = *w as f64 / 100.0;
                 Ok(Value::Color(Color::rgba(
-                    (a.r as f32 * (1.0 - weight) + b.r as f32 * weight) as u8,
-                    (a.g as f32 * (1.0 - weight) + b.g as f32 * weight) as u8,
-                    (a.b as f32 * (1.0 - weight) + b.b as f32 * weight) as u8,
+                    (a.r as f64 * (1.0 - weight) + b.r as f64 * weight) as u8,
+                    (a.g as f64 * (1.0 - weight) + b.g as f64 * weight) as u8,
+                    (a.b as f64 * (1.0 - weight) + b.b as f64 * weight) as u8,
                     a.a * (1.0 - weight) + b.a * weight,
                 )))
             }

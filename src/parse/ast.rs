@@ -283,8 +283,22 @@ pub enum UnaryOp {
     Not,
 }
 
+/// 颜色格式——追踪颜色创建方式，影响序列化输出。
+#[derive(Debug, Clone, Default)]
+pub enum ColorFormat {
+    /// 自动：hex / 命名颜色 / rgba（默认行为）。
+    #[default]
+    Auto,
+    /// rgb(r, g, b) / rgba(r, g, b, a)——不转 hex 或命名。
+    Rgb,
+    /// hsl(h, s%, l%) / hsla(h, s%, l%, a)——存储原始 HSL 值 (h: 0-360, s/l: 0-1)。
+    Hsl(f64, f64, f64),
+    /// hwb(h w% b% / a)——存储原始 HWB 值 (h: 0-360, w/b: 0-1)。
+    Hwb(f64, f64, f64),
+}
+
 /// 颜色。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Color {
     /// 红色通道（0-255）。
     pub r: u8,
@@ -292,8 +306,17 @@ pub struct Color {
     pub g: u8,
     /// 蓝色通道（0-255）。
     pub b: u8,
-    /// Alpha 通道（0.0-1.0）。
-    pub a: f32,
+/// Alpha 通道（0.0-1.0）。
+pub a: f64,
+    /// 颜色格式（追踪创建方式）。
+    pub format: ColorFormat,
+}
+
+/// 颜色相等性仅比较 RGBA 值，忽略格式。
+impl PartialEq for Color {
+    fn eq(&self, other: &Self) -> bool {
+        self.r == other.r && self.g == other.g && self.b == other.b && self.a == other.a
+    }
 }
 
 impl Default for Color {
@@ -303,6 +326,7 @@ impl Default for Color {
             g: 0,
             b: 0,
             a: 1.0,
+            format: ColorFormat::Auto,
         }
     }
 }
@@ -310,11 +334,19 @@ impl Default for Color {
 impl Color {
     /// 创建 RGB 颜色。
     pub fn rgb(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b, a: 1.0 }
+        Self { r, g, b, a: 1.0, format: ColorFormat::Auto }
     }
     /// 创建 RGBA 颜色。
-    pub fn rgba(r: u8, g: u8, b: u8, a: f32) -> Self {
-        Self { r, g, b, a }
+    pub fn rgba(r: u8, g: u8, b: u8, a: f64) -> Self {
+        Self { r, g, b, a, format: ColorFormat::Auto }
+    }
+    /// 创建带格式的 RGB 颜色。
+    pub fn rgb_fmt(r: u8, g: u8, b: u8, format: ColorFormat) -> Self {
+        Self { r, g, b, a: 1.0, format }
+    }
+    /// 创建带格式的 RGBA 颜色。
+    pub fn rgba_fmt(r: u8, g: u8, b: u8, a: f64, format: ColorFormat) -> Self {
+        Self { r, g, b, a, format }
     }
 }
 
@@ -336,6 +368,36 @@ pub enum Separator {
 pub struct Ast {
     /// 顶层语法树节点列表。
     pub nodes: Vec<Node>,
+}
+
+/// 格式化 hue 值——整数不带小数点，否则保留原始精度。
+fn format_hue(h: f64) -> String {
+    if h.fract() == 0.0 {
+        format!("{}", h as i64)
+    } else {
+        format!("{h}")
+    }
+}
+
+/// 格式化百分比值（0.0-1.0 → 0%-100%），浮点精度截断到 11 位小数。
+fn format_pct(v: f64) -> String {
+    let pct = v * 100.0;
+    // 修复浮点精度问题（如 60.00000000000001 → 60）
+    let pct = (pct * 1e10).round() / 1e10;
+    if pct.fract() == 0.0 {
+        format!("{}", pct as i64)
+    } else {
+        format!("{pct}")
+    }
+}
+/// 格式化 alpha 值。
+fn format_alpha(a: f64) -> String {
+if a.fract() == 0.0 {
+format!("{}", a as i64)
+} else {
+let s = format!("{a}");
+s
+}
 }
 
 impl std::fmt::Display for Value {
@@ -373,15 +435,40 @@ impl std::fmt::Display for Value {
             }
             Value::String(s, false) => write!(f, "{s}"),
             Value::Color(c) => {
-                if (c.a - 1.0).abs() < f32::EPSILON {
-                    // 检查是否为命名颜色，优先输出名称（如 red 而非 #ff0000）
-                    if let Some(name) = crate::eval::Evaluator::reverse_lookup_named_color(c) {
-                        write!(f, "{name}")
-                    } else {
-                        write!(f, "#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+                match &c.format {
+                    ColorFormat::Hsl(h, s, l) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "hsl({}, {}%, {}%)", format_hue(*h), format_pct(*s), format_pct(*l))
+                        } else {
+                            write!(f, "hsla({}, {}%, {}%, {})", format_hue(*h), format_pct(*s), format_pct(*l), format_alpha(c.a))
+                        }
                     }
-                } else {
-                    write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a)
+                    ColorFormat::Hwb(h, w, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "hwb({} {}% {}%)", format_hue(*h), format_pct(*w), format_pct(*b))
+                        } else {
+                            write!(f, "hwb({} {}% {}% / {})", format_hue(*h), format_pct(*w), format_pct(*b), format_alpha(c.a))
+                        }
+                    }
+ColorFormat::Rgb => {
+if (c.a - 1.0).abs() < f64::EPSILON {
+write!(f, "rgb({}, {}, {})", c.r, c.g, c.b)
+} else {
+write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
+}
+                    }
+ColorFormat::Auto => {
+if (c.a - 1.0).abs() < f64::EPSILON {
+// 检查是否为命名颜色，优先输出名称（如 red 而非 #ff0000）
+if let Some(name) = crate::eval::Evaluator::reverse_lookup_named_color(c) {
+write!(f, "{name}")
+} else {
+write!(f, "#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+}
+} else {
+write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
+}
+                    }
                 }
             }
             Value::List(elements, sep, bracketed) => {

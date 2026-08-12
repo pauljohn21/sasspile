@@ -222,13 +222,15 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             [Value::List(_, _, true)] => Ok(Some(Value::Bool(true))),
             _ => Ok(Some(Value::Bool(false))),
         },
-        "list-slash" => match args {
-            [a, b] => Ok(Some(Value::List(
-                vec![a.clone(), b.clone()],
+        "list-slash" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("list-slash 需要 1+ 个参数".into()));
+            }
+            Ok(Some(Value::List(
+                args.to_vec(),
                 Separator::Slash,
                 false,
-            ))),
-            _ => Err(SassError::Eval("list-slash 需要 2 个参数".into())),
+            )))
         },
         "zip" => {
             if args.len() < 2 {
