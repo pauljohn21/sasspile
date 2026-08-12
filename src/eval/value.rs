@@ -28,11 +28,21 @@ impl Evaluator {
     /// 部分条件求值结果。
     fn partial_eval_condition(condition: &Value, env: &Env) -> Result<PartialCond> {
         match condition {
+            // 括号——递归求值内部表达式
+            // Paren 包裹 List 时不保留括号（如 (var(--not) css()) → var(--not) css()）
+            // Paren 包裹单个 Calc 时保留括号（如 (css()) → (css())）
             Value::Paren(inner) => {
                 match Self::partial_eval_condition(inner, env)? {
                     PartialCond::True => Ok(PartialCond::True),
                     PartialCond::False => Ok(PartialCond::False),
-                    PartialCond::Css(s) => Ok(PartialCond::Css(format!("({s})"))),
+                    PartialCond::Css(s) => {
+                        // 如果内部是 List，不加括号；否则加括号
+                        if matches!(inner.as_ref(), Value::List(_, Separator::Space, _)) {
+                            Ok(PartialCond::Css(s))
+                        } else {
+                            Ok(PartialCond::Css(format!("({s})")))
+                        }
+                    }
                 }
             }
             Value::UnaryOp(UnaryOp::Not, inner) => {
@@ -80,6 +90,47 @@ impl Evaluator {
             },
             // CSS 原生函数——不可求值
             Value::Calc(_) => Ok(PartialCond::Css(format!("{condition}"))),
+            // css() 函数（可能通过插值得到函数名）——CSS 透传
+            Value::Call(name, _args) if name == "css" => {
+                Ok(PartialCond::Css(format!("{condition}")))
+            }
+            // 嵌套 if() 调用——如果返回 CSS 值则保留原始形式
+            Value::Call(name, _args) if name == "if" => {
+                let val = Self::eval_value(condition, env)?;
+                if let Value::Calc(_) = val {
+                    Ok(PartialCond::Css(format!("{condition}")))
+                } else if Self::is_truthy(&val) {
+                    Ok(PartialCond::True)
+                } else {
+                    Ok(PartialCond::False)
+                }
+            }
+            // 空格分隔列表作为条件（如 var(--not) css()）
+            Value::List(items, Separator::Space, _) => {
+                // 检查是否包含 CSS 部分
+                let mut has_css = false;
+                let mut css_parts: Vec<String> = Vec::new();
+                for item in items {
+                    match Self::partial_eval_condition(item, env)? {
+                        PartialCond::False => {
+                            // false 条件在空格分隔列表中使整个条件为 false
+                            return Ok(PartialCond::False);
+                        }
+                        PartialCond::True => {
+                            // true 条件不影响 CSS 部分
+                        }
+                        PartialCond::Css(s) => {
+                            has_css = true;
+                            css_parts.push(s);
+                        }
+                    }
+                }
+                if has_css {
+                    Ok(PartialCond::Css(css_parts.join(" ")))
+                } else {
+                    Ok(PartialCond::True)
+                }
+            }
             // sass() 函数——求值参数
             Value::Call(name, _args) if name == "sass" => {
                 if env.plain_css {
@@ -93,14 +144,26 @@ impl Evaluator {
                 }
             }
             // 插值——plain CSS 中不允许
-            Value::Interp(_) => {
+            Value::Interp(s) => {
                 if env.plain_css {
                     return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into()));
                 }
-                // 在 SCSS 模式下，插值求值后检查是否为 CSS 函数
-                let val = Self::eval_value(condition, env)?;
-                if let Value::Calc(_) = val {
-                    Ok(PartialCond::Css(format!("{condition}")))
+                // 用 eval_simple_expr 求值插值内容（正确处理字符串引号）
+                let val = Self::eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
+                // 提取字符串内部值（去引号）进行比较
+                let val_str = match &val {
+                    Value::String(inner, _) => inner.clone(),
+                    _ => val.to_string(),
+                };
+                // and/or/not 关键字通过插值得到——作为 CSS 透传
+                if val_str == "and" || val_str == "or" || val_str == "not" {
+                    Ok(PartialCond::Css(val_str))
+                } else if val_str.starts_with("css(") || val_str.starts_with("var(") || val_str.starts_with("attr(")
+                    || val_str.starts_with("calc(") || val_str.starts_with("env(") || val_str.starts_with("clamp(")
+                {
+                    Ok(PartialCond::Css(val_str))
+                } else if let Value::Calc(_) = val {
+                    Ok(PartialCond::Css(val.to_string()))
                 } else if Self::is_truthy(&val) {
                     Ok(PartialCond::True)
                 } else {
@@ -110,7 +173,10 @@ impl Evaluator {
             // 其他值——正常求值
             _ => {
                 let val = Self::eval_value(condition, env)?;
-                if Self::is_truthy(&val) {
+                // 求值结果为 CSS 原生函数——透传
+                if let Value::Calc(_) = val {
+                    Ok(PartialCond::Css(val.to_string()))
+                } else if Self::is_truthy(&val) {
                     Ok(PartialCond::True)
                 } else {
                     Ok(PartialCond::False)

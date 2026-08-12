@@ -13,10 +13,22 @@
 			"path": "../bootstrap-5.3.8"
 		},
 		{
-			"path": "../rivulet"
+			"path": "../banyan"
 		},
 		{
-			"path": "../banyan"
+			"path": "../flux"
+		},
+		{
+			"path": "../creep"
+		},
+		{
+			"path": "../creep-core"
+		},
+		{
+			"path": "../creep-frontend"
+		},
+		{
+			"path": "../creep-demo"
 		}
 	],
 	"settings": {}

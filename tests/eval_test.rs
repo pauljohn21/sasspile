@@ -1,6 +1,32 @@
+use sasspile::compile_expanded;
 use sasspile::css::node::CssNode;
 use sasspile::eval::Evaluator;
 use sasspile::parse::ast::*;
+
+#[test]
+fn test_eval_interp_not_css_if() {
+    sasspile::init_tracing();
+    // #{"not"} css() 应保留为 not css()（插值 not + CSS 透传 css()）
+    let input = r#"a {b: if(#{"not"} css(): c)}"#;
+    let css = compile_expanded(input).unwrap_or_else(|err| {
+        tracing::error!("编译失败: {:?}", err);
+        String::new()
+    });
+    tracing::info!("结果: [{}]", css);
+    assert_eq!(css, "a {\n  b: if(not css(): c);\n}\n");
+}
+
+#[test]
+fn test_eval_interp_and_keyword() {
+    sasspile::init_tracing();
+    // 测试 if(#{"and"}: c) — 插值 and 应作为 CSS 透传
+    let input = r#"a {b: if(#{"and"}: c)}"#;
+    let css = compile_expanded(input).unwrap_or_else(|_e| {
+        String::new()
+    });
+    // and 应作为 CSS 透传，条件无法求值为 true
+    assert_eq!(css, "a {\n  b: if(and: c);\n}\n");
+}
 
 #[test]
 fn test_eval_simple() {

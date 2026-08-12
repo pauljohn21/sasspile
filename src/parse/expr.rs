@@ -241,7 +241,7 @@ impl<'tok> Parser<'tok> {
                         let next = self.tokens.get(self.pos + 1);
                         matches!(next, Some(Token::String(_, _)))
                     };
-                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url" | "css")
+                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url" | "css" | "attr")
                         && !is_url_with_string
                     {
                         self.advance(); // 消费 (
@@ -264,6 +264,11 @@ impl<'tok> Parser<'tok> {
                                 }
                                 Token::Whitespace => {
                                     content.push(' ');
+                                    self.advance();
+                                }
+                                Token::Interp(s) => {
+                                    // 插值在 CSS 函数中——求值变量后输出
+                                    content.push_str(s);
                                     self.advance();
                                 }
                                 _ => {
@@ -348,9 +353,24 @@ impl<'tok> Parser<'tok> {
                     }
                 }
                 if parts.len() == 1 {
-                    Ok(Value::Interp(parts.into_iter().next().unwrap()))
+                    let interp = parts.into_iter().next().unwrap();
+                    // 插值后跟 () → 函数调用（如 #{css}() → Call("css", [])）
+                    self.skip_ws();
+                    if self.peek() == Some(&Token::LParen) {
+                        let args = self.parse_args()?;
+                        Ok(Value::Call(interp, args))
+                    } else {
+                        Ok(Value::Interp(interp))
+                    }
                 } else {
-                    Ok(Value::Interp(parts.join("")))
+                    let joined = parts.join("");
+                    self.skip_ws();
+                    if self.peek() == Some(&Token::LParen) {
+                        let args = self.parse_args()?;
+                        Ok(Value::Call(joined, args))
+                    } else {
+                        Ok(Value::Interp(joined))
+                    }
                 }
             }
             Some(Token::True) => {

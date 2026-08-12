@@ -261,6 +261,10 @@ impl Evaluator {
                 important,
             } => {
                 let val = Self::eval_value(value, env)?;
+                // SCSS 中 null 值声明不输出
+                if matches!(val, Value::Null) {
+                    return Ok((vec![], env.clone()));
+                }
                 Ok((
                     vec![CssNode::Declaration {
                         property: property.clone(),

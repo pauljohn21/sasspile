@@ -37,6 +37,28 @@ fn test_interp() {
 }
 
 #[test]
+fn test_interp_with_string() {
+    // #{"not"} 的内容应包含引号
+    let tokens = lex("#{\"not\"}");
+    assert_eq!(tokens, vec![Token::Interp("\"not\"".to_string())]);
+}
+
+#[test]
+fn test_interp_not_css() {
+    // #{"not"} css() 的 token 序列
+    let tokens = lex("#{\"not\"} css()");
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Interp("\"not\"".to_string()),
+            Token::Ident("css".to_string()),
+            Token::LParen,
+            Token::RParen,
+        ]
+    );
+}
+
+#[test]
 fn test_amp() {
     assert_eq!(
         lex("&:hover"),

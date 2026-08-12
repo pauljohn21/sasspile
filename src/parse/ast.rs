@@ -414,8 +414,22 @@ impl std::fmt::Display for Value {
             Value::Bool(false) => write!(f, "false"),
             Value::Null => write!(f, "null"),
             Value::Call(name, args) => {
-                let parts: Vec<String> = args.iter().map(|a| a.value.to_string()).collect();
-                write!(f, "{}({})", name, parts.join(", "))
+                // if() 冒号语法：condition: value; else: other
+                if name == "if" && args.iter().any(|a| a.condition.is_some() || a.name.as_deref() == Some("else")) {
+                    let parts: Vec<String> = args.iter().map(|a| {
+                        if let Some(cond) = &a.condition {
+                            format!("{}: {}", cond, a.value)
+                        } else if let Some(n) = &a.name {
+                            format!("{}: {}", n, a.value)
+                        } else {
+                            a.value.to_string()
+                        }
+                    }).collect();
+                    write!(f, "{}({})", name, parts.join("; "))
+                } else {
+                    let parts: Vec<String> = args.iter().map(|a| a.value.to_string()).collect();
+                    write!(f, "{}({})", name, parts.join(", "))
+                }
             }
             Value::Interp(s) => write!(f, "#{{{s}}}"),
             Value::BinOp(b) => {
