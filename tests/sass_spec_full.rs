@@ -55,9 +55,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
 
             let case_files: Vec<(String, String)> = files
                 .iter()
-                .filter(|(p, _)| {
-                    (p.ends_with(".scss") || p.ends_with(".css")) && !p.contains("/sass/")
-                })
+                .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css"))
                 .map(|(p, c)| (p.clone(), c.clone()))
                 .collect();
 

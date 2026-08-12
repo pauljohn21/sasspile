@@ -369,12 +369,12 @@ impl<'tok> Parser<'tok> {
                         spread,
                         condition: Some(expr),
                     });
-                    // 检查 ; else: other 语法
+                    // 检查 ; condition: value 或 ; else: other 语法（支持多条件）
                     self.skip_ws();
-                    if self.peek() == Some(&Token::Semicolon) {
+                    while self.peek() == Some(&Token::Semicolon) {
                         self.advance();
                         self.skip_ws();
-                        // 期望 else : value
+                        // 期望 else : value 或 condition : value
                         if let Some(Token::Ident(s)) = self.peek() {
                             if s == "else" {
                                 self.advance();
@@ -390,7 +390,28 @@ impl<'tok> Parser<'tok> {
                                     spread: false,
                                     condition: None,
                                 });
+                                break; // else 是最后一个
                             }
+                        }
+                        // 解析 condition : value
+                        let cond2 = self.parse_expr(0)?;
+                        self.skip_ws();
+                        if self.peek() == Some(&Token::Colon) {
+                            self.advance();
+                            self.skip_ws();
+                            let val2 = self.parse_expr(0)?;
+                            let spread2 = if self.peek() == Some(&Token::DotDotDot) {
+                                self.advance();
+                                true
+                            } else {
+                                false
+                            };
+                            args.push(Arg {
+                                name: None,
+                                value: val2,
+                                spread: spread2,
+                                condition: Some(cond2),
+                            });
                         }
                     }
                     // 跳过后续处理

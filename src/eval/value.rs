@@ -4,6 +4,13 @@ use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
 use crate::__tracing::warn;
 
+/// 部分条件求值结果。
+enum PartialCond {
+    True,
+    False,
+    Css(String),
+}
+
 impl Evaluator {
     pub(crate) fn eval_variable(
         name: &str,
@@ -18,6 +25,100 @@ impl Evaluator {
         Ok((vec![], env.bind(name.to_string(), val)))
     }
 
+    /// 部分条件求值结果。
+    fn partial_eval_condition(condition: &Value, env: &Env) -> Result<PartialCond> {
+        match condition {
+            Value::Paren(inner) => {
+                match Self::partial_eval_condition(inner, env)? {
+                    PartialCond::True => Ok(PartialCond::True),
+                    PartialCond::False => Ok(PartialCond::False),
+                    PartialCond::Css(s) => Ok(PartialCond::Css(format!("({s})"))),
+                }
+            }
+            Value::UnaryOp(UnaryOp::Not, inner) => {
+                match Self::partial_eval_condition(inner, env)? {
+                    PartialCond::True => Ok(PartialCond::False),
+                    PartialCond::False => Ok(PartialCond::True),
+                    PartialCond::Css(s) => Ok(PartialCond::Css(format!("not {s}"))),
+                }
+            }
+            Value::BinOp(b) => match b.op {
+                BinOpKind::And => {
+                    match Self::partial_eval_condition(&b.left, env)? {
+                        PartialCond::False => Ok(PartialCond::False),
+                        PartialCond::True => Self::partial_eval_condition(&b.right, env),
+                        PartialCond::Css(left_css) => {
+                            match Self::partial_eval_condition(&b.right, env)? {
+                                PartialCond::False => Ok(PartialCond::False),
+                                PartialCond::True => Ok(PartialCond::Css(left_css)),
+                                PartialCond::Css(right_css) => Ok(PartialCond::Css(format!("{left_css} and {right_css}"))),
+                            }
+                        }
+                    }
+                }
+                BinOpKind::Or => {
+                    match Self::partial_eval_condition(&b.left, env)? {
+                        PartialCond::True => Ok(PartialCond::True),
+                        PartialCond::False => Self::partial_eval_condition(&b.right, env),
+                        PartialCond::Css(left_css) => {
+                            match Self::partial_eval_condition(&b.right, env)? {
+                                PartialCond::True => Ok(PartialCond::True),
+                                PartialCond::False => Ok(PartialCond::Css(left_css)),
+                                PartialCond::Css(right_css) => Ok(PartialCond::Css(format!("{left_css} or {right_css}"))),
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    let val = Self::eval_value(condition, env)?;
+                    if Self::is_truthy(&val) {
+                        Ok(PartialCond::True)
+                    } else {
+                        Ok(PartialCond::False)
+                    }
+                }
+            },
+            // CSS 原生函数——不可求值
+            Value::Calc(_) => Ok(PartialCond::Css(format!("{condition}"))),
+            // sass() 函数——求值参数
+            Value::Call(name, _args) if name == "sass" => {
+                if env.plain_css {
+                    return Err(SassError::Eval("sass() conditions aren't allowed in plain CSS".into()));
+                }
+                let val = Self::eval_value(condition, env)?;
+                if Self::is_truthy(&val) {
+                    Ok(PartialCond::True)
+                } else {
+                    Ok(PartialCond::False)
+                }
+            }
+            // 插值——plain CSS 中不允许
+            Value::Interp(_) => {
+                if env.plain_css {
+                    return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into()));
+                }
+                // 在 SCSS 模式下，插值求值后检查是否为 CSS 函数
+                let val = Self::eval_value(condition, env)?;
+                if let Value::Calc(_) = val {
+                    Ok(PartialCond::Css(format!("{condition}")))
+                } else if Self::is_truthy(&val) {
+                    Ok(PartialCond::True)
+                } else {
+                    Ok(PartialCond::False)
+                }
+            }
+            // 其他值——正常求值
+            _ => {
+                let val = Self::eval_value(condition, env)?;
+                if Self::is_truthy(&val) {
+                    Ok(PartialCond::True)
+                } else {
+                    Ok(PartialCond::False)
+                }
+            }
+        }
+    }
+
     /// 求值值表达式。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(value, env), fields(depth = env.depth), level = "trace"))]
     pub(crate) fn eval_value(value: &Value, env: &Env) -> Result<Value> {
@@ -27,6 +128,7 @@ impl Evaluator {
             | Value::Bool(..)
             | Value::Null
             | Value::Calc(..) => Ok(value.clone()),
+            Value::Paren(inner) => Self::eval_value(inner, env),
             Value::String(s, quoted) => {
                 // 处理插值在字符串中
                 if s.contains('#') && s.contains('{') {
@@ -82,48 +184,53 @@ impl Evaluator {
                         return Self::eval_value(&args[2].value, env);
                     }
                 }
-                // if() 冒号语法：if(condition: value; else: other)
-                // condition 为 CSS 函数时透传，为 Sass 表达式时求值
+                // if() 冒号语法：if(cond1: val1; cond2: val2; else: default)
+                // 使用 partial_eval_condition 进行部分求值：
+                // - sass() 部分短路求值
+                // - css() 部分保留为 CSS 透传
                 if name == "if" && args.iter().any(|a| a.condition.is_some()) {
-                    let cond_arg = args.iter().find(|a| a.condition.is_some()).expect("已检查");
-                    let condition = cond_arg.condition.as_ref().expect("已检查");
-                    let value = &cond_arg.value;
                     let else_arg = args.iter().find(|a| a.name.as_deref() == Some("else"));
-                    // 尝试求值条件
-                    match Self::eval_value(condition, env) {
-                        Ok(Value::Calc(..)) => {
-                            // 条件为 CSS 原生函数（如 css()），不可求值为布尔 → CSS 透传
-                            let mut parts: Vec<String> = Vec::new();
-                            parts.push(format!("{condition}: {value}"));
-                            if let Some(else_a) = else_arg {
-                                parts.push(format!("else: {}", else_a.value));
+                    // 逐个部分求值条件
+                    for (i, cond_arg) in args.iter().enumerate().filter(|(_, a)| a.condition.is_some()) {
+                        let condition = cond_arg.condition.as_ref().expect("已检查");
+                        match Self::partial_eval_condition(condition, env)? {
+                            PartialCond::True => {
+                                // 条件为 true → 返回对应值（短路，不求值后续条件）
+                                return Self::eval_value(&cond_arg.value, env);
                             }
-                            return Ok(Value::String(
-                                format!("if({})", parts.join("; ")),
-                                false,
-                            ));
-                        }
-                        Ok(cond) => {
-                            if Self::is_truthy(&cond) {
-                                return Self::eval_value(value, env);
-                            } else if let Some(else_a) = else_arg {
-                                return Self::eval_value(&else_a.value, env);
-                            } else {
-                                return Ok(Value::Null);
+                            PartialCond::False => {
+                                // 条件为 false → 继续检查下一个条件
+                                continue;
+                            }
+                            PartialCond::Css(css_str) => {
+                                // 条件包含 CSS → CSS 透传
+                                // 构建输出：当前条件用部分求值后的 CSS 字符串，后续条件保持原样
+                                let mut parts: Vec<String> = Vec::new();
+                                // 已求值条件（之前的 false 条件被跳过）
+                                parts.push(format!("{css_str}: {}", cond_arg.value));
+                                // 后续未求值条件保持原样
+                                for (_, a) in args.iter().enumerate().filter(|(j, a)| {
+                                    *j > i && a.condition.is_some()
+                                }) {
+                                    let cond = a.condition.as_ref().expect("已检查");
+                                    parts.push(format!("{cond}: {}", a.value));
+                                }
+                                // else 分支
+                                if let Some(else_a) = else_arg {
+                                    parts.push(format!("else: {}", else_a.value));
+                                }
+                                return Ok(Value::String(
+                                    format!("if({})", parts.join("; ")),
+                                    false,
+                                ));
                             }
                         }
-                        Err(_) => {
-                            // 条件包含 CSS 函数（如 css()），无法求值 → CSS 透传
-                            let mut parts: Vec<String> = Vec::new();
-                            parts.push(format!("{condition}: {value}"));
-                            if let Some(else_a) = else_arg {
-                                parts.push(format!("else: {}", else_a.value));
-                            }
-                            return Ok(Value::String(
-                                format!("if({})", parts.join("; ")),
-                                false,
-                            ));
-                        }
+                    }
+                    // 所有条件都为 false，返回 else 或 Null
+                    if let Some(else_a) = else_arg {
+                        return Self::eval_value(&else_a.value, env);
+                    } else {
+                        return Ok(Value::Null);
                     }
                 }
                 // if(else: value) — else-only 语法，始终返回 value

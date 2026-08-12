@@ -452,7 +452,7 @@ impl<'tok> Parser<'tok> {
                         self.advance();
                     }
                     if items.len() == 1 && !saw_comma {
-                        Ok(items.into_iter().next().unwrap())
+                        Ok(Value::Paren(Box::new(items.into_iter().next().unwrap())))
                     } else {
                         Ok(Value::List(items, sep, false))
                     }

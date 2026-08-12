@@ -226,6 +226,8 @@ pub enum Value {
     UnaryOp(UnaryOp, Box<Value>),
     /// calc() 原样保留。
     Calc(String),
+    /// 括号表达式——保留括号用于 CSS 透传。
+    Paren(Box<Value>),
     /// 剩余参数展开。
     Spread(Box<Value>),
 }
@@ -438,8 +440,9 @@ impl std::fmt::Display for Value {
                 UnaryOp::Neg => write!(f, "-{v}"),
                 UnaryOp::Not => write!(f, "not {v}"),
             },
-            Value::Calc(s) => write!(f, "{s}"),
-            Value::Spread(v) => write!(f, "{v}..."),
+Value::Calc(s) => write!(f, "{s}"),
+Value::Paren(v) => write!(f, "({v})"),
+Value::Spread(v) => write!(f, "{v}..."),
         }
     }
 }

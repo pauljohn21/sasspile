@@ -13,10 +13,7 @@
 			"path": "../bootstrap-5.3.8"
 		},
 		{
-			"path": "../rxweb"
-		},
-		{
-			"path": "../rxweb-video"
+			"path": "../rivulet"
 		},
 		{
 			"path": "../banyan"
