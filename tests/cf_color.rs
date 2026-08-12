@@ -107,7 +107,9 @@ fn color_error_patterns() {
                         } else if err_str.contains("语法错误") {
                             "syntax".to_string()
                         } else if err_str.contains("求值错误") {
-                            "eval".to_string()
+                            // 提取具体求值错误消息
+                            let msg = err_str.split("求值错误: ").nth(1).unwrap_or("?");
+                            format!("eval/{msg}")
                         } else {
                             "other_err".to_string()
                         };
