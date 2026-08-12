@@ -18,9 +18,9 @@
 | **lib.rs** | 357 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing |
 | **main.rs** | 36 | CLI 入口 |
 | **error.rs** | 80 | SassError 定义 |
-| **lex/token.rs** | 131 | Token 枚举定义 |
-| **lex/mod.rs** | 492 | Lexer + Iterator impl（scan_* 方法） |
-| **parse/ast.rs** | 375 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等） |
+| **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
+| **lex/mod.rs** | 500 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
+| **parse/ast.rs** | 638 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等）+ escape_quoted_string/escape_css_ident/escape_css_chars |
 | **parse/ast_impl.rs** | 281 | Display for Value + Node::to_scss() |
 | **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
 | **parse/nodes.rs** | 488 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
@@ -32,10 +32,10 @@
 | **eval/control_flow.rs** | 149 | eval_if/eval_for/eval_each/eval_while |
 | **eval/mixin.rs** | 192 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 77 | apply_extends |
-| **eval/module.rs** | 241 | resolve_file（含 load_paths） + load_module + call_module_function |
+| **eval/module.rs** | 281 | resolve_file（含 load_paths） + load_module + call_module_function（含 is-powerless/is-in-gamut/is-legacy/to-space/to-gamut 映射） |
 | **eval/color.rs** | 604 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 298 | call_builtin 分派入口（match 骨架 → 子模块分派） |
-| **eval/builtin/color.rs** | 253 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness |
+| **eval/builtin.rs** | 486 | call_builtin 分派入口（match 骨架 → 子模块分派）+ sass:color 新函数 + hsl/hsla 分派 |
+| **eval/builtin/color.rs** | 568 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
 | **eval/builtin/list.rs** | 259 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
 | **eval/builtin/map.rs** | 301 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
 | **eval/builtin/string.rs** | 281 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id |
@@ -67,6 +67,8 @@
 | `call_string_builtin` / `str_slice` / `str_insert` / `str_split` | `eval/builtin/string.rs` |
 | `hsl_to_rgb` / `hwb_to_rgb` / `rgb_to_hsl` / `simple_random` | `eval/color.rs` |
 | `builtin_rgba` / `builtin_darken` / `builtin_lighten` / `builtin_mix` | `eval/color.rs` |
+| `escape_quoted_string` / `escape_css_ident` / `escape_css_chars` | `parse/ast.rs` |
+| `is_channel_powerless` | `eval/builtin/color.rs` |
 
 ### 解析器（Parser）
 
@@ -92,6 +94,7 @@
 | `new` / `next` (Iterator impl) | `lex/mod.rs` |
 | `scan_ident` / `scan_number` / `scan_string` | `lex/mod.rs` |
 | `scan_interp` / `scan_at` / `scan_dollar` / `scan_hash` | `lex/mod.rs` |
+| `scan_escape_ident` | `lex/mod.rs` |
 | `scan_line_comment` / `scan_block_comment` | `lex/mod.rs` |
 
 ## 类型 → 文件定位
