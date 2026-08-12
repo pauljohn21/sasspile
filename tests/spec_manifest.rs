@@ -107,6 +107,27 @@ pub const SKIP_DIRS: &[&str] = &[
     "directives/use/error",
     // —— forward 错误用例（7 文件）
     "directives/forward/error",
+    // —— Sass 3.x meta 新 API（未实现）——
+    // meta.calc-args() / meta.calc-name()：calculation 内省（Dart Sass 1.8.0+）
+    "core_functions/meta/calc_args",
+    "core_functions/meta/calc_name",
+    // meta.module-variables/mixins/functions()：模块内省（Dart Sass 1.7.0+）
+    "core_functions/meta/module_functions",
+    "core_functions/meta/module_mixins",
+    "core_functions/meta/module_variables",
+    // meta.apply()：通过 mixin 引用调用（Dart Sass 1.7.0+）
+    "core_functions/meta/apply",
+    // meta.get-mixin()：获取 mixin 引用（Dart Sass 1.7.0+）
+    "core_functions/meta/get_mixin",
+    // meta.accepts-content()：检查 mixin 是否接受 @content（Dart Sass 1.7.0+）
+    "core_functions/meta/accepts_content",
+    // meta.inspect(mixin)：依赖 get-mixin（Dart Sass 1.7.0+）
+    "core_functions/meta/inspect/mixin",
+    // —— Sass 3.x .import.scss 迁移特性 ——
+    // @import 配置通过 .import.scss 文件转发（3.x 迁移机制）
+    "directives/import/configuration",
+    // —— CSS calculation 简化（依赖 Calculation 值类型）——
+    "css/plain/calculation",
 ];
 
 /// 检查文件相对 spec_root 的路径是否在跳过列表中。
