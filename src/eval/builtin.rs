@@ -267,7 +267,16 @@ color::call(&name, pos_args, kw_args)?
             // ── map ──
             "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge" | "map-remove"
             | "map-set" | "map-deep-merge" | "map-deep-remove" => {
-                Self::call_map_builtin(&name, pos_args, env)?
+                // 支持 $map 关键字参数（如 map.get($map: $m, $key: k)）
+                let mut combined_args = Vec::new();
+                if pos_args.is_empty() {
+                    if let Some(m) = kw_args.get("$map") {
+                        combined_args.push(m.clone());
+                    }
+                } else {
+                    combined_args.extend_from_slice(pos_args);
+                }
+                Self::call_map_builtin(&name, &combined_args, env)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
