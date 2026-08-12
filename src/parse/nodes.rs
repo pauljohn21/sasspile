@@ -105,11 +105,23 @@ impl<'tok> Parser<'tok> {
                 }
                 Token::Whitespace => {
                     if bracket_depth > 0 {
-                        // 括号内：标准化为单空格（而非跳过）
+                        // 向前跳过所有连续空白，找到下一个非空白 token
+                        let mut look = 1;
+                        while matches!(self.peek_n(look), Some(Token::Whitespace)) {
+                            look += 1;
+                        }
+                        let next_non_ws = self.peek_n(look);
                         if s.ends_with('[') || s.ends_with('=') {
-                            self.advance(); // = 或 [ 后的空白跳过
+                            // [ 或 = 后的空白跳过
+                            self.advance();
+                        } else if matches!(next_non_ws, Some(Token::RBracket | Token::Assign | Token::Tilde | Token::Pipe | Token::Caret | Token::Star)) {
+                            // ] 前或属性操作符（= ~= |= ^= *=）前的空白跳过
+                            self.advance();
                         } else {
-                            s.push(' ');
+                            // 避免连续空格
+                            if !s.ends_with(' ') {
+                                s.push(' ');
+                            }
                             self.advance();
                         }
                     } else {

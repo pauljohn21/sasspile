@@ -13,12 +13,6 @@
 			"path": "../bootstrap-5.3.8"
 		},
 		{
-			"path": "../banyan"
-		},
-		{
-			"path": "../flux"
-		},
-		{
 			"path": "../creep"
 		},
 		{
@@ -29,6 +23,9 @@
 		},
 		{
 			"path": "../creep-demo"
+		},
+		{
+			"path": "../trunk-main"
 		}
 	],
 	"settings": {}

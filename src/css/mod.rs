@@ -265,8 +265,10 @@ impl Serializer {
 
     /// 净化选择器——处理占位符 `%xxx` 在伪类中的移除。
     fn sanitize_selector(selector: &str) -> String {
+        // 先规范化属性选择器（引号去除、修饰符空格）
+        let selector = Self::normalize_attr_selectors(selector);
         if !selector.contains('%') {
-            return selector.to_string();
+            return selector;
         }
         // 顶层逗号分隔——移除纯占位符部分
         let parts: Vec<&str> = selector
@@ -302,9 +304,10 @@ impl Serializer {
                     .collect();
                 if real_args.is_empty() {
                     if *pseudo == "not" {
+                        // :not(%placeholder) → *（因为占位符不存在，:not 匹配所有元素）
                         let before = &result[..pos];
                         let after = &result[end + 1..];
-                        result = format!("{before}{after}");
+                        result = format!("{before}*{after}");
                     } else {
                         return String::new();
                     }
@@ -318,6 +321,101 @@ impl Serializer {
                     let after = &result[end + 1..];
                     result = format!("{before}({new_inner}){after}");
                 }
+            }
+        }
+        result
+    }
+
+    /// 规范化属性选择器——去除合法标识符的引号，在修饰符前加空格。
+    /// 例如：`[a="b"i]` → `[a=b i]`
+    fn normalize_attr_selectors(selector: &str) -> String {
+        let chars: Vec<char> = selector.chars().collect();
+        let mut result = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] == '[' {
+                // 找到匹配的 ]
+                let start = i;
+                let mut depth = 1;
+                i += 1;
+                while i < chars.len() && depth > 0 {
+                    if chars[i] == '[' {
+                        depth += 1;
+                    } else if chars[i] == ']' {
+                        depth -= 1;
+                    }
+                    if depth > 0 {
+                        i += 1;
+                    }
+                }
+                if i < chars.len() {
+                    // 提取属性选择器内容
+                    let inner: String = chars[start + 1..i].iter().collect();
+                    let normalized = Self::normalize_attr_content(&inner);
+                    result.push('[');
+                    result.push_str(&normalized);
+                    result.push(']');
+                    i += 1; // 跳过 ]
+                } else {
+                    // 未闭合的 [——直接复制剩余
+                    result.extend(&chars[start..]);
+                    break;
+                }
+            } else {
+                result.push(chars[i]);
+                i += 1;
+            }
+        }
+        result
+    }
+
+    /// 规范化属性选择器内容。
+    /// `a="b"i` → `a=b i`（当 b 是合法标识符时去引号，修饰符前加空格）
+    fn normalize_attr_content(inner: &str) -> String {
+        let chars: Vec<char> = inner.chars().collect();
+        let mut result = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] == '"' || chars[i] == '\'' {
+                let quote = chars[i];
+                // 找到结束引号
+                let val_start = i + 1;
+                let mut j = val_start;
+                while j < chars.len() && chars[j] != quote {
+                    j += 1;
+                }
+                if j < chars.len() {
+                    // 提取引号内的值
+                    let val: String = chars[val_start..j].iter().collect();
+                    // 检查是否是合法 CSS 标识符（但 --foo 需保留引号）
+                    let is_ident = !val.is_empty()
+                        && !val.starts_with("--")
+                        && val.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '-')
+                        && val.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+                    if is_ident {
+                        // 去除引号
+                        result.push_str(&val);
+                    } else {
+                        // 保留引号
+                        result.push(quote);
+                        result.push_str(&val);
+                        result.push(quote);
+                    }
+                    // 检查后面是否有修饰符（紧跟的字母）
+                    let after = j + 1;
+                    if after < chars.len() && chars[after].is_ascii_alphabetic() {
+                        // 在修饰符前加空格
+                        result.push(' ');
+                    }
+                    i = j + 1;
+                } else {
+                    // 未闭合的引号——直接复制
+                    result.push(chars[i]);
+                    i += 1;
+                }
+            } else {
+                result.push(chars[i]);
+                i += 1;
             }
         }
         result
