@@ -80,41 +80,53 @@ impl Serializer {
 
     fn serialize_expanded(nodes: &[CssNode], depth: usize) -> String {
         let indent = "  ".repeat(depth);
-        let result: String = nodes
-            .iter()
-            .map(|n| Self::serialize_node_expanded(n, &indent, depth))
-            .collect::<Vec<_>>()
-            .join("\n");
-        if depth == 0 {
-            format!("{result}\n")
-        } else {
-            result
+        let mut result = String::new();
+        for (i, n) in nodes.iter().enumerate() {
+            if i > 0 {
+                result.push('\n');
+            }
+            Self::write_node_expanded(&mut result, n, &indent, depth);
         }
+        if depth == 0 {
+            result.push('\n');
+        }
+        result
     }
 
     fn serialize_compressed(nodes: &[CssNode]) -> String {
-        nodes
-            .iter()
-            .map(Self::serialize_node_compressed)
-            .collect::<Vec<_>>()
-            .join("")
+        let mut result = String::new();
+        for n in nodes {
+            Self::write_node_compressed(&mut result, n);
+        }
+        result
     }
 
-    fn serialize_node_expanded(node: &CssNode, indent: &str, depth: usize) -> String {
+    /// 直接写入 String 缓冲区——避免 format! + collect + join 的多重分配。
+    fn write_node_expanded(buf: &mut String, node: &CssNode, indent: &str, depth: usize) {
         match node {
             CssNode::Declaration {
                 property,
                 value,
                 important,
             } => {
+                buf.push_str(indent);
+                buf.push_str(property);
+                buf.push_str(": ");
+                buf.push_str(value);
                 if *important {
-                    format!("{indent}{property}: {value} !important;")
-                } else {
-                    format!("{indent}{property}: {value};")
+                    buf.push_str(" !important");
                 }
+                buf.push(';');
             }
-            CssNode::Comment(text) => format!("{indent}/* {text} */"),
-            CssNode::AtRoot(nodes) => Self::serialize_expanded(nodes, depth),
+            CssNode::Comment(text) => {
+                buf.push_str(indent);
+                buf.push_str("/* ");
+                buf.push_str(text);
+                buf.push_str(" */");
+            }
+            CssNode::AtRoot(nodes) => {
+                buf.push_str(&Self::serialize_expanded(nodes, depth));
+            }
             CssNode::Rule {
                 selector,
                 declarations,
@@ -122,10 +134,12 @@ impl Serializer {
             } => {
                 let selector = Self::sanitize_selector(selector);
                 if selector.is_empty() {
-                    return String::new();
+                    return;
                 }
                 let inner = "  ".repeat(depth + 1);
-                let mut parts = vec![format!("{indent}{selector} {{")];
+                buf.push_str(indent);
+                buf.push_str(&selector);
+                buf.push_str(" {\n");
                 for decl in declarations {
                     if let CssNode::Declaration {
                         property,
@@ -133,21 +147,26 @@ impl Serializer {
                         important,
                     } = decl
                     {
+                        buf.push_str(&inner);
+                        buf.push_str(property);
+                        buf.push_str(": ");
+                        buf.push_str(value);
                         if *important {
-                            parts.push(format!("{inner}{property}: {value} !important;"));
-                        } else {
-                            parts.push(format!("{inner}{property}: {value};"));
+                            buf.push_str(" !important");
                         }
+                        buf.push(';');
+                        buf.push('\n');
                     }
                 }
                 if !children.is_empty() {
                     let child_css = Self::serialize_expanded(children, depth + 1);
                     if !child_css.is_empty() {
-                        parts.push(child_css);
+                        buf.push_str(&child_css);
+                        buf.push('\n');
                     }
                 }
-                parts.push(format!("{indent}}}"));
-                parts.join("\n")
+                buf.push_str(indent);
+                buf.push('}');
             }
             CssNode::AtRule {
                 has_body: true,
@@ -157,24 +176,30 @@ impl Serializer {
             } => {
                 let p = params.as_deref().unwrap_or("");
                 if children.is_empty() {
-                    // 空块——单行输出
-                    if p.is_empty() {
-                        format!("{indent}@{name} {{}}")
-                    } else {
-                        format!("{indent}@{name} {p} {{}}")
+                    buf.push_str(indent);
+                    buf.push('@');
+                    buf.push_str(name);
+                    if !p.is_empty() {
+                        buf.push(' ');
+                        buf.push_str(p);
                     }
+                    buf.push_str(" {}");
                 } else {
-                    let mut parts = if p.is_empty() {
-                        vec![format!("{indent}@{name} {{")]
-                    } else {
-                        vec![format!("{indent}@{name} {p} {{")]
-                    };
+                    buf.push_str(indent);
+                    buf.push('@');
+                    buf.push_str(name);
+                    if !p.is_empty() {
+                        buf.push(' ');
+                        buf.push_str(p);
+                    }
+                    buf.push_str(" {\n");
                     let child_css = Self::serialize_expanded(children, depth + 1);
                     if !child_css.is_empty() {
-                        parts.push(child_css);
+                        buf.push_str(&child_css);
+                        buf.push('\n');
                     }
-                    parts.push(format!("{indent}}}"));
-                    parts.join("\n")
+                    buf.push_str(indent);
+                    buf.push('}');
                 }
             }
             CssNode::AtRule {
@@ -184,35 +209,41 @@ impl Serializer {
                 ..
             } => {
                 let p = params.as_deref().unwrap_or("");
-                if p.is_empty() {
-                    format!("{indent}@{name};")
-                } else {
-                    format!("{indent}@{name} {p};")
+                buf.push_str(indent);
+                buf.push('@');
+                buf.push_str(name);
+                if !p.is_empty() {
+                    buf.push(' ');
+                    buf.push_str(p);
                 }
+                buf.push(';');
             }
-            CssNode::Raw(text) => format!("{text}"),
-            CssNode::Return(_) => String::new(),
+            CssNode::Raw(text) => {
+                buf.push_str(text);
+            }
+            CssNode::Return(_) => {}
         }
     }
 
-    fn serialize_node_compressed(node: &CssNode) -> String {
+    fn write_node_compressed(buf: &mut String, node: &CssNode) {
         match node {
             CssNode::Declaration {
                 property,
                 value,
                 important,
             } => {
+                buf.push_str(property);
+                buf.push(':');
+                buf.push_str(value);
                 if *important {
-                    format!("{property}:{value} !important;")
-                } else {
-                    format!("{property}:{value};")
+                    buf.push_str(" !important");
                 }
+                buf.push(';');
             }
-            CssNode::Comment(_) => String::new(),
-            CssNode::AtRoot(nodes) => nodes
-                .iter()
-                .map(Self::serialize_node_compressed)
-                .collect::<String>(),
+            CssNode::Comment(_) => {}
+            CssNode::AtRoot(nodes) => {
+                buf.push_str(&Self::serialize_compressed(nodes));
+            }
             CssNode::Rule {
                 selector,
                 declarations,
@@ -220,17 +251,17 @@ impl Serializer {
             } => {
                 let sel = Self::sanitize_selector(selector);
                 if sel.is_empty() {
-                    return String::new();
+                    return;
                 }
-                let decls: String = declarations
-                    .iter()
-                    .map(Self::serialize_node_compressed)
-                    .collect();
-                let kids: String = children
-                    .iter()
-                    .map(Self::serialize_node_compressed)
-                    .collect();
-                format!("{sel}{{{decls}{kids}}}")
+                buf.push_str(&sel);
+                buf.push('{');
+                for decl in declarations {
+                    Self::write_node_compressed(buf, decl);
+                }
+                for kid in children {
+                    Self::write_node_compressed(buf, kid);
+                }
+                buf.push('}');
             }
             CssNode::AtRule {
                 has_body: true,
@@ -239,11 +270,17 @@ impl Serializer {
                 children,
             } => {
                 let p = params.as_deref().unwrap_or("");
-                let kids: String = children
-                    .iter()
-                    .map(Self::serialize_node_compressed)
-                    .collect();
-                format!("@{name} {p}{{{kids}}}")
+                buf.push('@');
+                buf.push_str(name);
+                if !p.is_empty() {
+                    buf.push(' ');
+                    buf.push_str(p);
+                }
+                buf.push('{');
+                for kid in children {
+                    Self::write_node_compressed(buf, kid);
+                }
+                buf.push('}');
             }
             CssNode::AtRule {
                 has_body: false,
@@ -252,14 +289,18 @@ impl Serializer {
                 ..
             } => {
                 let p = params.as_deref().unwrap_or("");
-                if p.is_empty() {
-                    format!("@{name};")
-                } else {
-                    format!("@{name} {p};")
+                buf.push('@');
+                buf.push_str(name);
+                if !p.is_empty() {
+                    buf.push(' ');
+                    buf.push_str(p);
                 }
+                buf.push(';');
             }
-            CssNode::Raw(text) => text.clone(),
-            CssNode::Return(_) => String::new(),
+            CssNode::Raw(text) => {
+                buf.push_str(text);
+            }
+            CssNode::Return(_) => {}
         }
     }
 

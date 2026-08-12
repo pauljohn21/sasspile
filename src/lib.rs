@@ -83,7 +83,7 @@
 #[cfg(feature = "tracing")]
 pub(crate) mod __tracing {
     pub use tracing::{
-        debug, debug_span, error, info, info_span, trace, trace_span, warn,
+        debug, debug_span, error, info, info_span, trace, warn,
     };
 }
 

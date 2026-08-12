@@ -34,11 +34,12 @@ impl<'src> Lexer<'src> {
         self.chars.peek().copied()
     }
 
-    /// 查看下下个字符（不消费）。
-    fn peek2(&mut self) -> Option<char> {
-        let mut clone = self.chars.clone();
-        clone.next();
-        clone.next()
+    /// 查看下下个字符（不消费）——直接从源码字符串索引，避免克隆迭代器。
+    fn peek2(&self) -> Option<char> {
+        let remainder = &self.source[self.pos..];
+        let mut iter = remainder.chars();
+        iter.next(); // 跳过第一个字符
+        iter.next() // 返回第二个字符
     }
 
     /// 消费下一个字符并前进。

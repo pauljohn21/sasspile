@@ -476,7 +476,7 @@ write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
                     if *bracketed {
                         return write!(f, "[]");
                     }
-                    return write!(f, "");
+                    return Ok(());
                 }
                 let sep_str = match sep {
                     Separator::Comma => ", ",
@@ -484,38 +484,65 @@ write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
                     Separator::Slash => " / ",
                     Separator::Undecided => " ",
                 };
-                let parts: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
-                let inner = parts.join(sep_str);
                 if *bracketed {
-                    write!(f, "[{}]", inner)
-                } else {
-                    write!(f, "{}", inner)
+                    f.write_str("[")?;
                 }
+                for (i, e) in elements.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(sep_str)?;
+                    }
+                    e.fmt(f)?;
+                }
+                if *bracketed {
+                    f.write_str("]")?;
+                }
+                Ok(())
             }
             Value::Map(pairs) => {
-                let parts: Vec<String> = pairs.iter().map(|(k, v)| format!("{k}: {v}")).collect();
-                write!(f, "({})", parts.join(", "))
+                f.write_str("(")?;
+                for (i, (k, v)) in pairs.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    k.fmt(f)?;
+                    f.write_str(": ")?;
+                    v.fmt(f)?;
+                }
+                f.write_str(")")
             }
             Value::Variable(name) => write!(f, "${name}"),
-            Value::Bool(true) => write!(f, "true"),
-            Value::Bool(false) => write!(f, "false"),
-            Value::Null => write!(f, "null"),
+            Value::Bool(true) => f.write_str("true"),
+            Value::Bool(false) => f.write_str("false"),
+            Value::Null => f.write_str("null"),
             Value::Call(name, args) => {
                 // if() 冒号语法：condition: value; else: other
                 if name == "if" && args.iter().any(|a| a.condition.is_some() || a.name.as_deref() == Some("else")) {
-                    let parts: Vec<String> = args.iter().map(|a| {
-                        if let Some(cond) = &a.condition {
-                            format!("{}: {}", cond, a.value)
-                        } else if let Some(n) = &a.name {
-                            format!("{}: {}", n, a.value)
-                        } else {
-                            a.value.to_string()
+                    write!(f, "{name}(")?;
+                    for (i, a) in args.iter().enumerate() {
+                        if i > 0 {
+                            f.write_str("; ")?;
                         }
-                    }).collect();
-                    write!(f, "{}({})", name, parts.join("; "))
+                        if let Some(cond) = &a.condition {
+                            cond.fmt(f)?;
+                            f.write_str(": ")?;
+                            a.value.fmt(f)?;
+                        } else if let Some(n) = &a.name {
+                            write!(f, "{n}: ")?;
+                            a.value.fmt(f)?;
+                        } else {
+                            a.value.fmt(f)?;
+                        }
+                    }
+                    f.write_str(")")
                 } else {
-                    let parts: Vec<String> = args.iter().map(|a| a.value.to_string()).collect();
-                    write!(f, "{}({})", name, parts.join(", "))
+                    write!(f, "{name}(")?;
+                    for (i, a) in args.iter().enumerate() {
+                        if i > 0 {
+                            f.write_str(", ")?;
+                        }
+                        a.value.fmt(f)?;
+                    }
+                    f.write_str(")")
                 }
             }
             Value::Interp(s) => write!(f, "#{{{s}}}"),
