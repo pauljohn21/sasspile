@@ -368,7 +368,8 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
         },
         "adjust-hue" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            match (color_arg, args.get(1)) {
+            let deg_arg = args.get(1).or_else(|| kw_args.get("$degrees")).or_else(|| kw_args.get("$hue"));
+            match (color_arg, deg_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(deg, _))) => {
                     let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     let new_h = (h + *deg).rem_euclid(360.0);
@@ -381,7 +382,8 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
         }
         "saturate" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            match (color_arg, args.get(1)) {
+            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
@@ -397,7 +399,8 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
         }
         "desaturate" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            match (color_arg, args.get(1)) {
+            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
@@ -413,7 +416,8 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
         }
         "transparentize" | "fade-out" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            match (color_arg, args.get(1)) {
+            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => Ok(Some(Value::Color(Color::rgba(
                     c.r,
                     c.g,
@@ -427,7 +431,8 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
         }
         "opacify" | "fade-in" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            match (color_arg, args.get(1)) {
+            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => Ok(Some(Value::Color(Color::rgba(
                     c.r,
                     c.g,
