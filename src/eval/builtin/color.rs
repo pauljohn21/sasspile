@@ -22,8 +22,10 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
 
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
-"invert" => match args {
-[Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
+"invert" => {
+let color_arg = args.first().or_else(|| kw_args.get("$color"));
+match color_arg {
+Some(Value::Color(c)) => Ok(Some(Value::Color(Color::rgb(
 255 - c.r,
 255 - c.g,
 255 - c.b,
@@ -34,18 +36,22 @@ let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
 Ok(Some(Value::String(format!("invert({arg_str})"), false)))
 },
 _ => Err(SassError::Eval("invert 需要 1 个参数".into())),
+}
 },
-"grayscale" => match args {
-[Value::Color(c)] => {
+"grayscale" => {
+let color_arg = args.first().or_else(|| kw_args.get("$color"));
+match color_arg {
+Some(Value::Color(c)) => {
 let avg = ((c.r as u16 + c.g as u16 + c.b as u16) / 3) as u8;
-                Ok(Some(Value::Color(Color::rgba(avg, avg, avg, c.a))))
-            }
+            Ok(Some(Value::Color(Color::rgba(avg, avg, avg, c.a))))
+        }
 _ if !args.is_empty() => {
- let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
- Ok(Some(Value::String(format!("grayscale({arg_str})"), false)))
- },
- _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
- },
+let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+Ok(Some(Value::String(format!("grayscale({arg_str})"), false)))
+},
+_ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
+}
+},
         "color-channel" => match args {
             [Value::Color(c), Value::String(ch, _)] => match ch.as_str() {
                 "red" => Ok(Some(Value::Number(c.r as f64, None))),
@@ -59,7 +65,8 @@ _ if !args.is_empty() => {
             )),
         },
         "adjust-color" => {
-            let c = match args.first() {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let c = match color_arg {
                 Some(Value::Color(c)) => c.clone(),
                 _ => return Err(SassError::Eval("adjust-color 需要 1 个颜色参数".into())),
             };
@@ -120,7 +127,8 @@ _ if !args.is_empty() => {
             ))))
         }
         "change-color" => {
-            let c = match args.first() {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let c = match color_arg {
                 Some(Value::Color(c)) => c.clone(),
                 _ => return Err(SassError::Eval("change-color 需要 1 个颜色参数".into())),
             };
@@ -181,7 +189,8 @@ _ if !args.is_empty() => {
             ))))
         }
         "scale-color" => {
-            let c = match args.first() {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let c = match color_arg {
                 Some(Value::Color(c)) => c.clone(),
                 _ => return Err(SassError::Eval("scale-color 需要 1 个颜色参数".into())),
             };
@@ -190,7 +199,7 @@ _ if !args.is_empty() => {
             let mut b = c.b as f64;
             let mut a = c.a as f64;
             let mut has_hsl = false;
-            let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+            let (h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
 
             let scale_fn = |val: f64, max: f64, kw: &str, kw_args: &HashMap<String, Value>| -> Result<f64> {
                 if let Some(Value::Number(n, _)) = kw_args.get(kw) {
@@ -278,28 +287,37 @@ _ if !args.is_empty() => {
                 _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
             }
         }
-        "whiteness" => match args {
-            [Value::Color(c)] => {
-                let w = c.r.min(c.g).min(c.b) as f64 / 255.0 * 100.0;
-                Ok(Some(Value::Number(w, Some("%".to_string()))))
+        "whiteness" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => {
+                    let w = c.r.min(c.g).min(c.b) as f64 / 255.0 * 100.0;
+                    Ok(Some(Value::Number(w, Some("%".to_string()))))
+                }
+                _ => Err(SassError::Eval("whiteness 需要 1 个颜色参数".into())),
             }
-            _ => Err(SassError::Eval("whiteness 需要 1 个颜色参数".into())),
-        },
-        "blackness" => match args {
-            [Value::Color(c)] => {
-                let b = (1.0 - c.r.max(c.g).max(c.b) as f64 / 255.0) * 100.0;
-                Ok(Some(Value::Number(b, Some("%".to_string()))))
+        }
+        "blackness" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => {
+                    let b = (1.0 - c.r.max(c.g).max(c.b) as f64 / 255.0) * 100.0;
+                    Ok(Some(Value::Number(b, Some("%".to_string()))))
+                }
+                _ => Err(SassError::Eval("blackness 需要 1 个颜色参数".into())),
             }
-            _ => Err(SassError::Eval("blackness 需要 1 个颜色参数".into())),
-        },
-        "complement" => match args {
-            [Value::Color(c)] => Ok(Some(Value::Color(Color::rgb(
-                255 - c.r,
-                255 - c.g,
-                255 - c.b,
-            )))),
-            _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
-        },
+        }
+        "complement" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => Ok(Some(Value::Color(Color::rgb(
+                    255 - c.r,
+                    255 - c.g,
+                    255 - c.b,
+                )))),
+                _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
+            }
+        }
         "hsl" => {
             let flat = flatten_space_list(args);
             match &flat[..] {
@@ -348,110 +366,147 @@ _ if !args.is_empty() => {
             _ => Err(SassError::Eval("hsla 需要 4 个参数".into())),
             }
         },
-        "adjust-hue" => match args {
-            [Value::Color(c), Value::Number(deg, _)] => {
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                let new_h = (h + *deg).rem_euclid(360.0);
-                Ok(Some(Value::Color(Evaluator::hsl_to_rgb(new_h, s, l))))
+        "adjust-hue" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match (color_arg, args.get(1)) {
+                (Some(Value::Color(c)), Some(Value::Number(deg, _))) => {
+                    let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    let new_h = (h + *deg).rem_euclid(360.0);
+                    Ok(Some(Value::Color(Evaluator::hsl_to_rgb(new_h, s, l))))
+                }
+                _ => Err(SassError::Eval(
+                    "adjust-hue 需要 (color, degrees) 参数".into(),
+                )),
             }
-            _ => Err(SassError::Eval(
-                "adjust-hue 需要 (color, degrees) 参数".into(),
-            )),
-        },
-        "saturate" => match args {
-            [Value::Color(c), Value::Number(amount, _)] => {
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
-                    h,
-                    (s + *amount / 100.0).min(1.0),
-                    l,
-                ))))
+        }
+        "saturate" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match (color_arg, args.get(1)) {
+                (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
+                    let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
+                        h,
+                        (s + *amount / 100.0).min(1.0),
+                        l,
+                    ))))
+                }
+                // CSS 滤镜函数透传：saturate(number)
+                (Some(Value::Number(n, _)), None) => Ok(Some(Value::String(format!("saturate({n})"), false))),
+                _ => Err(SassError::Eval("saturate 需要 (color, amount) 参数".into())),
             }
-            [Value::Number(n, _)] => Ok(Some(Value::String(format!("saturate({})", n), false))),
-            _ => Err(SassError::Eval("saturate 需要 (color, amount) 参数".into())),
-        },
-        "desaturate" => match args {
-            [Value::Color(c), Value::Number(amount, _)] => {
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
-                    h,
-                    (s - *amount / 100.0).max(0.0),
-                    l,
-                ))))
+        }
+        "desaturate" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match (color_arg, args.get(1)) {
+                (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
+                    let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
+                        h,
+                        (s - *amount / 100.0).max(0.0),
+                        l,
+                    ))))
+                }
+                _ => Err(SassError::Eval(
+                    "desaturate 需要 (color, amount) 参数".into(),
+                )),
             }
-            _ => Err(SassError::Eval(
-                "desaturate 需要 (color, amount) 参数".into(),
-            )),
-        },
-        "transparentize" | "fade-out" => match args {
-            [Value::Color(c), Value::Number(amount, _)] => Ok(Some(Value::Color(Color::rgba(
-                c.r,
-                c.g,
-                c.b,
-                (c.a - *amount as f64).max(0.0),
-            )))),
-            _ => Err(SassError::Eval(
-                "transparentize 需要 (color, amount) 参数".into(),
-            )),
-        },
-        "opacify" | "fade-in" => match args {
-            [Value::Color(c), Value::Number(amount, _)] => Ok(Some(Value::Color(Color::rgba(
-                c.r,
-                c.g,
-                c.b,
-                (c.a + *amount as f64).min(1.0),
-            )))),
-            _ => Err(SassError::Eval("opacify 需要 (color, amount) 参数".into())),
-        },
-        "alpha" | "opacity" => match args {
-            [Value::Color(c)] => {
-                Ok(Some(Value::Number(c.a, None)))
+        }
+        "transparentize" | "fade-out" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match (color_arg, args.get(1)) {
+                (Some(Value::Color(c)), Some(Value::Number(amount, _))) => Ok(Some(Value::Color(Color::rgba(
+                    c.r,
+                    c.g,
+                    c.b,
+                    (c.a - *amount as f64).max(0.0),
+                )))),
+                _ => Err(SassError::Eval(
+                    "transparentize 需要 (color, amount) 参数".into(),
+                )),
             }
-            // CSS 透传：旧 IE filter 语法 alpha(opacity=0) — 关键字参数直接透传
-            _ if !kw_args.is_empty() => {
-                let kw_str = kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(", ");
-                Ok(Some(Value::String(format!("{name}({kw_str})"), false)))
+        }
+        "opacify" | "fade-in" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match (color_arg, args.get(1)) {
+                (Some(Value::Color(c)), Some(Value::Number(amount, _))) => Ok(Some(Value::Color(Color::rgba(
+                    c.r,
+                    c.g,
+                    c.b,
+                    (c.a + *amount as f64).min(1.0),
+                )))),
+                _ => Err(SassError::Eval("opacify 需要 (color, amount) 参数".into())),
             }
-            // CSS 透传：非颜色位置参数原样输出（如 alpha(var(--x))）
-            _ if !args.is_empty() && !matches!(args[0], Value::Color(_)) => {
-                let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
-                Ok(Some(Value::String(format!("{name}({arg_str})"), false)))
+        }
+        "alpha" | "opacity" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.a, None))),
+                _ => {
+                    // CSS 透传：旧 IE filter 语法 alpha(opacity=0) — 关键字参数直接透传
+                    if !kw_args.is_empty() {
+                        let kw_str = kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(", ");
+                        Ok(Some(Value::String(format!("{name}({kw_str})"), false)))
+                    } else if !args.is_empty() {
+                        // CSS 透传：非颜色位置参数原样输出（如 alpha(var(--x))）
+                        let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
+                        Ok(Some(Value::String(format!("{name}({arg_str})"), false)))
+                    } else {
+                        Err(SassError::Eval("alpha 需要 1 个颜色参数".into()))
+                    }
+                }
             }
-            _ => Err(SassError::Eval("alpha 需要 1 个颜色参数".into())),
-        },
-        "red" => match args {
-            [Value::Color(c)] => Ok(Some(Value::Number(c.r as f64, None))),
-            _ => Err(SassError::Eval("red 需要 1 个颜色参数".into())),
-        },
-        "green" => match args {
-            [Value::Color(c)] => Ok(Some(Value::Number(c.g as f64, None))),
-            _ => Err(SassError::Eval("green 需要 1 个颜色参数".into())),
-        },
-        "blue" => match args {
-            [Value::Color(c)] => Ok(Some(Value::Number(c.b as f64, None))),
-            _ => Err(SassError::Eval("blue 需要 1 个颜色参数".into())),
-        },
-        "hue" => match args {
-            [Value::Color(c)] => {
-                let (h, _, _) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                Ok(Some(Value::Number(h, Some("deg".into()))))
+        }
+        "red" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.r as f64, None))),
+                _ => Err(SassError::Eval("red 需要 1 个颜色参数".into())),
             }
-            _ => Err(SassError::Eval("hue 需要 1 个颜色参数".into())),
-        },
-        "saturation" => match args {
-            [Value::Color(c)] => {
-                let (_, s, _) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                Ok(Some(Value::Number(s * 100.0, Some("%".into()))))
+        }
+        "green" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.g as f64, None))),
+                _ => Err(SassError::Eval("green 需要 1 个颜色参数".into())),
             }
-            _ => Err(SassError::Eval("saturation 需要 1 个颜色参数".into())),
-        },
-        "lightness" => match args {
-            [Value::Color(c)] => {
-                let (_, _, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                Ok(Some(Value::Number(l * 100.0, Some("%".into()))))
+        }
+        "blue" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.b as f64, None))),
+                _ => Err(SassError::Eval("blue 需要 1 个颜色参数".into())),
             }
-            _ => Err(SassError::Eval("lightness 需要 1 个颜色参数".into())),
-        },
+        }
+        "hue" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => {
+                    let (h, _, _) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    Ok(Some(Value::Number(h, Some("deg".into()))))
+                }
+                _ => Err(SassError::Eval("hue 需要 1 个颜色参数".into())),
+            }
+        }
+        "saturation" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => {
+                    let (_, s, _) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    Ok(Some(Value::Number(s * 100.0, Some("%".into()))))
+                }
+                _ => Err(SassError::Eval("saturation 需要 1 个颜色参数".into())),
+            }
+        }
+        "lightness" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => {
+                    let (_, _, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    Ok(Some(Value::Number(l * 100.0, Some("%".into()))))
+                }
+                _ => Err(SassError::Eval("lightness 需要 1 个颜色参数".into())),
+            }
+        }
         _ => Ok(None),
     }
 }
