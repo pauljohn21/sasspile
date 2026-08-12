@@ -11,21 +11,6 @@
 		},
 		{
 			"path": "../bootstrap-5.3.8"
-		},
-		{
-			"path": "../creep"
-		},
-		{
-			"path": "../creep-core"
-		},
-		{
-			"path": "../creep-frontend"
-		},
-		{
-			"path": "../creep-demo"
-		},
-		{
-			"path": "../trunk-main"
 		}
 	],
 	"settings": {}

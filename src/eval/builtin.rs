@@ -295,6 +295,46 @@ impl Evaluator {
         }
     }
 
+    /// 检查函数名是否为已知的 Sass 内置函数。
+    /// 用于区分"真正未定义的函数"（应 CSS 透传）和"已知但参数错误的函数"（应报错）。
+    pub(crate) fn is_known_builtin(name: &str) -> bool {
+        matches!(
+            name,
+            // ── math ──
+            "abs" | "ceil" | "floor" | "round" | "min" | "max" | "percentage"
+            | "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
+            | "random" | "clamp" | "unit" | "is-unitless" | "unitless"
+            | "compatible" | "comparable"
+            // ── color ──
+            | "rgba" | "rgb" | "darken" | "lighten" | "mix"
+            | "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
+            | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue"
+            | "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
+            | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
+            | "hue" | "saturation" | "lightness"
+            // ── map ──
+            | "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge"
+            | "map-remove" | "map-set" | "map-deep-merge" | "map-deep-remove"
+            // ── string ──
+            | "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
+            | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id"
+            // ── meta ──
+            | "type-of" | "inspect" | "if" | "mixin-exists" | "function-exists"
+            | "global-variable-exists" | "variable-exists" | "get-function" | "call"
+            | "keywords"
+            // ── list ──
+            | "length" | "list-length" | "nth" | "append" | "join" | "index"
+            | "list-separator" | "separator" | "set-nth" | "is-bracketed"
+            | "list-slash" | "zip"
+            // ── selector ──
+            | "selector-append" | "selector-nest" | "selector-is-super"
+            | "selector-parse" | "selector-simple-selectors" | "selector-unify"
+            | "selector-extend"
+            // ── CSS 原生（在 call_builtin 中有专门分支）──
+            | "calc" | "env" | "var"
+        )
+    }
+
     /// 检查函数名是否为已知 CSS 原生函数（应原样输出，不求值）。
     fn is_css_function(name: &str) -> bool {
         matches!(

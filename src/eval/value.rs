@@ -329,8 +329,9 @@ impl Evaluator {
                 // 尝试作为 Sass 函数调用，未定义时 CSS 透传
                 match Self::call_function(name, &pos_args, &kw_args, env) {
                     Ok(result) => Ok(result),
-                    Err(SassError::UndefinedFunction(_)) if name.starts_with('-') || !kw_args.is_empty() => {
-                        // 带前缀 - 的未知函数（如 -c-type）或带关键字参数的未知函数 → CSS 透传
+                    Err(SassError::UndefinedFunction(_))
+                        if !name.contains('.') && !Self::is_known_builtin(name) => {
+                        // 真正未定义的非模块限定函数 → CSS 透传（如 c(%), my-func(1px) 等）
                         let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
                         for (k, v) in &kw_args {
                             parts.push(format!("{k}={v}"));
