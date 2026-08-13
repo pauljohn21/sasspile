@@ -105,8 +105,16 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             _ => Err(SassError::Eval("append 需要 2-3 个参数".into())),
         },
         "join" => {
-            if args.len() < 2 || args.len() > 4 {
-                return Err(SassError::Eval("join 需要 2-4 个参数".into()));
+            if args.is_empty() || args.len() > 4 {
+                return Err(SassError::Eval("join 需要 1-4 个参数".into()));
+            }
+            // 单参数 join(list) = 将列表合并为默认分隔符的列表
+            if args.len() == 1 {
+                let (items, sep, bracketed) = match &args[0] {
+                    Value::List(es, s, b) => (es.clone(), s.clone(), *b),
+                    other => (vec![other.clone()], Separator::Space, false),
+                };
+                return Ok(Some(Value::List(items, sep, bracketed)));
             }
             // 提取 list1 的 items 和 separator
             let (a_items, a_sep, a_bracketed) = match &args[0] {

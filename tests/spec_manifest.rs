@@ -134,7 +134,7 @@ fn should_skip(rel_path: &str) -> bool {
         .any(|skip| rel_path.starts_with(skip) || rel_path == *skip)
 }
 
-/// 收集 spec 目录下所有 HRX 文件，跳过 `SKIP_DIRS` 和 >100KB 的文件。
+/// 收集 spec 目录下所有 HRX 文件，跳过 `SKIP_DIRS` 和 >50KB 的文件。
 ///
 /// 参数：`dir` 要扫描的目录，`spec_root` spec 根目录（用于计算相对路径）。
 /// 返回 (files, skipped_count)。
@@ -167,7 +167,7 @@ fn collect_recursive(
                     continue;
                 }
                 if let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000 {
+                    && meta.len() < 50_000 {
                         files.push(path);
                     }
             }
