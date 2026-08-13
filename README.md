@@ -24,7 +24,7 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 
 ## 编译管线
 
-![sasspile 编译管线](docs/images/sasspile-architecture.svg)
+![sasspile 编译管线](docs/images/sasspile-architecture.png)
 
 sasspile 采用**类型状态机管线**设计，每个阶段通过类型转换确保编译顺序：
 
