@@ -217,6 +217,7 @@ impl Node {
                 show,
                 hide,
                 prefix,
+                config,
             } => {
                 let mut s = format!("{pad}@forward \"{url}\"");
                 if let Some(p) = prefix {
@@ -227,6 +228,14 @@ impl Node {
                 }
                 if !hide.is_empty() {
                     s.push_str(&format!(" hide {}", hide.join(", ")));
+                }
+                if !config.is_empty() {
+                    let cfg = config
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    s.push_str(&format!(" with ({cfg})"));
                 }
                 s.push(';');
                 s

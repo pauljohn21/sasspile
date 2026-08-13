@@ -94,6 +94,9 @@ impl Env {
     pub fn has_var(&self, name: &str) -> bool {
         self.vars.contains_key(name)
     }
+    pub(crate) fn has_mixin(&self, name: &str) -> bool {
+        self.mixins.contains_key(name)
+    }
     pub(crate) fn define_mixin(&self, name: String, def: MixinDef) -> Self {
         let mut new = self.clone();
         new.mixins.insert(name, def);
@@ -101,6 +104,9 @@ impl Env {
     }
     pub(crate) fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
         self.mixins.get(name)
+    }
+    pub(crate) fn has_function(&self, name: &str) -> bool {
+        self.functions.contains_key(name)
     }
     pub(crate) fn define_function(&self, name: String, def: FunctionDef) -> Self {
         let mut new = self.clone();
@@ -381,35 +387,52 @@ impl Evaluator {
                 show: _,
                 hide: _,
                 prefix,
+                config,
             } => {
                 // @forward 'url' —— 转发模块成员到当前作用域
                 // as prefix-* 时，成员名加前缀（如 c → d-c）
+                // with ($x: val) 时，覆盖模块中的 !default 变量
                 let base = env.base_path.as_ref();
                 let load_paths = env.get_load_paths();
                 if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    let exports = Self::load_module(&path, &[], env)?;
+                    let exports = Self::load_module(&path, &config, env)?;
                     let mut new_env = env.clone();
                     if let Some(prefix) = prefix {
                         // 带前缀重映射：c → prefix-c
                         for (k, v) in &exports.vars {
-                            new_env = new_env.bind(format!("{prefix}{k}"), v.clone());
+                            let prefixed = format!("{prefix}{k}");
+                            if !new_env.has_var(&prefixed) {
+                                new_env = new_env.bind(prefixed, v.clone());
+                            }
                         }
                         for (k, v) in &exports.mixins {
-                            new_env = new_env.define_mixin(format!("{prefix}{k}"), v.clone());
+                            let prefixed = format!("{prefix}{k}");
+                            if !new_env.has_mixin(&prefixed) {
+                                new_env = new_env.define_mixin(prefixed, v.clone());
+                            }
                         }
                         for (k, v) in &exports.functions {
-                            new_env = new_env.define_function(format!("{prefix}{k}"), v.clone());
+                            let prefixed = format!("{prefix}{k}");
+                            if !new_env.has_function(&prefixed) {
+                                new_env = new_env.define_function(prefixed, v.clone());
+                            }
                         }
                     } else {
-                        // 无前缀：原样绑定
+                        // 无前缀：原样绑定（不覆盖已有变量，尊重 with 配置）
                         for (k, v) in &exports.vars {
-                            new_env = new_env.bind(k.clone(), v.clone());
+                            if !new_env.has_var(k) {
+                                new_env = new_env.bind(k.clone(), v.clone());
+                            }
                         }
                         for (k, v) in &exports.mixins {
-                            new_env = new_env.define_mixin(k.clone(), v.clone());
+                            if !new_env.has_mixin(k) {
+                                new_env = new_env.define_mixin(k.clone(), v.clone());
+                            }
                         }
                         for (k, v) in &exports.functions {
-                            new_env = new_env.define_function(k.clone(), v.clone());
+                            if !new_env.has_function(k) {
+                                new_env = new_env.define_function(k.clone(), v.clone());
+                            }
                         }
                     }
                     return Ok((exports.css, new_env));

@@ -160,6 +160,8 @@ pub enum Node {
         hide: Vec<String>,
         /// `as prefix-*` 前缀重映射。
         prefix: Option<String>,
+        /// `with ($x: val)` 配置参数列表。
+        config: Vec<(String, Value)>,
     },
     /// `@import` 导入。
     Import {
