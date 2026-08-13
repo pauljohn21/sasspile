@@ -383,7 +383,7 @@ color::call(&name, pos_args, kw_args)?
             // ── selector 子模块分派 ──
             "selector-append"
             | "selector-nest"
-            | "selector-is-super"
+            | "selector-is-superselector"
             | "selector-parse"
             | "selector-simple-selectors"
             | "selector-unify"
@@ -437,7 +437,7 @@ color::call(&name, pos_args, kw_args)?
             | "list-separator" | "separator" | "set-nth" | "is-bracketed"
             | "list-slash" | "zip"
             // ── selector ──
-            | "selector-append" | "selector-nest" | "selector-is-super"
+            | "selector-append" | "selector-nest" | "selector-is-superselector"
             | "selector-parse" | "selector-simple-selectors" | "selector-unify"
             | "selector-extend" | "selector-replace"
             // ── CSS 原生（在 call_builtin 中有专门分支）──

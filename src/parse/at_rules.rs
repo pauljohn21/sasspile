@@ -447,7 +447,10 @@ impl<'tok> Parser<'tok> {
                     self.advance();
                 } // 跳过注释
                 Token::Whitespace => {
-                    s.push(' ');
+                    // 规范化：多个连续空白合并为单个空格，但不在 ( 后添加空格
+                    if !s.ends_with(' ') && !s.ends_with('(') {
+                        s.push(' ');
+                    }
                     self.advance();
                 }
                 _ => {
@@ -456,8 +459,8 @@ impl<'tok> Parser<'tok> {
                 }
             }
         }
-        // 标准化冒号周围空白
-        let s = s.replace(" : ", ": ").replace(":  ", ": ");
+        // 标准化冒号周围空白：": " 前不应有空格，后跟单个空格
+        let s = s.replace(" :", ":").replace(":  ", ": ");
         Ok(s.trim().to_string())
     }
 }

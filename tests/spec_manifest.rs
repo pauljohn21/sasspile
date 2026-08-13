@@ -91,10 +91,10 @@ pub const SKIP_DIRS: &[&str] = &[
     "core_functions/modules",
     // —— load-css（23 文件）—— meta.load-css
     "core_functions/meta/load_css",
-    // —— 复杂选择器（81 文件）—— is-superselector/extend/unify 复杂分支
-    "core_functions/selector/is_superselector",
-    "core_functions/selector/extend",
-    "core_functions/selector/unify",
+    // —— 选择器函数已解锁（selector-is-superselector/unify/extend 已实现）——
+    // "core_functions/selector/is_superselector",
+    // "core_functions/selector/extend",
+    // "core_functions/selector/unify",
     // —— calculation 类型（60 文件）—— calc/min/max/clamp 作为值类型
     "values/calculation",
     // —— use/forward with 配置（31 文件）—— 配置参数传递

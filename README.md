@@ -22,13 +22,30 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 - **tracing 调试**: 内建 span + event 追踪链路
 - **AI 开发技能**: 内置 `skill.md` 综合开发指南
 
+## 编译管线
+
+![sasspile 编译管线](docs/images/sasspile-architecture.svg)
+
+sasspile 采用**类型状态机管线**设计，每个阶段通过类型转换确保编译顺序：
+
+```
+Source → Lexer → Parser → Evaluator → Serializer → CSS
+```
+
+| 阶段 | 模块 | 职责 |
+|------|------|------|
+| Lexer | `src/lex/` | 词法分析，将 SCSS 源码转换为 Token 流 |
+| Parser | `src/parse/` | 语法分析，将 Token 流转换为 AST |
+| Evaluator | `src/eval/` | 求值器，处理变量、函数调用、控制流 |
+| Serializer | `src/css/` | CSS 序列化，将求值结果转换为 CSS 字符串 |
+
 ## 快速开始
 
 添加依赖：
 
 ```toml
 [dependencies]
-sasspile = "0.4"
+sasspile = "0.5"
 ```
 
 最小示例：

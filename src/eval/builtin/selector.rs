@@ -3,6 +3,7 @@
 //! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend。
 
 use crate::error::{Result, SassError};
+use crate::eval::selector::algorithms;
 use crate::parse::ast::*;
 
 pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
@@ -27,9 +28,9 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 .collect();
             Ok(Some(Value::String(parts.join(" "), false)))
         }
-        "selector-is-super" => match args {
+        "selector-is-superselector" => match args {
             [Value::String(a, _), Value::String(b, _)] => {
-                Ok(Some(Value::Bool(b.contains(a.as_str()))))
+                algorithms::is_superselector(a, b).map(Some)
             }
             _ => Ok(Some(Value::Bool(false))),
         },
@@ -67,15 +68,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             )),
         },
         "selector-unify" => match args {
-            [Value::String(a, _), Value::String(b, _)] => {
-                if a.contains(b.as_str()) {
-                    Ok(Some(Value::String(a.clone(), false)))
-                } else if b.contains(a.as_str()) {
-                    Ok(Some(Value::String(b.clone(), false)))
-                } else {
-                    Ok(Some(Value::String(format!("{a}{b}"), false)))
-                }
-            }
+            [Value::String(a, _), Value::String(b, _)] => algorithms::unify(a, b).map(Some),
             _ => Ok(Some(Value::Null)),
         },
         "selector-extend" => match args {
@@ -83,14 +76,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 Value::String(selector, _),
                 Value::String(target, _),
                 Value::String(extender, _),
-            ] => {
-                let result = if selector.contains(target.as_str()) {
-                    format!("{selector}, {extender}")
-                } else {
-                    selector.clone()
-                };
-                Ok(Some(Value::String(result, false)))
-            }
+            ] => algorithms::extend(selector, target, extender).map(Some),
             _ => Err(SassError::Eval("selector-extend 需要 3 个参数".into())),
         },
         "selector-replace" => match args {

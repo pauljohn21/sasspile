@@ -1,5 +1,7 @@
 //! 求值器——纯函数式 try_fold + 不可变环境。
 
+pub(crate) mod selector;
+
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::lex::Lexer;
@@ -190,7 +192,7 @@ impl Env {
 pub struct Evaluator;
 
 /// 最大递归深度——防止无限递归导致内存爆炸。
-const MAX_DEPTH: usize = 100000;
+const MAX_DEPTH: usize = 10000;
 
 impl Evaluator {
     /// 求值 AST 入口。

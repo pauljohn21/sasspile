@@ -202,9 +202,33 @@ impl Value {
     }
 
     /// 对未加引号的 CSS 标识符进行转义。
-    /// 反斜杠 → `\\`，控制字符 → `\XXXX`，NULL → `\0 `。
+    /// 反斜杠 → `\\`，控制字符 → `\XXXX`，NULL → `\0 `，
+    /// 前导数字 → `\XX `（CSS 标识符不能以数字开头）。
     pub(crate) fn escape_css_ident(s: &str) -> String {
-        Self::escape_css_chars(s, |_| false)
+        let chars: Vec<char> = s.chars().collect();
+        let mut result = String::new();
+
+        for (i, &c) in chars.iter().enumerate() {
+            if c.is_ascii_digit() && (i == 0 || (i == 1 && chars[0] == '-')) {
+                // 前导数字（包括 -后跟数字）需要十六进制转义
+                let hex = format!("{:x}", c as u32);
+                result.push('\\');
+                result.push_str(&hex);
+                // CSS 规范：转义产生的数字后必须跟空格终止（当下一个字符存在且不是空白时）
+                let next = chars.get(i + 1).copied();
+                if next.is_some_and(|nc| !nc.is_whitespace()) {
+                    result.push(' ');
+                }
+            } else if c == '$' {
+                // $ 在 CSS 标识符中需要保留转义（Dart Sass 行为）
+                result.push_str("\\$");
+            } else {
+                // 其余字符使用标准转义逻辑（反斜杠、控制字符、NULL、私有区字符）
+                let fragment = Self::escape_css_chars(&c.to_string(), |_| false);
+                result.push_str(&fragment);
+            }
+        }
+        result
     }
 
     /// 核心转义逻辑——遍历字符并转义特殊字符。

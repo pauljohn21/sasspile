@@ -267,7 +267,7 @@ impl Evaluator {
             // sass:selector
             "selector.append" => "selector-append",
             "selector.nest" => "selector-nest",
-            "selector.is-super" => "selector-is-super",
+            "selector.is-superselector" => "selector-is-superselector",
             "selector.parse" => "selector-parse",
             "selector.simple-selectors" => "selector-simple-selectors",
             "selector.unify" => "selector-unify",

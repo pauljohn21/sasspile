@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0] — 2026-08-13
+
+### Changed
+
+- **模块拆分**：`src/parse/ast.rs` 拆分为 `ast/mod.rs` + `ast/display.rs`（+238 行）
+- **模块拆分**：`src/parse/expr.rs` 拆分为 `expr/mod.rs` + `expr/prefix.rs`（+177 行）
+- **模块拆分**：`src/eval/value/ops.rs` 独立模块（+209 行）
+- **基准测试**：新增 `benches/` 性能基准测试套件
+- **文档**：新增 `docs/` 架构文档和 API 文档
+
+### Stats
+
+- 42 文件变更，+1946 / -1387 行
+- 测试：252/252 全部通过
+
 ## [0.4.0] — 2026-08-13
 
 ### Added
