@@ -4,13 +4,13 @@
 			"path": "."
 		},
 		{
-			"path": "../element-plus-dev"
+			"path": "./ep"
 		},
 		{
 			"path": "../sass-spec-main"
 		},
 		{
-			"path": "../bootstrap-5.3.8"
+			"path": "./bs"
 		}
 	],
 	"settings": {}

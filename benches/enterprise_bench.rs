@@ -3,16 +3,29 @@
 //! 运行：cargo bench --bench enterprise_bench
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
+
+fn bs_scss(file: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("bs")
+        .join("scss")
+        .join(file)
+}
+
+fn ep_src() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("ep")
+        .join("packages")
+        .join("theme-chalk")
+        .join("src")
+}
 
 // —— sasspile 编译 Bootstrap ——
 
 fn bench_sasspile_bootstrap_reboot(c: &mut Criterion) {
-    let input = std::fs::read_to_string(
-        "/Users/pauljohn/rust/bootstrap-5.3.8/scss/bootstrap-reboot.scss",
-    )
-    .unwrap_or_default();
+    let input = std::fs::read_to_string(bs_scss("bootstrap-reboot.scss")).unwrap_or_default();
 
     c.bench_function("sasspile_bootstrap_reboot_48kb", |b| {
         b.iter(|| {
@@ -22,9 +35,7 @@ fn bench_sasspile_bootstrap_reboot(c: &mut Criterion) {
 }
 
 fn bench_sasspile_bootstrap_main(c: &mut Criterion) {
-    let input =
-        std::fs::read_to_string("/Users/pauljohn/rust/bootstrap-5.3.8/scss/bootstrap.scss")
-            .unwrap_or_default();
+    let input = std::fs::read_to_string(bs_scss("bootstrap.scss")).unwrap_or_default();
 
     c.bench_function("sasspile_bootstrap_main_158kb", |b| {
         b.iter(|| {
@@ -36,10 +47,10 @@ fn bench_sasspile_bootstrap_main(c: &mut Criterion) {
 // —— sasspile 编译 Element Plus ——
 
 fn bench_sasspile_element_plus(c: &mut Criterion) {
-    let dir = "/Users/pauljohn/rust/element-plus-dev/packages/theme-chalk/src";
+    let dir = ep_src();
     let mut combined = String::new();
 
-    if let Ok(entries) = std::fs::read_dir(dir) {
+    if let Ok(entries) = std::fs::read_dir(&dir) {
         let mut files: Vec<_> = entries
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "scss"))
@@ -69,9 +80,7 @@ fn bench_sasspile_element_plus(c: &mut Criterion) {
 // —— Dart Sass 对比（如果可用）——
 
 fn bench_dart_sass_bootstrap(c: &mut Criterion) {
-    let input =
-        std::fs::read_to_string("/Users/pauljohn/rust/bootstrap-5.3.8/scss/bootstrap.scss")
-            .unwrap_or_default();
+    let input = std::fs::read_to_string(bs_scss("bootstrap.scss")).unwrap_or_default();
 
     let temp_dir = std::env::temp_dir();
     let input_path = temp_dir.join("bench_bs_input.scss");

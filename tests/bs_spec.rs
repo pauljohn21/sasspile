@@ -3,9 +3,16 @@
 use sasspile::*;
 use std::path::PathBuf;
 
+fn bs_scss(file: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("bs")
+        .join("scss")
+        .join(file)
+}
+
 fn try_compile(name: &str, file: &str) {
     init_tracing();
-    let path = PathBuf::from(format!("/Users/pauljohn/rust/bootstrap-5.3.8/scss/{file}"));
+    let path = bs_scss(file);
     match compile_file(&path, OutputStyle::Expanded) {
         Ok(css) => tracing::info!(component = name, bytes = css.len(), "编译成功"),
         Err(e) => tracing::error!(component = name, error = %e, "编译失败"),
@@ -56,7 +63,7 @@ fn bs_card() {
 #[test]
 fn bs_full() {
     init_tracing();
-    let path = PathBuf::from("/Users/pauljohn/rust/bootstrap-5.3.8/scss/bootstrap.scss");
+    let path = bs_scss("bootstrap.scss");
     match compile_file(&path, OutputStyle::Expanded) {
         Ok(css) => tracing::info!(bytes = css.len(), "bootstrap.scss 编译成功"),
         Err(e) => tracing::error!(error = %e, "bootstrap.scss 编译失败"),
@@ -66,7 +73,7 @@ fn bs_full() {
 #[test]
 fn bs_reboot_only() {
     init_tracing();
-    let path = PathBuf::from("/Users/pauljohn/rust/bootstrap-5.3.8/scss/bootstrap-reboot.scss");
+    let path = bs_scss("bootstrap-reboot.scss");
     match compile_file(&path, OutputStyle::Expanded) {
         Ok(css) => tracing::info!(bytes = css.len(), "bootstrap-reboot.scss 编译成功"),
         Err(e) => tracing::error!(error = %e, "bootstrap-reboot.scss 编译失败"),
@@ -76,7 +83,7 @@ fn bs_reboot_only() {
 #[test]
 fn bs_functions() {
     init_tracing();
-    let path = PathBuf::from("/Users/pauljohn/rust/bootstrap-5.3.8/scss/_functions.scss");
+    let path = bs_scss("_functions.scss");
     match compile_file(&path, OutputStyle::Expanded) {
         Ok(css) => tracing::info!(bytes = css.len(), "_functions.scss 编译成功"),
         Err(e) => tracing::error!(error = %e, "_functions.scss 编译失败"),
@@ -86,7 +93,7 @@ fn bs_functions() {
 #[test]
 fn bs_variables() {
     init_tracing();
-    let path = PathBuf::from("/Users/pauljohn/rust/bootstrap-5.3.8/scss/_variables.scss");
+    let path = bs_scss("_variables.scss");
     match compile_file(&path, OutputStyle::Expanded) {
         Ok(css) => tracing::info!(bytes = css.len(), "_variables.scss 编译成功"),
         Err(e) => tracing::error!(error = %e, "_variables.scss 编译失败"),
@@ -96,7 +103,7 @@ fn bs_variables() {
 #[test]
 fn bs_mixins() {
     init_tracing();
-    let path = PathBuf::from("/Users/pauljohn/rust/bootstrap-5.3.8/scss/_mixins.scss");
+    let path = bs_scss("_mixins.scss");
     match compile_file(&path, OutputStyle::Expanded) {
         Ok(css) => tracing::info!(bytes = css.len(), "_mixins.scss 编译成功"),
         Err(e) => tracing::error!(error = %e, "_mixins.scss 编译失败"),

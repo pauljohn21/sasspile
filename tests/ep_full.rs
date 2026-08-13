@@ -8,7 +8,11 @@ use std::path::PathBuf;
 #[test]
 fn test_ep_full_stats() {
     init_tracing();
-    let dir = PathBuf::from("/Users/pauljohn/rust/element-plus-dev/packages/theme-chalk/src");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("ep")
+        .join("packages")
+        .join("theme-chalk")
+        .join("src");
     let mut ok = 0;
     let mut fail = 0;
     let mut errors: Vec<(String, String)> = vec![];
