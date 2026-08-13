@@ -165,6 +165,8 @@ pub enum Node {
     Import {
         /// 要导入的文件 URL 列表（支持逗号分隔的 CSS @import）。
         urls: Vec<String>,
+        /// 媒体查询修饰符（如 `b` 或 `b(c)`），用于 `@import "a.css" b;` 语法。
+        modifiers: Vec<String>,
     },
 
     // —— 其他指令 ——

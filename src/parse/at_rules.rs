@@ -317,6 +317,7 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_import(&mut self) -> Result<Node> {
         let mut urls = Vec::new();
+        let mut modifiers = Vec::new();
         loop {
             self.skip_ws();
             let url = self.parse_string_value()?;
@@ -330,10 +331,37 @@ impl<'tok> Parser<'tok> {
             break;
         }
         self.skip_ws();
+        // 捕获修饰符（媒体查询等）：@import "a.css" b;
+        while let Some(t) = self.peek() {
+            match t {
+                Token::Semicolon | Token::RBrace => break,
+                Token::Whitespace => {
+                    self.advance();
+                }
+                _ => {
+                    // 捕获修饰符 token
+                    let mut mod_str = String::new();
+                    while let Some(t) = self.peek() {
+                        match t {
+                            Token::Semicolon | Token::RBrace | Token::Whitespace => break,
+                            _ => {
+                                mod_str.push_str(&t.to_string());
+                                self.advance();
+                            }
+                        }
+                    }
+                    if !mod_str.is_empty() {
+                        modifiers.push(mod_str);
+                    }
+                    self.skip_ws();
+                }
+            }
+        }
+        self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
-        Ok(Node::Import { urls })
+        Ok(Node::Import { urls, modifiers })
     }
 
     pub(crate) fn parse_extend(&mut self) -> Result<Node> {

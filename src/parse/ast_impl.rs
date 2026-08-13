@@ -231,9 +231,14 @@ impl Node {
                 s.push(';');
                 s
             }
-            Node::Import { urls } => {
+            Node::Import { urls, modifiers } => {
                 let urls_str = urls.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join(", ");
-                format!("{pad}@import {urls_str};")
+                let mod_str = if modifiers.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", modifiers.join(" "))
+                };
+                format!("{pad}@import {urls_str}{mod_str};")
             }
             // —— 其他指令 ——
             Node::Extend { selector, optional } => {

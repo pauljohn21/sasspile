@@ -449,9 +449,14 @@ impl Evaluator {
                 }
                 Ok((vec![], env.clone()))
             }
-            Node::Import { urls } => {
+            Node::Import { urls, modifiers } => {
                 // 处理逗号分隔的 CSS @import：@import "a.css", "b.css";
                 let mut css_nodes = Vec::new();
+                let mod_str = if modifiers.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", modifiers.join(" "))
+                };
                 for url in urls {
                     // @import 'url' —— 旧版内联：加载文件内容注入当前作用域
                     if url.starts_with("sass:") {
@@ -461,7 +466,7 @@ impl Evaluator {
                     if url.ends_with(".css") || url.starts_with("http://") || url.starts_with("https://") || url.starts_with("url(") {
                         css_nodes.push(CssNode::AtRule {
                             name: "import".to_string(),
-                            params: Some(format!("\"{url}\"")),
+                            params: Some(format!("\"{url}\"{mod_str}")),
                             children: vec![],
                             has_body: false,
                         });
@@ -477,7 +482,7 @@ impl Evaluator {
                     // 文件未找到——输出 CSS @import 透传
                     css_nodes.push(CssNode::AtRule {
                         name: "import".to_string(),
-                        params: Some(format!("\"{url}\"")),
+                        params: Some(format!("\"{url}\"{mod_str}")),
                         children: vec![],
                         has_body: false,
                     });
