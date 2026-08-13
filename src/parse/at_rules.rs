@@ -228,6 +228,7 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         let value = self.parse_value()?;
         self.skip_ws();
+        // @return 可用 ; 结束，也可在函数体末尾以 } 结束（无分号）
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
