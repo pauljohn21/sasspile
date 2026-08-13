@@ -263,6 +263,10 @@ impl<'tok> Parser<'tok> {
                             break;
                         } // 尾随逗号
                         let k = self.parse_expr(0)?;
+                        // 重复键检测：未求值的键若与已有键结构相同则报错
+                        if pairs.iter().any(|(ek, _)| ek == &k) {
+                            return Err(SassError::Eval("Duplicate key.".into()));
+                        }
                         self.skip_ws();
                         self.expect(&Token::Colon)?;
                         self.skip_ws();
@@ -333,9 +337,25 @@ impl<'tok> Parser<'tok> {
                 }
             }
             Some(Token::Not) => {
+                // `not` 后紧跟 `(` 没有空白 → 报错 "Whitespace is required"
+                // 例如 `not(css())` 报错，`not (css())` 合法
+                let next = self.tokens.get(self.pos + 1);
+                if matches!(next, Some(Token::LParen)) {
+                    return Err(SassError::Parse {
+                        expected: "Whitespace is required after not".into(),
+                        found: "(".into(),
+                    });
+                }
                 self.advance();
                 self.skip_ws();
                 let v = self.parse_prefix()?;
+                // `not not` 是语法错误（不能连续两个 not）
+                if matches!(v, Value::UnaryOp(UnaryOp::Not, _)) {
+                    return Err(SassError::Parse {
+                        expected: "(".into(),
+                        found: "not".into(),
+                    });
+                }
                 Ok(Value::UnaryOp(UnaryOp::Not, Box::new(v)))
             }
             Some(Token::LBracket) => {

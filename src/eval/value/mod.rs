@@ -95,7 +95,7 @@ impl Evaluator {
                 }
             },
             // CSS 原生函数——不可求值
-            Value::Calc(_) => Ok(PartialCond::Css(format!("{condition}"))),
+            Value::Calc(_) | Value::Raw(_) => Ok(PartialCond::Css(format!("{condition}"))),
             // css() 函数（可能通过插值得到函数名）——CSS 透传
             Value::Call(name, _args) if name == "css" => {
                 Ok(PartialCond::Css(format!("{condition}")))
@@ -103,7 +103,7 @@ impl Evaluator {
             // 嵌套 if() 调用——如果返回 CSS 值则保留原始形式
             Value::Call(name, _args) if name == "if" => {
                 let val = Self::eval_value(condition, env)?;
-                if let Value::Calc(_) = val {
+                if let Value::Calc(_) | Value::Raw(_) = val {
                     Ok(PartialCond::Css(format!("{condition}")))
                 } else if Self::is_truthy(&val) {
                     Ok(PartialCond::True)
@@ -156,34 +156,30 @@ impl Evaluator {
                 }
                 // 用 eval_simple_expr 求值插值内容（正确处理字符串引号）
                 let val = eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
+                // 求值结果为 Calc/Raw——CSS 透传
+                if let Value::Calc(_) | Value::Raw(_) = val {
+                    return Ok(PartialCond::Css(val.to_string()));
+                }
                 // 提取字符串内部值（去引号）进行比较
                 let val_str = match &val {
                     Value::String(inner, _) => inner.clone(),
                     _ => val.to_string(),
                 };
-                // and/or/not 关键字通过插值得到——作为 CSS 透传
-                if val_str == "and" || val_str == "or" || val_str == "not"
-                    || val_str.starts_with("css(")
-                    || val_str.starts_with("var(")
-                    || val_str.starts_with("attr(")
-                    || val_str.starts_with("calc(")
-                    || val_str.starts_with("env(")
-                    || val_str.starts_with("clamp(")
-                {
-                    Ok(PartialCond::Css(val_str))
-                } else if let Value::Calc(_) = val {
-                    Ok(PartialCond::Css(val.to_string()))
-                } else if Self::is_truthy(&val) {
+                // 简单布尔值——正常求值
+                if val_str == "true" {
                     Ok(PartialCond::True)
-                } else {
+                } else if val_str == "false" || val_str == "null" || val_str.is_empty() {
                     Ok(PartialCond::False)
+                } else {
+                    // 其他字符串（如 "and", "and css(2)", "not", 等）——CSS 透传
+                    Ok(PartialCond::Css(val_str))
                 }
             }
             // 其他值——正常求值
             _ => {
                 let val = Self::eval_value(condition, env)?;
                 // 求值结果为 CSS 原生函数——透传
-                if let Value::Calc(_) = val {
+                if let Value::Calc(_) | Value::Raw(_) = val {
                     Ok(PartialCond::Css(val.to_string()))
                 } else if Self::is_truthy(&val) {
                     Ok(PartialCond::True)
@@ -202,7 +198,8 @@ impl Evaluator {
             | Value::Color(..)
             | Value::Bool(..)
             | Value::Null
-            | Value::Calc(..) => Ok(value.clone()),
+            | Value::Calc(..)
+            | Value::Raw(..) => Ok(value.clone()),
             Value::Paren(inner) => Self::eval_value(inner, env),
             Value::String(s, quoted) => {
                 // 处理插值在字符串中

@@ -33,7 +33,7 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
         // String + Calc / Calc + String — 拼接字符串表示
         (Value::String(a, qa), Value::Calc(c)) => Ok(Value::String(format!("{a}{c}"), qa)),
         (Value::Calc(c), Value::String(b, qb)) => Ok(Value::String(format!("{c}{b}"), qb)),
-        (Value::Calc(a), Value::Calc(b)) => Ok(Value::String(format!("{a}{b}"), false)),
+        (Value::Calc(a), Value::Calc(b)) => Ok(Value::Raw(format!("{a}{b}"))),
         // String + Bool / Bool + String
         (Value::String(a, qa), Value::Bool(b)) => Ok(Value::String(format!("{a}{b}"), qa)),
         (Value::Bool(a), Value::String(b, qb)) => Ok(Value::String(format!("{a}{b}"), qb)),
@@ -110,7 +110,12 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
             Ok(Value::Number(a / b, u1.clone()))
         }
         // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
-        _ => Ok(Value::String(format!("{l}/{r}"), false)),
+        // 简化简单 calc(N) → N
+        _ => {
+            let l_str = value_to_raw(l);
+            let r_str = value_to_raw(r);
+            Ok(Value::Raw(format!("{l_str}/{r_str}")))
+        }
     }
 }
 
@@ -120,7 +125,37 @@ pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
             if *b == 0.0 {
                 return Err(SassError::DivideByZero);
             }
+            // 处理 infinity 情况：1px % Infinity = 1px, -1px % -Infinity = -1px
+            // 符号不同时：-1px % Infinity = NaN, 1px % -Infinity = NaN
+            if b.is_infinite() {
+                if a == &0.0 || a.signum() == b.signum() {
+                    return Ok(Value::Number(*a, u.clone()));
+                } else {
+                    let unit = u.as_deref().unwrap_or("");
+                    return Ok(Value::Raw(format!("calc(NaN * 1{unit})")));
+                }
+            }
             Ok(Value::Number(a % b, u.clone()))
+        }
+        // 处理右侧是 calc(infinity * 1px) 等情况
+        (Value::Number(a, u), Value::Calc(s)) => {
+            if s.contains("infinity") {
+                let is_negative = s.starts_with("calc(-") || s.contains("-infinity");
+                let a_sign = a.signum();
+                if *a == 0.0 || (is_negative && a_sign < 0.0) || (!is_negative && a_sign > 0.0) {
+                    Ok(Value::Number(*a, u.clone()))
+                } else {
+                    let unit = u.as_deref().unwrap_or("");
+                    Ok(Value::Raw(format!("calc(NaN * 1{unit})")))
+                }
+            } else {
+                // 非 infinity 的 calc —— 作为空格分隔列表保留
+                Ok(Value::List(
+                    vec![l.clone(), r.clone()],
+                    Separator::Space,
+                    false,
+                ))
+            }
         }
         // Null RHS — % 不是运算符，作为字符串保留
         (l, Value::Null) => Ok(Value::List(
@@ -134,6 +169,27 @@ pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
             Separator::Space,
             false,
         )),
+    }
+}
+
+/// 将 Value 转换为原始 CSS 字符串，简化简单 calc(N) 为 N
+fn value_to_raw(v: &Value) -> String {
+    match v {
+        Value::Calc(s) => {
+            // 尝试简化 calc(N) → N
+            if let Some(inner) = s.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")) {
+                let inner = inner.trim();
+                if let Ok(n) = inner.parse::<f64>() {
+                    if n.fract() == 0.0 {
+                        return format!("{}", n as i64);
+                    } else {
+                        return format!("{n}");
+                    }
+                }
+            }
+            s.clone()
+        }
+        _ => v.to_string(),
     }
 }
 
@@ -182,8 +238,9 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
 pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
     match (l, r) {
         (Value::Number(a, _), Value::Number(b, _)) => {
-            if a.is_nan() && b.is_nan() {
-                return true;
+            // IEEE 754：NaN != NaN
+            if a.is_nan() || b.is_nan() {
+                return false;
             }
             if a.is_infinite() && b.is_infinite() && a.signum() == b.signum() {
                 return true;
@@ -194,8 +251,10 @@ pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Color(a), Value::Color(b)) => a == b,
         (Value::Null, Value::Null) => true,
-        (Value::List(a, _, _), Value::List(b, _, _)) => {
-            a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_eq(x, y))
+        (Value::List(a, sa, ba), Value::List(b, sb, bb)) => {
+            // 列表相等：长度、分隔符、括号状态、每个元素都相同
+            sa == sb && ba == bb && a.len() == b.len()
+                && a.iter().zip(b.iter()).all(|(x, y)| values_eq(x, y))
         }
         (Value::Map(a), Value::Map(b)) => {
             a.len() == b.len()

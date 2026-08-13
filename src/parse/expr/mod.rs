@@ -10,7 +10,7 @@ pub(crate) use prefix::{parse_hash_color, parse_number};
 
 use super::ast::*;
 use super::Parser;
-use crate::error::Result;
+use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
 impl<'tok> Parser<'tok> {
@@ -72,9 +72,66 @@ impl<'tok> Parser<'tok> {
             if bp < min_bp {
                 break;
             }
+            // 检查 and/or 后面的 token（跳过空白）
+            let mut after_op_idx = self.pos + 1;
+            while matches!(self.tokens.get(after_op_idx), Some(Token::Whitespace)) {
+                after_op_idx += 1;
+            }
+            let after_op = self.tokens.get(after_op_idx);
+            // 检查 and/or 后面是否紧跟 (（无空白）→ 报错
+            // 例如 `and(css(2))` 报错，`and (css(2))` 合法
+            // 判断是否有空白：如果 after_op_idx == self.pos + 1，则没有空白
+            if matches!(after_op, Some(Token::LParen))
+                && matches!(op, BinOpKind::And | BinOpKind::Or)
+                && after_op_idx == self.pos + 1
+            {
+                return Err(SassError::Parse {
+                    expected: format!("Whitespace is required after {}", if matches!(op, BinOpKind::And) { "and" } else { "or" }),
+                    found: "(".into(),
+                });
+            }
+            // `and`/`or` 后面不能直接跟 `not`（需要括号）
+            // 例如 `css(1) and not css(2)` 报错
+            if matches!(after_op, Some(Token::Not))
+                && matches!(op, BinOpKind::And | BinOpKind::Or)
+            {
+                return Err(SassError::Parse {
+                    expected: "(".into(),
+                    found: "not".into(),
+                });
+            }
             self.advance(); // 消费运算符
             self.skip_ws();
             let rhs = self.parse_expr(bp + 1)?;
+            // 检查：and/or 的左操作数不能是 not
+            // 例如 `not css(1) and css(2)` 报错
+            if matches!(&lhs, Value::UnaryOp(UnaryOp::Not, _))
+                && matches!(op, BinOpKind::And | BinOpKind::Or)
+            {
+                return Err(SassError::Parse {
+                    expected: ":".into(),
+                    found: if matches!(op, BinOpKind::And) { "and".into() } else { "or".into() },
+                });
+            }
+            // 检查 and/or 混合：or 的右操作数不能是 BinOp(And, ...)，反之亦然
+            // 例如 `css(1) or css(2) and css(3)` 报错
+            // 注意：由于 and 的绑定优先级高于 or，`or css(2) and css(3)` 会被解析为
+            // `or (and css(2) css(3))`，所以需要检查右操作数
+            match (&op, &rhs) {
+                (BinOpKind::Or, Value::BinOp(b)) if matches!(b.op, BinOpKind::And) => {
+                    return Err(SassError::Parse {
+                        expected: ":".into(),
+                        found: "and".into(),
+                    });
+                }
+                (BinOpKind::And, Value::BinOp(b)) if matches!(b.op, BinOpKind::Or) => {
+                    return Err(SassError::Parse {
+                        expected: ":".into(),
+                        found: "or".into(),
+                    });
+                }
+                _ => {}
+            }
             lhs = Value::BinOp(Box::new(BinOp {
                 op,
                 left: lhs,
@@ -94,6 +151,22 @@ impl<'tok> Parser<'tok> {
             };
             if bp < min_bp {
                 break;
+            }
+            // 检查 and/or 后面的 token（跳过空白）
+            let mut after_op_idx = self.pos + 1;
+            while matches!(self.tokens.get(after_op_idx), Some(Token::Whitespace)) {
+                after_op_idx += 1;
+            }
+            let after_op = self.tokens.get(after_op_idx);
+            // 检查 and/or 后面是否紧跟 (（无空白）→ 报错
+            if matches!(after_op, Some(Token::LParen))
+                && matches!(op, BinOpKind::And | BinOpKind::Or)
+                && after_op_idx == self.pos + 1
+            {
+                return Err(SassError::Parse {
+                    expected: format!("Whitespace is required after {}", if matches!(op, BinOpKind::And) { "and" } else { "or" }),
+                    found: "(".into(),
+                });
             }
             self.advance();
             self.skip_ws();

@@ -4,8 +4,9 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
+use im::HashMap;
 
-pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
+pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
         "length" | "list-length" => match args {
             [Value::List(es, _, _)] => Ok(Some(Value::Number(es.len() as f64, None))),
@@ -138,8 +139,17 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
             };
-            // 解析 separator 参数
-            let sep = if let Some(Value::String(s, _)) = args.get(2) {
+            // 解析 separator 参数（支持 keyword argument $separator，kw_args 中键名不带 $）
+            let sep = if let Some(Value::String(s, _)) = kw_args.get("separator").or_else(|| kw_args.get("$separator")) {
+                match s.as_str() {
+                    "comma" => Separator::Comma,
+                    "space" => Separator::Space,
+                    "slash" => Separator::Slash,
+                    _ => {
+                        if a_sep == Separator::Undecided { b_sep } else { a_sep }
+                    }
+                }
+            } else if let Some(Value::String(s, _)) = args.get(2) {
                 match s.as_str() {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
@@ -152,8 +162,12 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 // 无 separator 参数 → auto
                 if a_sep == Separator::Undecided { b_sep } else { a_sep }
             };
-            // 解析 bracketed 参数
-            let bracketed = if let Some(Value::Bool(b)) = args.get(3) {
+            // 解析 bracketed 参数（支持 keyword argument $bracketed，kw_args 中键名不带 $）
+            let bracketed = if let Some(Value::Bool(b)) = kw_args.get("bracketed").or_else(|| kw_args.get("$bracketed")) {
+                *b
+            } else if let Some(Value::String(s, _)) = kw_args.get("bracketed").or_else(|| kw_args.get("$bracketed")) {
+                s == "auto"
+            } else if let Some(Value::Bool(b)) = args.get(3) {
                 *b
             } else if let Some(Value::String(s, _)) = args.get(3) {
                 s == "auto"

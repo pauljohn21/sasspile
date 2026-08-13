@@ -298,6 +298,10 @@ impl Evaluator {
                 if matches!(val, Value::Null) {
                     return Ok((vec![], env.clone()));
                 }
+                // Map 不能作为 CSS 值输出
+                if matches!(val, Value::Map(_)) {
+                    return Err(SassError::Eval(format!("{val} isn't a valid CSS value.")));
+                }
                 // 求值属性名（支持 $var 和 #{...} 插值）
                 let property = crate::eval::value::eval_property_name(property, env);
                 Ok((

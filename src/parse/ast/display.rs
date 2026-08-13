@@ -174,6 +174,7 @@ impl std::fmt::Display for Value {
             Value::Calc(s) => write!(f, "{s}"),
             Value::Paren(v) => write!(f, "({v})"),
             Value::Spread(v) => write!(f, "{v}..."),
+            Value::Raw(s) => write!(f, "{s}"),
         }
     }
 }

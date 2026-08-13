@@ -342,8 +342,34 @@ fn diag_values_colors() {
     diag("values/colors", 10);
 }
 
+#[test]
+fn diag_values_identifiers() {
+    diag("values/identifiers", 10);
+}
+
+#[test]
+fn diag_values_lists() {
+    diag("values/lists", 10);
+}
+
+#[test]
+fn diag_values_ids() {
+    diag("values/ids", 10);
+}
+
+#[test]
+fn diag_values_strings() {
+    diag("values/strings", 10);
+}
+
+#[test]
+fn diag_values_mixins() {
+    diag("values/mixins", 10);
+}
+
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
+    sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
     let dir = spec_root.join(subdir);
     let mut files = Vec::new();
@@ -381,7 +407,7 @@ fn stats_subdir(subdir: &str) {
         }
     }
     let pct = if cases > 0 { pass * 100 / cases } else { 0 };
-    tracing::info!(subdir = %subdir, pass = pass, total = cases, pct = pct, fail = fail, "子目录统计");
+    tracing::warn!(subdir = %subdir, pass = pass, total = cases, pct = pct, fail = fail, "子目录统计");
 }
 
 #[test]
@@ -392,4 +418,16 @@ fn stats_list() {
 #[test]
 fn stats_math() {
     stats_subdir("core_functions/math");
+}
+
+#[test]
+fn stats_values_all() {
+    stats_subdir("values/colors");
+    stats_subdir("values/identifiers");
+    stats_subdir("values/lists");
+    stats_subdir("values/maps");
+    stats_subdir("values/mixins");
+    stats_subdir("values/numbers");
+    stats_subdir("values/strings");
+    stats_subdir("values/ids");
 }

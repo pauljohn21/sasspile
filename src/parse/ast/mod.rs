@@ -234,6 +234,8 @@ pub enum Value {
     Paren(Box<Value>),
     /// 剩余参数展开。
     Spread(Box<Value>),
+    /// 原始 CSS 值——输出时不进行任何转义或处理。
+    Raw(String),
 }
 
 /// 二元运算。

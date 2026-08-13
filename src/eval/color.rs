@@ -500,9 +500,9 @@ impl Evaluator {
             [Value::Color(c), Value::Number(a, _)] => {
                 Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, c.format.clone())))
             }
-            // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
+            // CSS 透传：参数包含 var()/calc()/raw 等非数值时，原样输出
             _ if args.iter().any(|a| {
-                matches!(a, Value::Calc(_) | Value::String(_, false))
+                matches!(a, Value::Calc(_) | Value::Raw(_) | Value::String(_, false))
                     && !matches!(a, Value::Color(_))
             }) => {
                 let arg_str = args
