@@ -54,13 +54,11 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
             let path = entry.path();
             if path.is_dir() {
                 collect_hrx(&path, files);
-            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
-                if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 100_000 {
+            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
+                && let Ok(meta) = std::fs::metadata(&path)
+                    && meta.len() < 100_000 {
                         files.push(path);
                     }
-                }
-            }
         }
     }
 }
@@ -124,7 +122,7 @@ fn color_error_patterns() {
     tracing::info!(pass = pass, fail = fail, "color 诊断");
     tracing::info!("错误模式 (top 20):");
     let mut sorted: Vec<_> = patterns.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
     for (k, v) in sorted.iter().take(20) {
         tracing::info!(count = *v, pattern = %k, "错误模式");
     }

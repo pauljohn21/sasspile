@@ -3,7 +3,6 @@
 /// 测试 Bootstrap 使用的核心 SCSS 特性。
 /// 注意：完整 Bootstrap 编译需要 @import、@mixin、父选择器 & 等高级特性支持。
 /// 当前版本会将 hex 颜色转换为 rgba() 格式。
-
 /// 检查 CSS 是否包含颜色（支持 hex 和 rgba 格式）。
 fn assert_contains_color(css: &str, hex: &str) {
     // 将 hex 转换为 rgba 进行比较

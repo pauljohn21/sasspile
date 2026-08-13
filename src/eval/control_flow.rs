@@ -99,7 +99,7 @@ impl Evaluator {
                 return Err(SassError::Eval("@each 输出节点过多".into()));
             }
             if vars.len() == 1 {
-                let val = item_group.get(0).cloned().unwrap_or(Value::Null);
+                let val = item_group.first().cloned().unwrap_or(Value::Null);
                 current_env = current_env.bind(vars[0].clone(), val);
             } else {
                 for (j, v) in vars.iter().enumerate() {

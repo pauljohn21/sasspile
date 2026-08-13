@@ -187,6 +187,28 @@ Source { content }  ──lex()──►  Lexed { tokens }
 - 必须先求值后序列化
 - 编译错误在类型层面被阻止
 
+## 文档
+
+- **架构指南**: `docs/ARCH.md` — 模块职责、设计决策、性能考虑
+- **API 文档**: `docs/API.md` — 公开 API 参考
+- **开发技能**: `skill.md` — 编译管线、内建函数、调试追踪
+- **设计文档**: `DESIGN.md` — 项目设计思路
+
+### 常用命令
+
+```bash
+# 开发任务（使用 just）
+just test-all          # 运行全部测试
+just clippy            # Clippy 检查
+just bench             # 性能基准测试
+just diag <subdir>     # sass-spec 诊断
+
+# 或直接 cargo
+cargo test --test compile_test
+cargo clippy --all-targets
+cargo bench
+```
+
 ## 许可证
 
 MIT

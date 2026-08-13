@@ -3,7 +3,7 @@ use sasspile::parse::ast::*;
 #[test]
 fn test_number_display() {
     assert_eq!(Value::Number(10.0, None).to_string(), "10");
-    assert_eq!(Value::Number(3.14, None).to_string(), "3.14");
+    assert_eq!(Value::Number(1.23, None).to_string(), "1.23");
     assert_eq!(Value::Number(10.0, Some("px".into())).to_string(), "10px");
     assert_eq!(Value::Number(50.0, Some("%".into())).to_string(), "50%");
 }

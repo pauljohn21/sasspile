@@ -219,13 +219,11 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
             let path = entry.path();
             if path.is_dir() {
                 collect_hrx(&path, files);
-            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
-                if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 50_000 {
+            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
+                && let Ok(meta) = std::fs::metadata(&path)
+                    && meta.len() < 50_000 {
                         files.push(path);
                     }
-                }
-            }
         }
     }
 }

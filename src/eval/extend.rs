@@ -37,8 +37,8 @@ impl Evaluator {
                             } else {
                                 // 普通选择器：添加继承者作为额外选择器
                                 let new_sel = selector.replace(target_trimmed, extender);
-                                if !new_sel.is_empty() && new_sel != *selector {
-                                    if !selector.contains(&new_sel) {
+                                if !new_sel.is_empty() && new_sel != *selector
+                                    && !selector.contains(&new_sel) {
                                         selector.push_str(", ");
                                         selector.push_str(&new_sel);
                                         crate::__tracing::debug!(
@@ -47,7 +47,6 @@ impl Evaluator {
                                             "extender appended"
                                         );
                                     }
-                                }
                             }
                         }
                     }

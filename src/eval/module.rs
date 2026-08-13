@@ -152,11 +152,10 @@ impl Evaluator {
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let func_name = &name[dot + 1..];
-            if let Some(module) = env.get_namespace(ns) {
-                if let Some(func) = module.functions.get(func_name) {
+            if let Some(module) = env.get_namespace(ns)
+                && let Some(func) = module.functions.get(func_name) {
                     return Self::call_user_function(func, pos_args, kw_args, env);
                 }
-            }
         }
         // 将模块限定名映射到内建函数
         let builtin_name = match name {

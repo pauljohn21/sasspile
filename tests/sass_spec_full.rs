@@ -140,11 +140,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
     }
 
     let evaluated = cases - skip;
-    let pct = if evaluated > 0 {
-        pass * 100 / evaluated
-    } else {
-        0
-    };
+    let pct = pass * 100 / evaluated.max(1);
     info!(
         dir = dir_name,
         pass = pass,
@@ -165,11 +161,7 @@ fn test_import_use_forward() {
     for subdir in &["directives/import", "directives/use", "directives/forward"] {
         let (pass, fail, skip, cases) = run_spec_dir(&spec_root, subdir);
         let evaluated = cases - skip;
-        let pct = if evaluated > 0 {
-            pass * 100 / evaluated
-        } else {
-            0
-        };
+        let pct = pass * 100 / evaluated.max(1);
         info!(
             subdir = subdir,
             pass = pass,
@@ -211,11 +203,7 @@ fn test_sass_spec_full_stats() {
     }
 
     let evaluated = total_cases - total_skip;
-    let overall_pct = if evaluated > 0 {
-        total_pass * 100 / evaluated
-    } else {
-        0
-    };
+    let overall_pct = total_pass * 100 / evaluated.max(1);
     info!(
         pass = total_pass,
         fail = total_fail,

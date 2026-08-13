@@ -482,9 +482,9 @@ impl Evaluator {
                 let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
                 let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
                 let alpha = if ua.as_deref() == Some("%") {
-                    (*a / 100.0) as f64
+                    *a / 100.0
                 } else {
-                    *a as f64
+                    *a
                 };
                 crate::__tracing::debug!(
                     target: "sasspile::color",
@@ -498,7 +498,7 @@ impl Evaluator {
             }
             // rgba($color, $alpha) — 修改颜色的 alpha 通道
             [Value::Color(c), Value::Number(a, _)] => {
-                Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a as f64, c.format.clone())))
+                Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, c.format.clone())))
             }
             // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
             _ if args.iter().any(|a| {
@@ -526,7 +526,7 @@ impl Evaluator {
                     amount = *amount,
                     "darken input"
                 );
-                let factor = 1.0 - (*amount as f64 / 100.0);
+                let factor = 1.0 - (*amount / 100.0);
                 let result = Value::Color(Color::rgba(
                     (c.r as f64 * factor) as u8,
                     (c.g as f64 * factor) as u8,
@@ -555,7 +555,7 @@ impl Evaluator {
                     amount = *amount,
                     "lighten input"
                 );
-                let factor = *amount as f64 / 100.0;
+                let factor = *amount / 100.0;
                 let result = Value::Color(Color::rgba(
                     (c.r as f64 + (255.0 - c.r as f64) * factor) as u8,
                     (c.g as f64 + (255.0 - c.g as f64) * factor) as u8,
@@ -597,7 +597,7 @@ impl Evaluator {
                     color_a = ?a, color_b = ?b, weight = *w,
                     "mix 3-arg input"
                 );
-                let weight = *w as f64 / 100.0;
+                let weight = *w / 100.0;
                 Ok(Value::Color(Color::rgba(
                     (a.r as f64 * (1.0 - weight) + b.r as f64 * weight) as u8,
                     (a.g as f64 * (1.0 - weight) + b.g as f64 * weight) as u8,
@@ -610,7 +610,7 @@ impl Evaluator {
                     target: "sasspile::color",
                     fn = "mix",
                     n_args = args.len(),
-                    arg_types = ?args.iter().map(|a| std::mem::discriminant(a)).collect::<Vec<_>>(),
+                    arg_types = ?args.iter().map(std::mem::discriminant).collect::<Vec<_>>(),
                     args_debug = ?args.iter().map(|a| format!("{a}")).collect::<Vec<_>>(),
                     "mix argument mismatch"
                 );

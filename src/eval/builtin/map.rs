@@ -27,7 +27,7 @@ impl Evaluator {
         if keys.is_empty() {
             let mut result = map.to_vec();
             for (k, v) in map2 {
-                if let Some(entry) = result.iter_mut().find(|(ek, _)| Self::values_eq(ek, k)) {
+                if let Some(entry) = result.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
                     entry.1 = v.clone();
                 } else {
                     result.push((k.clone(), v.clone()));
@@ -40,14 +40,14 @@ impl Evaluator {
         let mut result = Vec::new();
         let mut found = false;
         for (k, v) in map {
-            if Self::values_eq(k, key) {
+            if crate::eval::value::values_eq(k, key) {
                 found = true;
                 let inner_map = Self::value_to_map(v).unwrap_or_default();
                 let new_inner = if remaining.is_empty() {
                     let mut merged = inner_map;
                     for (mk, mv) in map2 {
                         if let Some(entry) =
-                            merged.iter_mut().find(|(ek, _)| Self::values_eq(ek, mk))
+                            merged.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, mk))
                         {
                             entry.1 = mv.clone();
                         } else {
@@ -86,7 +86,7 @@ impl Evaluator {
         if keys.len() == 1 {
             let key = &keys[0];
             let mut result = map.to_vec();
-            if let Some(entry) = result.iter_mut().find(|(ek, _)| Self::values_eq(ek, key)) {
+            if let Some(entry) = result.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, key)) {
                 entry.1 = value;
             } else {
                 result.push((key.clone(), value));
@@ -98,7 +98,7 @@ impl Evaluator {
         let mut result = Vec::new();
         let mut found = false;
         for (k, v) in map {
-            if Self::values_eq(k, key) {
+            if crate::eval::value::values_eq(k, key) {
                 found = true;
                 let inner_map = Self::value_to_map(v).unwrap_or_default();
                 let new_inner = Self::nested_map_set(&inner_map, remaining, value.clone())?;
@@ -124,7 +124,7 @@ impl Evaluator {
                 let mut current = args[0].clone();
                 for key in &args[1..] {
                     let pairs = Self::value_to_map(&current)?;
-                    match pairs.iter().find(|(k, _)| Self::values_eq(k, key)) {
+                    match pairs.iter().find(|(k, _)| crate::eval::value::values_eq(k, key)) {
                         Some((_, v)) => current = v.clone(),
                         None => return Ok(Some(Value::Null)),
                     }
@@ -167,7 +167,7 @@ impl Evaluator {
                             break;
                         }
                     };
-                    match pairs.iter().find(|(k, _)| Self::values_eq(k, key)) {
+                    match pairs.iter().find(|(k, _)| crate::eval::value::values_eq(k, key)) {
                         Some((_, v)) => current = v.clone(),
                         None => {
                             found = false;
@@ -191,7 +191,7 @@ impl Evaluator {
                 let map2 = Self::value_to_map(&args[1])?;
                 let mut merged = map1;
                 for (k, v) in &map2 {
-                    if let Some(entry) = merged.iter_mut().find(|(ek, _)| Self::values_eq(ek, k)) {
+                    if let Some(entry) = merged.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
                         entry.1 = v.clone();
                     } else {
                         merged.push((k.clone(), v.clone()));
@@ -210,7 +210,7 @@ impl Evaluator {
                 let keys = &args[1..];
                 let filtered: Vec<(Value, Value)> = pairs
                     .iter()
-                    .filter(|(k, _)| !keys.iter().any(|key| Self::values_eq(k, key)))
+                    .filter(|(k, _)| !keys.iter().any(|key| crate::eval::value::values_eq(k, key)))
                     .cloned()
                     .collect();
                 Value::Map(filtered)
@@ -249,7 +249,7 @@ impl Evaluator {
     ) -> Vec<(Value, Value)> {
         let mut result = map1.to_vec();
         for (k2, v2) in map2 {
-            if let Some(entry) = result.iter_mut().find(|(k1, _)| Self::values_eq(k1, k2)) {
+            if let Some(entry) = result.iter_mut().find(|(k1, _)| crate::eval::value::values_eq(k1, k2)) {
                 // 两个值都是 map → 递归合并
                 if let (Value::Map(inner1), Value::Map(inner2)) = (&entry.1, v2) {
                     entry.1 = Value::Map(Self::deep_merge_maps(inner1, inner2));
@@ -275,7 +275,7 @@ impl Evaluator {
                 let remaining_keys = &keys[1..];
                 let mut result: Vec<(Value, Value)> = Vec::new();
                 for (k, v) in pairs.iter() {
-                    if Self::values_eq(k, target_key) {
+                    if crate::eval::value::values_eq(k, target_key) {
                         if remaining_keys.is_empty() {
                             continue;
                         } else if let Value::Map(inner) = v {

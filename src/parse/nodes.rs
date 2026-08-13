@@ -178,12 +178,11 @@ impl<'tok> Parser<'tok> {
         if self.peek() == Some(&Token::Bang) {
             self.advance();
             self.skip_ws();
-            if let Some(Token::Ident(s)) = self.peek() {
-                if s == "important" {
+            if let Some(Token::Ident(s)) = self.peek()
+                && s == "important" {
                     self.advance();
                     return Ok(true);
                 }
-            }
         }
         Ok(false)
     }
@@ -387,8 +386,8 @@ impl<'tok> Parser<'tok> {
                         self.advance();
                         self.skip_ws();
                         // 期望 else : value 或 condition : value
-                        if let Some(Token::Ident(s)) = self.peek() {
-                            if s == "else" {
+                        if let Some(Token::Ident(s)) = self.peek()
+                            && s == "else" {
                                 self.advance();
                                 self.skip_ws();
                                 if self.peek() == Some(&Token::Colon) {
@@ -404,7 +403,6 @@ impl<'tok> Parser<'tok> {
                                 });
                                 break; // else 是最后一个
                             }
-                        }
                         // 解析 condition : value
                         let cond2 = self.parse_expr(0)?;
                         self.skip_ws();

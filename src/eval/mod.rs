@@ -266,7 +266,7 @@ impl Evaluator {
                     return Ok((vec![], env.clone()));
                 }
                 // 求值属性名（支持 $var 和 #{...} 插值）
-                let property = Self::eval_property_name(property, env);
+                let property = crate::eval::value::eval_property_name(property, env);
                 Ok((
                     vec![CssNode::Declaration {
                         property,

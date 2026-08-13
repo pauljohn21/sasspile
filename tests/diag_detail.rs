@@ -6,7 +6,9 @@ use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 use tracing::info;
 
-fn parse_hrx(content: &str) -> Vec<(Vec<(String, String)>, String, String, bool)> {
+type ParsedHrx = Vec<(Vec<(String, String)>, String, String, bool)>;
+
+fn parse_hrx(content: &str) -> ParsedHrx {
     let mut files: Vec<(String, String)> = Vec::new();
     let mut current_path = String::new();
     let mut current_content = String::new();
@@ -159,7 +161,7 @@ fn diag_output_mismatch() {
                         .to_string_lossy()
                         .to_string();
 
-                    match run_case(case, &[spec_root.to_path_buf()]) {
+                    match run_case(case, std::slice::from_ref(&spec_root)) {
                         Ok(_) => {}
                         Err(err) => {
                             *error_counts.entry(err.clone()).or_insert(0) += 1;
@@ -183,7 +185,7 @@ fn diag_output_mismatch() {
 
     // Show details for top output_mismatch patterns
     let mut sorted_patterns: Vec<_> = patterns.iter().collect();
-    sorted_patterns.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    sorted_patterns.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
     info!("=== Top 15 失败模式详情 ===");
     for (i, (pattern, files)) in sorted_patterns.iter().take(15).enumerate() {
         info!(rank = i + 1, pattern = pattern.as_str(), count = files.len(), "模式");

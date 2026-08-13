@@ -141,11 +141,10 @@ impl<'src> Lexer<'src> {
                         if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') {
                             self.next_char();
                         }
-                        if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                            if let Some(ch) = char::from_u32(code) {
+                        if let Ok(code) = u32::from_str_radix(&hex, 16)
+                            && let Some(ch) = char::from_u32(code) {
                                 content.push(ch);
                             }
-                        }
                     } else {
                         // 非十六进制转义：\X → X（如 \" → ", \\ → \）
                         self.next_char();

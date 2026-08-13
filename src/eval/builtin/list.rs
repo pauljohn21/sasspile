@@ -2,7 +2,6 @@
 //!
 //! 包含 length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip。
 
-use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 
@@ -137,7 +136,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
-                    "auto" | _ => {
+                    _ => {
                         if a_sep == Separator::Undecided { b_sep } else { a_sep }
                     }
                 }
@@ -161,14 +160,14 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
         "index" => match args {
             [Value::List(items, _, _), needle] => {
                 for (i, item) in items.iter().enumerate() {
-                    if Evaluator::values_eq(item, needle) {
+                    if crate::eval::value::values_eq(item, needle) {
                         return Ok(Some(Value::Number((i + 1) as f64, None)));
                     }
                 }
                 Ok(Some(Value::Null))
             }
             [other, needle] => {
-                if Evaluator::values_eq(other, needle) {
+                if crate::eval::value::values_eq(other, needle) {
                     Ok(Some(Value::Number(1.0, None)))
                 } else {
                     Ok(Some(Value::Null))

@@ -13,7 +13,7 @@ impl Evaluator {
         let _enter = span.enter();
         // 对选择器中的 #{...} 插值求值
         let selector = if selector.contains("#{") {
-            Self::eval_interp_str(selector, env)
+            crate::eval::value::eval_interp_str(selector, env)
         } else {
             selector.to_string()
         };

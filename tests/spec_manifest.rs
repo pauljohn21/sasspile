@@ -166,11 +166,10 @@ fn collect_recursive(
                     *skipped += 1;
                     continue;
                 }
-                if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 100_000 {
+                if let Ok(meta) = std::fs::metadata(&path)
+                    && meta.len() < 100_000 {
                         files.push(path);
                     }
-                }
             }
         }
     }
@@ -191,13 +190,11 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
             let path = entry.path();
             if path.is_dir() {
                 collect_all_recursive(&path, files);
-            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
-                if let Ok(meta) = std::fs::metadata(&path) {
-                    if meta.len() < 100_000 {
+            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
+                && let Ok(meta) = std::fs::metadata(&path)
+                    && meta.len() < 100_000 {
                         files.push(path);
                     }
-                }
-            }
         }
     }
 }

@@ -15,11 +15,10 @@ impl Evaluator {
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let mixin_name = &name[dot + 1..];
-            if let Some(module) = env.get_namespace(ns) {
-                if let Some(mixin) = module.mixins.get(mixin_name) {
+            if let Some(module) = env.get_namespace(ns)
+                && let Some(mixin) = module.mixins.get(mixin_name) {
                     return Self::exec_mixin(mixin, args, content, env);
                 }
-            }
         }
         let mixin = env
             .get_mixin(name)
@@ -209,9 +208,9 @@ for (ns, exports) in &mixin.captured_namespaces {
 
         // 当 @media/@supports/@container 在规则内部时，提升到外层：
         // 将声明包裹在当前选择器的规则中，嵌套规则保持原样（选择器已合并）。
-        if matches!(name, "media" | "supports" | "container") {
-            if let Some(sel) = env.get_selector() {
-                if !sel.is_empty() {
+        if matches!(name, "media" | "supports" | "container")
+            && let Some(sel) = env.get_selector()
+                && !sel.is_empty() {
                     let mut new_children = Vec::new();
                     let mut current_decls = Vec::new();
                     for child in children {
@@ -246,8 +245,6 @@ for (ns, exports) in &mixin.captured_namespaces {
                         env.clone(),
                     ));
                 }
-            }
-        }
 
         Ok((
             vec![CssNode::AtRule {

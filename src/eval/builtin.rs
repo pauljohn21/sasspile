@@ -140,12 +140,11 @@ impl Evaluator {
             "atan2" => match pos_args {
                 [Value::Number(y, yu), Value::Number(x, xu)] => {
                     // 检查单位兼容性
-                    if let (Some(yu), Some(xu)) = (yu, xu) {
-                        if yu != xu {
+                    if let (Some(yu), Some(xu)) = (yu, xu)
+                        && yu != xu {
                             // 尝试兼容转换（如 cm 和 mm）
                             // 简化处理：如果单位不同但都是长度单位，比值消去单位
                         }
-                    }
                     let result = y.atan2(*x).to_degrees();
                     Ok(Value::Number(result, Some("deg".to_string())))
                 }
@@ -238,13 +237,13 @@ impl Evaluator {
             },
             "compatible" => match pos_args {
                 [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
-                    Self::units_compatible(u1.as_deref(), u2.as_deref()),
+                    crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
                 )),
                 _ => Err(SassError::Eval("compatible 需要 2 个数字参数".into())),
             },
             "comparable" => match pos_args {
                 [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
-                    Self::units_compatible(u1.as_deref(), u2.as_deref()),
+                    crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
                 )),
                 _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
             },
@@ -305,7 +304,7 @@ color::call(&name, pos_args, kw_args)?
                 _ => Ok(Value::String("unknown".into(), false)),
             },
             "inspect" => match pos_args {
-                [v] => Ok(Value::String(Self::inspect_value(v), false)),
+                [v] => Ok(Value::String(crate::eval::value::inspect_value(v), false)),
                 _ => Err(SassError::Eval("inspect 需要 1 个参数".into())),
             },
             "if" => match pos_args {

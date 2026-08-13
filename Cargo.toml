@@ -52,3 +52,20 @@ lto = true
 codegen-units = 1
 
 [dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "lexer_bench"
+harness = false
+
+[[bench]]
+name = "parser_bench"
+harness = false
+
+[[bench]]
+name = "eval_bench"
+harness = false
+
+[[bench]]
+name = "compile_bench"
+harness = false
