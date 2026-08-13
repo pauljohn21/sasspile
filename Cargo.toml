@@ -32,6 +32,7 @@ exclude = [
 [dependencies]
 thiserror = "2"
 im = "15"  # 不可变 HashMap —— 支持函数式状态传递
+rxrust = "1.0.0-rc.5"
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
 
@@ -68,4 +69,8 @@ harness = false
 
 [[bench]]
 name = "compile_bench"
+harness = false
+
+[[bench]]
+name = "rxrust_compare"
 harness = false
