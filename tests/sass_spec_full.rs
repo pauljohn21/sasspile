@@ -13,19 +13,13 @@ use std::path::{Path, PathBuf};
 use tracing::info;
 
 // —— jemalloc 全局分配器 + 显式 purge ——
-#[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-/// 触发内存 pressure relief（macOS 专用 FFI）。
+/// 触发 jemalloc purge，将空闲内存归还 OS。
 fn purge_memory() {
-    #[cfg(target_os = "macos")]
-    unsafe {
-        unsafe extern "C" {
-            fn malloc_zone_pressure_relief(zone: *mut libc::c_void, goal: libc::size_t) -> libc::size_t;
-        }
-        malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
-    }
+    // 推进 jemalloc epoch，触发空闲 page 归还 OS
+    let _ = jemalloc_ctl::epoch::advance();
 }
 
 /// HRX 测试用例。
@@ -289,58 +283,64 @@ fn test_sass_spec_full_stats() {
     );
 }
 
-// core_functions 子目录逐个独立运行（完全隔离，避免累积 OOM）
-macro_rules! core_fn_test {
-    ($name:ident, $subdir:expr) => {
-        #[test]
-        #[ignore]
-        fn $name() {
-            sasspile::init_tracing();
-            let spec_root =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
-            let (pass, fail, skip, cases) =
-                run_spec_dir_chunked(&spec_root, &format!("core_functions/{}", $subdir));
-            let evaluated = cases - skip;
-            let pct = pass * 100 / evaluated.max(1);
-            info!(
-                pass = pass,
-                fail = fail,
-                skip = skip,
-                total = cases,
-                evaluated = evaluated,
-                pct = pct,
-                subdir = $subdir,
-                "core_functions 子目录"
-            );
-        }
-    };
-}
-
-core_fn_test!(cf_general, "general.hrx");
-core_fn_test!(cf_newlines, "newlines.hrx");
-core_fn_test!(cf_list, "list");
-core_fn_test!(cf_map, "map");
-core_fn_test!(cf_math, "math");
-core_fn_test!(cf_meta, "meta");
-// selector 拆分为独立子目录（避免累积 OOM）
-core_fn_test!(cf_selector_append, "selector/append.hrx");
-core_fn_test!(cf_selector_nest, "selector/nest");
-core_fn_test!(cf_selector_parse, "selector/parse");
-core_fn_test!(cf_selector_replace, "selector/replace.hrx");
-core_fn_test!(cf_selector_extend, "selector/extend");
-core_fn_test!(cf_selector_unify, "selector/unify");
-core_fn_test!(cf_selector_is_superselector, "selector/is_superselector");
-core_fn_test!(cf_string, "string");
-
+/// core_functions —— 单测试内逐子目录运行，每目录后 purge_memory。
+/// 避免多测试并行累积内存导致 OOM。
 #[test]
 #[ignore]
-fn test_sass_spec_parser_callable() {
+fn test_core_functions_all() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
 
-    // parser + callable 单独运行
-    let (pass, fail, skip, cases) =
-        run_dirs(&spec_root, &["parser", "callable"]);
+    let subdirs = [
+        "general.hrx",
+        "newlines.hrx",
+        "list",
+        "map",
+        "math",
+        "meta",
+        "selector/append.hrx",
+        "selector/nest",
+        "selector/parse",
+        "selector/replace.hrx",
+        "selector/extend",
+        "selector/unify",
+        "selector/is_superselector",
+        "string",
+    ];
+
+    let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
+
+    for subdir in &subdirs {
+        let path = format!("core_functions/{subdir}");
+        let (pass, fail, skip, cases) = run_spec_dir_chunked(&spec_root, &path);
+        total_pass += pass;
+        total_fail += fail;
+        total_skip += skip;
+        total_cases += cases;
+        purge_memory(); // 每个子目录后释放物理内存
+    }
+
+    let evaluated = total_cases - total_skip;
+    let pct = total_pass * 100 / evaluated.max(1);
+    info!(
+        pass = total_pass,
+        fail = total_fail,
+        skip = total_skip,
+        total = total_cases,
+        evaluated = evaluated,
+        pct = pct,
+        "core_functions 全量（purge_memory 防 OOM）"
+    );
+}
+
+/// parser + callable —— 低内存目录，可并行。
+#[test]
+#[ignore]
+fn test_parser_callable() {
+    sasspile::init_tracing();
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+
+    let (pass, fail, skip, cases) = run_dirs(&spec_root, &["parser", "callable"]);
 
     let evaluated = cases - skip;
     let pct = pass * 100 / evaluated.max(1);
@@ -351,6 +351,6 @@ fn test_sass_spec_parser_callable() {
         total = cases,
         evaluated = evaluated,
         pct = pct,
-        "sass-spec parser + callable"
+        "parser + callable"
     );
 }

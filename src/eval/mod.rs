@@ -192,7 +192,7 @@ impl Env {
 pub struct Evaluator;
 
 /// 最大递归深度——防止无限递归导致内存爆炸。
-const MAX_DEPTH: usize = 100_000;
+const MAX_DEPTH: usize = 100000;
 
 impl Evaluator {
     /// 求值 AST 入口。

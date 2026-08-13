@@ -53,8 +53,8 @@ codegen-units = 1
 
 [dev-dependencies]
 criterion = "0.5"
-tikv-jemallocator = "0.6"
-libc = "0.2"
+jemallocator = "0.5"
+jemalloc-ctl = "0.5"
 
 [[bench]]
 name = "lexer_bench"
