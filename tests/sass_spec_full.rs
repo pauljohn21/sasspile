@@ -59,7 +59,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
 
             let case_files: Vec<(String, String)> = files
                 .iter()
-                .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css"))
+                .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
                 .map(|(p, c)| (p.clone(), c.clone()))
                 .collect();
 
