@@ -354,6 +354,22 @@
 
 ---
 
+## CssNode 枚举（求值输出 IR）
+
+`src/css/node.rs` — 求值器产出的中间表示，将被序列化为 CSS 字符串。
+
+| 变体 | 字段 | 语义 |
+|------|------|------|
+| `Rule` | `selector: String`, `declarations: Vec<CssNode>`, `children: Vec<CssNode>` | CSS 规则 |
+| `Declaration` | `property: String`, `value: String`, `important: bool` | 属性声明 |
+| `AtRule` | `name: String`, `params: Option<String>`, `children: Vec<CssNode>`, `has_body: bool` | @规则 |
+| `Comment` | `String` | CSS 注释 |
+| `AtRoot` | `Vec<CssNode>` | @at-root 输出（不嵌套在父选择器下） |
+| `Raw` | `String` | 原始 CSS 内容（.css 文件原样输出） |
+| `Return` | `Value` | @return 值（不序列化，仅内部传播） |
+
+---
+
 ## 补充说明
 
 本文件由 `RUSTDOCFLAGS="-W missing-docs" cargo doc` 驱动生成，覆盖以下源文件的缺失项：
@@ -362,5 +378,6 @@
 - `src/error.rs` — 6 个 SassError 变体字段
 - `src/parse/ast.rs` — 90+ 个 Node/Value/BinOp/Color/Separator/Ast 变体及字段
 - `src/eval/mod.rs` — 4 个 Env 公开方法
+- `src/css/node.rs` — 7 个 CssNode 变体及字段
 
-共计 135 项 `missing-docs` 警告，全部在此文档中补充语义说明。
+共计 140+ 项 `missing-docs` 警告，全部在此文档中补充语义说明。

@@ -23,8 +23,8 @@
 | **parse/ast.rs** | 638 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等）+ escape_quoted_string/escape_css_ident/escape_css_chars |
 | **parse/ast_impl.rs** | 281 | Display for Value + Node::to_scss() |
 | **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
-| **parse/nodes.rs** | 488 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
-| **parse/at_rules.rs** | 451 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
+| **parse/nodes.rs** | 578 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
+| **parse/at_rules.rs** | 465 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
 | **parse/expr.rs** | 623 | Pratt 表达式解析 + parse_number/parse_hash_color |
 | **eval/mod.rs** | 454 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node |
 | **eval/rule.rs** | 136 | eval_rule + combine_selectors |
@@ -34,14 +34,14 @@
 | **eval/extend.rs** | 77 | apply_extends |
 | **eval/module.rs** | 281 | resolve_file（含 load_paths） + load_module + call_module_function（含 is-powerless/is-in-gamut/is-legacy/to-space/to-gamut 映射） |
 | **eval/color.rs** | 604 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 486 | call_builtin 分派入口（match 骨架 → 子模块分派）+ sass:color 新函数 + hsl/hsla 分派 |
-| **eval/builtin/color.rs** | 568 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
+| **eval/builtin.rs** | 487 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin + is_css_function |
+| **eval/builtin/color.rs** | 569 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
 | **eval/builtin/list.rs** | 259 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
 | **eval/builtin/map.rs** | 301 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
 | **eval/builtin/string.rs** | 281 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id |
 | **eval/builtin/selector.rs** | 98 | selector-append/nest/is-super/parse/simple-selectors/unify/extend |
-| **css/mod.rs** | 358 | Serializer（CSS 树 → 字符串，含 Return 忽略） |
-| **css/node.rs** | 88 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Return） |
+| **css/mod.rs** | 738 | Serializer（CSS 树 → 字符串，选择器净化 + 组合器验证 + @规则合并） |
+| **css/node.rs** | 93 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Raw/Return） |
 | **stage/*.rs** | 14-89 | 管线阶段类型（Source/Lexed/Parsed/Evaluated/Serialized） |
 
 ## 函数 → 文件定位

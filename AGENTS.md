@@ -24,15 +24,15 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
 ## 验证清单（修复后必跑）
 
 ```bash
-cargo test --test compile_test    # 28 个
+cargo test --test compile_test    # 41 个
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 cargo test --test bs_spec -- --nocapture    # 15 个
-cargo test --test ep_full -- --nocapture    # 121 个（约 25 秒）
+cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
 ```
 
-**通过标准**：28/28 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
+**通过标准**：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
 
 ## Git 规范
 
@@ -42,6 +42,7 @@ cargo test --test ep_full -- --nocapture    # 121 个（约 25 秒）
 ## 参考文档（需要时查阅）
 
 - **代码导航**：`docs/CODE_INDEX.md`（静态）/ CodeGraph（动态查询）
+- **综合开发技能**：根目录 `skill.md`（编译管线 + 内建函数 + CSS 序列化 + 调试追踪）
 - **调试技能**：`.claude/skills/tracing-debug/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
 - **源文件结构**：见 `docs/CODE_INDEX.md`

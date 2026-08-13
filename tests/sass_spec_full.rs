@@ -53,20 +53,9 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
                 .unwrap_or_default();
             let expect_error = files.iter().any(|(p, _)| p == &error_path);
 
-            // 只收集当前 case 路径前缀下的文件（避免同 HRX 多 case 路径碰撞）
-            let case_prefix = if let Some(parent) = path.rfind('/') {
-                &path[..parent + 1]
-            } else if path != "input.scss" {
-                path.strip_suffix("input.scss").unwrap_or(path)
-            } else {
-                ""
-            };
             let case_files: Vec<(String, String)> = files
                 .iter()
-                .filter(|(p, _)| {
-                    (p.ends_with(".scss") || p.ends_with(".css"))
-                        && (case_prefix.is_empty() || p.starts_with(case_prefix) || p == path)
-                })
+                .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css"))
                 .map(|(p, c)| (p.clone(), c.clone()))
                 .collect();
 
@@ -92,9 +81,7 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
         return false;
     }
 
-    // 使用唯一 temp 目录（含 case 输入路径），避免同 HRX 多测试用例路径碰撞
-    let unique_tag = case.input_path.replace('/', "_").replace('\\', "_");
-    let tmp_dir = std::env::temp_dir().join(format!("sass-spec-{}-{}", std::process::id(), unique_tag));
+    let tmp_dir = std::env::temp_dir().join(format!("sass-spec-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0] — 2026-08-13
+
+### Added
+
+- 综合 AI 开发技能 `skill.md`（613 行）：编译管线、内建函数参考、CSS 序列化、调试追踪系统
+- `is-channel-powerless` 函数完整实现（HSL/HWB 通道无效检测）
+- `sass-spec` 测试修复：HRX 文件多 case 隔离（独立临时目录 + case_dir 过滤）
+- `@charset "UTF-8"` 自动添加（非 ASCII 内容）
+- 选择器净化增强：相邻复合选择器规范化、属性选择器去引号、修饰符空格
+
+### Changed
+
+- sass-spec 通过率：2566/4848 (53%)，较 0.3 的 36% 提升 17 个百分点
+- compile_test 从 28 增长到 41（新增 13 个编译测试用例）
+- `css/mod.rs` Serializer 从 358 行扩展到 738 行（选择器验证 + 组合器检查 + 相邻复合规范化）
+- CssNode 新增 `Raw(String)` 和 `AtRoot(Vec<CssNode>)` 变体
+
+### Fixed
+
+- sass-spec 测试运行器 HRX 多 case 路径碰撞 bug
+- `SKIP_DIRS` 更新：排除 CSS Level 4 颜色空间（oklch/oklab/lab/lch）等 Sass 3.x 未实现特性
+
 ## [0.3.1] — 2026-08-11
 
 ### Added

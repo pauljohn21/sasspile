@@ -15,10 +15,10 @@ enum SelToken {
     /// 普通选择器片段。
     Selector(String),
     /// 组合器（>, +, ~）。
-    Combinator(char),
+    Combinator,
     /// 伪类内部的选择器列表（需递归检查）。
-    /// (伪类名, 内部选择器字符串, 是否允许前导组合器)
-    PseudoInner(String, String, bool),
+    /// (内部选择器字符串, 是否允许前导组合器)
+    PseudoInner(String, bool),
 }
 
 impl Serializer {
@@ -506,11 +506,7 @@ impl Serializer {
                 // :is/:where/:not/matches 不允许前导组合器
                 // :has 允许前导组合器（同顶层）
                 let allow_leading = pseudo_name.as_deref() == Some("has");
-                tokens.push(SelToken::PseudoInner(
-                    pseudo_name.unwrap_or_default(),
-                    inner,
-                    allow_leading,
-                ));
+                tokens.push(SelToken::PseudoInner(inner, allow_leading));
                 continue; // 已经推进了 i
             } else if in_brackets {
                 current.push(c);
@@ -519,7 +515,7 @@ impl Serializer {
                     tokens.push(SelToken::Selector(current.trim().to_string()));
                     current = String::new();
                 }
-                tokens.push(SelToken::Combinator(c));
+                tokens.push(SelToken::Combinator);
             } else if c.is_whitespace() {
                 if !current.trim().is_empty() {
                     tokens.push(SelToken::Selector(current.trim().to_string()));
@@ -563,30 +559,30 @@ impl Serializer {
             return false;
         }
         // 检查尾部组合器
-        if matches!(tokens.last(), Some(SelToken::Combinator(_))) {
+        if matches!(tokens.last(), Some(SelToken::Combinator)) {
             return true;
         }
         // 检查前导组合器
-        if let Some(SelToken::Combinator(_)) = tokens.first() {
+        if let Some(SelToken::Combinator) = tokens.first() {
             if !allow_leading_combinator {
                 return true;
             }
             // 单个前导组合器允许，但第二个不能是组合器
             if tokens.len() >= 2 {
-                if let SelToken::Combinator(_) = tokens[1] {
+                if let SelToken::Combinator = tokens[1] {
                     return true; // 连续组合器
                 }
             }
         }
         // 检查中间连续组合器
         for window in tokens.windows(2) {
-            if let (SelToken::Combinator(_), SelToken::Combinator(_)) = (&window[0], &window[1]) {
+            if let (SelToken::Combinator, SelToken::Combinator) = (&window[0], &window[1]) {
                 return true;
             }
         }
         // 递归检查伪类内部
         for token in tokens {
-            if let SelToken::PseudoInner(name, inner, allow_leading) = token {
+            if let SelToken::PseudoInner(inner, allow_leading) = token {
                 // 处理逗号分隔的多个选择器
                 for part in inner.split(',') {
                     let part = part.trim();
@@ -598,17 +594,6 @@ impl Serializer {
                         return true;
                     }
                 }
-                // 多个逗号分隔的伪类选择器之间也需要有完整的选择器
-                let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-                if parts.len() > 1 {
-                    for part in &parts {
-                        let inner_tokens = Self::tokenize_selector_with_pseudo(part);
-                        if Self::tokens_have_bogus(&inner_tokens, *allow_leading) {
-                            return true;
-                        }
-                    }
-                }
-                let _ = name; // 仅 :has 允许前导组合器
             }
         }
         false
