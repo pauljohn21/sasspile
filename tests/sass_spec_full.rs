@@ -4,7 +4,7 @@
 //! 支持新功能后，从 `SKIP_DIRS` 移除对应条目即可。
 //!
 //! 流式处理：逐文件读取 → 解析 → 编译 → drop，内存 O(1)。
-//! 使用 jemalloc + 每文件 purge 释放物理内存，防止 macOS OOM。
+//! 使用 compile_batch 分块编译，每 chunk 后显式释放临时内存。
 
 mod spec_manifest;
 
@@ -12,15 +12,6 @@ use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 use tracing::info;
 
-// —— jemalloc 全局分配器 + 显式 purge ——
-#[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
-/// 触发 jemalloc purge，将空闲内存归还 OS。
-fn purge_memory() {
-    // 推进 jemalloc epoch，触发空闲 page 归还 OS
-    let _ = jemalloc_ctl::epoch::advance();
-}
 
 /// HRX 测试用例。
 struct HrxCase {
@@ -83,7 +74,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
     cases
 }
 
-/// 运行单个测试用例——写入临时目录并用 compile_file 编译。
+/// 运行单个测试用例——写入临时目录并用 compile_file_with_load_paths 编译。
 fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     if case.expected_output.is_empty() && !case.expect_error {
         return true;
@@ -124,8 +115,7 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     }
 }
 
-/// 流式处理单个 HRX 文件——编译所有 case 后立即释放内存。
-/// 关键：content 和 cases 在函数返回时 drop，不累积。
+/// 流式处理单个 HRX 文件——逐 case 编译，立即释放。
 fn process_hrx_file(
     file_path: &Path,
     spec_root: &Path,
@@ -218,7 +208,6 @@ fn run_spec_dir_chunked(spec_root: &Path, dir_name: &str) -> (usize, usize, usiz
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
     for file in &files {
         process_hrx_file(file, spec_root, &mut pass, &mut fail, &mut skip, &mut cases);
-        purge_memory(); // 每文件释放物理内存给 OS
     }
     // 释放文件列表
     drop(files);
@@ -317,7 +306,6 @@ fn test_core_functions_all() {
         total_fail += fail;
         total_skip += skip;
         total_cases += cases;
-        purge_memory(); // 每个子目录后释放物理内存
     }
 
     let evaluated = total_cases - total_skip;

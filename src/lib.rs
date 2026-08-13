@@ -68,6 +68,29 @@
 //! - 继承（`@extend`）
 //! - 内建函数：颜色、字符串、列表、Map、数学、选择器
 //!
+//! ## 批量编译
+//!
+//! ```rust,no_run
+//! use sasspile::{compile_batch, OutputStyle};
+//!
+//! let files = vec!["a.scss", "b.scss", "c.scss"];
+//! let result = compile_batch(&files, OutputStyle::Expanded);
+//! for (name, res) in result.outputs {
+//!     match res {
+//!         Ok(css) => println!("{name}: {} bytes", css.len()),
+//!         Err(e) => eprintln!("{name} 失败: {e}"),
+//!     }
+//! }
+//! ```
+//!
+//! > **macOS 用户注意**：默认分配器不主动归还内存给 OS，大量文件连续编译时
+//! > 进程 RSS 可能持续增长。建议在 `Cargo.toml` 中添加：
+//! > ```toml
+//! > [target.'cfg(target_os = "macOS")'.dependencies]
+//! > jemallocator = "0.5"
+//! > ```
+//! > 并在 `main.rs` 中添加 `#[global_allocator] static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;`
+//!
 //! ## 兼容性
 //!
 //! - Bootstrap 5.3.8：全量编译通过 ✅
@@ -332,3 +355,51 @@ pub fn compile_file_with_load_paths(
     let serialized = crate::css::Serializer::serialize(&nodes, style);
     Ok(serialized)
 }
+
+// ---------------------------------------------------------------------------
+// 批量编译 — 纯 Rust，零 unsafe
+// ---------------------------------------------------------------------------
+
+/// 批量编译结果。
+#[derive(Debug)]
+pub struct BatchResult {
+    pub outputs: Vec<(String, Result<String>)>,
+}
+
+/// 批量编译入口，顺序编译每个文件，编译完即释放临时内存。
+///
+/// 与 `compile_file` / `compile_file_with_load_paths` 行为一致。
+/// 每个文件的编译数据在循环迭代结束时自动 drop，
+/// 防止大批量编译时内存无限增长。
+///
+/// # 示例
+/// ```
+/// use sasspile::{compile_batch, OutputStyle};
+///
+/// let files = vec!["a.scss", "b.scss", "c.scss"];
+/// let result = compile_batch(&files, OutputStyle::Expanded);
+/// println!("编译了 {} 个文件", result.outputs.len());
+/// ```
+pub fn compile_batch<P: AsRef<std::path::Path>>(
+    paths: &[P],
+    style: OutputStyle,
+) -> BatchResult {
+    let mut outputs = Vec::with_capacity(paths.len());
+
+    for path in paths.iter() {
+        let path_ref = path.as_ref();
+        let file_name = path_ref
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("<unknown>")
+            .to_string();
+
+        let result = compile_file(&path_ref.to_path_buf(), style);
+        outputs.push((file_name, result));
+        // result 在此作用域结束时自动 drop
+    }
+
+    BatchResult { outputs }
+}
+
+
