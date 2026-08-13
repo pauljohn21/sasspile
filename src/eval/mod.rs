@@ -51,6 +51,9 @@ pub struct Env {
     load_paths: Vec<PathBuf>,
     /// plain CSS 模式——`.css` 文件加载时设为 true，不展开选择器。
     plain_css: bool,
+    /// 作用域栈——每个元素是一个 HashMap，记录该作用域内绑定的变量名及其原始值。
+    /// 用于实现词法作用域：离开作用域时恢复原始值（支持变量遮蔽）。
+    scope_stack: Vec<HashMap<String, Option<Value>>>,
 }
 
 /// mixin 定义存储。
@@ -85,7 +88,35 @@ impl Env {
     /// 不可变插入变量绑定，返回新环境。
     pub fn bind(&self, name: String, value: Value) -> Self {
         let mut new = self.clone();
+        // 如果有作用域栈，保存原始值（如果变量尚未在当前作用域中记录）
+        if let Some(scope) = new.scope_stack.last_mut() {
+            if !scope.contains_key(&name) {
+                scope.insert(name.clone(), new.vars.get(&name).cloned());
+            }
+        }
         new.vars.insert(name, value);
+        new
+    }
+
+    /// 进入新作用域——推入空作用域。
+    pub fn enter_scope(&self) -> Self {
+        let mut new = self.clone();
+        new.scope_stack.push(HashMap::new());
+        new
+    }
+
+    /// 离开作用域——弹出作用域并恢复该作用域内绑定的变量的原始值。
+    /// 支持变量遮蔽：如果变量在外层有定义，恢复原始值；如果是新定义的，移除。
+    pub fn leave_scope(&self) -> Self {
+        let mut new = self.clone();
+        if let Some(scope) = new.scope_stack.pop() {
+            for (var_name, original_value) in &scope {
+                match original_value {
+                    Some(val) => new.vars.insert(var_name.clone(), val.clone()),
+                    None => new.vars.remove(var_name),
+                };
+            }
+        }
         new
     }
     /// 按名查找变量引用。

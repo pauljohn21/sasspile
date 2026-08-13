@@ -8,6 +8,7 @@ impl Evaluator {
         else_body: &Option<Vec<Node>>,
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        // @if 不创建新作用域——变量修改对外层可见
         for (cond, body) in branches {
             let c = Self::eval_value(cond, env)?;
             if Self::is_truthy(&c) {

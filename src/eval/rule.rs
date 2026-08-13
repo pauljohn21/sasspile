@@ -17,7 +17,11 @@ impl Evaluator {
         } else {
             selector.to_string()
         };
-        let (css, new_env) = Self::eval_nodes(body, &env.with_selector(selector.clone()))?;
+        // 进入新作用域：规则体内的变量赋值不影响外层
+        let scoped_env = env.enter_scope().with_selector(selector.clone());
+        let (css, new_env) = Self::eval_nodes(body, &scoped_env)?;
+        // 离开作用域：移除规则体内定义的局部变量
+        let restored_env = new_env.leave_scope();
 
         // plain CSS 模式——不合并选择器，保留嵌套结构
         if env.plain_css {
@@ -133,7 +137,7 @@ impl Evaluator {
 
         // 添加 @at-root 节点
         result.extend(root_nodes);
-        Ok((result, new_env))
+        Ok((result, restored_env))
     }
 
     /// 组合选择器——处理 & 替换和逗号分隔选择器。
