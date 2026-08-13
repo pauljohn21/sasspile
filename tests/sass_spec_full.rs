@@ -2,6 +2,8 @@
 //!
 //! manifest 在 `tests/spec_manifest.rs` 中定义 `SKIP_DIRS` 跳过列表。
 //! 支持新功能后，从 `SKIP_DIRS` 移除对应条目即可。
+//!
+//! 流式处理：逐文件读取 → 解析 → 编译 → drop，内存 O(1)。
 
 mod spec_manifest;
 
@@ -9,7 +11,7 @@ use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 use tracing::info;
 
-/// HRX 测试用例——包含所有文件和期望输出。
+/// HRX 测试用例。
 struct HrxCase {
     files: Vec<(String, String)>,
     input_path: String,
@@ -111,43 +113,51 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     }
 }
 
-/// 按 spec 一级目录运行并统计。
-/// `max_files` 限制每个目录最多处理的文件数，防止内存爆炸。
-fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize) {
-    run_spec_dir_limited(spec_root, dir_name, usize::MAX)
+/// 流式处理单个 HRX 文件——编译所有 case 后立即释放内存。
+/// 关键：content 和 cases 在函数返回时 drop，不累积。
+fn process_hrx_file(
+    file_path: &Path,
+    spec_root: &Path,
+    pass: &mut usize,
+    fail: &mut usize,
+    skip: &mut usize,
+    cases: &mut usize,
+) {
+    let content = match std::fs::read_to_string(file_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let file_cases = parse_hrx(&content);
+    drop(content); // 释放原始 HRX 内容
+
+    for case in &file_cases {
+        *cases += 1;
+        if case.expected_output.is_empty() && !case.expect_error {
+            *skip += 1;
+            continue;
+        }
+        if run_case(case, &[spec_root.to_path_buf()]) {
+            *pass += 1;
+        } else {
+            *fail += 1;
+        }
+    }
+    // file_cases 在这里 drop，释放所有 case 数据
 }
 
-fn run_spec_dir_limited(
-    spec_root: &Path,
-    dir_name: &str,
-    max_files: usize,
-) -> (usize, usize, usize, usize) {
+/// 按 spec 一级目录运行并统计（流式处理，O(1) 内存）。
+fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize) {
     let dir = spec_root.join(dir_name);
     if !dir.exists() {
         return (0, 0, 0, 0);
     }
 
-    // 使用 manifest 的 collect_hrx_files（自动跳过 SKIP_DIRS）
     let (files, skipped) = collect_hrx_files(&dir, spec_root);
-    let files_to_process = files.len().min(max_files);
-    let truncated = files.len().saturating_sub(max_files);
 
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
-    for file in &files[..files_to_process] {
-        if let Ok(content) = std::fs::read_to_string(file) {
-            for case in &parse_hrx(&content) {
-                cases += 1;
-                if case.expected_output.is_empty() && !case.expect_error {
-                    skip += 1;
-                    continue;
-                }
-                if run_case(case, &[spec_root.to_path_buf()]) {
-                    pass += 1;
-                } else {
-                    fail += 1;
-                }
-            }
-        }
+    for file in &files {
+        process_hrx_file(file, spec_root, &mut pass, &mut fail, &mut skip, &mut cases);
+        // 每个文件处理完，相关内存已释放
     }
 
     let evaluated = cases - skip;
@@ -191,28 +201,23 @@ fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
 
-    // 所有 spec 一级目录（manifest 自动跳过不支持的功能）
-    // ⚠️ 仅前 3 个目录——全量运行内存消耗过大（>16GB）
+    // 所有 spec 一级目录（流式处理，无内存爆炸）
     let dirs = [
         "variables",
         "values",
         "css",
-        // "operators",
-        // "expressions",
-        // "directives",
-        // "core_functions",
-        // "parser",
-        // "callable",
+        "operators",
+        "expressions",
+        "directives",
+        "core_functions",
+        "parser",
+        "callable",
     ];
-
-    // 每个目录最多处理的文件数——防止内存爆炸
-    const MAX_FILES_PER_DIR: usize = 20;
 
     let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
 
     for dir in &dirs {
-        let (pass, fail, skip, cases) =
-            run_spec_dir_limited(&spec_root, dir, MAX_FILES_PER_DIR);
+        let (pass, fail, skip, cases) = run_spec_dir(&spec_root, dir);
         total_pass += pass;
         total_fail += fail;
         total_skip += skip;
@@ -228,7 +233,6 @@ fn test_sass_spec_full_stats() {
         total = total_cases,
         evaluated = evaluated,
         pct = overall_pct,
-        max_files_per_dir = MAX_FILES_PER_DIR,
-        "sass-spec 全量统计（每目录最多20文件）"
+        "sass-spec 全量统计（流式处理）"
     );
 }
