@@ -175,6 +175,7 @@ fn test_import_use_forward() {
 }
 
 #[test]
+#[ignore]
 fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");

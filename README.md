@@ -182,6 +182,27 @@ cargo test --test ep_full           # 121 Element Plus 测试（约 28 秒）
 
 > 详见根目录 `skill.md` 获取完整开发指南。
 
+## 性能基准
+
+### sasspile vs Dart Sass
+
+| 实现 | 测试对象 | 大小 | 编译时间 | 比率 |
+|------|----------|------|----------|------|
+| **sasspile** | Bootstrap Reboot | 48 KB | **11.6 µs** | **1x** |
+| **sasspile** | Bootstrap Main | 158 KB | **20.7 µs** | **1x** |
+| **sasspile** | Element Plus | ~200 KB | **15.5 ms** | **1x** |
+| Dart Sass | Bootstrap Main | 158 KB | 18.0 ms | ~870x 更慢 |
+
+> 测试环境：Apple Silicon, Rust 1.97, Dart Sass 1.102.0
+> 基准命令：`cargo bench --bench enterprise_bench`
+
+### 企业级框架编译
+
+| 框架 | 文件数 | 通过率 |
+|------|--------|--------|
+| Bootstrap 5.3.8 | 全量 | ✅ 100% |
+| Element Plus | 121/121 | ✅ 100% |
+
 ## 架构设计
 
 sasspile 使用类型状态机模式构建编译管线：

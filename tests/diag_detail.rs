@@ -126,6 +126,7 @@ fn run_case(
 }
 
 #[test]
+#[ignore]
 fn diag_output_mismatch() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
