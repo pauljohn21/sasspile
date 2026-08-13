@@ -331,7 +331,7 @@ impl<'tok> Parser<'tok> {
             break;
         }
         self.skip_ws();
-        // 捕获修饰符（媒体查询等）：@import "a.css" b;
+        // 捕获修饰符（媒体查询等）：@import "a.css" b; 或 @import "a.css" b(c);
         while let Some(t) = self.peek() {
             match t {
                 Token::Semicolon | Token::RBrace => break,
@@ -339,11 +339,23 @@ impl<'tok> Parser<'tok> {
                     self.advance();
                 }
                 _ => {
-                    // 捕获修饰符 token
+                    // 捕获修饰符 token，支持跨行括号
                     let mut mod_str = String::new();
+                    let mut paren_depth = 0usize;
                     while let Some(t) = self.peek() {
                         match t {
-                            Token::Semicolon | Token::RBrace | Token::Whitespace => break,
+                            Token::Semicolon | Token::RBrace if paren_depth == 0 => break,
+                            Token::LParen => {
+                                paren_depth += 1;
+                                mod_str.push_str(&t.to_string());
+                                self.advance();
+                            }
+                            Token::RParen => {
+                                paren_depth = paren_depth.saturating_sub(1);
+                                mod_str.push_str(&t.to_string());
+                                self.advance();
+                            }
+                            Token::Whitespace if paren_depth == 0 => break,
                             _ => {
                                 mod_str.push_str(&t.to_string());
                                 self.advance();
