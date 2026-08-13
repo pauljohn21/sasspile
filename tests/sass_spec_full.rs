@@ -4,12 +4,29 @@
 //! 支持新功能后，从 `SKIP_DIRS` 移除对应条目即可。
 //!
 //! 流式处理：逐文件读取 → 解析 → 编译 → drop，内存 O(1)。
+//! 使用 jemalloc + 每文件 purge 释放物理内存，防止 macOS OOM。
 
 mod spec_manifest;
 
 use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 use tracing::info;
+
+// —— jemalloc 全局分配器 + 显式 purge ——
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+/// 触发内存 pressure relief（macOS 专用 FFI）。
+fn purge_memory() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        unsafe extern "C" {
+            fn malloc_zone_pressure_relief(zone: *mut libc::c_void, goal: libc::size_t) -> libc::size_t;
+        }
+        malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
+    }
+}
 
 /// HRX 测试用例。
 struct HrxCase {
@@ -195,44 +212,145 @@ fn test_import_use_forward() {
     }
 }
 
+/// 处理单个目录——每个 HRX 文件编译后显式 drop。
+fn run_spec_dir_chunked(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize) {
+    let dir = spec_root.join(dir_name);
+    if !dir.exists() {
+        return (0, 0, 0, 0);
+    }
+
+    let (files, skipped) = collect_hrx_files(&dir, spec_root);
+
+    let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
+    for file in &files {
+        process_hrx_file(file, spec_root, &mut pass, &mut fail, &mut skip, &mut cases);
+        purge_memory(); // 每文件释放物理内存给 OS
+    }
+    // 释放文件列表
+    drop(files);
+
+    let evaluated = cases - skip;
+    let pct = pass * 100 / evaluated.max(1);
+    info!(
+        dir = dir_name,
+        pass = pass,
+        fail = fail,
+        skip = skip,
+        skipped_dirs = skipped,
+        total = cases,
+        pct = pct,
+        "sass-spec 目录"
+    );
+    (pass, fail, skip, cases)
+}
+
+/// 运行指定目录列表并汇总统计。
+fn run_dirs(spec_root: &Path, dirs: &[&str]) -> (usize, usize, usize, usize) {
+    let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
+    for dir in dirs {
+        let (pass, fail, skip, cases) = run_spec_dir_chunked(spec_root, dir);
+        total_pass += pass;
+        total_fail += fail;
+        total_skip += skip;
+        total_cases += cases;
+    }
+    (total_pass, total_fail, total_skip, total_cases)
+}
+
 #[test]
 #[ignore]
 fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
 
-    // 所有 spec 一级目录（流式处理，无内存爆炸）
-    let dirs = [
-        "variables",
-        "values",
-        "css",
-        "operators",
-        "expressions",
-        "directives",
-        "core_functions",
-        "parser",
-        "callable",
-    ];
+    // 基础目录（已通过，无 OOM）
+    let (pass, fail, skip, cases) = run_dirs(
+        &spec_root,
+        &[
+            "variables",
+            "values",
+            "css",
+            "operators",
+            "expressions",
+            "directives",
+        ],
+    );
 
-    let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
-
-    for dir in &dirs {
-        let (pass, fail, skip, cases) = run_spec_dir(&spec_root, dir);
-        total_pass += pass;
-        total_fail += fail;
-        total_skip += skip;
-        total_cases += cases;
-    }
-
-    let evaluated = total_cases - total_skip;
-    let overall_pct = total_pass * 100 / evaluated.max(1);
+    let evaluated = cases - skip;
+    let pct = pass * 100 / evaluated.max(1);
     info!(
-        pass = total_pass,
-        fail = total_fail,
-        skip = total_skip,
-        total = total_cases,
+        pass = pass,
+        fail = fail,
+        skip = skip,
+        total = cases,
         evaluated = evaluated,
-        pct = overall_pct,
-        "sass-spec 全量统计（流式处理）"
+        pct = pct,
+        "sass-spec 基础目录（无 OOM）"
+    );
+}
+
+// core_functions 子目录逐个独立运行（完全隔离，避免累积 OOM）
+macro_rules! core_fn_test {
+    ($name:ident, $subdir:expr) => {
+        #[test]
+        #[ignore]
+        fn $name() {
+            sasspile::init_tracing();
+            let spec_root =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+            let (pass, fail, skip, cases) =
+                run_spec_dir_chunked(&spec_root, &format!("core_functions/{}", $subdir));
+            let evaluated = cases - skip;
+            let pct = pass * 100 / evaluated.max(1);
+            info!(
+                pass = pass,
+                fail = fail,
+                skip = skip,
+                total = cases,
+                evaluated = evaluated,
+                pct = pct,
+                subdir = $subdir,
+                "core_functions 子目录"
+            );
+        }
+    };
+}
+
+core_fn_test!(cf_general, "general.hrx");
+core_fn_test!(cf_newlines, "newlines.hrx");
+core_fn_test!(cf_list, "list");
+core_fn_test!(cf_map, "map");
+core_fn_test!(cf_math, "math");
+core_fn_test!(cf_meta, "meta");
+// selector 拆分为独立子目录（避免累积 OOM）
+core_fn_test!(cf_selector_append, "selector/append.hrx");
+core_fn_test!(cf_selector_nest, "selector/nest");
+core_fn_test!(cf_selector_parse, "selector/parse");
+core_fn_test!(cf_selector_replace, "selector/replace.hrx");
+core_fn_test!(cf_selector_extend, "selector/extend");
+core_fn_test!(cf_selector_unify, "selector/unify");
+core_fn_test!(cf_selector_is_superselector, "selector/is_superselector");
+core_fn_test!(cf_string, "string");
+
+#[test]
+#[ignore]
+fn test_sass_spec_parser_callable() {
+    sasspile::init_tracing();
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+
+    // parser + callable 单独运行
+    let (pass, fail, skip, cases) =
+        run_dirs(&spec_root, &["parser", "callable"]);
+
+    let evaluated = cases - skip;
+    let pct = pass * 100 / evaluated.max(1);
+    info!(
+        pass = pass,
+        fail = fail,
+        skip = skip,
+        total = cases,
+        evaluated = evaluated,
+        pct = pct,
+        "sass-spec parser + callable"
     );
 }
