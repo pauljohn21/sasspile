@@ -78,6 +78,7 @@ pub fn parse_selector_list(s: &str) -> Result<SelectorList> {
 }
 
 /// 解析单个复杂选择器（不含逗号）。
+#[allow(dead_code)]
 pub fn parse_selector(s: &str) -> Result<ComplexSelector> {
     parse_complex_selector(s)
 }
@@ -307,6 +308,7 @@ fn parse_paren_args(chars: &[char], i: &mut usize) -> Result<String> {
 }
 
 /// 解析单个选择器（兼容性包装）。
+#[allow(dead_code)]
 pub fn parse_single_selector(s: &str) -> Result<ComplexSelector> {
     parse_selector_list(s)?
         .into_iter()

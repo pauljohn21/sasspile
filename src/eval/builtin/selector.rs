@@ -26,7 +26,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
             // 将每个参数展平为选择器字符串列表
             let lists: Vec<Vec<String>> = args
                 .iter()
-                .map(|a| value_to_selector_strings(a))
+                .map(value_to_selector_strings)
                 .collect();
             // 笛卡尔积组合
             let mut result = vec![String::new()];
@@ -132,7 +132,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
 fn value_to_selector_strings(val: &Value) -> Vec<String> {
     match val {
         Value::String(s, _) => vec![s.clone()],
-        Value::List(items, _, _) => items.iter().map(|v| value_to_selector_string(v)).collect(),
+        Value::List(items, _, _) => items.iter().map(value_to_selector_string).collect(),
         Value::Null => vec![],
         _ => vec![val.to_string()],
     }

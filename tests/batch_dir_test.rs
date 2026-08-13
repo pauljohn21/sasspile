@@ -23,10 +23,10 @@ fn collect_scss_files(dir: &Path, files: &mut Vec<PathBuf>) {
             let path = entry.path();
             if path.is_dir() {
                 collect_scss_files(&path, files);
-            } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if ext == "scss" || ext == "sass" {
-                    files.push(path);
-                }
+            } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && (ext == "scss" || ext == "sass")
+            {
+                files.push(path);
             }
         }
     }

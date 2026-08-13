@@ -110,7 +110,7 @@ pub fn unify(selector1: &str, selector2: &str) -> Result<Value> {
         Ok(Value::String(
             result
                 .iter()
-                .map(|c| complex_to_string(c))
+                .map(complex_to_string)
                 .collect::<Vec<_>>()
                 .join(", "),
             false,
@@ -240,7 +240,7 @@ pub fn extend(selector: &str, target: &str, extender: &str) -> Result<Value> {
         Ok(Value::String(
             result
                 .iter()
-                .map(|c| complex_to_string(c))
+                .map(complex_to_string)
                 .collect::<Vec<_>>()
                 .join(", "),
             false,
@@ -311,6 +311,7 @@ fn extend_complex(
     None
 }
 
+#[allow(dead_code)]
 fn complex_matches_target(sel: &ComplexSelector, target: &ComplexSelector) -> bool {
     // 简化：检查 sel 是否包含 target 的所有部分
     if target.parts.len() > sel.parts.len() {
