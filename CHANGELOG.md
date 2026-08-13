@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.1] — 2026-08-13
+
+### Fixed
+
+- **slash_separated 修复（13 用例）**：顶层属性值中 `/` 视为斜杠分隔列表而非除法
+  - 新增 `Separator::SlashDiv` 变体（显示为 `/`，无空格）
+  - 保持 `Separator::Slash` 用于嵌套列表（显示为 ` / `，有空格）
+  - Parser 添加 `paren_depth` 字段追踪括号深度
+  - 添加 `has_other_operator_at_top_level()` 前瞻检测顶层其他运算符
+- **插值转义修复**：`Value::Interp` 求值改用 `eval_simple_expr` + `Value::Raw` 避免 CSS 标识符转义（如 `\31` → `1`）
+- **alpha_hex 4位颜色解析**：#RGBA 格式改为 R=AA, G=BB, B=CC, A=DD/255
+- **alpha 精度截断**：`format_alpha` 和新增 `round_alpha` 截断到 10 位小数
+- **precision 修复**：绝对值 < 1e-10 显示为 0；接近整数（距离 < 1e-10）四舍五入为整数
+
+### Stats
+
+- values 子目录通过率：maps 100% (8/8)、lists 100% (18/18)、colors 96% (26/27)、numbers 63% (91/143)
+- 全部测试通过：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
+
 ## [0.5.0] — 2026-08-13
 
 ### Changed

@@ -70,11 +70,15 @@ RUST_LOG="sasspile::lex=trace" cargo test --test lex_test -- --nocapture
 
 ```
 src/parse/
-├── mod.rs          # Parser 入口
-├── ast.rs          # Node 枚举 + Value 枚举定义
+├── mod.rs          # Parser 入口 + paren_depth
+├── ast/
+│   ├── mod.rs      # Node 枚举 + Value 枚举定义
+│   └── display.rs  # Display trait + escape 函数 + round_alpha
 ├── ast_impl.rs     # AST 实现（to_scss 等）
 ├── at_rules.rs     # @use/@mixin/@include/@if/@for 解析
-├── expr.rs         # 表达式解析
+├── expr/
+│   ├── mod.rs      # Pratt 表达式解析 + has_other_operator_at_top_level
+│   └── prefix.rs   # parse_number/parse_hash_color
 └── nodes.rs        # 节点解析辅助
 ```
 
@@ -121,7 +125,10 @@ RUST_LOG="sasspile::parse=debug" cargo test --test parse_test -- --nocapture
 ```
 src/eval/
 ├── mod.rs              # Evaluator + eval_nodes
-├── value.rs            # Value 求值（eval_value）
+├── value/
+│   ├── mod.rs          # Value 求值（eval_value, eval_interp_str, eval_simple_expr）
+│   ├── ops.rs          # 算术/比较运算（add/sub/mul/div/modulo/compare）
+│   └── display.rs      # inspect_value + 值格式化
 ├── rule.rs             # Rule 求值
 ├── control_flow.rs     # @if/@for/@each/@while
 ├── mixin.rs            # @mixin/@include
@@ -539,13 +546,14 @@ result.map_err(|e| {
 | 类型 | 文件 | 说明 |
 |------|------|------|
 | `Token` | `lex/token.rs` | 词法单元 |
-| `Node` | `parse/ast.rs` | AST 节点 |
-| `Value` | `parse/ast.rs` | 求值结果 |
-| `Color` | `parse/ast.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
-| `ColorFormat` | `parse/ast.rs` | 颜色格式追踪（Hex/Hsl/Hwb/...） |
+| `Node` | `parse/ast/mod.rs` | AST 节点 |
+| `Value` | `parse/ast/mod.rs` | 求值结果（含 Raw + Interp） |
+| `Color` | `parse/ast/mod.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
+| `ColorFormat` | `parse/ast/mod.rs` | 颜色格式追踪（Hex/Hsl/Hwb/...） |
+| `Separator` | `parse/ast/mod.rs` | 列表分隔符（Slash/SlashDiv/Comma/Space） |
 | `CssNode` | `css/node.rs` | CSS 输出节点 |
 | `Env` | `eval/mod.rs` | 求值环境（变量/函数/mixin 作用域） |
-| `Arg` | `parse/ast.rs` | 函数调用参数 |
+| `Arg` | `parse/ast/mod.rs` | 函数调用参数 |
 | `OutputStyle` | `lib.rs` | 输出风格枚举 |
 | `SassError` | `error.rs` | 错误类型 |
 
@@ -587,14 +595,14 @@ result.map_err(|e| {
 
 ```bash
 # 核心测试
-cargo test --test compile_test    # 28 个
+cargo test --test compile_test    # 41 个
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 
 # 兼容性测试
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
-cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 25 秒）
+cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 秒）
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

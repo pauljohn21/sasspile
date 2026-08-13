@@ -20,15 +20,19 @@
 | **error.rs** | 80 | SassError 定义 |
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
 | **lex/mod.rs** | 500 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
-| **parse/ast.rs** | 638 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags 等）+ escape_quoted_string/escape_css_ident/escape_css_chars |
-| **parse/ast_impl.rs** | 281 | Display for Value + Node::to_scss() |
-| **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect） |
+| **parse/ast/mod.rs** | 638 | AST 类型定义（Node, Value, Color, BinOp, Separator, Param, Arg, VarFlags 等）|
+| **parse/ast/display.rs** | 238 | Display trait 实现 + escape_quoted_string/escape_css_ident/escape_css_chars + round_alpha |
+| **parse/ast_impl.rs** | 281 | Node::to_scss() 实现 |
+| **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_ws/expect）+ paren_depth |
 | **parse/nodes.rs** | 578 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args |
 | **parse/at_rules.rs** | 465 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
-| **parse/expr.rs** | 623 | Pratt 表达式解析 + parse_number/parse_hash_color |
+| **parse/expr/mod.rs** | 623 | Pratt 表达式解析 + has_other_operator_at_top_level |
+| **parse/expr/prefix.rs** | 177 | parse_number/parse_hash_color + hex2/hex1 |
 | **eval/mod.rs** | 454 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node |
 | **eval/rule.rs** | 136 | eval_rule + combine_selectors |
-| **eval/value.rs** | 524 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible |
+| **eval/value/mod.rs** | 524 | eval_value + eval_binop + values_eq + eval_interp_str + eval_simple_expr + units_compatible |
+| **eval/value/ops.rs** | 209 | add/sub/mul/div/modulo/compare 算术/比较运算 |
+| **eval/value/display.rs** | 238 | inspect_value + 值格式化输出 |
 | **eval/control_flow.rs** | 149 | eval_if/eval_for/eval_each/eval_while |
 | **eval/mixin.rs** | 192 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 77 | apply_extends |
@@ -53,10 +57,11 @@
 | `evaluate` / `evaluate_with_path` / `evaluate_with_path_and_load_paths` | `eval/mod.rs` |
 | `eval_nodes` / `eval_node` | `eval/mod.rs` |
 | `eval_rule` / `combine_selectors` | `eval/rule.rs` |
-| `eval_value` / `eval_binop` / `units_compatible` | `eval/value.rs` |
-| `add` / `sub` / `mul` / `div` / `modulo` / `compare` | `eval/value.rs` |
-| `values_eq` / `inspect_value` / `is_truthy` | `eval/value.rs` |
-| `eval_interp_str` / `eval_simple_expr` | `eval/value.rs` |
+| `eval_value` / `eval_binop` / `units_compatible` | `eval/value/mod.rs` |
+| `add` / `sub` / `mul` / `div` / `modulo` / `compare` | `eval/value/ops.rs` |
+| `values_eq` / `is_truthy` | `eval/value/mod.rs` |
+| `inspect_value` | `eval/value/display.rs` |
+| `eval_interp_str` / `eval_simple_expr` | `eval/value/mod.rs` |
 | `eval_if` / `eval_for` / `eval_each` / `eval_while` | `eval/control_flow.rs` |
 | `eval_include` / `bind_params` / `call_function` | `eval/mixin.rs` |
 | `call_user_function` / `eval_at_root` / `eval_at_rule` | `eval/mixin.rs` |
@@ -67,7 +72,7 @@
 | `call_string_builtin` / `str_slice` / `str_insert` / `str_split` | `eval/builtin/string.rs` |
 | `hsl_to_rgb` / `hwb_to_rgb` / `rgb_to_hsl` / `simple_random` | `eval/color.rs` |
 | `builtin_rgba` / `builtin_darken` / `builtin_lighten` / `builtin_mix` | `eval/color.rs` |
-| `escape_quoted_string` / `escape_css_ident` / `escape_css_chars` | `parse/ast.rs` |
+| `escape_quoted_string` / `escape_css_ident` / `escape_css_chars` | `parse/ast/display.rs` |
 | `is_channel_powerless` | `eval/builtin/color.rs` |
 
 ### 解析器（Parser）
@@ -84,8 +89,9 @@
 | `parse_return` / `parse_use` / `parse_forward` / `parse_import` | `parse/at_rules.rs` |
 | `parse_extend` / `parse_at_root` / `parse_warn` / `parse_debug` / `parse_error` | `parse/at_rules.rs` |
 | `parse_generic_at_rule` / `parse_at_params` | `parse/at_rules.rs` |
-| `parse_expr` / `is_value_start` / `parse_prefix` / `peek_binding_power` | `parse/expr.rs` |
-| `parse_number` / `parse_hash_color` / `hex2` / `hex1` | `parse/expr.rs` |
+| `parse_expr` / `is_value_start` / `parse_prefix` / `peek_binding_power` | `parse/expr/mod.rs` |
+| `has_other_operator_at_top_level` | `parse/expr/mod.rs` |
+| `parse_number` / `parse_hash_color` / `hex2` / `hex1` | `parse/expr/prefix.rs` |
 
 ### 词法分析器（Lexer）
 
@@ -101,13 +107,13 @@
 
 | 类型 | 定义位置 |
 |------|----------|
-| `Node` (AST 节点枚举) | `parse/ast.rs` |
-| `Value` (值枚举) | `parse/ast.rs` |
-| `Color` | `parse/ast.rs` |
-| `BinOp` / `BinOpKind` | `parse/ast.rs` |
-| `Separator` | `parse/ast.rs` |
-| `Ast` | `parse/ast.rs` |
-| `Param` / `Arg` / `VarFlags` | `parse/ast.rs` |
+| `Node` (AST 节点枚举) | `parse/ast/mod.rs` |
+| `Value` (值枚举，含 Raw + Interp) | `parse/ast/mod.rs` |
+| `Color` | `parse/ast/mod.rs` |
+| `BinOp` / `BinOpKind` | `parse/ast/mod.rs` |
+| `Separator` (含 Slash/SlashDiv/Comma/Space) | `parse/ast/mod.rs` |
+| `Ast` | `parse/ast/mod.rs` |
+| `Param` / `Arg` / `VarFlags` | `parse/ast/mod.rs` |
 | `Token` | `lex/token.rs` |
 | `Lexer` | `lex/mod.rs` |
 | `Parser` | `parse/mod.rs` |
