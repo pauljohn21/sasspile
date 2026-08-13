@@ -221,6 +221,11 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         self.expect(&Token::LBrace)?;
         let body = self.parse_body()?;
+        self.skip_ws();
+        // 消费函数体后的可选分号（如 @function f() {@return 1;}）
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::FunctionDef { name, params, body })
     }
 
@@ -311,13 +316,24 @@ impl<'tok> Parser<'tok> {
     }
 
     pub(crate) fn parse_import(&mut self) -> Result<Node> {
-        self.skip_ws();
-        let url = self.parse_string_value()?;
+        let mut urls = Vec::new();
+        loop {
+            self.skip_ws();
+            let url = self.parse_string_value()?;
+            urls.push(url);
+            self.skip_ws();
+            // 支持逗号分隔的 CSS @import：@import "a.css", "b.css";
+            if self.peek() == Some(&Token::Comma) {
+                self.advance(); // 消费逗号
+                continue;
+            }
+            break;
+        }
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
-        Ok(Node::Import { url })
+        Ok(Node::Import { urls })
     }
 
     pub(crate) fn parse_extend(&mut self) -> Result<Node> {

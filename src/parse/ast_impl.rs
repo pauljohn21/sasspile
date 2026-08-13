@@ -231,7 +231,10 @@ impl Node {
                 s.push(';');
                 s
             }
-            Node::Import { url } => format!("{pad}@import \"{url}\";"),
+            Node::Import { urls } => {
+                let urls_str = urls.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join(", ");
+                format!("{pad}@import {urls_str};")
+            }
             // —— 其他指令 ——
             Node::Extend { selector, optional } => {
                 let opt = if *optional { " !optional" } else { "" };

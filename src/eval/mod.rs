@@ -418,39 +418,40 @@ impl Evaluator {
                 }
                 Ok((vec![], env.clone()))
             }
-            Node::Import { url } => {
-                // @import 'url' —— 旧版内联：加载文件内容注入当前作用域
-                if url.starts_with("sass:") {
-                    return Ok((vec![], env.add_module(url.clone())));
-                }
-                // CSS @import 透传：以 .css 结尾或 url() 包裹
-                if url.ends_with(".css") || url.starts_with("http://") || url.starts_with("https://") || url.starts_with("url(") {
-                    return Ok((
-                        vec![CssNode::AtRule {
+            Node::Import { urls } => {
+                // 处理逗号分隔的 CSS @import：@import "a.css", "b.css";
+                let mut css_nodes = Vec::new();
+                for url in urls {
+                    // @import 'url' —— 旧版内联：加载文件内容注入当前作用域
+                    if url.starts_with("sass:") {
+                        return Ok((vec![], env.add_module(url.clone())));
+                    }
+                    // CSS @import 透传：以 .css 结尾或 url() 包裹
+                    if url.ends_with(".css") || url.starts_with("http://") || url.starts_with("https://") || url.starts_with("url(") {
+                        css_nodes.push(CssNode::AtRule {
                             name: "import".to_string(),
                             params: Some(format!("\"{url}\"")),
                             children: vec![],
                             has_body: false,
-                        }],
-                        env.clone(),
-                    ));
-                }
-                let base = env.base_path.as_ref();
-                let load_paths = env.get_load_paths();
-                if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    // @import 内联：继承当前环境（变量/mixin/函数），使被导入文件能看到之前定义的成员
-                    return Self::load_import(&path, env);
-                }
-                // 文件未找到——输出 CSS @import 透传
-                Ok((
-                    vec![CssNode::AtRule {
+                        });
+                        continue;
+                    }
+                    // SCSS 文件导入（仅处理第一个非 CSS URL）
+                    let base = env.base_path.as_ref();
+                    let load_paths = env.get_load_paths();
+                    if let Some(path) = Self::resolve_file(base, url, load_paths) {
+                        // @import 内联：继承当前环境（变量/mixin/函数），使被导入文件能看到之前定义的成员
+                        return Self::load_import(&path, env);
+                    }
+                    // 文件未找到——输出 CSS @import 透传
+                    css_nodes.push(CssNode::AtRule {
                         name: "import".to_string(),
                         params: Some(format!("\"{url}\"")),
                         children: vec![],
                         has_body: false,
-                    }],
-                    env.clone(),
-                ))
+                    });
+                }
+                Ok((css_nodes, env.clone()))
             }
             Node::Extend {
                 selector,
