@@ -7,6 +7,24 @@ impl<'tok> Parser<'tok> {
     pub(crate) fn parse_prefix(&mut self) -> Result<Value> {
         self.skip_ws();
         match self.peek() {
+            Some(Token::Plus) => {
+                // 一元正号：+0, +1, +$var 等
+                let next = self.tokens.get(self.pos + 1);
+                if matches!(
+                    next,
+                    Some(Token::Number(_))
+                        | Some(Token::Dollar(_))
+                        | Some(Token::LParen)
+                        | Some(Token::Hash(_))
+                ) {
+                    self.advance();
+                    self.skip_ws();
+                    self.parse_prefix()
+                } else {
+                    self.advance();
+                    Ok(Value::String("+".to_string(), false))
+                }
+            }
             Some(Token::Minus) => {
                 // 一元负号：当后面是数字、变量、括号表达式时
                 // 标识符前的 - 是 CSS 厂商前缀（如 -webkit-inline-box）
@@ -241,10 +259,12 @@ impl<'tok> Parser<'tok> {
             }
             Some(Token::LParen) => {
                 self.advance();
+                self.paren_depth += 1; // 进入括号——/ 在括号内是除法
                 self.skip_ws();
                 // 空 Map 或列表
                 if self.peek() == Some(&Token::RParen) {
                     self.advance();
+                    self.paren_depth -= 1;
                     return Ok(Value::List(vec![], Separator::Undecided, false));
                 }
                 let first = self.parse_expr(0)?;
@@ -265,6 +285,7 @@ impl<'tok> Parser<'tok> {
                         let k = self.parse_expr(0)?;
                         // 重复键检测：未求值的键若与已有键结构相同则报错
                         if pairs.iter().any(|(ek, _)| ek == &k) {
+                            self.paren_depth -= 1;
                             return Err(SassError::Eval("Duplicate key.".into()));
                         }
                         self.skip_ws();
@@ -275,6 +296,7 @@ impl<'tok> Parser<'tok> {
                         self.skip_ws();
                     }
                     self.expect(&Token::RParen)?;
+                    self.paren_depth -= 1;
                     Ok(Value::Map(pairs))
                 } else {
                     // 分组或列表
@@ -329,6 +351,7 @@ impl<'tok> Parser<'tok> {
                     if self.peek() == Some(&Token::RParen) {
                         self.advance();
                     }
+                    self.paren_depth -= 1;
                     if items.len() == 1 && !saw_comma {
                         Ok(Value::Paren(Box::new(items.into_iter().next().unwrap())))
                     } else {
@@ -451,23 +474,27 @@ pub(crate) fn parse_hash_color(s: &str) -> Color {
             hex2(bytes[1], bytes[1]),
             hex2(bytes[2], bytes[2]),
         ),
-        4 => Color::rgba(
-            hex2(bytes[1], bytes[1]),
-            hex2(bytes[2], bytes[2]),
-            hex2(bytes[3], bytes[3]),
-            hex1(bytes[0]) as f64 / 15.0,
-        ),
+        4 => {
+            // #RGBA 格式：每个字符复制一份（如 #AbCd → R=AA G=BB B=CC A=DD）
+            let r = hex2(bytes[0], bytes[0]);
+            let g = hex2(bytes[1], bytes[1]);
+            let b = hex2(bytes[2], bytes[2]);
+            let a = round_alpha(hex2(bytes[3], bytes[3]) as f64 / 255.0);
+            Color::rgba(r, g, b, a)
+        }
         6 => Color::rgb(
             hex2(bytes[0], bytes[1]),
             hex2(bytes[2], bytes[3]),
             hex2(bytes[4], bytes[5]),
         ),
-        8 => Color::rgba(
-            hex2(bytes[0], bytes[1]),
-            hex2(bytes[2], bytes[3]),
-            hex2(bytes[4], bytes[5]),
-            hex2(bytes[6], bytes[7]) as f64 / 255.0,
-        ),
+        8 => {
+            // #RRGGBBAA 格式
+            let r = hex2(bytes[0], bytes[1]);
+            let g = hex2(bytes[2], bytes[3]);
+            let b = hex2(bytes[4], bytes[5]);
+            let a = round_alpha(hex2(bytes[6], bytes[7]) as f64 / 255.0);
+            Color::rgba(r, g, b, a)
+        }
         _ => Color::default(),
     }
 }

@@ -36,6 +36,33 @@ impl<'tok> Parser<'tok> {
     pub(crate) fn parse_expr(&mut self, min_bp: u8) -> Result<Value> {
         self.skip_ws();
         let mut lhs = self.parse_prefix()?;
+        // 顶层斜杠分隔列表检测（无其他运算符时）：Number/Color / Number/Color → 斜杠分隔
+        // 例如：1/2 → [1 / 2]；1/2/3/4/5 → [1 / 2 / 3 / 4 / 5]
+        // 注意：(1)/2 → 除法（lhs 是 Paren）；1+1/2 → 除法（含其他运算符）
+        // 1/(2) → 除法（/ 后跟括号表达式）；1/2+1 → 除法（含 + 运算符）
+        // 检查 / 后是否紧跟 Number/Hash（LParen 开头的是除法，如 1/(2) = 0.5）
+        let slash_followed_by_value = matches!(self.tokens.get(self.pos + 1),
+            Some(Token::Number(_) | Token::Hash(_)))
+            || matches!(self.tokens.get(self.pos + 1), Some(Token::Whitespace))
+                && matches!(self.tokens.get(self.pos + 2),
+                    Some(Token::Number(_) | Token::Hash(_)));
+        if self.paren_depth == 0
+            && min_bp == 0
+            && self.in_declaration
+            && matches!(lhs, Value::Number(_, _) | Value::Color(_))
+            && matches!(self.peek(), Some(Token::Slash))
+            && !self.has_other_operator_at_top_level()
+            && slash_followed_by_value
+        {
+            let mut items = vec![lhs];
+            while matches!(self.peek(), Some(Token::Slash)) {
+                self.advance(); // 消费 /
+                self.skip_ws();
+                let next = self.parse_prefix()?;
+                items.push(next);
+            }
+            return Ok(Value::List(items, Separator::SlashDiv, false));
+        }
         loop {
             self.skip_ws();
             let (op, bp) = match self.peek_binding_power() {
@@ -46,6 +73,21 @@ impl<'tok> Parser<'tok> {
                         let mut items = vec![lhs.clone()];
                         loop {
                             self.skip_ws();
+                            // 检查斜杠分隔子列表：Number/Color 后紧跟 /（无空白）→ 斜杠子列表
+                            // 例如：1 2/3 4 → [1, [2/3], 4]；在任何上下文中都生效
+                            if matches!(items.last(), Some(Value::Number(_, _) | Value::Color(_)))
+                                && matches!(self.peek(), Some(Token::Slash))
+                            {
+                                let base = items.pop().unwrap();
+                                let mut slash_items = vec![base];
+                                while matches!(self.peek(), Some(Token::Slash)) {
+                                    self.advance(); // 消费 /
+                                    self.skip_ws();
+                                    slash_items.push(self.parse_prefix()?);
+                                }
+                                items.push(Value::List(slash_items, Separator::Slash, false));
+                                continue;
+                            }
                             // 先检查二元运算符——仅算术运算符（+,-,*,/,%）才在列表内消费
                             // 低优先级运算符（or,and,==,!=,<,>,<=,>=）不在此消费
                             if let Some((_, bp)) = self.peek_binding_power()
@@ -178,6 +220,42 @@ impl<'tok> Parser<'tok> {
             }));
         }
         Ok(lhs)
+    }
+
+    /// 检查当前顶层是否有除 / 以外的其他运算符（+,-,*,%,==,!=,<,>,<=,>=,and,or）。
+    /// 用于决定 / 应解释为斜杠分隔列表还是除法。
+    /// 只在 paren_depth == 0 时调用。
+    fn has_other_operator_at_top_level(&self) -> bool {
+        let mut depth = 0i32;
+        let mut i = self.pos;
+        while let Some(tok) = self.tokens.get(i) {
+            match tok {
+                Token::LParen | Token::LBracket => depth += 1,
+                Token::RParen | Token::RBracket => {
+                    if depth <= 0 {
+                        break;
+                    }
+                    depth -= 1;
+                }
+                Token::Plus | Token::Minus | Token::Star | Token::Percent => {
+                    if depth == 0 {
+                        return true;
+                    }
+                }
+                // 注意：Slash 不算"其他运算符"（它本身就是我们正在检查的）
+                Token::Eq | Token::NotEq | Token::Less | Token::Greater
+                | Token::LessEq | Token::GreaterEq | Token::And | Token::Or
+                | Token::Colon => {
+                    if depth == 0 {
+                        return true;
+                    }
+                }
+                Token::RBrace | Token::Semicolon | Token::Comma | Token::Eof => break,
+                _ => {}
+            }
+            i += 1;
+        }
+        false
     }
 
     /// 检查字符串是否为 SCSS 关键字（不应被拼接进字符串）。

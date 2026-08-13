@@ -90,7 +90,12 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
 pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
-            let unit = if u1.is_some() { u1.clone() } else { u2.clone() };
+            // 当两边都有单位时，合并为复合单位（如 px*em）
+            let unit = match (u1, u2) {
+                (Some(u1), Some(u2)) => Some(format!("{u1}*{u2}")),
+                (Some(u), None) | (None, Some(u)) => Some(u.clone()),
+                (None, None) => None,
+            };
             Ok(Value::Number(a * b, unit))
         }
         _ => Err(SassError::Eval(format!("无法 {l} * {r}"))),
@@ -99,15 +104,22 @@ pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
 
 pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
-        (Value::Number(a, u1), Value::Number(b, _)) => {
+        (Value::Number(a, u1), Value::Number(b, u2)) => {
+            // 构建结果单位：分子单位/分母单位
+            let result_unit = match (u1, u2) {
+                (Some(n), Some(d)) => Some(format!("{n}/{d}")),
+                (Some(n), None) => Some(n.clone()),
+                (None, Some(d)) => Some(format!("/{d}")),
+                (None, None) => None,
+            };
             if *b == 0.0 {
                 // SCSS: 1/0 = Infinity, -1/0 = -Infinity, 0/0 = NaN
                 if *a == 0.0 {
-                    return Ok(Value::Number(f64::NAN, u1.clone()));
+                    return Ok(Value::Number(f64::NAN, result_unit));
                 }
-                return Ok(Value::Number(a / b, u1.clone())); // f64 除零产生 Infinity
+                return Ok(Value::Number(a / b, result_unit)); // f64 除零产生 Infinity
             }
-            Ok(Value::Number(a / b, u1.clone()))
+            Ok(Value::Number(a / b, result_unit))
         }
         // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
         // 简化简单 calc(N) → N
@@ -123,7 +135,12 @@ pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u), Value::Number(b, _)) => {
             if *b == 0.0 {
-                return Err(SassError::DivideByZero);
+                // Sass: 1 % 0 = NaN（不报错）
+                let unit = u.as_deref().unwrap_or("");
+                if unit.is_empty() {
+                    return Ok(Value::Number(f64::NAN, None));
+                }
+                return Ok(Value::Raw(format!("calc(NaN * 1{unit})")));
             }
             // 处理 infinity 情况：1px % Infinity = 1px, -1px % -Infinity = -1px
             // 符号不同时：-1px % Infinity = NaN, 1px % -Infinity = NaN
@@ -135,7 +152,12 @@ pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
                     return Ok(Value::Raw(format!("calc(NaN * 1{unit})")));
                 }
             }
-            Ok(Value::Number(a % b, u.clone()))
+            // Dart Sass 使用向下取整除法语义：余数符号与除数相同
+            // result = a - floor(a/b) * b
+            let raw = a - (a / b).floor() * b;
+            // 精度截断——消除浮点误差（如 0.8999999999999995 → 0.9）
+            let result = (raw * 1e10).round() / 1e10;
+            Ok(Value::Number(result, u.clone()))
         }
         // 处理右侧是 calc(infinity * 1px) 等情况
         (Value::Number(a, u), Value::Calc(s)) => {

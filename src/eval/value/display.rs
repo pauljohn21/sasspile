@@ -17,6 +17,7 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                 Separator::Comma => ", ",
                 Separator::Space => " ",
                 Separator::Slash => " / ",
+                Separator::SlashDiv => "/",
                 Separator::Undecided => " ",
             };
             let parts: Vec<String> = elements.iter().map(inspect_value).collect();
@@ -178,6 +179,8 @@ pub(crate) fn eval_simple_expr(expr: &str, env: &Env) -> crate::error::Result<Va
         })
         .collect::<crate::error::Result<Vec<_>>>()?;
     let mut parser = crate::parse::Parser::new(&tokens);
+    // 插值 #{1/2} 应按声明上下文解析（斜杠是列表分隔符）
+    parser.in_declaration = true;
     let v = parser.parse_value()?;
     super::Evaluator::eval_value(&v, env)
 }

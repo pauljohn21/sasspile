@@ -142,7 +142,12 @@ impl Evaluator {
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
-        let ast = crate::parse::Parser::parse(&tokens)?;
+        let ast = crate::parse::Parser::parse(&tokens).map_err(|e| {
+            SassError::Parse {
+                expected: format!("在 {} 中: {}", path.display(), e),
+                found: "see above".into(),
+            }
+        })?;
         // 继承当前环境的所有成员（变量、mixin、函数、命名空间）
         let mut env = caller_env.clone();
         env.base_path = Some(path.to_path_buf());

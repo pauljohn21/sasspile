@@ -146,7 +146,11 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         self.expect(&Token::Colon)?;
         self.skip_ws();
+        // 声明上下文：启用斜杠列表语义（1/2 在属性值中是斜杠列表）
+        let prev_decl = self.in_declaration;
+        self.in_declaration = true;
         let value = self.parse_value()?;
+        self.in_declaration = prev_decl;
         let important = self.check_important()?;
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
@@ -204,7 +208,11 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         self.expect(&Token::Colon)?;
         self.skip_ws();
+        // 变量值是表达式上下文（1/2 是除法），禁用声明斜杠列表语义
+        let prev_decl = self.in_declaration;
+        self.in_declaration = false;
         let value = self.parse_value()?;
+        self.in_declaration = prev_decl;
         let flags = self.parse_var_flags()?;
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
@@ -251,6 +259,9 @@ impl<'tok> Parser<'tok> {
     // —— 参数解析 ——
     pub(crate) fn parse_params(&mut self) -> Result<Vec<Param>> {
         self.expect(&Token::LParen)?;
+        // 参数默认值是表达式上下文，禁用声明斜杠列表语义
+        let prev_decl = self.in_declaration;
+        self.in_declaration = false;
         let mut params = Vec::new();
         loop {
             self.skip_ws();
@@ -300,11 +311,17 @@ impl<'tok> Parser<'tok> {
         if self.peek() == Some(&Token::RParen) {
             self.advance();
         }
+        self.in_declaration = prev_decl;
         Ok(params)
     }
 
     pub(crate) fn parse_args(&mut self) -> Result<Vec<Arg>> {
         self.expect(&Token::LParen)?;
+        // 函数参数中，单个值 1/2 是除法；但空格分隔列表中的 2/3 仍是斜杠子列表
+        // 因为 space-list 检测在 parse_value 内部（in_declaration 仍生效），
+        // 而单个参数 parse_expr 时需禁用 in_declaration
+        let prev_decl = self.in_declaration;
+        self.in_declaration = false;
         let mut args = Vec::new();
         loop {
             self.skip_ws();
@@ -458,6 +475,7 @@ impl<'tok> Parser<'tok> {
         if self.peek() == Some(&Token::RParen) {
             self.advance();
         }
+        self.in_declaration = prev_decl;
         Ok(args)
     }
 

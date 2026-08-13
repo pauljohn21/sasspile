@@ -365,6 +365,8 @@ pub enum Separator {
     Space,
     /// 斜杠分隔——`(a / b / c)`。
     Slash,
+    /// 斜杠分隔（除法语义，无空格）——`a/b/c`。
+    SlashDiv,
     /// 未确定——单元素或待推断。
     Undecided,
 }
@@ -397,12 +399,22 @@ fn format_pct(v: f64) -> String {
     }
 }
 
-/// 格式化 alpha 值。
+/// 格式化 alpha 值——截断到 10 位小数（Dart Sass 精度）。
 fn format_alpha(a: f64) -> String {
     if a.fract() == 0.0 {
         format!("{}", a as i64)
     } else {
-        let s = format!("{a}");
-        s
+        // 截断到 10 位小数
+        let truncated = (a * 1e10).round() / 1e10;
+        format!("{truncated}")
+    }
+}
+
+/// 将 alpha 值截断到 10 位小数精度（Dart Sass 精度）。
+pub(crate) fn round_alpha(a: f64) -> f64 {
+    if a.fract() == 0.0 {
+        a
+    } else {
+        (a * 1e10).round() / 1e10
     }
 }

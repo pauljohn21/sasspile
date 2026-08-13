@@ -172,7 +172,11 @@ impl<'tok> Parser<'tok> {
         };
         self.skip_ws();
         self.expect(&Token::LBrace)?;
+        // mixin 体内是表达式上下文，禁用声明斜杠列表语义
+        let prev_decl = self.in_declaration;
+        self.in_declaration = false;
         let body = self.parse_body()?;
+        self.in_declaration = prev_decl;
         Ok(Node::MixinDef { name, params, body })
     }
 
@@ -220,7 +224,11 @@ impl<'tok> Parser<'tok> {
         };
         self.skip_ws();
         self.expect(&Token::LBrace)?;
+        // 函数体内是表达式上下文（1/2 是除法），禁用声明斜杠列表语义
+        let prev_decl = self.in_declaration;
+        self.in_declaration = false;
         let body = self.parse_body()?;
+        self.in_declaration = prev_decl;
         self.skip_ws();
         // 消费函数体后的可选分号（如 @function f() {@return 1;}）
         if self.peek() == Some(&Token::Semicolon) {
@@ -231,7 +239,11 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_return(&mut self) -> Result<Node> {
         self.skip_ws();
+        // @return 的值是表达式上下文（1/2 是除法），禁用声明斜杠列表语义
+        let prev_decl = self.in_declaration;
+        self.in_declaration = false;
         let value = self.parse_value()?;
+        self.in_declaration = prev_decl;
         self.skip_ws();
         // @return 可用 ; 结束，也可在函数体末尾以 } 结束（无分号）
         if self.peek() == Some(&Token::Semicolon) {

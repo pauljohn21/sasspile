@@ -297,6 +297,91 @@ fn diag_numbers() {
     diag("values/numbers", 20);
 }
 
+/// 完整列出 values/numbers 所有失败的详细信息
+#[test]
+fn diag_numbers_full() {
+    sasspile::init_tracing();
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let dir = spec_root.join("values/numbers");
+    let mut files = Vec::new();
+    collect_hrx(&dir, &mut files);
+
+    let mut total = 0;
+    let mut pass = 0;
+    let mut fails: Vec<(String, String, String, String)> = Vec::new(); // (name, kind, expected, actual)
+
+    for file in &files {
+        if let Ok(content) = std::fs::read_to_string(file) {
+            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            for case in &parse_hrx(&content) {
+                if case.expected_output.is_empty() && !case.expect_error {
+                    continue;
+                }
+                total += 1;
+                let name = case
+                    .input_path
+                    .strip_suffix("input.scss")
+                    .unwrap_or(&case.input_path)
+                    .trim_end_matches('/')
+                    .to_string();
+                let full_name = format!("{stem}/{name}");
+                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
+                    Ok(actual) => {
+                        if case.expect_error {
+                            pass += 1;
+                        } else if actual.trim() == case.expected_output.trim() {
+                            pass += 1;
+                        } else {
+                            fails.push((
+                                full_name,
+                                "diff".into(),
+                                case.expected_output.trim().into(),
+                                actual.trim().into(),
+                            ));
+                        }
+                    }
+                    Err(err_str) => {
+                        if case.expect_error {
+                            pass += 1;
+                        } else {
+                            let kind = if err_str.contains("语法错误") {
+                                "syntax"
+                            } else if err_str.contains("求值错误") {
+                                "eval"
+                            } else {
+                                "err"
+                            };
+                            fails.push((
+                                full_name,
+                                kind.into(),
+                                case.expected_output.trim().into(),
+                                err_str,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 按测试名聚合
+    fails.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, kind, expected, actual) in &fails {
+        let exp_short = expected.replace('\n', "\\n").chars().take(60).collect::<String>();
+        let act_short = actual.replace('\n', "\\n").chars().take(60).collect::<String>();
+        tracing::warn!(test = %name, kind = %kind, expected = %exp_short, actual = %act_short, "FAIL_DETAIL");
+    }
+    // 按 kind 分组统计
+    let mut kind_counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (_, kind, _, _) in &fails {
+        *kind_counts.entry(kind.as_str()).or_default() += 1;
+    }
+    for (k, v) in &kind_counts {
+        tracing::warn!(kind = %k, count = *v, "KIND_STATS");
+    }
+    tracing::warn!(total = total, pass = pass, fail = fails.len(), "完整统计");
+}
+
 #[test]
 fn diag_libsass_closed() {
     diag("libsass-closed-issues", 20);

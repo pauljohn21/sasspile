@@ -81,14 +81,21 @@ impl Evaluator {
                 _ => Err(SassError::Eval("percentage 需要 1 个数字参数".into())),
             },
             "math.div" | "div" => match pos_args {
-                [Value::Number(a, u1), Value::Number(b, _)] => {
+                [Value::Number(a, u1), Value::Number(b, u2)] => {
+                    // 构建结果单位：分子单位/分母单位
+                    let result_unit = match (u1, u2) {
+                        (Some(n), Some(d)) => Some(format!("{n}/{d}")),
+                        (Some(n), None) => Some(n.clone()),
+                        (None, Some(d)) => Some(format!("/{d}")),
+                        (None, None) => None,
+                    };
                     if *b == 0.0 {
                         if *a == 0.0 {
-                            return Ok(Value::Number(f64::NAN, u1.clone()));
+                            return Ok(Value::Number(f64::NAN, result_unit));
                         }
-                        return Ok(Value::Number(a / b, u1.clone()));
+                        return Ok(Value::Number(a / b, result_unit));
                     }
-                    Ok(Value::Number(a / b, u1.clone()))
+                    Ok(Value::Number(a / b, result_unit))
                 }
                 _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
             },
@@ -307,14 +314,19 @@ color::call(&name, pos_args, kw_args)?
                 [v] => Ok(Value::String(crate::eval::value::inspect_value(v), false)),
                 _ => Err(SassError::Eval("inspect 需要 1 个参数".into())),
             },
-            "if" => match pos_args {
-                [cond, t, f] => Ok(if Self::is_truthy(cond) {
-                    t.clone()
+            "if" => {
+                // 支持位置参数 if(cond, $then, $else) 和命名参数 if(cond, $if-true: $if-false:)
+                let (cond, t, f) = if pos_args.len() == 3 {
+                    (&pos_args[0], &pos_args[1], &pos_args[2])
+                } else if pos_args.len() == 1 {
+                    let t = kw_args.get("if-true").ok_or_else(|| SassError::Eval("if 需要 $if-true 参数或 3 个位置参数".into()))?;
+                    let f = kw_args.get("if-false").ok_or_else(|| SassError::Eval("if 需要 $if-false 参数或 3 个位置参数".into()))?;
+                    (&pos_args[0], t, f)
                 } else {
-                    f.clone()
-                }),
-                _ => Err(SassError::Eval("if 需要 3 个参数".into())),
-            },
+                    return Err(SassError::Eval("if 需要 3 个位置参数或 1+named 参数".into()));
+                };
+                Ok(if Self::is_truthy(cond) { t.clone() } else { f.clone() })
+            }
             "content-exists" => {
                 // 检查当前环境是否有 @content 内容块
                 Ok(Value::Bool(env.content.is_some()))

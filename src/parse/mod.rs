@@ -12,12 +12,22 @@ use crate::__tracing::warn;
 pub struct Parser<'tok> {
     tokens: &'tok [Token],
     pos: usize,
+    /// 括号深度——追踪是否在括号内（影响 / 的解释：括号内=除法，顶层=斜杠分隔）。
+    paren_depth: usize,
+    /// 声明上下文——true 表示正在解析属性值（declaration value）。
+    /// 在声明上下文中 1/2 是斜杠列表；在变量/返回值等表达式上下文中 1/2 是除法。
+    pub(crate) in_declaration: bool,
 }
 
 impl<'tok> Parser<'tok> {
     /// 创建新的 Parser。
     pub fn new(tokens: &'tok [Token]) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            paren_depth: 0,
+            in_declaration: false,
+        }
     }
 
     /// 解析入口。

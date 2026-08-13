@@ -1,30 +1,114 @@
 use super::*;
 
+/// 格式化单位为 CSS 字符串（不带前缀）。
+/// - `"px"` → `"1px"`
+/// - `"px*em"` → `"1px * 1em"`
+/// - `"px/em"` → `"1px / 1em"`
+/// - `"/px"` → `"/ 1px"`
+/// - `"px*em/s"` → `"1px * 1em / 1s"`
+fn format_unit(unit: &str) -> String {
+    let mut tokens: Vec<String> = Vec::new();
+    let (numerator, denominator) = if let Some(rest) = unit.strip_prefix('/') {
+        (String::new(), rest)
+    } else {
+        let split: Vec<&str> = unit.splitn(2, '/').collect();
+        (split[0].to_string(), split.get(1).copied().unwrap_or(""))
+    };
+    // 分子（* 分隔）
+    let num_units: Vec<&str> = numerator.split('*').filter(|u| !u.is_empty()).collect();
+    for (i, u) in num_units.iter().enumerate() {
+        if i > 0 {
+            tokens.push("*".to_string());
+        }
+        tokens.push(format!("1{u}"));
+    }
+    // 分母（* 分隔）
+    let den_units: Vec<&str> = denominator.split('*').filter(|u| !u.is_empty()).collect();
+    for u in den_units.iter() {
+        tokens.push("/".to_string());
+        tokens.push(format!("1{u}"));
+    }
+    if tokens.is_empty() {
+        String::new()
+    } else {
+        tokens.join(" ")
+    }
+}
+
+/// 安全格式化 f64 整数值——避免 i64 溢出。
+/// 当值超出 i64 范围时使用原始 f64 的整数形式。
+fn fmt_int(val: f64) -> String {
+    if val >= i64::MAX as f64 {
+        // 超出 i64 范围，直接截断小数位输出
+        format!("{:.0}", val)
+    } else if val <= i64::MIN as f64 {
+        format!("{:.0}", val)
+    } else {
+        format!("{}", val as i64)
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Number(n, None) => {
                 if n.is_infinite() {
-                    return write!(f, "calc(infinity)");
+                    return if n.is_sign_negative() {
+                        write!(f, "calc(-infinity)")
+                    } else {
+                        write!(f, "calc(infinity)")
+                    };
                 }
                 if n.is_nan() {
                     return write!(f, "calc(NaN)");
                 }
+                // Dart Sass 精度规则：
+                // 1. 绝对值 < 1e-10 显示为 0
+                // 2. 接近整数（距离 < 1e-10）四舍五入为整数
+                if n.abs() < 1e-10 {
+                    return write!(f, "0");
+                }
+                let rounded = n.round();
+                if (n - rounded).abs() < 1e-10 {
+                    return write!(f, "{}", fmt_int(rounded));
+                }
                 if n.fract() == 0.0 {
-                    write!(f, "{}", *n as i64)
+                    write!(f, "{}", fmt_int(*n))
                 } else {
                     write!(f, "{n}")
                 }
             }
             Value::Number(n, Some(unit)) => {
+                let formatted = format_unit(unit);
+                let prefix = if unit.starts_with('/') { "" } else { "* " };
                 if n.is_infinite() {
-                    return write!(f, "calc(infinity * 1{unit})");
+                    return if n.is_sign_negative() {
+                        write!(f, "calc(-infinity {prefix}{formatted})")
+                    } else {
+                        write!(f, "calc(infinity {prefix}{formatted})")
+                    };
                 }
                 if n.is_nan() {
-                    return write!(f, "calc(NaN * 1{unit})");
+                    return write!(f, "calc(NaN {prefix}{formatted})");
+                }
+                // Dart Sass 精度规则
+                if n.abs() < 1e-10 {
+                    return write!(f, "0");
+                }
+                let rounded = n.round();
+                if (n - rounded).abs() < 1e-10 {
+                    // 复合单位用空格分隔：1px * 1em 或 1px / 1em
+                    if unit.contains('*') || unit.contains('/') {
+                        return write!(f, "{} {}", fmt_int(rounded), formatted);
+                    }
+                    return write!(f, "{}{unit}", fmt_int(rounded));
                 }
                 if n.fract() == 0.0 {
-                    write!(f, "{}{unit}", *n as i64)
+                    // 复合单位用空格分隔：1px * 1em 或 1px / 1em
+                    if unit.contains('*') || unit.contains('/') {
+                        return write!(f, "{} {}", fmt_int(*n), formatted);
+                    }
+                    write!(f, "{}{unit}", fmt_int(*n))
                 } else {
                     write!(f, "{n}{unit}")
                 }
@@ -84,7 +168,8 @@ impl std::fmt::Display for Value {
                 let sep_str = match sep {
                     Separator::Comma => ", ",
                     Separator::Space => " ",
-                    Separator::Slash => " / ",
+                    Separator::Slash => "/",
+                    Separator::SlashDiv => "/",
                     Separator::Undecided => " ",
                 };
                 if *bracketed {

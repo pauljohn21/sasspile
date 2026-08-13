@@ -247,12 +247,25 @@ impl Evaluator {
             }
             Value::Call(name, args) => {
                 // if() 惰性求值：只求值选中的分支，避免副作用和类型错误
-                if name == "if" && args.len() == 3 && args.iter().all(|a| a.name.is_none() && a.condition.is_none()) {
-                    let cond = Self::eval_value(&args[0].value, env)?;
-                    if Self::is_truthy(&cond) {
-                        return Self::eval_value(&args[1].value, env);
+                // 支持位置参数 if(cond, t, f) 和命名参数 if(cond, $if-true:, $if-false:)
+                if name == "if" {
+                    let (cond_idx, t_idx, f_idx) = if args.len() == 3 && args.iter().all(|a| a.condition.is_none()) {
+                        (0, 1, 2)
+                    } else if args.len() == 3 && args[0].condition.is_none() {
+                        // 命名参数形式：if(cond, $if-true: t, $if-false: f)
+                        let t_idx = args.iter().position(|a| a.name.as_deref() == Some("if-true")).unwrap_or(1);
+                        let f_idx = args.iter().position(|a| a.name.as_deref() == Some("if-false")).unwrap_or(2);
+                        (0, t_idx, f_idx)
                     } else {
-                        return Self::eval_value(&args[2].value, env);
+                        (3, 3, 3) // 标记：不走快速路径
+                    };
+                    if cond_idx < 3 {
+                        let cond = Self::eval_value(&args[cond_idx].value, env)?;
+                        return if Self::is_truthy(&cond) {
+                            Self::eval_value(&args[t_idx].value, env)
+                        } else {
+                            Self::eval_value(&args[f_idx].value, env)
+                        };
                     }
                 }
                 // if() 冒号语法：if(cond1: val1; cond2: val2; else: default)
@@ -346,7 +359,17 @@ impl Evaluator {
                     Err(e) => Err(e),
                 }
             }
-            Value::Interp(s) => Ok(Value::String(eval_interp_str(s, env), false)),
+            Value::Interp(s) => {
+                // 将插值内容作为表达式求值
+                let val = eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
+                // 插值上下文中字符串去引号
+                let val_str = match &val {
+                    Value::String(inner, _) => inner.clone(),
+                    _ => val.to_string(),
+                };
+                // 使用 Raw 避免 CSS 标识符转义（如 1 → \31）
+                Ok(Value::Raw(val_str))
+            }
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),
             Value::UnaryOp(op, v) => {
                 let val = Self::eval_value(v, env)?;
