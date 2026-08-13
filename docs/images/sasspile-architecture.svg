@@ -1,0 +1,203 @@
+      <svg viewBox="0 0 1260 498" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="archify-diagram-title">sasspile 编译管线</title>
+        <desc id="archify-diagram-description">纯 Rust 函数式 SCSS 编译器架构</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Boundaries (behind everything) -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="0" x="220" y="220" width="820" height="110" rx="8" class="c-security-group" stroke-width="1"/>
+        <text x="228" y="238" class="t-security" font-size="9" font-weight="600">sasspile::pipeline</text>
+
+        <!-- Connection paths (before components for correct z-order) -->
+        <path data-edge-from="source" data-edge-to="lexer" data-edge-label="input" data-edge-key="0" data-edge-id="source-to-lexer" data-composition-points="170,280;250,280" d="M 170 280 L 250 280" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="lexer" data-edge-to="parser" data-edge-label="Token 流" data-edge-key="1" data-edge-id="lexer-to-parser" data-composition-points="380,280;460,280" d="M 380 280 L 460 280" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="parser" data-edge-to="evaluator" data-edge-label="AST" data-edge-key="2" data-edge-id="parser-to-eval" data-composition-points="590,280;670,280" d="M 590 280 L 670 280" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="evaluator" data-edge-to="serializer" data-edge-label="CssNode 树" data-edge-key="3" data-edge-id="eval-to-serializer" data-composition-points="800,280;880,280" d="M 800 280 L 880 280" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="serializer" data-edge-to="output" data-edge-label="CSS 字符串" data-edge-key="4" data-edge-id="serializer-to-output" data-composition-points="1010,280;1090,280" d="M 1010 280 L 1090 280" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="builtin" data-edge-to="evaluator" data-edge-label="调用" data-edge-key="5" data-edge-id="builtin-to-eval" data-composition-points="740,175;740,199;756,199;756,226;735,226;735,250" d="M 740 175 L 740 191 Q 740 199 748 199 L 748 199 Q 756 199 756 207 L 756 218 Q 756 226 748 226 L 743 226 Q 735 226 735 234 L 735 250" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="module" data-edge-to="parser" data-edge-label="依赖" data-edge-key="6" data-edge-id="module-to-parser" data-composition-points="530,175;530,199;546,199;546,226;525,226;525,250" d="M 530 175 L 530 191 Q 530 199 538 199 L 538 199 Q 546 199 546 207 L 546 218 Q 546 226 538 226 L 533 226 Q 525 226 525 234 L 525 250" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="tracing" data-edge-to="lexer" data-edge-label="span" data-edge-key="7" data-edge-id="tracing-to-lexer" data-composition-points="315,380;315,310" d="M 315 380 L 315 310" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+
+        <!-- Components -->
+        <g id="node-source" data-node-id="source" data-node-label="SCSS Source" tabindex="0" role="button" aria-label="Focus SCSS Source, 输入源码, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="输入源码" data-node-tag=".scss" data-node-context="Architecture component">
+          <title>SCSS Source · 输入源码 · Architecture component · .scss</title>
+          <rect x="40" y="250" width="130" height="60" rx="6" class="c-mask"/>
+          <rect x="40" y="250" width="130" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 256) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-detail-anchor x="105" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SCSS Source</text>
+        <text data-detail="context" x="105" y="294" class="t-muted" font-size="9" text-anchor="middle">输入源码</text>
+        <text data-detail="fine" x="105" y="302" class="t-external" font-size="7" text-anchor="middle">.scss</text>
+        </g>
+
+        <g id="node-lexer" data-node-id="lexer" data-node-label="Lexer" tabindex="0" role="button" aria-label="Focus Lexer, lex/mod.rs, sasspile::pipeline" aria-pressed="false" data-node-kind="backend" data-node-sublabel="lex/mod.rs" data-node-tag="Tokenizer" data-node-context="sasspile::pipeline">
+          <title>Lexer · lex/mod.rs · sasspile::pipeline · Tokenizer</title>
+          <rect x="250" y="250" width="130" height="60" rx="6" class="c-mask"/>
+          <rect x="250" y="250" width="130" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 256) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="315" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Lexer</text>
+        <text data-detail="context" x="315" y="294" class="t-muted" font-size="9" text-anchor="middle">lex/mod.rs</text>
+        <text data-detail="fine" x="315" y="302" class="t-backend" font-size="7" text-anchor="middle">Tokenizer</text>
+        </g>
+
+        <g id="node-parser" data-node-id="parser" data-node-label="Parser" tabindex="0" role="button" aria-label="Focus Parser, parse/expr/mod.rs, sasspile::pipeline" aria-pressed="false" data-node-kind="backend" data-node-sublabel="parse/expr/mod.rs" data-node-tag="Pratt Parser" data-node-context="sasspile::pipeline">
+          <title>Parser · parse/expr/mod.rs · sasspile::pipeline · Pratt Parser</title>
+          <rect x="460" y="250" width="130" height="60" rx="6" class="c-mask"/>
+          <rect x="460" y="250" width="130" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(466 256) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="525" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Parser</text>
+        <text data-detail="context" x="525" y="294" class="t-muted" font-size="9" text-anchor="middle">parse/expr/mod.rs</text>
+        <text data-detail="fine" x="525" y="302" class="t-backend" font-size="7" text-anchor="middle">Pratt Parser</text>
+        </g>
+
+        <g id="node-evaluator" data-node-id="evaluator" data-node-label="Evaluator" tabindex="0" role="button" aria-label="Focus Evaluator, eval/mod.rs, sasspile::pipeline" aria-pressed="false" data-node-kind="backend" data-node-sublabel="eval/mod.rs" data-node-tag="Tree Walk" data-node-context="sasspile::pipeline">
+          <title>Evaluator · eval/mod.rs · sasspile::pipeline · Tree Walk</title>
+          <rect x="670" y="250" width="130" height="60" rx="6" class="c-mask"/>
+          <rect x="670" y="250" width="130" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(676 256) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="735" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Evaluator</text>
+        <text data-detail="context" x="735" y="294" class="t-muted" font-size="9" text-anchor="middle">eval/mod.rs</text>
+        <text data-detail="fine" x="735" y="302" class="t-backend" font-size="7" text-anchor="middle">Tree Walk</text>
+        </g>
+
+        <g id="node-serializer" data-node-id="serializer" data-node-label="Serializer" tabindex="0" role="button" aria-label="Focus Serializer, css/mod.rs, sasspile::pipeline" aria-pressed="false" data-node-kind="backend" data-node-sublabel="css/mod.rs" data-node-tag="String Buffer" data-node-context="sasspile::pipeline">
+          <title>Serializer · css/mod.rs · sasspile::pipeline · String Buffer</title>
+          <rect x="880" y="250" width="130" height="60" rx="6" class="c-mask"/>
+          <rect x="880" y="250" width="130" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(886 256) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="945" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Serializer</text>
+        <text data-detail="context" x="945" y="294" class="t-muted" font-size="9" text-anchor="middle">css/mod.rs</text>
+        <text data-detail="fine" x="945" y="302" class="t-backend" font-size="7" text-anchor="middle">String Buffer</text>
+        </g>
+
+        <g id="node-output" data-node-id="output" data-node-label="CSS Output" tabindex="0" role="button" aria-label="Focus CSS Output, 输出结果, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="输出结果" data-node-tag=".css" data-node-context="Architecture component">
+          <title>CSS Output · 输出结果 · Architecture component · .css</title>
+          <rect x="1090" y="250" width="130" height="60" rx="6" class="c-mask"/>
+          <rect x="1090" y="250" width="130" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1096 256) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-detail-anchor x="1155" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CSS Output</text>
+        <text data-detail="context" x="1155" y="294" class="t-muted" font-size="9" text-anchor="middle">输出结果</text>
+        <text data-detail="fine" x="1155" y="302" class="t-external" font-size="7" text-anchor="middle">.css</text>
+        </g>
+
+        <g id="node-builtin" data-node-id="builtin" data-node-label="Builtin Functions" tabindex="0" role="button" aria-label="Focus Builtin Functions, color/map/list/string, Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="color/map/list/string" data-node-context="Architecture component">
+          <title>Builtin Functions · color/map/list/string · Architecture component</title>
+          <rect x="670" y="120" width="140" height="55" rx="6" class="c-mask"/>
+          <rect x="670" y="120" width="140" height="55" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(676 126) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-detail-anchor x="740" y="145.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Builtin Functions</text>
+        <text data-detail="context" x="740" y="161.5" class="t-muted" font-size="9" text-anchor="middle">color/map/list/string</text>
+        </g>
+
+        <g id="node-module" data-node-id="module" data-node-label="Module System" tabindex="0" role="button" aria-label="Focus Module System, @use @forward @import, Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="@use @forward @import" data-node-context="Architecture component">
+          <title>Module System · @use @forward @import · Architecture component</title>
+          <rect x="460" y="120" width="140" height="55" rx="6" class="c-mask"/>
+          <rect x="460" y="120" width="140" height="55" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(466 126) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-detail-anchor x="530" y="145.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Module System</text>
+        <text data-detail="context" x="530" y="161.5" class="t-muted" font-size="9" text-anchor="middle">@use @forward @import</text>
+        </g>
+
+        <g id="node-tracing" data-node-id="tracing" data-node-label="Tracing" tabindex="0" role="button" aria-label="Focus Tracing, RUST_LOG, Architecture component" aria-pressed="false" data-node-kind="security" data-node-sublabel="RUST_LOG" data-node-context="Architecture component">
+          <title>Tracing · RUST_LOG · Architecture component</title>
+          <rect x="250" y="380" width="130" height="50" rx="6" class="c-mask"/>
+          <rect x="250" y="380" width="130" height="50" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(256 386) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-detail-anchor x="315" y="403" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Tracing</text>
+        <text data-detail="context" x="315" y="419" class="t-muted" font-size="9" text-anchor="middle">RUST_LOG</text>
+        </g>
+
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="source" data-edge-to="lexer" data-edge-label="input" data-edge-key="0" data-edge-id="source-to-lexer">
+          <rect x="193" y="260" width="34" height="14" rx="3" class="c-mask"/>
+          <text x="210" y="270" class="t-backend" font-size="8" text-anchor="middle">input</text>
+        </g>
+        <g data-detail="context" data-edge-from="lexer" data-edge-to="parser" data-edge-label="Token 流" data-edge-key="1" data-edge-id="lexer-to-parser">
+          <rect x="395.8" y="260" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="420" y="270" class="t-muted" font-size="8" text-anchor="middle">Token 流</text>
+        </g>
+        <g data-detail="context" data-edge-from="parser" data-edge-to="evaluator" data-edge-label="AST" data-edge-key="2" data-edge-id="parser-to-eval">
+          <rect x="615" y="260" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="630" y="270" class="t-muted" font-size="8" text-anchor="middle">AST</text>
+        </g>
+        <g data-detail="context" data-edge-from="evaluator" data-edge-to="serializer" data-edge-label="CssNode 树" data-edge-key="3" data-edge-id="eval-to-serializer">
+          <rect x="811" y="260" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="840" y="270" class="t-muted" font-size="8" text-anchor="middle">CssNode 树</text>
+        </g>
+        <g data-detail="context" data-edge-from="serializer" data-edge-to="output" data-edge-label="CSS 字符串" data-edge-key="4" data-edge-id="serializer-to-output">
+          <rect x="1021" y="260" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1050" y="270" class="t-backend" font-size="8" text-anchor="middle">CSS 字符串</text>
+        </g>
+        <g data-detail="context" data-edge-from="builtin" data-edge-to="evaluator" data-edge-label="调用" data-edge-key="5" data-edge-id="builtin-to-eval">
+          <rect x="733" y="179" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="748" y="189" class="t-messagebus" font-size="8" text-anchor="middle">调用</text>
+        </g>
+        <g data-detail="context" data-edge-from="module" data-edge-to="parser" data-edge-label="依赖" data-edge-key="6" data-edge-id="module-to-parser">
+          <rect x="523" y="179" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="538" y="189" class="t-messagebus" font-size="8" text-anchor="middle">依赖</text>
+        </g>
+        <g data-detail="context" data-edge-from="tracing" data-edge-to="lexer" data-edge-label="span" data-edge-key="7" data-edge-id="tracing-to-lexer">
+          <rect x="300" y="360" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="315" y="370" class="t-messagebus" font-size="8" text-anchor="middle">span</text>
+        </g>
+
+        <!-- Legend -->
+        <g data-legend data-legend-bridge>
+          <text x="40" y="462" class="t-primary" font-size="12" font-weight="650">Legend</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="482" data-legend-width="78">
+            <rect x="40" y="473" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="62" y="482" class="t-muted" font-size="10" font-weight="500">Backend</text>
+          </g>
+          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud" data-legend-x="140" data-legend-baseline="482" data-legend-width="68">
+            <rect x="140" y="473" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="162" y="482" class="t-muted" font-size="10" font-weight="500">Cloud</text>
+          </g>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Security" data-legend-x="230" data-legend-baseline="482" data-legend-width="83">
+            <rect x="230" y="473" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="252" y="482" class="t-muted" font-size="10" font-weight="500">Security</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="335" data-legend-baseline="482" data-legend-width="83">
+            <rect x="335" y="473" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="357" y="482" class="t-muted" font-size="10" font-weight="500">External</text>
+          </g>
+        </g>
+      </svg>

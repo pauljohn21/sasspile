@@ -484,7 +484,8 @@ impl<'tok> Parser<'tok> {
             self.skip_ws();
             self.expect(&Token::Colon)?;
             self.skip_ws();
-            let value = self.parse_value()?;
+            // 使用 parse_expr 而不是 parse_value，避免消费逗号分隔的列表
+            let value = self.parse_expr(0)?;
             config.push((name, value));
             self.skip_ws();
             if self.peek() == Some(&Token::Comma) {

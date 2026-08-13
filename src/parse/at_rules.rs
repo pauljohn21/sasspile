@@ -253,6 +253,7 @@ impl<'tok> Parser<'tok> {
         }
         self.skip_ws();
         if self.peek_keyword("with") {
+            self.advance(); // 消费 with 关键字
             self.skip_ws();
             self.expect(&Token::LParen)?;
             config = self.parse_config()?;

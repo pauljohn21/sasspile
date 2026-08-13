@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "sasspile 编译管线",
+    "subtitle": "纯 Rust 函数式 SCSS 编译器架构",
+    "output": "sasspile-architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "pipeline", "label": "编译管线", "focus": ["source", "lexer", "parser", "evaluator", "serializer"], "note": "核心编译管线：Source → Lexer → Parser → Evaluator → Serializer → CSS" },
+      { "id": "modules", "label": "模块组织", "focus": ["lexer", "parser", "evaluator", "serializer"], "note": "src/ 下的四大模块：lex/, parse/, eval/, css/" }
+    ]
+  },
+  "components": [
+    { "id": "source", "type": "external", "label": "SCSS Source", "sublabel": "输入源码", "pos": [40, 250], "size": [130, 60], "tag": ".scss" },
+    { "id": "lexer", "type": "backend", "label": "Lexer", "sublabel": "lex/mod.rs", "pos": [250, 250], "size": [130, 60], "tag": "Tokenizer" },
+    { "id": "parser", "type": "backend", "label": "Parser", "sublabel": "parse/expr/mod.rs", "pos": [460, 250], "size": [130, 60], "tag": "Pratt Parser" },
+    { "id": "evaluator", "type": "backend", "label": "Evaluator", "sublabel": "eval/mod.rs", "pos": [670, 250], "size": [130, 60], "tag": "Tree Walk" },
+    { "id": "serializer", "type": "backend", "label": "Serializer", "sublabel": "css/mod.rs", "pos": [880, 250], "size": [130, 60], "tag": "String Buffer" },
+    { "id": "output", "type": "external", "label": "CSS Output", "sublabel": "输出结果", "pos": [1090, 250], "size": [130, 60], "tag": ".css" },
+    { "id": "builtin", "type": "cloud", "label": "Builtin Functions", "sublabel": "color/map/list/string", "pos": [670, 120], "size": [140, 55] },
+    { "id": "module", "type": "cloud", "label": "Module System", "sublabel": "@use @forward @import", "pos": [460, 120], "size": [140, 55] },
+    { "id": "tracing", "type": "security", "label": "Tracing", "sublabel": "RUST_LOG", "pos": [250, 380], "size": [130, 50] }
+  ],
+  "boundaries": [
+    { "kind": "security-group", "label": "sasspile::pipeline", "wraps": ["lexer", "parser", "evaluator", "serializer"] }
+  ],
+  "connections": [
+    { "id": "source-to-lexer", "from": "source", "to": "lexer", "label": "input", "variant": "emphasis" },
+    { "id": "lexer-to-parser", "from": "lexer", "to": "parser", "label": "Token 流" },
+    { "id": "parser-to-eval", "from": "parser", "to": "evaluator", "label": "AST" },
+    { "id": "eval-to-serializer", "from": "evaluator", "to": "serializer", "label": "CssNode 树" },
+    { "id": "serializer-to-output", "from": "serializer", "to": "output", "label": "CSS 字符串", "variant": "emphasis" },
+    { "id": "builtin-to-eval", "from": "builtin", "to": "evaluator", "label": "调用", "variant": "dashed", "fromSide": "bottom", "toSide": "top" },
+    { "id": "module-to-parser", "from": "module", "to": "parser", "label": "依赖", "variant": "dashed", "fromSide": "bottom", "toSide": "top" },
+    { "id": "tracing-to-lexer", "from": "tracing", "to": "lexer", "label": "span", "variant": "dashed", "fromSide": "top", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "输入 / 输出", "items": ["SCSS 源码作为输入", "编译为 CSS 展开/压缩格式"] },
+    { "dot": "emerald", "title": "核心模块", "items": ["Lexer 词法分析 → Token 流", "Parser 语法分析 → AST", "Evaluator 求值 → CssNode 树", "Serializer 序列化 → CSS 字符串"] },
+    { "dot": "rose", "title": "扩展能力", "items": ["40+ 内建函数（color/map/list/string）", "模块系统 @use/@forward/@import", "tracing 链路追踪（RUST_LOG）"] }
+  ]
+}
