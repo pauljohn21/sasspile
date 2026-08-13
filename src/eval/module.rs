@@ -28,6 +28,8 @@ impl Evaluator {
     }
 
     /// 在指定目录下尝试解析 url 对应的文件。
+    /// 如果 URL 指定了扩展名（如 .scss/.sass/.css），优先精确匹配；
+    /// 否则按默认顺序查找（_scss, _sass, _css）。
     fn try_resolve_dir(dir: &Path, url: &str) -> Option<PathBuf> {
         let url_path = std::path::Path::new(url);
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
@@ -35,6 +37,21 @@ impl Evaluator {
             .file_stem() // file_stem 自动去除扩展名
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| url.to_string());
+
+        // 如果 URL 指定了扩展名，优先精确匹配
+        if let Some(ext) = url_path.extension().and_then(|e| e.to_str()) {
+            let candidates = [
+                dir.join(parent).join(format!("_{filename}.{ext}")),
+                dir.join(parent).join(format!("{filename}.{ext}")),
+            ];
+            for c in &candidates {
+                if c.exists() {
+                    return Some(c.clone());
+                }
+            }
+        }
+
+        // 默认查找顺序
         let candidates = [
             dir.join(parent).join(format!("_{filename}.scss")),
             dir.join(parent).join(format!("{filename}.scss")),
