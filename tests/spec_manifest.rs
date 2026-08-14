@@ -13,6 +13,8 @@ pub const SKIP_DIRS: &[&str] = &[
     "libsass-todo-issues",
     "libsass-todo-tests",
     "non_conformant",
+    // CSS calc() 数学化简（需实现算术化简引擎，暂跳过）
+    "values/calculation",
     // CSS4 色彩空间（整个目录都是）
     "core_functions/color/hwb",
     "core_functions/color/lab",

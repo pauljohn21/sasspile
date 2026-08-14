@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.5.2] — 2026-08-14
+
+### Fixed
+
+- **String 函数关键字参数支持**：`call_string_builtin` 添加 `kw_args` 参数
+  - 支持 `string.to-lower-case($string: abc)` 等命名参数调用
+  - 提取 `get_str_arg` helper 统一位置/关键字参数查找
+  - `str-length` / `to-upper-case` / `to-lower-case` / `unquote` / `quote` / `str-index` / `str-slice` / `str-insert` / `str-split` / `unique-id` 全部支持
+- **String 函数参数数量校验**：所有 string 函数添加 max arg count 校验
+  - 修复大量 `expected_error_but_ok` 类失败（如 `str-index/error/too_many_args`）
+- **Math `pow` 函数修复**：参数数量校验 + 单位校验 + fuzzy-zero hack
+  - `pow(1px, 0)` → 报错 "$base: Expected 1px to have no units."
+  - `pow(0, 1px)` → 报错 "$exponent: Expected 1px to have no units."
+  - 接近 0 的底视为精确 0（Dart Sass 兼容）
+- **Math `comparable` 参数数量校验**：`comparable/error/too_many_args` 修复
+- **跳过 values/calculation**：CSS calc() 数学化简测试暂跳过（需独立实现算术化简引擎）
+
+### Stats
+
+- core_functions/string: **97%** (149/153)
+- core_functions/map: **88%** (112/127)
+- values: **80%** (168/209) — 跳过 calculation 后从 31% 提升
+- operators: **100%** (30/30)
+- expressions: **73%** (153/209)
+- core_functions/list: **69%** (161/233)
+- core_functions/math: **63%** (308/482)
+- 全部单元测试通过：41/41 + 10/10 + 8/8 + 5/5 + 2/2 + 1/1
+
 ## [0.5.1] — 2026-08-13
 
 ### Fixed

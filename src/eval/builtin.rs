@@ -116,13 +116,37 @@ impl Evaluator {
                 }
             }
             "pow" => {
+                // 参数数量校验
+                if pos_args.len() > 2 {
+                    return Err(SassError::Eval(format!(
+                        "Only 2 arguments allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
+                }
                 let base_arg = pos_args.first()
                     .or_else(|| kw_args.get("base").or_else(|| kw_args.get("$base")));
                 let exp_arg = pos_args.get(1)
                     .or_else(|| kw_args.get("exponent").or_else(|| kw_args.get("$exponent")));
                 match (base_arg, exp_arg) {
-                    (Some(Value::Number(a, _)), Some(Value::Number(b, _))) => {
-                        Ok(Value::Number(a.powf(*b), None))
+                    (Some(Value::Number(a, bu)), Some(Value::Number(b, eu))) => {
+                        // 单位校验（pow 的底和指数必须无单位）
+                        if bu.is_some() {
+                            return Err(SassError::Eval(format!(
+                                "$base: Expected {} to have no units.",
+                                Value::Number(*a, bu.clone())
+                            )));
+                        }
+                        if eu.is_some() {
+                            return Err(SassError::Eval(format!(
+                                "$exponent: Expected {} to have no units.",
+                                Value::Number(*b, eu.clone())
+                            )));
+                        }
+                        // Fuzzy-zero hack：接近 0 的底视为精确 0
+                        let fuzzy_zero = 1e-10;
+                        let a_clean = if a.abs() < fuzzy_zero { 0.0 } else { *a };
+                        let result = a_clean.powf(*b);
+                        Ok(Value::Number(result, None))
                     }
                     _ => Err(SassError::Eval("pow 需要 base 和 exponent 参数".into())),
                 }
@@ -279,6 +303,13 @@ impl Evaluator {
                 }
             }
             "compatible" | "comparable" => {
+                // 参数数量校验
+                if pos_args.len() > 2 {
+                    return Err(SassError::Eval(format!(
+                        "Only 2 arguments allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
+                }
                 // 支持位置参数和关键字参数（$number1/$number2）
                 let n1 = match pos_args.first() {
                     Some(v) => Some(v),
@@ -332,7 +363,7 @@ impl Evaluator {
             // ── string ──
             "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
             | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id" => {
-                Self::call_string_builtin(&name, pos_args)?
+                Self::call_string_builtin(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 

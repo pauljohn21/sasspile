@@ -9,23 +9,35 @@ use crate::parse::ast::*;
 
 impl Evaluator {
     /// String 函数分派。返回 Ok(Some(value)) 表示已处理，Ok(None) 表示不匹配。
-    pub(crate) fn call_string_builtin(name: &str, args: &[Value]) -> Result<Option<Value>> {
+    /// 支持关键字参数（如 string.to-lower-case($string: abc)）。
+    pub(crate) fn call_string_builtin(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &std::collections::HashMap<String, Value>,
+    ) -> Result<Option<Value>> {
         let result = match name {
             "str-length" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("str-length 需要 1 个字符串参数".into()));
+                if pos_args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
                 }
-                match &args[0] {
-                    Value::String(s, _) => Value::Number(s.chars().count() as f64, None),
-                    _ => return Err(SassError::Eval("str-length 需要 1 个字符串参数".into())),
+                match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+                    Some(Value::String(s, _)) => Value::Number(s.chars().count() as f64, None),
+                    Some(other) => return Err(SassError::Eval(format!("$string: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $string.".into())),
                 }
             }
             "to-upper-case" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("to-upper-case 需要 1 个字符串参数".into()));
+                if pos_args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
                 }
-                match &args[0] {
-                    Value::String(s, q) => {
+                match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+                    Some(Value::String(s, q)) => {
                         // Dart Sass 只转换 ASCII a-z → A-Z
                         let uppered: String = s
                             .chars()
@@ -39,15 +51,19 @@ impl Evaluator {
                             .collect();
                         Value::String(uppered, *q)
                     }
-                    _ => return Err(SassError::Eval("to-upper-case 需要 1 个字符串参数".into())),
+                    Some(other) => return Err(SassError::Eval(format!("$string: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $string.".into())),
                 }
             }
             "to-lower-case" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("to-lower-case 需要 1 个字符串参数".into()));
+                if pos_args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
                 }
-                match &args[0] {
-                    Value::String(s, q) => {
+                match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+                    Some(Value::String(s, q)) => {
                         // Dart Sass 只转换 ASCII A-Z → a-z
                         let lowered: String = s
                             .chars()
@@ -61,63 +77,92 @@ impl Evaluator {
                             .collect();
                         Value::String(lowered, *q)
                     }
-                    _ => return Err(SassError::Eval("to-lower-case 需要 1 个字符串参数".into())),
+                    Some(other) => return Err(SassError::Eval(format!("$string: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $string.".into())),
                 }
             }
             "unquote" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("unquote 需要 1 个字符串参数".into()));
+                if pos_args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
                 }
-                match &args[0] {
-                    Value::String(s, _) => Value::String(s.clone(), false),
-                    _ => return Err(SassError::Eval("unquote 需要 1 个字符串参数".into())),
+                match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+                    Some(Value::String(s, _)) => Value::String(s.clone(), false),
+                    Some(other) => return Err(SassError::Eval(format!("$string: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $string.".into())),
                 }
             }
             "quote" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("quote 需要 1 个字符串参数".into()));
+                if pos_args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
                 }
-                match &args[0] {
-                    Value::String(s, _) => Value::String(s.clone(), true),
-                    _ => return Err(SassError::Eval("quote 需要 1 个字符串参数".into())),
+                match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+                    Some(Value::String(s, _)) => Value::String(s.clone(), true),
+                    Some(other) => return Err(SassError::Eval(format!("$string: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $string.".into())),
                 }
             }
-            "str-slice" => Self::str_slice(args)?,
-            "str-index" => {
-                if args.len() != 2 {
-                    return Err(SassError::Eval("str-index 需要 2 个参数".into()));
+            "str-slice" => {
+                if pos_args.len() > 3 {
+                    return Err(SassError::Eval(format!(
+                        "Only 3 arguments allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
                 }
-                let s = match &args[0] {
-                    Value::String(s, _) => s.clone(),
-                    other => {
-                        return Err(SassError::Eval(format!(
-                            "$string: {} is not a string.",
-                            other
-                        )));
-                    }
+                Self::str_slice(pos_args, kw_args)?
+            }
+            "str-index" => {
+                if pos_args.len() > 2 {
+                    return Err(SassError::Eval(format!(
+                        "Only 2 arguments allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
+                }
+                let s = match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+                    Some(Value::String(s, _)) => s.clone(),
+                    Some(other) => return Err(SassError::Eval(format!("$string: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $string.".into())),
                 };
-                let needle = match &args[1] {
-                    Value::String(needle, _) => needle.clone(),
-                    other => {
-                        return Err(SassError::Eval(format!(
-                            "$substring: {} is not a string.",
-                            other
-                        )));
-                    }
+                let needle = match Self::get_str_arg(pos_args, kw_args, 1, "substring") {
+                    Some(Value::String(needle, _)) => needle.clone(),
+                    Some(other) => return Err(SassError::Eval(format!("$substring: {other} is not a string."))),
+                    None => return Err(SassError::Eval("Missing argument $substring.".into())),
                 };
                 match s.find(&needle) {
                     Some(pos) => Value::Number((s[..pos].chars().count() + 1) as f64, None),
                     None => Value::Null,
                 }
             }
-            "str-insert" => Self::str_insert(args)?,
-            "str-split" => Self::str_split(args)?,
+            "str-insert" => {
+                if pos_args.len() > 3 {
+                    return Err(SassError::Eval(format!(
+                        "Only 3 arguments allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
+                }
+                Self::str_insert(pos_args, kw_args)?
+            }
+            "str-split" => {
+                if pos_args.len() > 3 {
+                    return Err(SassError::Eval(format!(
+                        "Only 3 arguments allowed, but {} were passed.",
+                        pos_args.len()
+                    )));
+                }
+                Self::str_split(pos_args, kw_args)?
+            }
             "unique-id" => {
-                if !args.is_empty() {
+                if !pos_args.is_empty() || !kw_args.is_empty() {
+                    let n = pos_args.len() + kw_args.len();
                     return Err(SassError::Eval(format!(
                         "Only 0 arguments allowed, but {} {} passed.",
-                        args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
+                        n,
+                        if n == 1 { "was" } else { "were" }
                     )));
                 }
                 use std::sync::atomic::{AtomicU64, Ordering};
@@ -130,22 +175,35 @@ impl Evaluator {
         Ok(Some(result))
     }
 
+    /// 辅助：从 pos_args 或 kw_args 按位置/名字取参数
+    fn get_str_arg<'a>(
+        pos_args: &'a [Value],
+        kw_args: &'a std::collections::HashMap<String, Value>,
+        pos: usize,
+        kw: &str,
+    ) -> Option<&'a Value> {
+        pos_args.get(pos)
+            .or_else(|| kw_args.get(kw))
+            .or_else(|| kw_args.get(&format!("${kw}")))
+    }
+
     /// str-slice($string, $start-at, $end-at: -1)
-    fn str_slice(args: &[Value]) -> Result<Value> {
-        if args.len() < 2 || args.len() > 3 {
-            return Err(SassError::Eval("str-slice 需要 2-3 个参数".into()));
-        }
-        let (s, q) = match &args[0] {
-            Value::String(s, q) => (s.clone(), *q),
-            other => {
+    fn str_slice(
+        pos_args: &[Value],
+        kw_args: &std::collections::HashMap<String, Value>,
+    ) -> Result<Value> {
+        let (s, q) = match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+            Some(Value::String(s, q)) => (s.clone(), *q),
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$string: {} is not a string.",
                     other
                 )));
             }
+            None => return Err(SassError::Eval("Missing argument $string.".into())),
         };
-        let start = match &args[1] {
-            Value::Number(n, u) => {
+        let start = match Self::get_str_arg(pos_args, kw_args, 1, "start-at") {
+            Some(Value::Number(n, u)) => {
                 if n.fract() != 0.0 {
                     return Err(SassError::Eval(format!("$start-at: {} is not an int.", n)));
                 }
@@ -157,14 +215,15 @@ impl Evaluator {
                 }
                 *n as isize
             }
-            other => {
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$start-at: {} is not a number.",
                     other
                 )));
             }
+            None => return Err(SassError::Eval("Missing argument $start-at.".into())),
         };
-        let end = match args.get(2) {
+        let end = match Self::get_str_arg(pos_args, kw_args, 2, "end-at") {
             Some(Value::Number(n, u)) => {
                 if n.fract() != 0.0 {
                     return Err(SassError::Eval(format!("$end-at: {} is not an int.", n)));
@@ -209,30 +268,32 @@ impl Evaluator {
     }
 
     /// str-insert($string, $insert, $index)
-    fn str_insert(args: &[Value]) -> Result<Value> {
-        if args.len() != 3 {
-            return Err(SassError::Eval("str-insert 需要 3 个参数".into()));
-        }
-        let (s, q) = match &args[0] {
-            Value::String(s, q) => (s.clone(), *q),
-            other => {
+    fn str_insert(
+        pos_args: &[Value],
+        kw_args: &std::collections::HashMap<String, Value>,
+    ) -> Result<Value> {
+        let (s, q) = match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+            Some(Value::String(s, q)) => (s.clone(), *q),
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$string: {} is not a string.",
                     other
                 )));
             }
+            None => return Err(SassError::Eval("Missing argument $string.".into())),
         };
-        let insert = match &args[1] {
-            Value::String(insert, _) => insert.clone(),
-            other => {
+        let insert = match Self::get_str_arg(pos_args, kw_args, 1, "insert") {
+            Some(Value::String(insert, _)) => insert.clone(),
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$insert: {} is not a string.",
                     other
                 )));
             }
+            None => return Err(SassError::Eval("Missing argument $insert.".into())),
         };
-        let idx = match &args[2] {
-            Value::Number(n, u) => {
+        let idx = match Self::get_str_arg(pos_args, kw_args, 2, "index") {
+            Some(Value::Number(n, u)) => {
                 if u.is_some() {
                     return Err(SassError::Eval(format!(
                         "$index: Expected {} to have no units.",
@@ -244,12 +305,13 @@ impl Evaluator {
                 }
                 *n as isize
             }
-            other => {
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$index: {} is not a number.",
                     other
                 )));
             }
+            None => return Err(SassError::Eval("Missing argument $index.".into())),
         };
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len() as isize;
@@ -265,36 +327,42 @@ impl Evaluator {
     }
 
     /// str-split($string, $separator, $limit: null)
-    fn str_split(args: &[Value]) -> Result<Value> {
-        if args.len() > 3 {
-            return Err(SassError::Eval(format!(
-                "Only 3 arguments allowed, but {} were passed.",
-                args.len()
-            )));
+    fn str_split(
+        pos_args: &[Value],
+        kw_args: &std::collections::HashMap<String, Value>,
+    ) -> Result<Value> {
+        let total = pos_args.len() + kw_args.len();
+        if total == 0 || (pos_args.is_empty() && !kw_args.contains_key("string") && !kw_args.contains_key("$string")) {
+            return Err(SassError::Eval("Missing argument $string.".into()));
         }
-        if args.len() < 2 {
+        // 检查是否只有 $string 没 $separator
+        let has_string = !pos_args.is_empty() || kw_args.contains_key("string") || kw_args.contains_key("$string");
+        let has_separator = pos_args.len() > 1 || kw_args.contains_key("separator") || kw_args.contains_key("$separator");
+        if has_string && !has_separator {
             return Err(SassError::Eval("Missing argument $separator.".into()));
         }
-        let (s, input_quoted) = match &args[0] {
-            Value::String(s, q) => (s.clone(), *q),
-            other => {
+        let (s, input_quoted) = match Self::get_str_arg(pos_args, kw_args, 0, "string") {
+            Some(Value::String(s, q)) => (s.clone(), *q),
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$string: {} is not a string.",
                     other
                 )));
             }
+            None => return Err(SassError::Eval("Missing argument $string.".into())),
         };
-        let sep = match &args[1] {
-            Value::String(sep, _) => Some(sep.clone()),
-            Value::Null => None,
-            other => {
+        let sep = match Self::get_str_arg(pos_args, kw_args, 1, "separator") {
+            Some(Value::String(sep, _)) => Some(sep.clone()),
+            Some(Value::Null) => None,
+            Some(other) => {
                 return Err(SassError::Eval(format!(
                     "$separator: {} is not a string.",
                     other
                 )));
             }
+            None => None,
         };
-        let limit = match args.get(2) {
+        let limit = match Self::get_str_arg(pos_args, kw_args, 2, "limit") {
             Some(Value::Number(n, u)) => {
                 if u.is_some() {
                     return Err(SassError::Eval(format!(

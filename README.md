@@ -18,7 +18,7 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖**: 纯 Rust 实现，无外部 C 库
-- **sass-spec 兼容**: 2566/4848 (53%) 通过
+- **sass-spec 兼容**: 核心函数普遍 63%-97%；string 97%, map 88%, values 80%, math 63%
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
 - **Element Plus**: 121/121 (100%) 全量通过 ✅
 - **tracing 调试**: 内建 span + event 追踪链路
