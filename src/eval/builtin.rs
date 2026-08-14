@@ -452,7 +452,41 @@ impl Evaluator {
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
             },
-
+            // ── meta 模块内省函数 ──
+            "_meta-calc-args" => {
+                // meta.calc-args(calc(...)) → 返回 calc/clamp/min/max 表达式的参数列表
+                // sass-spec 中 expression 被包裹为 Calc(...) 或 String("clamp(...)")
+                match pos_args.first() {
+                    Some(Value::Calc(s)) | Some(Value::String(s, _)) if s.contains('(') => {
+                        // 提取 func(args) 的内部内容，按逗号分割为列表
+                        let inner = s
+                            .find('(')
+                            .and_then(|start| {
+                                s[start + 1..].rsplit(')').next().map(|inner| inner.to_string())
+                            })
+                            .unwrap_or_else(|| s.clone());
+                        let args: Vec<Value> = inner
+                            .split(',')
+                            .map(|a| {
+                                let trimmed = a.trim();
+                                if trimmed.is_empty() {
+                                    Value::Null
+                                } else if let Some((num, unit)) = Self::parse_num_with_unit(trimmed) {
+                                    Value::Number(num, unit)
+                                } else {
+                                    Value::String(trimmed.to_string(), false)
+                                }
+                            })
+                            .collect();
+                        Ok(Value::List(args, Separator::Comma, false))
+                    }
+                    Some(other) => Err(SassError::Eval(format!(
+                        "$calc: {} is not a calculation.",
+                        crate::eval::value::inspect_value(other)
+                    ))),
+                    None => Err(SassError::Eval("calc-args 需要 1 个参数".into())),
+                }
+            }
             // ── CSS 原生函数——原样保留 ──
             "calc" | "env" | "var" => {
                 let arg_str = pos_args
@@ -533,6 +567,25 @@ impl Evaluator {
             // ── CSS 原生（在 call_builtin 中有专门分支）──
             | "calc" | "env" | "var"
         )
+    }
+
+    /// 简单解析 "1.5px" → (1.5, Some("px")) 或 "var(--x)" → None。
+    fn parse_num_with_unit(s: &str) -> Option<(f64, Option<String>)> {
+        let s = s.trim();
+        if s.is_empty() {
+            return None;
+        }
+        // 找到第一个字母或 % 的位置作为数字/单位分界
+        let split_idx = s.find(|c: char| c.is_ascii_alphabetic() || c == '%').unwrap_or(s.len());
+        if split_idx == 0 {
+            return None;
+        }
+        let num_part = &s[..split_idx];
+        let unit = &s[split_idx..];
+        match num_part.parse::<f64>() {
+            Ok(n) => Some((n, if unit.is_empty() { None } else { Some(unit.to_string()) })),
+            Err(_) => None,
+        }
     }
 
     /// 检查函数名是否为已知 CSS 原生函数（应原样输出，不求值）。
