@@ -7,28 +7,33 @@ use crate::lex::token::Token;
 use crate::parse::ast::*;
 use crate::__tracing::warn;
 
-use im::HashMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 /// 模块导出——加载的文件模块的成员。
+/// 用 Rc 包装 HashMap，从 Env 转移到 ModuleExports 时无需拷贝。
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ModuleExports {
-    vars: HashMap<String, Value>,
-    mixins: HashMap<String, MixinDef>,
-    functions: HashMap<String, FunctionDef>,
+    vars: Rc<HashMap<String, Value>>,
+    mixins: Rc<HashMap<String, MixinDef>>,
+    functions: Rc<HashMap<String, FunctionDef>>,
     css: Vec<CssNode>,
 }
 
 /// 不可变求值环境。
+///
+/// **内存优化**：vars/mixins/functions 用 `Rc<HashMap>` 包装，实现写时复制（clone-on-write）。
+/// - `Env::clone()` 仅增加引用计数（原子操作），不深拷贝 HashMap
+/// - `bind/define_mixin/define_function` 用 `Rc::make_mut()` 延迟克隆：只有多所有者时才真正拷贝
 #[derive(Debug, Clone, Default)]
 pub struct Env {
-    /// 变量绑定（扁平，用作用域前缀模拟）。
-    vars: HashMap<String, Value>,
-    /// mixin 定义。
-    mixins: HashMap<String, MixinDef>,
-    /// 用户函数定义。
-    functions: HashMap<String, FunctionDef>,
+    /// 变量绑定（Rc 包装，clone-on-write）。
+    vars: Rc<HashMap<String, Value>>,
+    /// mixin 定义（Rc 包装，clone-on-write）。
+    mixins: Rc<HashMap<String, MixinDef>>,
+    /// 用户函数定义（Rc 包装，clone-on-write）。
+    functions: Rc<HashMap<String, FunctionDef>>,
     /// @content 内容块（Rc 共享，避免深拷贝）。
     content: Option<Rc<Vec<Node>>>,
     /// @content 的环境（Rc 共享，避免深拷贝）。
@@ -81,9 +86,10 @@ impl Env {
         new
     }
     /// 不可变插入变量绑定，返回新环境。
+    /// 使用 Rc::make_mut 实现写时复制：仅当多所有者时才真正拷贝 HashMap。
     pub fn bind(&self, name: String, value: Value) -> Self {
         let mut new = self.clone();
-        new.vars.insert(name, value);
+        Rc::make_mut(&mut new.vars).insert(name, value);
         new
     }
     /// 按名查找变量引用。
@@ -96,7 +102,7 @@ impl Env {
     }
     pub(crate) fn define_mixin(&self, name: String, def: MixinDef) -> Self {
         let mut new = self.clone();
-        new.mixins.insert(name, def);
+        Rc::make_mut(&mut new.mixins).insert(name, def);
         new
     }
     pub(crate) fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
@@ -104,7 +110,7 @@ impl Env {
     }
     pub(crate) fn define_function(&self, name: String, def: FunctionDef) -> Self {
         let mut new = self.clone();
-        new.functions.insert(name, def);
+        Rc::make_mut(&mut new.functions).insert(name, def);
         new
     }
     pub(crate) fn get_function(&self, name: &str) -> Option<&FunctionDef> {
@@ -352,13 +358,13 @@ impl Evaluator {
                     let exports = Self::load_module(&path, config, env)?;
                     if *star {
                         let mut new_env = env.clone();
-                        for (k, v) in &exports.vars {
+                        for (k, v) in &*exports.vars {
                             new_env = new_env.bind(k.clone(), v.clone());
                         }
-                        for (k, v) in &exports.mixins {
+                        for (k, v) in &*exports.mixins {
                             new_env = new_env.define_mixin(k.clone(), v.clone());
                         }
-                        for (k, v) in &exports.functions {
+                        for (k, v) in &*exports.functions {
                             new_env = new_env.define_function(k.clone(), v.clone());
                         }
                         // @use * 包含模块 CSS 输出（Dart Sass 语义）
@@ -391,24 +397,24 @@ impl Evaluator {
                     let mut new_env = env.clone();
                     if let Some(prefix) = prefix {
                         // 带前缀重映射：c → prefix-c
-                        for (k, v) in &exports.vars {
+                        for (k, v) in &*exports.vars {
                             new_env = new_env.bind(format!("{prefix}{k}"), v.clone());
                         }
-                        for (k, v) in &exports.mixins {
+                        for (k, v) in &*exports.mixins {
                             new_env = new_env.define_mixin(format!("{prefix}{k}"), v.clone());
                         }
-                        for (k, v) in &exports.functions {
+                        for (k, v) in &*exports.functions {
                             new_env = new_env.define_function(format!("{prefix}{k}"), v.clone());
                         }
                     } else {
                         // 无前缀：原样绑定
-                        for (k, v) in &exports.vars {
+                        for (k, v) in &*exports.vars {
                             new_env = new_env.bind(k.clone(), v.clone());
                         }
-                        for (k, v) in &exports.mixins {
+                        for (k, v) in &*exports.mixins {
                             new_env = new_env.define_mixin(k.clone(), v.clone());
                         }
-                        for (k, v) in &exports.functions {
+                        for (k, v) in &*exports.functions {
                             new_env = new_env.define_function(k.clone(), v.clone());
                         }
                     }

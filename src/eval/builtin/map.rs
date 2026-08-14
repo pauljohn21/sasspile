@@ -282,7 +282,7 @@ impl Evaluator {
                             let new_inner = Self::call_builtin(
                                 "map-deep-remove",
                                 &[Value::Map(inner.clone()), remaining_keys[0].clone()],
-                                &im::HashMap::new(),
+                                &std::collections::HashMap::new(),
                                 env,
                             )?;
                             result.push((k.clone(), new_inner));
