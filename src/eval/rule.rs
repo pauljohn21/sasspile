@@ -1,7 +1,7 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::Result;
-use crate::eval::selector::parse::{parse_selector_list, SelectorList};
+use crate::eval::selector::parse::{parse_selector_list, CompoundSelector, SelectorList};
 
 impl Evaluator {
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。
@@ -144,39 +144,120 @@ impl Evaluator {
         Ok((result, restored_env))
     }
 
-    /// 组合选择器——处理 & 替换和逗号分隔选择器。
-    /// 注意：此为临时实现，Phase 3 将改为纯结构化组合。
+    /// 组合选择器——结构化版本。
+    ///
+    /// 处理 & 替换和逗号分隔选择器：
+    /// - 如果 child 包含 & 元素，用 parent 的 compound 替换 &
+    /// - 如果 parent 为空，使用 child 原样
+    /// - 否则 parent + 后代组合器 + child
     pub(crate) fn combine_selectors(
         parent: &SelectorList,
         child: &SelectorList,
     ) -> SelectorList {
-        // 临时方案：使用字符串操作过渡
-        let parent_str = parent.to_string();
-        let child_str = child.to_string();
-
-        let parents: Vec<&str> = parent_str
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
-        let children: Vec<&str> = child_str
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
         let mut result = Vec::new();
-        for p in &parents {
-            for c in &children {
-                if c.contains('&') {
-                    result.push(c.replace('&', p));
-                } else if p.is_empty() {
-                    result.push(c.to_string());
-                } else {
-                    result.push(format!("{p} {c}"));
-                }
+
+        if parent.is_empty() {
+            // 父选择器为空，直接返回子选择器
+            return child.clone();
+        }
+
+        for parent_complex in parent.iter() {
+            for child_complex in child.iter() {
+                let combined = Self::combine_complex_selectors(parent_complex, child_complex);
+                result.push(combined);
             }
         }
-        let combined_str = result.join(", ");
-        parse_selector_list(&combined_str).unwrap_or_default()
+
+        SelectorList(result)
+    }
+
+    /// 组合两个 complex selector。
+    fn combine_complex_selectors(
+        parent: &selector::ComplexSelector,
+        child: &selector::ComplexSelector,
+    ) -> selector::ComplexSelector {
+        // 检查 child 是否包含 & 元素
+        let has_ampersand = child.parts.iter().any(|p| {
+            p.compound
+                .element
+                .as_ref()
+                .map_or(false, |e| e == "&")
+        });
+
+        if has_ampersand {
+            // 替换 & 元素为 parent 的 parts
+            Self::replace_ampersand(parent, child)
+        } else {
+            // parent + 后代组合器 + child
+            let mut parts = parent.parts.clone();
+            // 添加后代组合器（第一个 child part 使用 Descendant）
+            for (i, child_part) in child.parts.iter().enumerate() {
+                let combinator = if i == 0 {
+                    Some(selector::Combinator::Descendant)
+                } else {
+                    child_part.combinator.clone()
+                };
+                parts.push(selector::CompoundWithCombinator {
+                    compound: child_part.compound.clone(),
+                    combinator,
+                });
+            }
+            selector::ComplexSelector { parts }
+        }
+    }
+
+    /// 将 child 中的 & 替换为 parent 的 parts。
+    ///
+    /// SCSS 的 & 代表父选择器。当 child 为 `&:hover` 且 parent 为 `.btn` 时，
+    /// 结果是 `.btn:hover` - 即将 parent 的 compound 内容合并到 & 所在的 compound 中。
+    fn replace_ampersand(
+        parent: &selector::ComplexSelector,
+        child: &selector::ComplexSelector,
+    ) -> selector::ComplexSelector {
+        let mut parts = Vec::new();
+
+        for (i, child_part) in child.parts.iter().enumerate() {
+            let is_ampersand = child_part
+                .compound
+                .element
+                .as_ref()
+                .map_or(false, |e| e == "&");
+
+            if is_ampersand && !parent.parts.is_empty() {
+                // & 是一个"占位符" compound：element=&, pseudos=[hover], 等等
+                // 用 parent 的第一个 compound 的属性替换 & 的 element，
+                // 但保留 child 的 pseudos/classes 等附加属性
+                let parent_first = &parent.parts[0].compound;
+
+                // 构建合并后的 compound：parent 的基础 + child 的附加属性
+                let merged_compound = CompoundSelector {
+                    namespace: parent_first.namespace.clone(),
+                    element: parent_first.element.clone(),
+                    classes: parent_first.classes.clone(),
+                    ids: parent_first.ids.clone(),
+                    attrs: parent_first.attrs.clone(),
+                    pseudos: child_part.compound.pseudos.clone(),
+                };
+
+                parts.push(selector::CompoundWithCombinator {
+                    compound: merged_compound,
+                    combinator: child_part.combinator.clone(),
+                });
+
+                // 如果 parent 有多个 parts，添加剩余的 parts（带适当的组合器）
+                for (j, parent_part) in parent.parts.iter().enumerate().skip(1) {
+                    let combinator = parent_part.combinator.clone();
+                    parts.push(selector::CompoundWithCombinator {
+                        compound: parent_part.compound.clone(),
+                        combinator,
+                    });
+                }
+            } else {
+                // 保留原始 child part（或当 parent 为空时的 &）
+                parts.push(child_part.clone());
+            }
+        }
+
+        selector::ComplexSelector { parts }
     }
 }
