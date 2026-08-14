@@ -6,6 +6,7 @@
 use super::super::{Env, Evaluator};
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
+use std::collections::HashMap;
 
 impl Evaluator {
     /// 将 Value 转换为 Map（空列表/Null 视为空 map）。
@@ -282,7 +283,7 @@ impl Evaluator {
                             let new_inner = Self::call_builtin(
                                 "map-deep-remove",
                                 &[Value::Map(inner.clone()), remaining_keys[0].clone()],
-                                &std::collections::HashMap::new(),
+                                &HashMap::new(),
                                 env,
                             )?;
                             result.push((k.clone(), new_inner));

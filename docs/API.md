@@ -320,13 +320,14 @@
 
 ## Separator 枚举
 
-`src/parse/ast.rs` — 列表分隔符类型。
+`src/parse/ast/mod.rs` — 列表分隔符类型。
 
 | 变体 | 语义 |
 |------|------|
 | `Comma` | 逗号分隔——`(a, b, c)` |
 | `Space` | 空格分隔——`(a b c)` |
-| `Slash` | 斜杠分隔——`(a / b / c)` |
+| `Slash` | 斜杠分隔（空格环绕）——`(a / b / c)` |
+| `SlashDiv` | 斜杠分隔（除法语义，无空格）——`a/b/c` |
 | `Undecided` | 未确定——单元素或待推断 |
 
 ---

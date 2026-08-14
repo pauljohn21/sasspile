@@ -12,27 +12,25 @@ use crate::__tracing::warn;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// 模块导出——加载的文件模块的成员。
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ModuleExports {
-    vars: Rc<HashMap<String, Value>>,
-    mixins: Rc<HashMap<String, MixinDef>>,
-    functions: Rc<HashMap<String, FunctionDef>>,
+    vars: HashMap<String, Value>,
+    mixins: HashMap<String, MixinDef>,
+    functions: HashMap<String, FunctionDef>,
     css: Vec<CssNode>,
 }
 
 /// 不可变求值环境。
-/// **内存优化**：vars/mixins/functions 用 `Rc<HashMap>` 包装，实现写时复制。
 #[derive(Debug, Clone, Default)]
 pub struct Env {
-    /// 变量绑定（Rc 包装，clone-on-write）。
-    vars: Rc<HashMap<String, Value>>,
-    /// mixin 定义（Rc 包装，clone-on-write）。
-    mixins: Rc<HashMap<String, MixinDef>>,
-    /// 用户函数定义（Rc 包装，clone-on-write）。
-    functions: Rc<HashMap<String, FunctionDef>>,
+    /// 变量绑定（扁平，用作用域前缀模拟）。
+    vars: HashMap<String, Value>,
+    /// mixin 定义。
+    mixins: HashMap<String, MixinDef>,
+    /// 用户函数定义。
+    functions: HashMap<String, FunctionDef>,
     /// @content 内容块（Rc 共享，避免深拷贝）。
     content: Option<Rc<Vec<Node>>>,
     /// @content 的环境（Rc 共享，避免深拷贝）。
@@ -96,7 +94,7 @@ impl Env {
                 scope.insert(name.clone(), new.vars.get(&name).cloned());
             }
         }
-        Rc::make_mut(&mut new.vars).insert(name, value);
+        new.vars.insert(name, value);
         new
     }
 
@@ -112,11 +110,10 @@ impl Env {
     pub fn leave_scope(&self) -> Self {
         let mut new = self.clone();
         if let Some(scope) = new.scope_stack.pop() {
-            let vars = Rc::make_mut(&mut new.vars);
             for (var_name, original_value) in &scope {
                 match original_value {
-                    Some(val) => { vars.insert(var_name.clone(), val.clone()); }
-                    None => { vars.remove(var_name); }
+                    Some(val) => new.vars.insert(var_name.clone(), val.clone()),
+                    None => new.vars.remove(var_name),
                 };
             }
         }
@@ -132,7 +129,7 @@ impl Env {
     }
     pub(crate) fn define_mixin(&self, name: String, def: MixinDef) -> Self {
         let mut new = self.clone();
-        Rc::make_mut(&mut new.mixins).insert(name, def);
+        new.mixins.insert(name, def);
         new
     }
     pub(crate) fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
@@ -140,7 +137,7 @@ impl Env {
     }
     pub(crate) fn define_function(&self, name: String, def: FunctionDef) -> Self {
         let mut new = self.clone();
-        Rc::make_mut(&mut new.functions).insert(name, def);
+        new.functions.insert(name, def);
         new
     }
     pub(crate) fn get_function(&self, name: &str) -> Option<&FunctionDef> {
@@ -234,7 +231,7 @@ impl Evaluator {
         let (mut css, final_env) = Self::eval_nodes(&ast.nodes, &Env::default())?;
         let extends = final_env.get_extends().to_vec();
         if !extends.is_empty() {
-            Self::apply_extends(&mut css, &extends)?;
+            Self::apply_extends(&mut css, &extends);
         }
         Ok(css)
     }
@@ -262,7 +259,7 @@ impl Evaluator {
         let (mut css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
         let extends = final_env.get_extends().to_vec();
         if !extends.is_empty() {
-            Self::apply_extends(&mut css, &extends)?;
+            Self::apply_extends(&mut css, &extends);
         }
         Ok(css)
     }
@@ -274,10 +271,6 @@ impl Evaluator {
             warn!(depth = env.depth, "recursion limit exceeded");
             return Err(SassError::Eval("递归深度超过限制（可能是无限循环）".into()));
         }
-        // 内存检查节流计数器 —— 每 N 个节点检查一次 RSS，避免系统调用开销过大
-        static NODE_COUNTER: AtomicUsize = AtomicUsize::new(0);
-        const CHECK_INTERVAL: usize = 50;
-
         nodes.iter().try_fold((Vec::new(), env.clone()), |(mut css, env), node| {
             let node_span = crate::__tracing::debug_span!("eval_node_item", node = ?std::mem::discriminant(node));
             let _enter = node_span.enter();
@@ -286,16 +279,6 @@ impl Evaluator {
                 e
             })?;
             css.append(&mut out);
-
-            // 每 N 个节点检查一次内存 —— 链式反应：超限返 Err，Rust 自动释放
-            let count = NODE_COUNTER.fetch_add(1, Ordering::Relaxed);
-            if count % CHECK_INTERVAL == 0 {
-                memory_limit::MemoryLimitSubscriber::maybe_warn();
-                if let Err(e) = memory_limit::check_memory_limit() {
-                    return Err(e);
-                }
-            }
-
             Ok((css, new_env))
         })
     }
@@ -406,13 +389,13 @@ impl Evaluator {
                     let exports = Self::load_module(&path, config, env)?;
                     if *star {
                         let mut new_env = env.clone();
-                        for (k, v) in &*exports.vars {
+                        for (k, v) in &exports.vars {
                             new_env = new_env.bind(k.clone(), v.clone());
                         }
-                        for (k, v) in &*exports.mixins {
+                        for (k, v) in &exports.mixins {
                             new_env = new_env.define_mixin(k.clone(), v.clone());
                         }
-                        for (k, v) in &*exports.functions {
+                        for (k, v) in &exports.functions {
                             new_env = new_env.define_function(k.clone(), v.clone());
                         }
                         // @use * 包含模块 CSS 输出（Dart Sass 语义）
@@ -445,24 +428,24 @@ impl Evaluator {
                     let mut new_env = env.clone();
                     if let Some(prefix) = prefix {
                         // 带前缀重映射：c → prefix-c
-                        for (k, v) in &*exports.vars {
+                        for (k, v) in &exports.vars {
                             new_env = new_env.bind(format!("{prefix}{k}"), v.clone());
                         }
-                        for (k, v) in &*exports.mixins {
+                        for (k, v) in &exports.mixins {
                             new_env = new_env.define_mixin(format!("{prefix}{k}"), v.clone());
                         }
-                        for (k, v) in &*exports.functions {
+                        for (k, v) in &exports.functions {
                             new_env = new_env.define_function(format!("{prefix}{k}"), v.clone());
                         }
                     } else {
                         // 无前缀：原样绑定
-                        for (k, v) in &*exports.vars {
+                        for (k, v) in &exports.vars {
                             new_env = new_env.bind(k.clone(), v.clone());
                         }
-                        for (k, v) in &*exports.mixins {
+                        for (k, v) in &exports.mixins {
                             new_env = new_env.define_mixin(k.clone(), v.clone());
                         }
-                        for (k, v) in &*exports.functions {
+                        for (k, v) in &exports.functions {
                             new_env = new_env.define_function(k.clone(), v.clone());
                         }
                     }
@@ -537,7 +520,6 @@ mod builtin;
 mod color;
 mod control_flow;
 mod extend;
-mod memory_limit;
 mod mixin;
 mod module;
 mod rule;

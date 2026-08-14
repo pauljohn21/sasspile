@@ -72,44 +72,68 @@ impl StageInput for Source { type Output = Lexed; }
 
 ---
 
-## 3. 模块结构
+## 3. 模块结构（当前实现）
 
 ```
 sasspile/
 ├── Cargo.toml
 ├── DESIGN.md                    ← 你正在读的文档
 ├── src/
-│   ├── lib.rs                   ── 公共 API（管线入口）
-│   ├── main.rs                  ── CLI
-│   │
-│   ├── stage/                   ── 阶段转换（纯函数）
-│   │   ├── mod.rs               ── Stage trait 定义
-│   │   ├── source.rs            ── Source 类型
-│   │   ├── lexed.rs             ── Lexed 类型
-│   │   ├── parsed.rs            ── Parsed 类型
-│   │   ├── evaluated.rs         ── Evaluated 类型
-│   │   └── serialized.rs        ── Serialized 类型
+│   ├── lib.rs                   (405) ── 公共 API（管线入口）+ init_tracing
+│   ├── main.rs                  (49)  ── CLI 入口
+│   ├── error.rs                 (95)  ── 统一错误类型 (SassError)
 │   │
 │   ├── lex/                     ── 词法分析
-│   │   ├── mod.rs               ── Lexer（迭代器实现）
-│   │   └── token.rs             ── Token 定义
+│   │   ├── mod.rs               (499) ── Lexer + Iterator impl（scan_* 方法）
+│   │   └── token.rs             (170) ── Token 枚举定义 + Display impl
 │   │
-│   ├── parse/                   ── 语法分析
-│   │   ├── mod.rs               ── Parser（递归下降）
-│   │   ├── ast.rs               ── AST 定义
-│   │   └── selector.rs          ── 选择器解析
+│   ├── parse/                   ── 语法分析（Pratt + 递归下降）
+│   │   ├── mod.rs               (102) ── Parser 结构 + parse() 入口 + paren_depth
+│   │   ├── ast/                 ── AST 类型定义
+│   │   │   ├── mod.rs           (420) ── Node, Value, Color, BinOp, Separator 等
+│   │   │   └── display.rs       (348) ── Display trait + escape 函数 + round_alpha
+│   │   ├── ast_impl.rs          (289) ── Node::to_scss() 实现
+│   │   ├── at_rules.rs          (536) ── 所有 @ 规则解析
+│   │   ├── nodes.rs             (594) ── parse_node/parse_rule/parse_decl/parse_body
+│   │   └── expr/                ── 表达式解析
+│   │       ├── mod.rs           (328) ── Pratt 解析 + has_other_operator_at_top_level
+│   │       └── prefix.rs        (512) ── parse_number/parse_hash_color
 │   │
-│   ├── eval/                    ── 求值
-│   │   ├── mod.rs               ── Evaluator（fold 实现）
-│   │   ├── env.rs               ── 不可变环境
-│   │   ├── value.rs             ── 值类型
-│   │   └── builtin.rs           ── 内建函数
+│   ├── eval/                    ── 求值器
+│   │   ├── mod.rs               (526) ── Env + Evaluator + evaluate/eval_nodes
+│   │   ├── rule.rs              (169) ── eval_rule + combine_selectors
+│   │   ├── value/               ── 值求值
+│   │   │   ├── mod.rs           (449) ── eval_value + eval_interp_str + eval_simple_expr
+│   │   │   ├── ops.rs           (290) ── add/sub/mul/div/modulo/compare
+│   │   │   └── display.rs       (186) ── inspect_value + 值格式化
+│   │   ├── control_flow.rs      (150) ── eval_if/eval_for/eval_each/eval_while
+│   │   ├── mixin.rs             (264) ── eval_include + bind_params + call_function
+│   │   ├── extend.rs            (76)  ── apply_extends
+│   │   ├── module.rs            (302) ── resolve_file + load_module + call_module_function
+│   │   ├── color.rs             (621) ── hsl_to_rgb/hwb_to_rgb + builtin_rgba/darken/lighten/mix
+│   │   ├── builtin.rs           (497) ── call_builtin 分派入口
+│   │   ├── builtin/             ── 内建函数按类别分文件
+│   │   │   ├── color.rs         (553) ── 颜色函数（invert/hsl/hwb/adjust-color/...）
+│   │   │   ├── list.rs          (282) ── 列表函数（length/nth/append/join/...）
+│   │   │   ├── map.rs           (302) ── 映射函数（map-get/map-merge/...）
+│   │   │   ├── string.rs        (281) ── 字符串函数（str-length/str-slice/...）
+│   │   │   └── selector.rs      (156) ── 选择器函数
+│   │   ├── selector/            ── 选择器操作
+│   │   │   ├── parse.rs         ── 选择器解析为结构化表示
+│   │   │   └── algorithms.rs    ── 选择器算法（matches/unify/extend）
+│   │   └── memory_limit.rs      (92)  ── 内存限制器（链式反应设计）
 │   │
-│   ├── css/                     ── CSS 生成
-│   │   ├── mod.rs               ── Serializer
-│   │   └── node.rs              ── CssNode 定义
+│   ├── css/                     ── CSS 序列化
+│   │   ├── mod.rs               (350) ── Serializer（选择器净化 + @规则合并）
+│   │   └── node.rs              (93)  ── CssNode 枚举
 │   │
-│   └── error.rs                 ── 统一错误类型
+│   └── stage/                   ── 管线阶段类型（轻量包装）
+│       ├── mod.rs               ── Stage trait
+│       ├── source.rs            ── Source 类型
+│       ├── lexed.rs             ── Lexed 类型
+│       ├── parsed.rs            ── Parsed 类型
+│       ├── evaluated.rs         ── Evaluated 类型
+│       └── serialized.rs        ── Serialized 类型
 ```
 
 ---
@@ -124,9 +148,11 @@ sasspile/
 pub enum Token {
     // 字面量
     Ident(String),          // 标识符
-    Number(String),         // 数字（含单位）
-    String(String),         // 字符串
-    Hash(String),           // #color
+    Number(f64, Option<String>),  // 数字 + 可选单位
+    String(String, bool),   // 字符串 + 是否引号
+    Color(u32),             // 十六进制颜色
+    True, False, Null,      // 字面量
+    And, Or, Not,           // 逻辑运算符
 
     // 符号
     LParen, RParen,         // ( )
@@ -135,11 +161,18 @@ pub enum Token {
     Colon, Semicolon,       // : ;
     Comma, Dot,             // , .
     Plus, Minus, Star, Slash, Percent,
+    Amp,                    // & (父选择器引用)
+    Caret, Tilde, Bang,     // ^ ~ !
+    Assign,                 // =
+    Eq, NotEq,              // == !=
+    Less, Greater,          // < >
+    LessEq, GreaterEq,      // <= >=
+    DotDotDot,              // ... (展开)
+    Pipe,                   // | (命名空间)
 
     // 特殊
-    AtIdent(String),        // @import, @mixin 等
-    DollarIdent(String),    // $variable
-    Whitespace,
+    AtKeyword(String),      // @use, @mixin 等
+    Dollar(String),         // $variable（字段为变量名）
     Eof,
 }
 
@@ -158,58 +191,75 @@ impl Token {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     /// 样式规则：selector { ... }
-    Rule {
-        selector: Selector,
-        body: Vec<Node>,
-    },
-
+    Rule { selector: String, body: Vec<Node> },
     /// 声明：property: value;
-    Decl {
-        property: String,
-        value: Value,
-        important: bool,
-    },
-
+    Decl { property: String, value: Value, important: bool },
     /// 变量声明：$name: value;
-    Variable {
-        name: String,
-        value: Value,
-    },
-
-    /// @规则：@media, @mixin 等
-    AtRule {
-        name: String,
-        params: Option<String>,
-        body: Option<Vec<Node>>,
-    },
-
+    Variable { name: String, value: Value, flags: VarFlags },
+    /// @if / @else if / @else
+    If { branches: Vec<(Value, Vec<Node>)>, else_body: Option<Vec<Node>> },
+    /// @for 循环
+    For { var: String, from: Value, to: Value, inclusive: bool, body: Vec<Node> },
+    /// @each 循环
+    Each { vars: Vec<String>, list: Value, body: Vec<Node> },
+    /// @while 循环
+    While { cond: Value, body: Vec<Node> },
+    /// @mixin 定义
+    MixinDef { name: String, params: Vec<Param>, body: Vec<Node> },
+    /// @include 调用
+    Include { name: String, args: Vec<Arg>, content: Option<Vec<Node>> },
+    /// @function 定义
+    FunctionDef { name: String, params: Vec<Param>, body: Vec<Node> },
+    /// @use 模块加载
+    Use { url: String, namespace: Option<String>, star: bool, config: Vec<(String, Value)> },
+    /// @forward 模块转发
+    Forward { url: String, show: Vec<String>, hide: Vec<String>, prefix: Option<String> },
+    /// @import
+    Import { url: String },
+    /// @extend
+    Extend { selector: String, optional: bool },
+    /// @at-root
+    AtRoot { query: Option<String>, body: Vec<Node> },
+    /// 通用 @规则
+    AtRule { name: String, params: Option<String>, body: Option<Vec<Node>> },
+    /// @content 占位
+    Content,
+    /// @return
+    Return(Value),
+    /// @warn / @debug / @error
+    Warn(Value), Debug(Value), Error(Value),
     /// 注释
-    Comment(String),
-}
-
-/// 选择器。
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Selector {
-    pub raw: String,
+    Comment(String, bool),
 }
 
 /// 值表达式。
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    Number(f64, Option<String>),  // 值 + 单位
-    String(String, bool),         // 内容 + 是否引号
+    Number(f64, Option<String>),      // 值 + 单位
+    String(String, bool),             // 内容 + 是否引号
     Color(Color),
-    List(Vec<Value>, Separator),
-    Variable(String),
-    Call(String, Vec<Value>),    // 函数调用
+    List(Vec<Value>, Separator, bool), // 元素 + 分隔符 + 是否含括号
+    Map(Vec<(Value, Value)>),         // 键值对列表
+    Variable(String),                 // 变量引用
+    Bool(bool),
+    Null,
+    Call(String, Vec<Arg>),           // 函数调用
+    Interp(String),                   // 插值 #{...}
+    BinOp(Box<BinOp>),               // 二元运算
+    UnaryOp(UnaryOp, Box<Value>),    // 一元运算
+    Calc(String),                     // calc() 原样保留
+    Spread(Box<Value>),              // ... 展开
+    Raw(String),                      // 原始内容（不转义）
+    Identifier(String),              // 标识符
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Separator { Comma, Space, Slash }
+pub enum Separator { Comma, Space, Slash, SlashDiv, Undecided }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Color {
-    pub r: u8, pub g: u8, pub b: u8, pub a: f32,
+    pub r: u8, pub g: u8, pub b: u8, pub a: f64,
+    pub format: ColorFormat,
 }
 
 /// AST 容器。
@@ -227,7 +277,7 @@ pub struct Ast {
 pub enum CssNode {
     Rule {
         selector: String,
-        declarations: Vec<Declaration>,
+        declarations: Vec<CssNode>,
         children: Vec<CssNode>,
     },
     Declaration {
@@ -239,14 +289,12 @@ pub enum CssNode {
         name: String,
         params: Option<String>,
         children: Vec<CssNode>,
+        has_body: bool,
     },
     Comment(String),
-}
-
-pub struct Declaration {
-    pub property: String,
-    pub value: String,
-    pub important: bool,
+    AtRoot(Vec<CssNode>),
+    Raw(String),
+    Return(Value),  // 不序列化，仅内部传播
 }
 ```
 
@@ -364,27 +412,28 @@ impl Lexed {
 ### 5.3 Evaluator —— fold + 不可变环境
 
 ```rust
-/// 求值环境——不可变，查找返回引用。
+/// 求值环境——可变，但通过 clone 实现作用域隔离。
 #[derive(Debug, Clone)]
 pub struct Env {
-    bindings: im::HashMap<String, Value>,  // 不可变 HashMap
+    vars: HashMap<String, Value>,
+    mixins: HashMap<String, MixinDef>,
+    functions: HashMap<String, FunctionDef>,
+    namespaces: HashMap<String, ModuleExports>,
+    /// 当前深度——防止循环导入栈溢出。
+    pub(crate) depth: usize,
+    /// 基准路径——用于相对 @import 解析。
+    pub(crate) base_path: Option<PathBuf>,
+    /// plain CSS 模式——嵌套规则不展开。
+    pub(crate) plain_css: bool,
+    /// 加载路径列表——用于 @use/@import 文件查找。
+    pub(crate) load_paths: Vec<PathBuf>,
 }
 
 impl Env {
-    pub fn new() -> Self {
-        Self { bindings: im::HashMap::new() }
-    }
-
-    /// 返回新环境（不修改自身）。
-    pub fn bind(&self, name: String, value: Value) -> Self {
-        let mut new = self.clone();
-        new.bindings.insert(name, value);
-        new
-    }
-
-    pub fn lookup(&self, name: &str) -> Option<&Value> {
-        self.bindings.get(name)
-    }
+    pub(crate) fn new_env() -> Self { /* ... */ }
+    pub(crate) fn bind(&mut self, name: String, value: Value) { /* ... */ }
+    pub(crate) fn lookup(&self, name: &str) -> Option<&Value> { /* ... */ }
+    pub(crate) fn has_var(&self, name: &str) -> bool { /* ... */ }
 }
 
 /// 求值器——fold 替代循环。
@@ -504,26 +553,23 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SassError {
-    #[error("词法错误: {message} (位置 {position})")]
-    LexError { message: String, position: usize },
+    #[error("词法错误: {message} (位置 {pos})")]
+    Lex { message: String, pos: usize },
 
-    #[error("语法错误: {expected}, 实际 {found}")]
-    ParseError { expected: String, found: String },
+    #[error("语法错误: 期望 {expected}, 实际 {found}")]
+    Parse { expected: String, found: String },
 
     #[error("求值错误: {0}")]
-    EvalError(String),
+    Eval(String),
 
     #[error("类型错误: 期望 {expected}, 实际 {actual}")]
-    TypeError { expected: String, actual: String },
-
-    #[error("单位不兼容: 无法将 {from} 转为 {to}")]
-    UnitError { from: String, to: String },
-
-    #[error("未定义变量: {0}")]
-    UndefinedVariable(String),
+    Type { expected: String, actual: String },
 
     #[error("IO 错误: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("模块错误: {0}")]
+    Module(String),
 }
 
 pub type Result<T> = std::result::Result<T, SassError>;
@@ -560,25 +606,25 @@ pub mod style {
 use style::OutputStyle;
 
 /// 编译入口——完整管线。
-pub fn compile(source: &str, style: OutputStyle) -> Result<String> {
-    Source::new(source)
-        .lex()?
-        .parse()?
-        .evaluate()?
-        .serialize(style)
-        .pipe(|s| s.css)
-        .pipe(Ok)
-}
+pub fn compile(source: &str, style: OutputStyle) -> Result<String> { /* ... */ }
 
 /// 编译（展开式）。
-pub fn compile_expanded(source: &str) -> Result<String> {
-    compile(source, OutputStyle::Expanded)
-}
+pub fn compile_expanded(source: &str) -> Result<String> { /* ... */ }
 
 /// 编译（压缩式）。
-pub fn compile_compressed(source: &str) -> Result<String> {
-    compile(source, OutputStyle::Compressed)
-}
+pub fn compile_compressed(source: &str) -> Result<String> { /* ... */ }
+
+/// 文件编译。
+pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> { /* ... */ }
+
+/// 带加载路径的文件编译。
+pub fn compile_file_with_load_paths(path: &PathBuf, style: OutputStyle, paths: Vec<PathBuf>) -> Result<String> { /* ... */ }
+
+/// 批量编译（Bootstrap / Element Plus 验证用）。
+pub fn compile_batch(file_paths: &[PathBuf], style: OutputStyle) -> BatchResult { /* ... */ }
+
+/// 初始化 tracing 订阅器。
+pub fn init_tracing() { /* ... */ }
 ```
 
 ---
@@ -624,17 +670,17 @@ Milestone 6: 完整 sass-spec
 
 ---
 
-## 9. 与旧版 sasspile 对比
+## 9. 设计权衡
 
-| 维度 | 旧版 | 新版 |
+| 维度 | 决策 | 理由 |
 |------|------|------|
-| 架构 | 命令式 + 可变状态 | 函数式 + 管线 |
-| 阶段 | 松散 struct | 类型状态机 |
-| 求值 | &mut self | fold + 不可变 Env |
-| 错误 | Box<dyn Error> | thiserror enum |
-| 集合 | for loop | Iterator 链 |
-| 测试 | 集成测试为主 | 单元 + property test |
-| 文件 | 500 行上限 | 300 行上限（更聚焦） |
+| 解析器 | Pratt（算符优先）手写 | 更好的错误信息 + CSS 透传 + SCSS 特殊语法 |
+| 求值环境 | HashMap + clone | 简单够用，im-rs 已移除以降低依赖 |
+| 内建函数 | 按类别分文件 | color/list/map/string/selector 各一个文件 |
+| 错误类型 | thiserror enum | 类型安全 + 精确错误位置 |
+| 序列化 | 直接写入 String | 避免 format! 链的多次分配 |
+| 内存管理 | 链式反应设计 | 超限返回 Err → Rust 所有权自动释放 |
+| 测试验证 | BS + EP 双框架 | Bootstrap 验证兼容性，EP 验证 SCSS 高级特性 |
 
 ---
 
@@ -643,16 +689,25 @@ Milestone 6: 完整 sass-spec
 ```toml
 [package]
 name = "sasspile"
-version = "0.2.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.97"
 
 [dependencies]
 thiserror = "2"
-im = "15"              # 不可变 HashMap
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
+
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
 
 [dev-dependencies]
-insta = "1"            # 快照测试
+criterion = "0.5"
+
+[[bench]]
+name = "enterprise_bench"
+harness = false
 ```
 
 ---

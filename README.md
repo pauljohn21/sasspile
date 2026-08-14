@@ -7,9 +7,11 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.5.1** — slash 分隔列表 + 插值转义 + 颜色精度 — 196/196 tests。
+> **v0.5.0** — 类型状态机管线 + 纯函数式 — 196/196 tests。
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
+
+> **总计 9894 行 Rust 代码**，31 个源文件，零外部 C 库依赖。
 
 ## 特性
 
@@ -30,12 +32,12 @@ sasspile 采用**类型状态机管线**设计，每个阶段通过类型转换�
 Source → Lexer → Parser → Evaluator → Serializer → CSS
 ```
 
-| 阶段 | 模块 | 职责 |
-|------|------|------|
-| Lexer | `src/lex/` | 词法分析，将 SCSS 源码转换为 Token 流 |
-| Parser | `src/parse/` | 语法分析，将 Token 流转换为 AST |
-| Evaluator | `src/eval/` | 求值器，处理变量、函数调用、控制流 |
-| Serializer | `src/css/` | CSS 序列化，将求值结果转换为 CSS 字符串 |
+| 阶段 | 模块 | 源文件 | 职责 |
+|------|------|--------|------|
+| Lexer | `src/lex/` | `mod.rs` (499), `token.rs` (170) | 词法分析，将 SCSS 源码转换为 Token 流 |
+| Parser | `src/parse/` | `mod.rs` (102), `ast/` (420+348), `expr/` (328+512), `at_rules.rs` (536), `nodes.rs` (594) | 语法分析，Pratt 解析器 + 递归下降 |
+| Evaluator | `src/eval/` | `mod.rs` (526), `value/` (449+290+186), `builtin.rs` (497), `builtin/` (553+282+302+281+156) | 求值器，处理变量、函数调用、控制流 |
+| Serializer | `src/css/` | `mod.rs` (350), `node.rs` (93) | CSS 序列化，选择器净化 + @规则合并 |
 
 ## 快速开始
 
@@ -186,7 +188,7 @@ cargo test --test bs_spec           # 15 Bootstrap 测试
 cargo test --test ep_full           # 121 Element Plus 测试（约 28 秒）
 ```
 
-全部通过：**compile 41/41 + stage 10/10 + ast 8/8 + common 5/5 + BS 15/15 + EP 121/121**
+全部通过：**compile 41/41 + stage 10/10 + ast 8/8 + common 5/5 + EP 121/121**
 
 > 详见根目录 `skill.md` 获取完整开发指南。
 
@@ -232,6 +234,14 @@ Source { content }  ──lex()──►  Lexed { tokens }
 - 必须先解析后求值
 - 必须先求值后序列化
 - 编译错误在类型层面被阻止
+
+**管线入口** (`src/lib.rs`):
+- `compile(input, style)` — 通用入口
+- `compile_expanded(input)` — 展开式输出
+- `compile_compressed(input)` — 压缩输出
+- `compile_file(path, style)` — 文件编译
+- `compile_file_with_load_paths(path, style, paths)` — 带加载路径
+- `compile_batch(files, style)` — 批量编译
 
 ## 文档
 

@@ -152,13 +152,6 @@ fn unify_complex(s1: &ComplexSelector, s2: &ComplexSelector) -> Option<ComplexSe
 }
 
 fn unify_compound(c1: &CompoundSelector, c2: &CompoundSelector) -> Option<CompoundSelector> {
-    // 命名空间兼容检查：两个 Some 且不同 → 冲突
-    let namespace = match (&c1.namespace, &c2.namespace) {
-        (Some(n1), Some(n2)) if n1 != n2 => return None, // 命名空间冲突
-        (Some(n), None) | (None, Some(n)) => Some(n.clone()),
-        _ => None,
-    };
-
     // 元素选择器兼容检查
     let element = match (&c1.element, &c2.element) {
         (Some(e1), Some(e2)) => {
@@ -210,7 +203,6 @@ fn unify_compound(c1: &CompoundSelector, c2: &CompoundSelector) -> Option<Compou
 
     Some(CompoundSelector {
         element,
-        namespace,
         classes,
         ids,
         attrs,
@@ -287,21 +279,6 @@ fn extend_complex(
         }
 
         if matched {
-            // 检查命名空间冲突：extender 不能给已有命名空间的 compound 引入不同命名空间
-            let ns_conflict = extender_list[0].parts.iter().enumerate().any(|(i, ext_part)| {
-                let sel_idx = offset + i;
-                if sel_idx >= sel.parts.len() {
-                    return false;
-                }
-                match (&sel.parts[sel_idx].compound.namespace, &ext_part.compound.namespace) {
-                    (Some(sel_ns), Some(ext_ns)) => sel_ns != ext_ns,
-                    _ => false,
-                }
-            });
-            if ns_conflict {
-                continue; // 尝试下一个 offset，如果都不行最终返回 None
-            }
-
             // 构建结果：前缀 + extender + 后缀
             let mut result = Vec::new();
             for ext in extender_list {
@@ -355,13 +332,6 @@ fn complex_matches_target(sel: &ComplexSelector, target: &ComplexSelector) -> bo
 }
 
 fn compound_matches(sel: &CompoundSelector, target: &CompoundSelector) -> bool {
-    // 命名空间兼容：target 有命名空间则必须匹配 sel 的命名空间
-    match (&target.namespace, &sel.namespace) {
-        (Some(t), Some(s)) if t != s => return false,
-        (Some(_), None) => return false,
-        _ => {}
-    }
-
     // sel 必须包含 target 的所有选择器组件
     match (&target.element, &sel.element) {
         (Some(t), Some(s)) if t != s => return false,
@@ -412,12 +382,6 @@ fn complex_to_string(c: &ComplexSelector) -> String {
 
 fn compound_to_string(c: &CompoundSelector) -> String {
     let mut result = String::new();
-
-    // 命名空间前缀
-    if let Some(ns) = &c.namespace {
-        result.push_str(ns);
-        result.push('|');
-    }
 
     if let Some(elem) = &c.element {
         result.push_str(elem);

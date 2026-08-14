@@ -4,7 +4,7 @@
 mod spec_manifest;
 
 use spec_manifest::collect_hrx_files;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;

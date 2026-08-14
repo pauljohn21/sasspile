@@ -344,6 +344,7 @@ fn run_spec_dir_chunked(spec_root: &Path, dir_name: &str) -> (usize, usize, usiz
 }
 
 /// 运行指定目录列表并汇总统计。
+#[allow(dead_code)]
 fn run_dirs(spec_root: &Path, dirs: &[&str]) -> (usize, usize, usize, usize) {
     let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
     for dir in dirs {

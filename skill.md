@@ -61,7 +61,7 @@ src/lex/
 
 **追踪命令**：
 ```bash
-RUST_LOG="sasspile::lex=trace" cargo test --test lex_test -- --nocapture
+RUST_LOG="sasspile::lex=trace" cargo test --test compile_test -- --nocapture
 ```
 
 ---
@@ -70,16 +70,16 @@ RUST_LOG="sasspile::lex=trace" cargo test --test lex_test -- --nocapture
 
 ```
 src/parse/
-├── mod.rs          # Parser 入口 + paren_depth
+├── mod.rs          # Parser 结构 + parse() 入口 + paren_depth
 ├── ast/
-│   ├── mod.rs      # Node 枚举 + Value 枚举定义
+│   ├── mod.rs      # Node/Value/Color/BinOp/Separator/Param/Arg/VarFlags 枚举定义
 │   └── display.rs  # Display trait + escape 函数 + round_alpha
-├── ast_impl.rs     # AST 实现（to_scss 等）
-├── at_rules.rs     # @use/@mixin/@include/@if/@for 解析
+├── ast_impl.rs     # Node::to_scss() 实现
+├── at_rules.rs     # @use/@mixin/@include/@if/@for/@each/@while/@function/@forward/@import/@extend/@at-root 解析
 ├── expr/
 │   ├── mod.rs      # Pratt 表达式解析 + has_other_operator_at_top_level
-│   └── prefix.rs   # parse_number/parse_hash_color
-└── nodes.rs        # 节点解析辅助
+│   └── prefix.rs   # parse_number/parse_hash_color + hex2/hex1
+└── nodes.rs        # parse_node/parse_rule/parse_decl/parse_variable + parse_params/parse_args
 ```
 
 **核心 AST 类型**：
@@ -89,33 +89,39 @@ pub enum Node {
     Rule { selector: String, body: Vec<Node> },
     Decl { property: String, value: Value, important: bool },
     Variable { name: String, value: Value, flags: VarFlags },
+    Comment(String, bool),
     If { branches: Vec<(Value, Vec<Node>)>, else_body: Option<Vec<Node>> },
     For { var: String, from: Value, to: Value, inclusive: bool, body: Vec<Node> },
     Each { vars: Vec<String>, list: Value, body: Vec<Node> },
-    While { condition: Value, body: Vec<Node> },
-    Mixin { name: String, params: Vec<Param>, body: Vec<Node> },
+    While { cond: Value, body: Vec<Node> },
+    MixinDef { name: String, params: Vec<Param>, body: Vec<Node> },
     Include { name: String, args: Vec<Arg>, content: Option<Vec<Node>> },
-    Content, Return(Value),
-    AtRule { name: String, params: String, body: Vec<Node> },
+    Content,
+    Return(Value),
+    FunctionDef { name: String, params: Vec<Param>, body: Vec<Node> },
     Use { url: String, namespace: Option<String>, star: bool, config: Vec<(String, Value)> },
-    Forward { ... }, Extend { selector: String },
-    Comment(String, bool),
+    Forward { url: String, show: Vec<String>, hide: Vec<String>, prefix: Option<String> },
+    Import { urls: Vec<String>, modifiers: Vec<String> },
+    Extend { selector: String, optional: bool },
+    AtRoot { query: Option<String>, body: Vec<Node> },
+    AtRule { name: String, params: Option<String>, body: Option<Vec<Node>> },
+    Warn(Value), Debug(Value), Error(Value),
 }
 
 pub enum Value {
     Number(f64, Option<String>), String(String, bool),
     Color(Color), List(Vec<Value>, Separator, bool),
-    Map(Vec<(Value, Value)>), Bool(bool), Null,
-    Call(String, Vec<Arg>),
-    BinOp { op: BinOp, left: Box<Value>, right: Box<Value> },
-    UnaryOp(UnaryOp, Box<Value>), Interp(String),
-    If { ... }, Identifier(String),
+    Map(Vec<(Value, Value)>), Variable(String),
+    Bool(bool), Null,
+    Call(String, Vec<Arg>), Interp(String),
+    BinOp(Box<BinOp>), UnaryOp(UnaryOp, Box<Value>),
+    Calc(String), Paren(Box<Value>), Spread(Box<Value>), Raw(String),
 }
 ```
 
 **追踪命令**：
 ```bash
-RUST_LOG="sasspile::parse=debug" cargo test --test parse_test -- --nocapture
+RUST_LOG="sasspile::parse=debug" cargo test --test ast_test -- --nocapture
 ```
 
 ---
@@ -124,24 +130,29 @@ RUST_LOG="sasspile::parse=debug" cargo test --test parse_test -- --nocapture
 
 ```
 src/eval/
-├── mod.rs              # Evaluator + eval_nodes
+├── mod.rs              # Env + ModuleExports + Evaluator + eval_nodes
 ├── value/
-│   ├── mod.rs          # Value 求值（eval_value, eval_interp_str, eval_simple_expr）
+│   ├── mod.rs          # eval_value + eval_interp_str + eval_simple_expr + units_compatible
 │   ├── ops.rs          # 算术/比较运算（add/sub/mul/div/modulo/compare）
 │   └── display.rs      # inspect_value + 值格式化
-├── rule.rs             # Rule 求值
+├── rule.rs             # eval_rule + combine_selectors
 ├── control_flow.rs     # @if/@for/@each/@while
-├── mixin.rs            # @mixin/@include
-├── extend.rs           # @extend 后处理
-├── module.rs           # @use/@forward + call_module_function
-├── builtin.rs          # call_builtin 分派入口
+├── mixin.rs            # eval_include + bind_params + call_function + call_user_function
+├── extend.rs           # apply_extends
+├── module.rs           # resolve_file + load_module + call_module_function
+├── memory_limit.rs    # 内存限制保护（RSS 检查）
+├── selector/
+│   ├── mod.rs          # parse_selectors + unify_compound + compound_matches
+│   ├── algorithms.rs   # parse_complex/extend_complex/unify_compound/compound_to_string
+│   └── parse.rs        # parse_selector_list/parse_compound_selector + 命名空间支持
+├── builtin.rs          # call_builtin 分派入口 + is_known_builtin + is_css_function
 ├── builtin/
 │   ├── color.rs        # 颜色函数（invert/hsl/hwb/adjust-color/...）
 │   ├── list.rs         # 列表函数（length/nth/append/join/...）
 │   ├── map.rs          # 映射函数（map-get/map-merge/...）
 │   ├── string.rs       # 字符串函数（str-length/str-slice/...）
 │   └── selector.rs     # 选择器函数（selector-nest/selector-parse/...）
-└── color.rs            # 颜色辅助（rgb_to_hsl/hwb_to_rgb/hsl_to_rgb）
+└── color.rs            # 颜色辅助（hsl_to_rgb/hwb_to_rgb/rgb_to_hsl）+ builtin_rgba/builtin_mix
 ```
 
 **求值入口**：
@@ -186,8 +197,9 @@ RUST_LOG="sasspile::eval::builtin::color=trace" cargo test --test compile_test -
 
 ```
 src/css/
-├── mod.rs      # Serializer::serialize + serialize_nodes
-└── node.rs     # CssNode 枚举
+├── mod.rs      # Serializer（serialize + serialize_nodes + @规则合并 + charset）
+├── node.rs     # CssNode 枚举
+└── selector.rs # 选择器净化（sanitize_selector + 组合器验证 + 属性选择器规范化）
 ```
 
 **CssNode 类型**：
@@ -550,7 +562,7 @@ result.map_err(|e| {
 | `Value` | `parse/ast/mod.rs` | 求值结果（含 Raw + Interp） |
 | `Color` | `parse/ast/mod.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
 | `ColorFormat` | `parse/ast/mod.rs` | 颜色格式追踪（Hex/Hsl/Hwb/...） |
-| `Separator` | `parse/ast/mod.rs` | 列表分隔符（Slash/SlashDiv/Comma/Space） |
+| `Separator` | `parse/ast/mod.rs` | 列表分隔符（Comma/Space/Slash/SlashDiv/Undecided） |
 | `CssNode` | `css/node.rs` | CSS 输出节点 |
 | `Env` | `eval/mod.rs` | 求值环境（变量/函数/mixin 作用域） |
 | `Arg` | `parse/ast/mod.rs` | 函数调用参数 |

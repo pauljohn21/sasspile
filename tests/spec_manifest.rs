@@ -1,13 +1,19 @@
 //! sass-spec manifest——目录索引。
 //!
-//! 注意：所有 3.x/CSS4 色彩空间、模块系统、calculation 值类型等文件已物理删除。
-//! sasspile 直接运行剩余 spec，无跳过列表。
+//! CSS4 色彩空间、未来特性文件级跳过。
+//! 支持新功能后，从 SKIP_DIRS 或 CSS4_COLOR_PATTERNS 移除对应条目即可。
 
 use std::path::{Path, PathBuf};
 
-/// 跳过的 spec 子目录——CSS4 色彩空间等 sasspile 暂不支持的功能。
+/// 跳过的 spec 子目录——整个目录都是 CSS4/未来特性/libsass 专用。
 pub const SKIP_DIRS: &[&str] = &[
-    // CSS4 色彩空间（sasspile 暂不支持）
+    // libsass 专用（对 sasspile 无用）
+    "libsass",
+    "libsass-closed-issues",
+    "libsass-todo-issues",
+    "libsass-todo-tests",
+    "non_conformant",
+    // CSS4 色彩空间（整个目录都是）
     "core_functions/color/hwb",
     "core_functions/color/lab",
     "core_functions/color/lch",
@@ -22,13 +28,85 @@ pub const SKIP_DIRS: &[&str] = &[
     "core_functions/color/space",
     "core_functions/color/blackness",
     "core_functions/color/whiteness",
+    "core_functions/color/color",
+    "core_functions/color/adjust_color",
+    "core_functions/color/mixed_spaces",
+    "core_functions/color/channel",
+];
+
+/// CSS4 色彩空间文件名模式——出现在 adjust/change/scale 等目录中。
+/// 匹配文件名（不含路径）如果包含这些模式则跳过。
+const CSS4_COLOR_PATTERNS: &[&str] = &[
+    // CSS4 色彩空间
+    "a98_rgb", "a98-rgb",
+    "display_p3", "display-p3",
+    "display_p3_linear",
+    "prophoto_rgb", "prophoto-rgb",
+    "rec2020",
+    "srgb_linear", "srgb-linear",
+    "xyz_d50", "xyz-d50",
+    "xyz_d65",
+    "xyz",
+    // CSS4 色彩空间函数（hwb/lab/lch/oklab/oklch 在 adjust/change/scale 中）
+    "hwb",
+    "lab",
+    "lch",
+    "oklab",
+    "oklch",
 ];
 
 /// 检查文件相对 spec_root 的路径是否在跳过列表中。
 fn should_skip(rel_path: &str) -> bool {
-    SKIP_DIRS
-        .iter()
-        .any(|skip| rel_path.starts_with(skip) || rel_path == *skip)
+    // 目录级跳过
+    if SKIP_DIRS.iter().any(|skip| rel_path.starts_with(skip) || rel_path == *skip) {
+        return true;
+    }
+
+    // 文件名级 CSS4 色彩空间模式匹配
+    // 只对 core_functions/color 目录下的非 hsl/rgb/srgb 文件生效
+    if rel_path.starts_with("core_functions/color/") {
+        let file_name = Path::new(rel_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+
+        // 跳过包含 CSS4 色彩空间模式的文件
+        if CSS4_COLOR_PATTERNS.iter().any(|pat| file_name.contains(pat)) {
+            // 但保留 hsl/rgb/srgb 相关的标准文件
+            let is_standard = file_name == "hsl"
+                || file_name == "rgb"
+                || file_name == "srgb"
+                || file_name == "alpha"
+                || file_name == "hue"
+                || file_name == "saturation"
+                || file_name == "lightness"
+                || file_name == "blue"
+                || file_name == "green"
+                || file_name == "red"
+                || file_name == "complement"
+                || file_name == "grayscale"
+                || file_name == "invert"
+                || file_name == "mix"
+                || file_name == "scale"
+                || file_name == "adjust"
+                || file_name == "change"
+                || file_name == "darken"
+                || file_name == "lighten"
+                || file_name == "saturate"
+                || file_name == "desaturate"
+                || file_name == "fade_in"
+                || file_name == "fade_out"
+                || file_name == "opacify"
+                || file_name == "transparentize"
+                || file_name == "adjust_hue";
+
+            if !is_standard {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /// 收集 spec 目录下所有 HRX 文件，跳过 `SKIP_DIRS` 和 >50KB 的文件。
