@@ -5,6 +5,37 @@
 use sasspile::*;
 use std::path::PathBuf;
 
+// 内存监控 — tracing 事件 + 超限 panic
+fn get_rss_mb() -> usize {
+    let pid = std::process::id();
+    let output = std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output();
+    match output {
+        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse::<usize>().unwrap_or(0),
+        Err(_) => 0,
+    }
+}
+
+fn start_bs_memory_monitor() {
+    std::thread::spawn(|| {
+        let mut warned = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let rss = get_rss_mb();
+            if rss > 4 * 1024 * 1024 {
+                tracing::error!(rss_mb = rss, "💥 BS MEMORY OOM — auto-aborting");
+                panic!("💥 BS OOM: RSS={rss} MB");
+            } else if rss > 2 * 1024 * 1024 && !warned {
+                tracing::warn!(rss_mb = rss, "⚠️ BS 内存增长中");
+                warned = true;
+            } else if rss <= 2 * 1024 * 1024 {
+                warned = false;
+            }
+        }
+    });
+}
+
 fn bs_scss(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("bs")
@@ -16,6 +47,7 @@ fn bs_scss(file: &str) -> PathBuf {
 #[test]
 fn bs_entry_batch() {
     init_tracing();
+    start_bs_memory_monitor();
     let files = [
         bs_scss("bootstrap.scss"),
         bs_scss("bootstrap-grid.scss"),
@@ -48,6 +80,7 @@ fn bs_entry_batch() {
 #[test]
 fn bs_components_batch() {
     init_tracing();
+    start_bs_memory_monitor();
     let components = [
         "_reboot.scss",
         "_alert.scss",

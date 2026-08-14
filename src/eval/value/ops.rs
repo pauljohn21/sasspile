@@ -83,6 +83,13 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             format!("#{:02x}{:02x}{:02x}-{b}", c.r, c.g, c.b),
             qb,
         )),
+        // Raw 类型减法——用于 `prefix-inner` 这类无空格拼接
+        (Value::Raw(a), Value::String(b, _)) => Ok(Value::Raw(format!("{a}-{b}"))),
+        (Value::String(a, qa), Value::Raw(b)) => Ok(Value::String(format!("{a}-{b}"), qa)),
+        (Value::Raw(a), Value::Raw(b)) => Ok(Value::Raw(format!("{a}-{b}"))),
+        (Value::Raw(a), Value::Number(n, u)) => Ok(Value::Raw(
+            format!("{a}-{}", n) + u.as_deref().unwrap_or(""),
+        )),
         _ => Err(SassError::Eval("不支持的 - 运算".into())),
     }
 }

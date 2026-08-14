@@ -11,9 +11,6 @@
 		},
 		{
 			"path": "./bs"
-		},
-		{
-			"path": "../sasspile-async"
 		}
 	],
 	"settings": {}

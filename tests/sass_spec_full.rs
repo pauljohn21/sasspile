@@ -10,30 +10,134 @@ mod spec_manifest;
 
 use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
-use tracing::info;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::thread;
+use std::time::Duration;
+use tracing::{error, info, warn};
+
+// ═══════════════════════════════════════════════════════════════
+// 内存监控：后台线程每 2 秒检查 RSS，超过阈值自动 panic
+// ═══════════════════════════════════════════════════════════════
+
+/// 监控开关 — panic 后由 test harness 观察到并退出。
+static MONITOR_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// 最近一次打印时的 case 计数，辅助定位爆内存位置。
+static LAST_CASE_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// 警告阈值（KB）— `ps -o rss=` 返回 KB。1GB。
+/// SCSS 编译正常只需几十MB，超过 500MB 就是异常。
+const RSS_WARN_KB: usize = 512 * 1024;
+/// 致命阈值（KB）— 1GB。单次编译能吃 1G+ = 严重泄漏。
+const RSS_FATAL_KB: usize = 1024 * 1024;
+
+/// 启动内存监控线程。每 2 秒：
+/// - 超 WARN → tracing::warn! 事件（可观测趋势）
+/// - 超 FATAL → tracing::error! 事件 + panic（自动中止，不需要手动 kill）
+fn start_memory_monitor() {
+    if MONITOR_STARTED.swap(true, Ordering::SeqCst) {
+        return; // 已启动
+    }
+    thread::spawn(|| {
+        let pid = std::process::id();
+        let mut warned = false;
+        loop {
+            thread::sleep(Duration::from_secs(2));
+            let rss = get_rss_kb(pid);
+            let cases = LAST_CASE_COUNT.load(Ordering::Relaxed);
+
+            if rss > RSS_FATAL_KB {
+                let rss_mb = rss / 1024;
+                error!(
+                    rss_mb = rss_mb,
+                    cases = cases,
+                    "💥 MEMORY OOM — aborting test"
+                );
+                panic!("💥 MEMORY OOM: RSS={rss_mb} MB, {cases} cases — auto-aborted");
+            } else if rss > RSS_WARN_KB && !warned {
+                warn!(
+                    rss_mb = rss / 1024,
+                    cases = cases,
+                    "⚠️ 内存持续增长中 — 接近阈值，请留意是否组合爆炸"
+                );
+                warned = true;
+            } else if rss <= RSS_WARN_KB {
+                warned = false;
+            }
+        }
+    });
+}
+
+/// 手动更新 case 计数（用于定位爆内存位置）。
+fn record_case_count(count: usize) {
+    LAST_CASE_COUNT.store(count as u64, Ordering::Relaxed);
+}
+
+/// 获取当前进程 RSS（KB）。macOS 用 `ps -o rss= -p PID`。
+fn get_rss_kb(pid: u32) -> usize {
+    let output = std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output();
+    match output {
+        Ok(out) => {
+            let s = String::from_utf8_lossy(&out.stdout);
+            s.trim().parse::<usize>().unwrap_or(0)
+        }
+        Err(_) => 0,
+    }
+}
+
+/// 每 N 个 case 发放一次诊断事件（含 RSS），定位内存增长来源。
+const RSS_LOG_INTERVAL: usize = 5;
+
+fn log_memory_per_case(case_idx: usize, file_hint: &str) {
+    if case_idx % RSS_LOG_INTERVAL == 0 {
+        let rss = get_rss_kb(std::process::id());
+        info!(
+            case_idx = case_idx,
+            rss_mb = rss / 1024,
+            file = file_hint,
+            "📊 内存进度"
+        );
+    }
+}
 
 
-/// HRX 测试用例。
-struct HrxCase {
-    files: Vec<(String, String)>,
-    input_path: String,
-    expected_output: String,
+/// HRX 测试用例（借用引用，不克隆）。
+struct HrxCase<'a> {
+    files: &'a [(String, String)],
+    input_path: &'a str,
+    expected_output: &'a str,
     expect_error: bool,
 }
 
-/// 解析 HRX——提取所有文件和测试用例。
-fn parse_hrx(content: &str) -> Vec<HrxCase> {
+/// 解析 HRX 并直接运行——O(1) 额外内存。
+/// 每个 case 编译后立即释放，不累积 case 向量。
+fn parse_and_run_hrx(
+    content: &str,
+    load_paths: &[PathBuf],
+    pass: &mut usize,
+    fail: &mut usize,
+    skip: &mut usize,
+    cases: &mut usize,
+) {
     let mut files: Vec<(String, String)> = Vec::new();
     let mut current_path = String::new();
     let mut current_content = String::new();
 
     for line in content.lines() {
+        // 跳过纯 = 分隔线（如 ========================================）
+        if line.trim().chars().all(|c| c == '=')
+            || line.trim().is_empty()
+        {
+            continue;
+        }
         if line.starts_with("<===>") {
             if !current_path.is_empty() {
                 files.push((current_path.clone(), current_content));
+                current_content = String::new(); // 复用分配
             }
             current_path = line.trim_start_matches("<===>").trim().to_string();
-            current_content = String::new();
         } else {
             current_content.push_str(line);
             current_content.push('\n');
@@ -43,35 +147,50 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
         files.push((current_path, current_content));
     }
 
-    let mut cases = Vec::new();
-    for (path, _input) in &files {
-        if path.ends_with("input.scss") {
-            let base = path.strip_suffix("input.scss").unwrap_or(path).to_string();
-            let output_path = format!("{base}output.css");
-            let error_path = format!("{base}error");
+    // 直接运行每个 case，不 clone
+    for (path, _) in &files {
+        if !path.ends_with("input.scss") {
+            continue;
+        }
+        log_memory_per_case(*cases, path);
+        let base = path.strip_suffix("input.scss").unwrap_or(path);
+        let output_path = format!("{base}output.css");
+        let error_path = format!("{base}error");
 
-            let expected_output = files
-                .iter()
-                .find(|(p, _)| p == &output_path)
-                .map(|(_, c)| c.clone())
-                .unwrap_or_default();
-            let expect_error = files.iter().any(|(p, _)| p == &error_path);
+        let expected_output = files
+            .iter()
+            .find(|(p, _)| p == &output_path)
+            .map(|(_, c)| c.as_str())
+            .unwrap_or("");
+        let expect_error = files.iter().any(|(p, _)| p == &error_path);
 
-            let case_files: Vec<(String, String)> = files
-                .iter()
-                .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
-                .map(|(p, c)| (p.clone(), c.clone()))
-                .collect();
+        *cases += 1;
+        if expected_output.is_empty() && !expect_error {
+            *skip += 1;
+            continue;
+        }
 
-            cases.push(HrxCase {
-                files: case_files,
-                input_path: path.clone(),
-                expected_output,
-                expect_error,
-            });
+        let case = HrxCase {
+            files: &files,
+            input_path: path,
+            expected_output,
+            expect_error,
+        };
+        if run_case(&case, load_paths) {
+            *pass += 1;
+        } else {
+            *fail += 1;
+        }
+
+        // 同步断点：每个 case 编译完立刻查 RSS —— 比后台线程更早发现问题
+        let rss = get_rss_kb(std::process::id());
+        if rss > RSS_FATAL_KB {
+            error!(rss_mb = rss / 1024, case = path, "💥 CASE 触发内存爆炸");
+            panic!("💥 内存爆炸在 case '{}': RSS={}MB", path, rss / 1024);
+        } else if rss > RSS_WARN_KB {
+            warn!(rss_mb = rss / 1024, case = path, "⚠️ 该 case 内存异常");
         }
     }
-    cases
 }
 
 /// 运行单个测试用例——写入临时目录并用 compile_file_with_load_paths 编译。
@@ -89,7 +208,7 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
 
-    for (path, content) in &case.files {
+    for (path, content) in case.files.iter() {
         let file_path = tmp_dir.join(path);
         if let Some(parent) = file_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -115,7 +234,7 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     }
 }
 
-/// 流式处理单个 HRX 文件——逐 case 编译，立即释放。
+/// 流式处理单个 HRX 文件——边解析边跑，O(1) 额外内存。
 fn process_hrx_file(
     file_path: &Path,
     spec_root: &Path,
@@ -128,22 +247,16 @@ fn process_hrx_file(
         Ok(c) => c,
         Err(_) => return,
     };
-    let file_cases = parse_hrx(&content);
-    drop(content); // 释放原始 HRX 内容
-
-    for case in &file_cases {
-        *cases += 1;
-        if case.expected_output.is_empty() && !case.expect_error {
-            *skip += 1;
-            continue;
-        }
-        if run_case(case, &[spec_root.to_path_buf()]) {
-            *pass += 1;
-        } else {
-            *fail += 1;
-        }
-    }
-    // file_cases 在这里 drop，释放所有 case 数据
+    // 关键：parse_and_run_hrx 不返回 case Vec，直接在函数内跑掉并释放
+    parse_and_run_hrx(
+        &content,
+        &[spec_root.to_path_buf()],
+        pass,
+        fail,
+        skip,
+        cases,
+    );
+    // content 在这里 drop，所有 case 编译完即释放
 }
 
 /// 按 spec 一级目录运行并统计（流式处理，O(1) 内存）。
@@ -158,6 +271,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
     for file in &files {
         process_hrx_file(file, spec_root, &mut pass, &mut fail, &mut skip, &mut cases);
+        record_case_count(cases);
         // 每个文件处理完，相关内存已释放
     }
 
@@ -179,6 +293,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
 #[test]
 fn test_import_use_forward() {
     sasspile::init_tracing();
+    start_memory_monitor();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
     for subdir in &["directives/import", "directives/use", "directives/forward"] {
         let (pass, fail, skip, cases) = run_spec_dir(&spec_root, subdir);
@@ -208,6 +323,7 @@ fn run_spec_dir_chunked(spec_root: &Path, dir_name: &str) -> (usize, usize, usiz
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
     for file in &files {
         process_hrx_file(file, spec_root, &mut pass, &mut fail, &mut skip, &mut cases);
+        record_case_count(cases);
     }
     // 释放文件列表
     drop(files);
@@ -240,105 +356,67 @@ fn run_dirs(spec_root: &Path, dirs: &[&str]) -> (usize, usize, usize, usize) {
     (total_pass, total_fail, total_skip, total_cases)
 }
 
-#[test]
-#[ignore]
-fn test_sass_spec_full_stats() {
+/// 运行单个 spec 目录，独立测试防止内存累积 OOM。
+fn run_one_spec_dir(dir_name: &str) {
     sasspile::init_tracing();
+    start_memory_monitor();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
-
-    // 基础目录（已通过，无 OOM）
-    let (pass, fail, skip, cases) = run_dirs(
-        &spec_root,
-        &[
-            "variables",
-            "values",
-            "css",
-            "operators",
-            "expressions",
-            "directives",
-        ],
-    );
-
+    let (pass, fail, skip, cases) = run_spec_dir_chunked(&spec_root, dir_name);
     let evaluated = cases - skip;
     let pct = pass * 100 / evaluated.max(1);
     info!(
+        dir = dir_name,
         pass = pass,
         fail = fail,
         skip = skip,
         total = cases,
         evaluated = evaluated,
         pct = pct,
-        "sass-spec 基础目录（无 OOM）"
+        "sass-spec 目录"
     );
 }
 
-/// core_functions —— 单测试内逐子目录运行，每目录后 purge_memory。
-/// 避免多测试并行累积内存导致 OOM。
 #[test]
-#[ignore]
-fn test_core_functions_all() {
-    sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
-
-    let subdirs = [
-        "general.hrx",
-        "newlines.hrx",
-        "list",
-        "map",
-        "math",
-        "meta",
-        "selector/append.hrx",
-        "selector/nest",
-        "selector/parse",
-        "selector/replace.hrx",
-        "selector/extend",
-        "selector/unify",
-        "selector/is_superselector",
-        "string",
-    ];
-
-    let (mut total_pass, mut total_fail, mut total_skip, mut total_cases) = (0, 0, 0, 0);
-
-    for subdir in &subdirs {
-        let path = format!("core_functions/{subdir}");
-        let (pass, fail, skip, cases) = run_spec_dir_chunked(&spec_root, &path);
-        total_pass += pass;
-        total_fail += fail;
-        total_skip += skip;
-        total_cases += cases;
-    }
-
-    let evaluated = total_cases - total_skip;
-    let pct = total_pass * 100 / evaluated.max(1);
-    info!(
-        pass = total_pass,
-        fail = total_fail,
-        skip = total_skip,
-        total = total_cases,
-        evaluated = evaluated,
-        pct = pct,
-        "core_functions 全量（purge_memory 防 OOM）"
-    );
-}
-
-/// parser + callable —— 低内存目录，可并行。
+fn test_variables() { run_one_spec_dir("variables"); }
 #[test]
-#[ignore]
-fn test_parser_callable() {
-    sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+fn test_values() { run_one_spec_dir("values"); }
+#[test]
+fn test_css() { run_one_spec_dir("css"); }
+#[test]
+fn test_operators() { run_one_spec_dir("operators"); }
+#[test]
+fn test_expressions() { run_one_spec_dir("expressions"); }
+#[test]
+fn test_directives() { run_one_spec_dir("directives"); }
 
-    let (pass, fail, skip, cases) = run_dirs(&spec_root, &["parser", "callable"]);
+// core_functions 子目录——独立测试（selector 拆开，防 OOM）
+#[test]
+fn test_core_list() { run_one_spec_dir("core_functions/list"); }
+#[test]
+fn test_core_map() { run_one_spec_dir("core_functions/map"); }
+#[test]
+fn test_core_math() { run_one_spec_dir("core_functions/math"); }
+#[test]
+fn test_core_meta() { run_one_spec_dir("core_functions/meta"); }
+#[test]
+fn test_core_string() { run_one_spec_dir("core_functions/string"); }
+#[test]
+fn test_core_selector_append() { run_one_spec_dir("core_functions/selector/append.hrx"); }
+#[test]
+fn test_core_selector_nest() { run_one_spec_dir("core_functions/selector/nest"); }
+#[test]
+fn test_core_selector_parse() { run_one_spec_dir("core_functions/selector/parse"); }
+#[test]
+fn test_core_selector_replace() { run_one_spec_dir("core_functions/selector/replace.hrx"); }
+#[test]
+fn test_core_selector_extend() { run_one_spec_dir("core_functions/selector/extend"); }
+#[test]
+fn test_core_selector_unify() { run_one_spec_dir("core_functions/selector/unify"); }
+#[test]
+fn test_core_selector_is_superselector() { run_one_spec_dir("core_functions/selector/is_superselector"); }
 
-    let evaluated = cases - skip;
-    let pct = pass * 100 / evaluated.max(1);
-    info!(
-        pass = pass,
-        fail = fail,
-        skip = skip,
-        total = cases,
-        evaluated = evaluated,
-        pct = pct,
-        "parser + callable"
-    );
-}
+// parser + callable
+#[test]
+fn test_parser() { run_one_spec_dir("parser"); }
+#[test]
+fn test_callable() { run_one_spec_dir("callable"); }

@@ -1,0 +1,1947 @@
+找到 971 个 HRX 文件 (跳过 335)
+初始 RSS: 4 MB
+
+[   1] COMPILING directives/extend/trims_super_selector_without_combinator.hrx | RSS=4MB
+[1   ] OK   directives/extend/trims_super_selector_without_combinator.hrx |    4 →    4 MB (+0)
+[   2] COMPILING                             directives/extend/bogus.hrx | RSS=4MB
+[2   ] OK   directives/extend/bogus.hrx                                  |    4 →    4 MB (+0)
+[   3] COMPILING                        directives/extend/whitespace.hrx | RSS=4MB
+[3   ] OK   directives/extend/whitespace.hrx                             |    4 →    4 MB (+0)
+[   4] COMPILING                            directives/extend/pseudo.hrx | RSS=4MB
+[4   ] OK   directives/extend/pseudo.hrx                                 |    4 →    4 MB (+0)
+[   5] COMPILING                           directives/extend/comment.hrx | RSS=4MB
+[5   ] OK   directives/extend/comment.hrx                                |    4 →    4 MB (+0)
+[   6] COMPILING                             directives/extend/error.hrx | RSS=4MB
+[6   ] OK   directives/extend/error.hrx                                  |    4 →    4 MB (+0)
+[   7] COMPILING                      directives/extend/after_target.hrx | RSS=4MB
+[7   ] OK   directives/extend/after_target.hrx                           |    4 →    4 MB (+0)
+[   8] COMPILING                                    directives/while.hrx | RSS=4MB
+[8   ] OK   directives/while.hrx                                         |    4 →    4 MB (+0)
+[   9] COMPILING                                     directives/warn.hrx | RSS=4MB
+[9   ] OK   directives/warn.hrx                                          |    4 →    4 MB (+0)
+[  10] COMPILING               directives/mixin/custom_ident_include.hrx | RSS=4MB
+[10  ] OK   directives/mixin/custom_ident_include.hrx                    |    4 →    4 MB (+0)
+[  11] COMPILING                         directives/mixin/whitespace.hrx | RSS=4MB
+[11  ] OK   directives/mixin/whitespace.hrx                              |    4 →    4 MB (+0)
+[  12] COMPILING                            directives/mixin/comment.hrx | RSS=4MB
+[12  ] OK   directives/mixin/comment.hrx                                 |    4 →    4 MB (+0)
+[  13] COMPILING                               directives/mixin/sass.hrx | RSS=4MB
+[13  ] OK   directives/mixin/sass.hrx                                    |    4 →    4 MB (+0)
+[  14] COMPILING             directives/mixin/double_underscore_name.hrx | RSS=4MB
+[14  ] OK   directives/mixin/double_underscore_name.hrx                  |    4 →    4 MB (+0)
+[  15] COMPILING                            directives/if/whitespace.hrx | RSS=4MB
+[15  ] OK   directives/if/whitespace.hrx                                 |    4 →    5 MB (+1)
+[  16] COMPILING                               directives/if/comment.hrx | RSS=5MB
+[16  ] OK   directives/if/comment.hrx                                    |    5 →    5 MB (+0)
+[  17] COMPILING                                  directives/if/sass.hrx | RSS=5MB
+[17  ] OK   directives/if/sass.hrx                                       |    5 →    5 MB (+0)
+[  18] COMPILING                               directives/if/escaped.hrx | RSS=5MB
+[18  ] OK   directives/if/escaped.hrx                                    |    5 →    5 MB (+0)
+[  19] COMPILING                          directives/if/error/syntax.hrx | RSS=5MB
+[19  ] OK   directives/if/error/syntax.hrx                               |    5 →    5 MB (+0)
+[  20] COMPILING                                    directives/error.hrx | RSS=5MB
+[20  ] OK   directives/error.hrx                                         |    5 →    5 MB (+0)
+[  21] COMPILING                      directives/function/whitespace.hrx | RSS=5MB
+[21  ] OK   directives/function/whitespace.hrx                           |    5 →    5 MB (+0)
+[  22] COMPILING                            directives/function/name.hrx | RSS=5MB
+[22  ] OK   directives/function/name.hrx                                 |    5 →    5 MB (+0)
+[  23] COMPILING                         directives/function/comment.hrx | RSS=5MB
+[23  ] OK   directives/function/comment.hrx                              |    5 →    5 MB (+0)
+[  24] COMPILING                         directives/function/escaped.hrx | RSS=5MB
+[24  ] OK   directives/function/escaped.hrx                              |    5 →    5 MB (+0)
+[  25] COMPILING                      directives/use/extend/extended.hrx | RSS=5MB
+[25  ] OK   directives/use/extend/extended.hrx                           |    5 →    5 MB (+0)
+[  26] COMPILING                       directives/use/extend/diamond.hrx | RSS=5MB
+[26  ] OK   directives/use/extend/diamond.hrx                            |    5 →    5 MB (+0)
+[  27] COMPILING        directives/use/extend/optional_and_mandatory.hrx | RSS=5MB
+[27  ] OK   directives/use/extend/optional_and_mandatory.hrx             |    5 →    5 MB (+0)
+[  28] COMPILING                         directives/use/extend/scope.hrx | RSS=5MB
+[28  ] OK   directives/use/extend/scope.hrx                              |    5 →    5 MB (+0)
+[  29] COMPILING                      directives/use/extend/upstream.hrx | RSS=5MB
+[29  ] OK   directives/use/extend/upstream.hrx                           |    5 →    5 MB (+0)
+[  30] COMPILING directives/use/extend/midstream_extend_within_pseudoselector.hrx | RSS=5MB
+[30  ] OK   directives/use/extend/midstream_extend_within_pseudoselector.hrx |    5 →    5 MB (+0)
+[  31] COMPILING                      directives/use/with/multi_load.hrx | RSS=5MB
+[31  ] OK   directives/use/with/multi_load.hrx                           |    5 →    5 MB (+0)
+[  32] COMPILING                     directives/use/with/core_module.hrx | RSS=5MB
+[32  ] OK   directives/use/with/core_module.hrx                          |    5 →    5 MB (+0)
+[  33] COMPILING                   directives/use/with/used_in_input.hrx | RSS=5MB
+[33  ] OK   directives/use/with/used_in_input.hrx                        |    5 →    5 MB (+0)
+[  34] COMPILING               directives/use/with/some_unconfigured.hrx | RSS=5MB
+[34  ] OK   directives/use/with/some_unconfigured.hrx                    |    5 →    5 MB (+0)
+[  35] COMPILING                          directives/use/with/single.hrx | RSS=5MB
+[35  ] OK   directives/use/with/single.hrx                               |    5 →    5 MB (+0)
+[  36] COMPILING                 directives/use/with/through_forward.hrx | RSS=5MB
+[36  ] OK   directives/use/with/through_forward.hrx                      |    5 →    5 MB (+0)
+[  37] COMPILING                directives/use/with/distributed_vars.hrx | RSS=5MB
+[37  ] OK   directives/use/with/distributed_vars.hrx                     |    5 →    5 MB (+0)
+[  38] COMPILING                        directives/use/with/multiple.hrx | RSS=5MB
+[38  ] OK   directives/use/with/multiple.hrx                             |    5 →    5 MB (+0)
+[  39] COMPILING              directives/use/with/doesnt_run_default.hrx | RSS=5MB
+[39  ] OK   directives/use/with/doesnt_run_default.hrx                   |    5 →    5 MB (+0)
+[  40] COMPILING                            directives/use/with/null.hrx | RSS=5MB
+[40  ] OK   directives/use/with/null.hrx                                 |    5 →    5 MB (+0)
+[  41] COMPILING                  directives/use/with/trailing_comma.hrx | RSS=5MB
+[41  ] OK   directives/use/with/trailing_comma.hrx                       |    5 →    5 MB (+0)
+[  42] COMPILING                   directives/use/with/from_variable.hrx | RSS=5MB
+[42  ] OK   directives/use/with/from_variable.hrx                        |    5 →    5 MB (+0)
+[  43] COMPILING                  directives/use/with/through_import.hrx | RSS=5MB
+[43  ] OK   directives/use/with/through_import.hrx                       |    5 →    5 MB (+0)
+[  44] COMPILING                 directives/use/with/variable_exists.hrx | RSS=5MB
+[44  ] OK   directives/use/with/variable_exists.hrx                      |    5 →    5 MB (+0)
+[  45] COMPILING                directives/use/with/dash_insensitive.hrx | RSS=5MB
+[45  ] OK   directives/use/with/dash_insensitive.hrx                     |    5 →    5 MB (+0)
+[  46] COMPILING                           directives/use/whitespace.hrx | RSS=5MB
+[46  ] OK   directives/use/whitespace.hrx                                |    5 →    5 MB (+0)
+[  47] COMPILING                   directives/use/css/order/use_only.hrx | RSS=5MB
+[47  ] OK   directives/use/css/order/use_only.hrx                        |    5 →    5 MB (+0)
+[  48] COMPILING             directives/use/css/order/use_and_import.hrx | RSS=5MB
+[48  ] OK   directives/use/css/order/use_and_import.hrx                  |    5 →    5 MB (+0)
+[  49] COMPILING                           directives/use/css/import.hrx | RSS=5MB
+[49  ] OK   directives/use/css/import.hrx                                |    5 →    5 MB (+0)
+[  50] COMPILING                              directives/use/comment.hrx | RSS=5MB
+[50  ] OK   directives/use/comment.hrx                                   |    5 →    5 MB (+0)
+[  51] COMPILING                    directives/use/member/namespaced.hrx | RSS=5MB
+[51  ] OK   directives/use/member/namespaced.hrx                         |    5 →    5 MB (+0)
+[  52] COMPILING        directives/use/member/nested_global_variable.hrx | RSS=5MB
+[52  ] OK   directives/use/member/nested_global_variable.hrx             |    5 →    5 MB (+0)
+[  53] COMPILING                 directives/use/member/use_to_import.hrx | RSS=5MB
+[53  ] OK   directives/use/member/use_to_import.hrx                      |    5 →    5 MB (+0)
+[  54] COMPILING                        directives/use/member/global.hrx | RSS=5MB
+[54  ] OK   directives/use/member/global.hrx                             |    5 →    5 MB (+0)
+[  55] COMPILING                              directives/use/escaped.hrx | RSS=5MB
+[55  ] OK   directives/use/escaped.hrx                                   |    5 →    5 MB (+0)
+[  56] COMPILING               directives/use/error/with/core_module.hrx | RSS=5MB
+[56  ] OK   directives/use/error/with/core_module.hrx                    |    5 →    5 MB (+0)
+[  57] COMPILING                  directives/use/error/with/conflict.hrx | RSS=5MB
+[57  ] OK   directives/use/error/with/conflict.hrx                       |    5 →    5 MB (+0)
+[  58] COMPILING           directives/use/error/with/through_forward.hrx | RSS=5MB
+[58  ] OK   directives/use/error/with/through_forward.hrx                |    5 →    5 MB (+0)
+[  59] COMPILING       directives/use/error/with/multi_configuration.hrx | RSS=5MB
+[59  ] OK   directives/use/error/with/multi_configuration.hrx            |    5 →    5 MB (+0)
+[  60] COMPILING                 directives/use/error/with/namespace.hrx | RSS=5MB
+[60  ] OK   directives/use/error/with/namespace.hrx                      |    5 →    5 MB (+0)
+[  61] COMPILING                 directives/use/error/with/undefined.hrx | RSS=5MB
+[61  ] OK   directives/use/error/with/undefined.hrx                      |    5 →    5 MB (+0)
+[  62] COMPILING        directives/use/error/with/invalid_expression.hrx | RSS=5MB
+[62  ] OK   directives/use/error/with/invalid_expression.hrx             |    5 →    5 MB (+0)
+[  63] COMPILING                   directives/use/error/with/private.hrx | RSS=5MB
+[63  ] OK   directives/use/error/with/private.hrx                        |    5 →    5 MB (+0)
+[  64] COMPILING               directives/use/error/with/not_default.hrx | RSS=5MB
+[64  ] OK   directives/use/error/with/not_default.hrx                    |    5 →    5 MB (+0)
+[  65] COMPILING         directives/use/error/with/repeated_variable.hrx | RSS=5MB
+[65  ] OK   directives/use/error/with/repeated_variable.hrx              |    5 →    5 MB (+0)
+[  66] COMPILING                    directives/use/error/with/nested.hrx | RSS=5MB
+[66  ] OK   directives/use/error/with/nested.hrx                         |    5 →    5 MB (+0)
+[  67] COMPILING     directives/use/error/with/through_forward_twice.hrx | RSS=5MB
+[67  ] OK   directives/use/error/with/through_forward_twice.hrx          |    5 →    5 MB (+0)
+[  68] COMPILING  directives/use/error/with/missing_distributed_vars.hrx | RSS=5MB
+[68  ] OK   directives/use/error/with/missing_distributed_vars.hrx       |    5 →    5 MB (+0)
+[  69] COMPILING                directives/use/error/member/conflict.hrx | RSS=5MB
+[69  ] OK   directives/use/error/member/conflict.hrx                     |    5 →    5 MB (+0)
+[  70] COMPILING                 directives/use/error/member/missing.hrx | RSS=5MB
+[70  ] OK   directives/use/error/member/missing.hrx                      |    5 →    5 MB (+0)
+[  71] COMPILING              directives/use/error/member/before_use.hrx | RSS=5MB
+[71  ] OK   directives/use/error/member/before_use.hrx                   |    5 →    5 MB (+0)
+[  72] COMPILING            directives/use/error/member/inaccessible.hrx | RSS=5MB
+[72  ] OK   directives/use/error/member/inaccessible.hrx                 |    5 →    5 MB (+0)
+[  73] COMPILING                         directives/use/error/extend.hrx | RSS=5MB
+[73  ] OK   directives/use/error/extend.hrx                              |    5 →    5 MB (+0)
+[  74] COMPILING                  directives/use/error/syntax/within.hrx | RSS=5MB
+[74  ] OK   directives/use/error/syntax/within.hrx                       |    5 →    5 MB (+0)
+[  75] COMPILING                     directives/use/error/syntax/url.hrx | RSS=5MB
+[75  ] OK   directives/use/error/syntax/url.hrx                          |    5 →    5 MB (+0)
+[  76] COMPILING              directives/use/error/syntax/as_invalid.hrx | RSS=5MB
+[76  ] OK   directives/use/error/syntax/as_invalid.hrx                   |    5 →    5 MB (+0)
+[  77] COMPILING                    directives/use/error/syntax/with.hrx | RSS=5MB
+[77  ] OK   directives/use/error/syntax/with.hrx                         |    5 →    5 MB (+0)
+[  78] COMPILING                  directives/use/error/syntax/member.hrx | RSS=5MB
+[78  ] OK   directives/use/error/syntax/member.hrx                       |    5 →    5 MB (+0)
+[  79] COMPILING              directives/use/error/syntax/as_nothing.hrx | RSS=5MB
+[79  ] OK   directives/use/error/syntax/as_nothing.hrx                   |    5 →    5 MB (+0)
+[  80] COMPILING                   directives/use/error/syntax/empty.hrx | RSS=5MB
+[80  ] OK   directives/use/error/syntax/empty.hrx                        |    5 →    5 MB (+0)
+[  81] COMPILING                   directives/use/error/syntax/after.hrx | RSS=5MB
+[81  ] OK   directives/use/error/syntax/after.hrx                        |    5 →    5 MB (+0)
+[  82] COMPILING                           directives/use/error/load.hrx | RSS=5MB
+[82  ] OK   directives/use/error/load.hrx                                |    5 →    6 MB (+1)
+[  83] COMPILING                                 directives/use/load.hrx | RSS=6MB
+[83  ] OK   directives/use/load.hrx                                      |    6 →    6 MB (+0)
+[  84] COMPILING                                    directives/debug.hrx | RSS=6MB
+[84  ] OK   directives/debug.hrx                                         |    6 →    6 MB (+0)
+[  85] COMPILING                           directives/for/whitespace.hrx | RSS=6MB
+[85  ] OK   directives/for/whitespace.hrx                                |    6 →    6 MB (+0)
+[  86] COMPILING                              directives/for/comment.hrx | RSS=6MB
+[86  ] OK   directives/for/comment.hrx                                   |    6 →    6 MB (+0)
+[  87] COMPILING                                  directives/for/for.hrx | RSS=6MB
+[87  ] OK   directives/for/for.hrx                                       |    6 →    6 MB (+0)
+[  88] COMPILING                                   directives/return.hrx | RSS=6MB
+[88  ] OK   directives/return.hrx                                        |    6 →    6 MB (+0)
+[  89] COMPILING                                     directives/each.hrx | RSS=6MB
+[89  ] OK   directives/each.hrx                                          |    6 →    6 MB (+0)
+[  90] COMPILING            directives/import/configuration/indirect.hrx | RSS=6MB
+[90  ] OK   directives/import/configuration/indirect.hrx                 |    6 →    6 MB (+0)
+[  91] COMPILING directives/import/configuration/midstream_definition.hrx | RSS=6MB
+[91  ] OK   directives/import/configuration/midstream_definition.hrx     |    6 →    6 MB (+0)
+[  92] COMPILING        directives/import/configuration/import_twice.hrx | RSS=6MB
+[92  ] OK   directives/import/configuration/import_twice.hrx             |    6 →    6 MB (+0)
+[  93] COMPILING           directives/import/configuration/same_file.hrx | RSS=6MB
+[93  ] OK   directives/import/configuration/same_file.hrx                |    6 →    6 MB (+0)
+[  94] COMPILING              directives/import/configuration/nested.hrx | RSS=6MB
+[94  ] OK   directives/import/configuration/nested.hrx                   |    6 →    6 MB (+0)
+[  95] COMPILING       directives/import/configuration/separate_file.hrx | RSS=6MB
+[95  ] OK   directives/import/configuration/separate_file.hrx            |    6 →    7 MB (+1)
+[  96] COMPILING         directives/import/configuration/prefixed_as.hrx | RSS=7MB
+[96  ] OK   directives/import/configuration/prefixed_as.hrx              |    7 →    7 MB (+0)
+[  97] COMPILING  directives/import/configuration/unrelated_variable.hrx | RSS=7MB
+[97  ] OK   directives/import/configuration/unrelated_variable.hrx       |    7 →    7 MB (+0)
+[  98] COMPILING                        directives/import/whitespace.hrx | RSS=7MB
+[98  ] OK   directives/import/whitespace.hrx                             |    7 →    7 MB (+0)
+[  99] COMPILING                               directives/import/css.hrx | RSS=7MB
+[99  ] OK   directives/import/css.hrx                                    |    7 →    7 MB (+0)
+[ 100] COMPILING                           directives/import/comment.hrx | RSS=7MB
+[100 ] OK   directives/import/comment.hrx                                |    7 →    7 MB (+0)
+[ 101] COMPILING                  directives/import/top_level_parent.hrx | RSS=7MB
+[101 ] OK   directives/import/top_level_parent.hrx                       |    7 →    7 MB (+0)
+[ 102] COMPILING             directives/import/implicit_dependencies.hrx | RSS=7MB
+[102 ] OK   directives/import/implicit_dependencies.hrx                  |    7 →    7 MB (+0)
+[ 103] COMPILING                            directives/import/nested.hrx | RSS=7MB
+[103 ] OK   directives/import/nested.hrx                                 |    7 →    7 MB (+0)
+[ 104] COMPILING                           directives/import/escaped.hrx | RSS=7MB
+[104 ] OK   directives/import/escaped.hrx                                |    7 →    7 MB (+0)
+[ 105] COMPILING                    directives/import/error/conflict.hrx | RSS=7MB
+[105 ] OK   directives/import/error/conflict.hrx                         |    7 →    7 MB (+0)
+[ 106] COMPILING                   directives/import/error/not_found.hrx | RSS=7MB
+[106 ] OK   directives/import/error/not_found.hrx                        |    7 →    7 MB (+0)
+[ 107] COMPILING       directives/import/error/top_level_declaration.hrx | RSS=7MB
+[107 ] OK   directives/import/error/top_level_declaration.hrx            |    7 →    7 MB (+0)
+[ 108] COMPILING                      directives/import/error/member.hrx | RSS=7MB
+[108 ] OK   directives/import/error/member.hrx                           |    7 →    7 MB (+0)
+[ 109] COMPILING                              directives/import/load.hrx | RSS=7MB
+[109 ] OK   directives/import/load.hrx                                   |    7 →    7 MB (+0)
+[ 110] COMPILING                         directives/at_root/load_css.hrx | RSS=7MB
+[110 ] OK   directives/at_root/load_css.hrx                              |    7 →    7 MB (+0)
+[ 111] COMPILING                       directives/at_root/whitespace.hrx | RSS=7MB
+[111 ] OK   directives/at_root/whitespace.hrx                            |    7 →    7 MB (+0)
+[ 112] COMPILING                          directives/at_root/comment.hrx | RSS=7MB
+[112 ] OK   directives/at_root/comment.hrx                               |    7 →    7 MB (+0)
+[ 113] COMPILING                    directives/at_root/property_only.hrx | RSS=7MB
+[113 ] OK   directives/at_root/property_only.hrx                         |    7 →    7 MB (+0)
+[ 114] COMPILING                        directives/at_root/keyframes.hrx | RSS=7MB
+[114 ] OK   directives/at_root/keyframes.hrx                             |    7 →    7 MB (+0)
+[ 115] COMPILING                             directives/at_root/sass.hrx | RSS=7MB
+[115 ] OK   directives/at_root/sass.hrx                                  |    7 →    7 MB (+0)
+[ 116] COMPILING                    directives/at_root/nested_import.hrx | RSS=7MB
+[116 ] OK   directives/at_root/nested_import.hrx                         |    7 →    7 MB (+0)
+[ 117] COMPILING                  directives/forward/with/multi_load.hrx | RSS=7MB
+[117 ] OK   directives/forward/with/multi_load.hrx                       |    7 →    7 MB (+0)
+[ 118] COMPILING                 directives/forward/with/core_module.hrx | RSS=7MB
+[118 ] OK   directives/forward/with/core_module.hrx                      |    7 →    7 MB (+0)
+[ 119] COMPILING                     directives/forward/with/default.hrx | RSS=7MB
+[119 ] OK   directives/forward/with/default.hrx                          |    7 →    7 MB (+0)
+[ 120] COMPILING               directives/forward/with/used_in_input.hrx | RSS=7MB
+[120 ] OK   directives/forward/with/used_in_input.hrx                    |    7 →    7 MB (+0)
+[ 121] COMPILING           directives/forward/with/some_unconfigured.hrx | RSS=7MB
+[121 ] OK   directives/forward/with/some_unconfigured.hrx                |    7 →    7 MB (+0)
+[ 122] COMPILING                      directives/forward/with/single.hrx | RSS=7MB
+[122 ] OK   directives/forward/with/single.hrx                           |    7 →    7 MB (+0)
+[ 123] COMPILING             directives/forward/with/through_forward.hrx | RSS=7MB
+[123 ] OK   directives/forward/with/through_forward.hrx                  |    7 →    7 MB (+0)
+[ 124] COMPILING                    directives/forward/with/multiple.hrx | RSS=7MB
+[124 ] OK   directives/forward/with/multiple.hrx                         |    7 →    7 MB (+0)
+[ 125] COMPILING          directives/forward/with/doesnt_run_default.hrx | RSS=7MB
+[125 ] OK   directives/forward/with/doesnt_run_default.hrx               |    7 →    7 MB (+0)
+[ 126] COMPILING                        directives/forward/with/null.hrx | RSS=7MB
+[126 ] OK   directives/forward/with/null.hrx                             |    7 →    7 MB (+0)
+[ 127] COMPILING              directives/forward/with/trailing_comma.hrx | RSS=7MB
+[127 ] OK   directives/forward/with/trailing_comma.hrx                   |    7 →    7 MB (+0)
+[ 128] COMPILING               directives/forward/with/from_variable.hrx | RSS=7MB
+[128 ] OK   directives/forward/with/from_variable.hrx                    |    7 →    7 MB (+0)
+[ 129] COMPILING directives/forward/with/facade_contains_multiple_configured_forwards.hrx | RSS=7MB
+[129 ] OK   directives/forward/with/facade_contains_multiple_configured_forwards.hrx |    7 →    7 MB (+0)
+[ 130] COMPILING              directives/forward/with/through_import.hrx | RSS=7MB
+[130 ] OK   directives/forward/with/through_import.hrx                   |    7 →    7 MB (+0)
+[ 131] COMPILING             directives/forward/with/variable_exists.hrx | RSS=7MB
+[131 ] OK   directives/forward/with/variable_exists.hrx                  |    7 →    7 MB (+0)
+[ 132] COMPILING            directives/forward/with/dash_insensitive.hrx | RSS=7MB
+[132 ] OK   directives/forward/with/dash_insensitive.hrx                 |    7 →    7 MB (+0)
+[ 133] COMPILING                       directives/forward/whitespace.hrx | RSS=7MB
+[133 ] OK   directives/forward/whitespace.hrx                            |    7 →    7 MB (+0)
+[ 134] COMPILING                              directives/forward/css.hrx | RSS=7MB
+[134 ] OK   directives/forward/css.hrx                                   |    7 →    7 MB (+0)
+[ 135] COMPILING                          directives/forward/comment.hrx | RSS=7MB
+[135 ] OK   directives/forward/comment.hrx                               |    7 →    7 MB (+0)
+[ 136] COMPILING                      directives/forward/member/bare.hrx | RSS=7MB
+[136 ] OK   directives/forward/member/bare.hrx                           |    7 →    7 MB (+0)
+[ 137] COMPILING                  directives/forward/member/newlines.hrx | RSS=7MB
+[137 ] OK   directives/forward/member/newlines.hrx                       |    7 →    7 MB (+0)
+[ 138] COMPILING                  directives/forward/member/shadowed.hrx | RSS=7MB
+[138 ] OK   directives/forward/member/shadowed.hrx                       |    7 →    7 MB (+0)
+[ 139] COMPILING                directives/forward/member/visibility.hrx | RSS=7MB
+[139 ] OK   directives/forward/member/visibility.hrx                     |    7 →    7 MB (+0)
+[ 140] COMPILING directives/forward/member/import/import_to_forward/top_level.hrx | RSS=7MB
+[140 ] OK   directives/forward/member/import/import_to_forward/top_level.hrx |    7 →    7 MB (+0)
+[ 141] COMPILING directives/forward/member/import/import_to_forward/with.hrx | RSS=7MB
+[141 ] OK   directives/forward/member/import/import_to_forward/with.hrx  |    7 →    7 MB (+0)
+[ 142] COMPILING directives/forward/member/import/import_to_forward/use_to.hrx | RSS=7MB
+[142 ] OK   directives/forward/member/import/import_to_forward/use_to.hrx |    7 →    7 MB (+0)
+[ 143] COMPILING directives/forward/member/import/import_to_forward/nested.hrx | RSS=7MB
+[143 ] OK   directives/forward/member/import/import_to_forward/nested.hrx |    7 →    7 MB (+0)
+[ 144] COMPILING directives/forward/member/import/import_to_forward/override.hrx | RSS=7MB
+[144 ] OK   directives/forward/member/import/import_to_forward/override.hrx |    7 →    7 MB (+0)
+[ 145] COMPILING directives/forward/member/import/import_to_forward/transitive.hrx | RSS=7MB
+[145 ] OK   directives/forward/member/import/import_to_forward/transitive.hrx |    7 →    7 MB (+0)
+[ 146] COMPILING         directives/forward/member/import/precedence.hrx | RSS=7MB
+[146 ] OK   directives/forward/member/import/precedence.hrx              |    7 →    7 MB (+0)
+[ 147] COMPILING  directives/forward/member/import/forward_to_import.hrx | RSS=7MB
+[147 ] OK   directives/forward/member/import/forward_to_import.hrx       |    7 →    7 MB (+0)
+[ 148] COMPILING                        directives/forward/member/as.hrx | RSS=7MB
+[148 ] OK   directives/forward/member/as.hrx                             |    7 →    7 MB (+0)
+[ 149] COMPILING                           directives/forward/extend.hrx | RSS=7MB
+[149 ] OK   directives/forward/extend.hrx                                |    7 →    7 MB (+0)
+[ 150] COMPILING                          directives/forward/escaped.hrx | RSS=7MB
+[150 ] OK   directives/forward/escaped.hrx                               |    7 →    7 MB (+0)
+[ 151] COMPILING            directives/forward/error/member/conflict.hrx | RSS=7MB
+[151 ] OK   directives/forward/error/member/conflict.hrx                 |    7 →    7 MB (+0)
+[ 152] COMPILING   directives/forward/error/member/import_to_forward.hrx | RSS=7MB
+[152 ] OK   directives/forward/error/member/import_to_forward.hrx        |    7 →    7 MB (+0)
+[ 153] COMPILING        directives/forward/error/member/inaccessible.hrx | RSS=7MB
+[153 ] OK   directives/forward/error/member/inaccessible.hrx             |    7 →    7 MB (+0)
+[ 154] COMPILING                       directives/forward/error/with.hrx | RSS=7MB
+[154 ] OK   directives/forward/error/with.hrx                            |    7 →    7 MB (+0)
+[ 155] COMPILING                     directives/forward/error/extend.hrx | RSS=7MB
+[155 ] OK   directives/forward/error/extend.hrx                          |    7 →    7 MB (+0)
+[ 156] COMPILING                     directives/forward/error/syntax.hrx | RSS=7MB
+[156 ] OK   directives/forward/error/syntax.hrx                          |    7 →    7 MB (+0)
+[ 157] COMPILING                       directives/forward/error/load.hrx | RSS=7MB
+[157 ] OK   directives/forward/error/load.hrx                            |    7 →    7 MB (+0)
+[ 158] COMPILING                                     operators/minus.hrx | RSS=7MB
+[158 ] OK   operators/minus.hrx                                          |    7 →    7 MB (+0)
+[ 159] COMPILING                                  operators/newlines.hrx | RSS=7MB
+[159 ] OK   operators/newlines.hrx                                       |    7 →    7 MB (+0)
+[ 160] COMPILING                                    operators/modulo.hrx | RSS=7MB
+[160 ] OK   operators/modulo.hrx                                         |    7 →    7 MB (+0)
+[ 161] COMPILING                                      operators/plus.hrx | RSS=7MB
+[161 ] OK   operators/plus.hrx                                           |    7 →    7 MB (+0)
+[ 162] COMPILING                                     operators/slash.hrx | RSS=7MB
+[162 ] OK   operators/slash.hrx                                          |    7 →    7 MB (+0)
+[ 163] COMPILING                                         css/percent.hrx | RSS=7MB
+[163 ] OK   css/percent.hrx                                              |    7 →    7 MB (+0)
+[ 164] COMPILING                           css/empty_block_directive.hrx | RSS=7MB
+[164 ] OK   css/empty_block_directive.hrx                                |    7 →    7 MB (+0)
+[ 165] COMPILING                                      css/style_rule.hrx | RSS=7MB
+[165 ] OK   css/style_rule.hrx                                           |    7 →    7 MB (+0)
+[ 166] COMPILING                                          css/escape.hrx | RSS=7MB
+[166 ] OK   css/escape.hrx                                               |    7 →    7 MB (+0)
+[ 167] COMPILING                         css/selector/pseudoselector.hrx | RSS=7MB
+[167 ] OK   css/selector/pseudoselector.hrx                              |    7 →    7 MB (+0)
+[ 168] COMPILING                                 css/selector/parent.hrx | RSS=7MB
+[168 ] OK   css/selector/parent.hrx                                      |    7 →    7 MB (+0)
+[ 169] COMPILING                        css/selector/inline_comments.hrx | RSS=7MB
+[169 ] OK   css/selector/inline_comments.hrx                             |    7 →    7 MB (+0)
+[ 170] COMPILING                                css/selector/slotted.hrx | RSS=7MB
+[170 ] OK   css/selector/slotted.hrx                                     |    7 →    7 MB (+0)
+[ 171] COMPILING                            css/selector/placeholder.hrx | RSS=7MB
+[171 ] OK   css/selector/placeholder.hrx                                 |    7 →    7 MB (+0)
+[ 172] COMPILING                   css/selector/reference_combinator.hrx | RSS=7MB
+[172 ] OK   css/selector/reference_combinator.hrx                        |    7 →    7 MB (+0)
+[ 173] COMPILING                              css/selector/attribute.hrx | RSS=7MB
+[173 ] OK   css/selector/attribute.hrx                                   |    7 →    7 MB (+0)
+[ 174] COMPILING                      css/selector/combinator/middle.hrx | RSS=7MB
+[174 ] OK   css/selector/combinator/middle.hrx                           |    7 →    7 MB (+0)
+[ 175] COMPILING                     css/selector/combinator/leading.hrx | RSS=7MB
+[175 ] OK   css/selector/combinator/leading.hrx                          |    7 →    7 MB (+0)
+[ 176] COMPILING                    css/selector/combinator/trailing.hrx | RSS=7MB
+[176 ] OK   css/selector/combinator/trailing.hrx                         |    7 →    7 MB (+0)
+[ 177] COMPILING                    css/selector/combinator/adjacent.hrx | RSS=7MB
+[177 ] OK   css/selector/combinator/adjacent.hrx                         |    7 →    7 MB (+0)
+[ 178] COMPILING                          css/selector/combinator/is.hrx | RSS=7MB
+[178 ] OK   css/selector/combinator/is.hrx                               |    7 →    7 MB (+0)
+[ 179] COMPILING              css/selector/combinator/only_one_bogus.hrx | RSS=7MB
+[179 ] OK   css/selector/combinator/only_one_bogus.hrx                   |    7 →    7 MB (+0)
+[ 180] COMPILING             css/selector/combinator/selector_pseudo.hrx | RSS=7MB
+[180 ] OK   css/selector/combinator/selector_pseudo.hrx                  |    7 →    7 MB (+0)
+[ 181] COMPILING                     css/selector/combinator/newline.hrx | RSS=7MB
+[181 ] OK   css/selector/combinator/newline.hrx                          |    7 →    7 MB (+0)
+[ 182] COMPILING                         css/selector/combinator/has.hrx | RSS=7MB
+[182 ] OK   css/selector/combinator/has.hrx                              |    7 →    7 MB (+0)
+[ 183] COMPILING                               css/selector/escaping.hrx | RSS=7MB
+[183 ] OK   css/selector/escaping.hrx                                    |    7 →    7 MB (+0)
+[ 184] COMPILING                             css/supports/whitespace.hrx | RSS=7MB
+[184 ] OK   css/supports/whitespace.hrx                                  |    7 →    7 MB (+0)
+[ 185] COMPILING                                css/supports/comment.hrx | RSS=7MB
+[185 ] OK   css/supports/comment.hrx                                     |    7 →    7 MB (+0)
+[ 186] COMPILING                                css/supports/nesting.hrx | RSS=7MB
+[186 ] OK   css/supports/nesting.hrx                                     |    7 →    7 MB (+0)
+[ 187] COMPILING                                  css/supports/error.hrx | RSS=7MB
+[187 ] OK   css/supports/error.hrx                                       |    7 →    7 MB (+0)
+[ 188] COMPILING                    css/supports/syntax/calculations.hrx | RSS=7MB
+[188 ] OK   css/supports/syntax/calculations.hrx                         |    7 →    7 MB (+0)
+[ 189] COMPILING                     css/supports/syntax/declaration.hrx | RSS=7MB
+[189 ] OK   css/supports/syntax/declaration.hrx                          |    7 →    7 MB (+0)
+[ 190] COMPILING                        css/supports/syntax/operator.hrx | RSS=7MB
+[190 ] OK   css/supports/syntax/operator.hrx                             |    7 →    7 MB (+0)
+[ 191] COMPILING                        css/supports/syntax/anything.hrx | RSS=7MB
+[191 ] OK   css/supports/syntax/anything.hrx                             |    7 →    7 MB (+0)
+[ 192] COMPILING                        css/supports/syntax/function.hrx | RSS=7MB
+[192 ] OK   css/supports/syntax/function.hrx                             |    7 →    7 MB (+0)
+[ 193] COMPILING              css/supports/syntax/lone_interpolation.hrx | RSS=7MB
+[193 ] OK   css/supports/syntax/lone_interpolation.hrx                   |    7 →    7 MB (+0)
+[ 194] COMPILING               css/plain/style_rule/top_level_parent.hrx | RSS=7MB
+[194 ] OK   css/plain/style_rule/top_level_parent.hrx                    |    7 →    7 MB (+0)
+[ 195] COMPILING       css/plain/style_rule/nesting/multiple_complex.hrx | RSS=7MB
+[195 ] OK   css/plain/style_rule/nesting/multiple_complex.hrx            |    7 →    7 MB (+0)
+[ 196] COMPILING                 css/plain/style_rule/nesting/parent.hrx | RSS=7MB
+[196 ] OK   css/plain/style_rule/nesting/parent.hrx                      |    7 →    7 MB (+0)
+[ 197] COMPILING                  css/plain/style_rule/nesting/media.hrx | RSS=7MB
+[197 ] OK   css/plain/style_rule/nesting/media.hrx                       |    7 →    7 MB (+0)
+[ 198] COMPILING               css/plain/style_rule/nesting/supports.hrx | RSS=7MB
+[198 ] OK   css/plain/style_rule/nesting/supports.hrx                    |    7 →    7 MB (+0)
+[ 199] COMPILING              css/plain/style_rule/nesting/one_level.hrx | RSS=7MB
+[199 ] OK   css/plain/style_rule/nesting/one_level.hrx                   |    7 →    7 MB (+0)
+[ 200] COMPILING             css/plain/style_rule/nesting/combinator.hrx | RSS=7MB
+[200 ] OK   css/plain/style_rule/nesting/combinator.hrx                  |    7 →    7 MB (+0)
+[ 201] COMPILING             css/plain/style_rule/nesting/two_levels.hrx | RSS=7MB
+[201 ] OK   css/plain/style_rule/nesting/two_levels.hrx                  |    7 →    7 MB (+0)
+[ 202] COMPILING       css/plain/style_rule/nesting/through_load_css.hrx | RSS=7MB
+[202 ] OK   css/plain/style_rule/nesting/through_load_css.hrx            |    7 →    7 MB (+0)
+[ 203] COMPILING         css/plain/style_rule/nesting/through_import.hrx | RSS=7MB
+[203 ] OK   css/plain/style_rule/nesting/through_import.hrx              |    7 →    7 MB (+0)
+[ 204] COMPILING                css/plain/style_rule/nesting/unknown.hrx | RSS=7MB
+[204 ] OK   css/plain/style_rule/nesting/unknown.hrx                     |    7 →    7 MB (+0)
+[ 205] COMPILING       css/plain/style_rule/nesting/with_declaration.hrx | RSS=7MB
+[205 ] OK   css/plain/style_rule/nesting/with_declaration.hrx            |    7 →    7 MB (+0)
+[ 206] COMPILING                                     css/plain/hacks.hrx | RSS=7MB
+[206 ] OK   css/plain/hacks.hrx                                          |    7 →    7 MB (+0)
+[ 207] COMPILING                                     css/plain/media.hrx | RSS=7MB
+[207 ] OK   css/plain/media.hrx                                          |    7 →    7 MB (+0)
+[ 208] COMPILING                                        css/plain/if.hrx | RSS=7MB
+[208 ] OK   css/plain/if.hrx                                             |    7 →    7 MB (+0)
+[ 209] COMPILING                                      css/plain/null.hrx | RSS=7MB
+[209 ] OK   css/plain/null.hrx                                           |    7 →    7 MB (+0)
+[ 210] COMPILING                        css/plain/boolean_operations.hrx | RSS=7MB
+[210 ] OK   css/plain/boolean_operations.hrx                             |    7 →    7 MB (+0)
+[ 211] COMPILING                                    css/plain/extend.hrx | RSS=7MB
+[211 ] OK   css/plain/extend.hrx                                         |    7 →    7 MB (+0)
+[ 212] COMPILING                             css/plain/single_equals.hrx | RSS=7MB
+[212 ] OK   css/plain/single_equals.hrx                                  |    7 →    7 MB (+0)
+[ 213] COMPILING                         css/plain/custom_properties.hrx | RSS=7MB
+[213 ] OK   css/plain/custom_properties.hrx                              |    7 →    7 MB (+0)
+[ 214] COMPILING                                  css/plain/function.hrx | RSS=7MB
+[214 ] OK   css/plain/function.hrx                                       |    7 →    7 MB (+0)
+[ 215] COMPILING                               css/plain/calculation.hrx | RSS=7MB
+[215 ] OK   css/plain/calculation.hrx                                    |    7 →    7 MB (+0)
+[ 216] COMPILING                         css/plain/import/whitespace.hrx | RSS=7MB
+[216 ] OK   css/plain/import/whitespace.hrx                              |    7 →    7 MB (+0)
+[ 217] COMPILING                   css/plain/import/partial_conflict.hrx | RSS=7MB
+[217 ] OK   css/plain/import/partial_conflict.hrx                        |    7 →    7 MB (+0)
+[ 218] COMPILING                   css/plain/import/css_before_index.hrx | RSS=7MB
+[218 ] OK   css/plain/import/css_before_index.hrx                        |    7 →    7 MB (+0)
+[ 219] COMPILING              css/plain/import/sass_takes_precedence.hrx | RSS=7MB
+[219 ] OK   css/plain/import/sass_takes_precedence.hrx                   |    7 →    7 MB (+0)
+[ 220] COMPILING                             css/plain/import/in_css.hrx | RSS=7MB
+[220 ] OK   css/plain/import/in_css.hrx                                  |    7 →    7 MB (+0)
+[ 221] COMPILING                         css/plain/import/conditions.hrx | RSS=7MB
+[221 ] OK   css/plain/import/conditions.hrx                              |    7 →    7 MB (+0)
+[ 222] COMPILING              css/plain/import/scss_takes_precedence.hrx | RSS=7MB
+[222 ] OK   css/plain/import/scss_takes_precedence.hrx                   |    7 →    7 MB (+0)
+[ 223] COMPILING                               css/plain/error/media.hrx | RSS=7MB
+[223 ] OK   css/plain/error/media.hrx                                    |    7 →    7 MB (+0)
+[ 224] COMPILING                css/plain/error/statement/style_rule.hrx | RSS=7MB
+[224 ] OK   css/plain/error/statement/style_rule.hrx                     |    7 →    7 MB (+0)
+[ 225] COMPILING            css/plain/error/statement/silent_comment.hrx | RSS=7MB
+[225 ] OK   css/plain/error/statement/silent_comment.hrx                 |    7 →    7 MB (+0)
+[ 226] COMPILING                   css/plain/error/statement/at_rule.hrx | RSS=7MB
+[226 ] OK   css/plain/error/statement/at_rule.hrx                        |    7 →    7 MB (+0)
+[ 227] COMPILING                css/plain/error/expression/operation.hrx | RSS=7MB
+[227 ] OK   css/plain/error/expression/operation.hrx                     |    7 →    7 MB (+0)
+[ 228] COMPILING          css/plain/error/expression/parent_selector.hrx | RSS=7MB
+[228 ] OK   css/plain/error/expression/parent_selector.hrx               |    7 →    7 MB (+0)
+[ 229] COMPILING                       css/plain/error/expression/if.hrx | RSS=7MB
+[229 ] OK   css/plain/error/expression/if.hrx                            |    7 →    7 MB (+0)
+[ 230] COMPILING                     css/plain/error/expression/list.hrx | RSS=7MB
+[230 ] OK   css/plain/error/expression/list.hrx                          |    7 →    7 MB (+0)
+[ 231] COMPILING                      css/plain/error/expression/map.hrx | RSS=7MB
+[231 ] OK   css/plain/error/expression/map.hrx                           |    7 →    7 MB (+0)
+[ 232] COMPILING            css/plain/error/expression/interpolation.hrx | RSS=7MB
+[232 ] OK   css/plain/error/expression/interpolation.hrx                 |    7 →    7 MB (+0)
+[ 233] COMPILING                 css/plain/error/expression/function.hrx | RSS=7MB
+[233 ] OK   css/plain/error/expression/function.hrx                      |    7 →    7 MB (+0)
+[ 234] COMPILING              css/plain/error/expression/calculation.hrx | RSS=7MB
+[234 ] OK   css/plain/error/expression/calculation.hrx                   |    7 →    7 MB (+0)
+[ 235] COMPILING              css/plain/error/expression/parentheses.hrx | RSS=7MB
+[235 ] OK   css/plain/error/expression/parentheses.hrx                   |    7 →    7 MB (+0)
+[ 236] COMPILING                 css/plain/error/expression/variable.hrx | RSS=7MB
+[236 ] OK   css/plain/error/expression/variable.hrx                      |    7 →    7 MB (+0)
+[ 237] COMPILING                                 css/plain/functions.hrx | RSS=7MB
+[237 ] OK   css/plain/functions.hrx                                      |    7 →    7 MB (+0)
+[ 238] COMPILING                                     css/plain/slash.hrx | RSS=7MB
+[238 ] OK   css/plain/slash.hrx                                          |    7 →    7 MB (+0)
+[ 239] COMPILING                                         css/comment.hrx | RSS=7MB
+[239 ] OK   css/comment.hrx                                              |    7 →    7 MB (+0)
+[ 240] COMPILING                       css/function_name_identifiers.hrx | RSS=7MB
+[240 ] OK   css/function_name_identifiers.hrx                            |    7 →    7 MB (+0)
+[ 241] COMPILING                                             css/url.hrx | RSS=7MB
+[241 ] OK   css/url.hrx                                                  |    7 →    7 MB (+0)
+[ 242] COMPILING                                       css/keyframes.hrx | RSS=7MB
+[242 ] OK   css/keyframes.hrx                                            |    7 →    7 MB (+0)
+[ 243] COMPILING            css/custom_properties/name_interpolation.hrx | RSS=7MB
+[243 ] OK   css/custom_properties/name_interpolation.hrx                 |    7 →    7 MB (+0)
+[ 244] COMPILING           css/custom_properties/value_interpolation.hrx | RSS=7MB
+[244 ] OK   css/custom_properties/value_interpolation.hrx                |    7 →    7 MB (+0)
+[ 245] COMPILING            css/custom_properties/nesting_characters.hrx | RSS=7MB
+[245 ] OK   css/custom_properties/nesting_characters.hrx                 |    7 →    7 MB (+0)
+[ 246] COMPILING             css/custom_properties/without_semicolon.hrx | RSS=7MB
+[246 ] OK   css/custom_properties/without_semicolon.hrx                  |    7 →    7 MB (+0)
+[ 247] COMPILING                   css/custom_properties/exclamation.hrx | RSS=7MB
+[247 ] OK   css/custom_properties/exclamation.hrx                        |    7 →    7 MB (+0)
+[ 248] COMPILING                         css/custom_properties/error.hrx | RSS=7MB
+[248 ] OK   css/custom_properties/error.hrx                              |    7 →    7 MB (+0)
+[ 249] COMPILING                        css/custom_properties/script.hrx | RSS=7MB
+[249 ] OK   css/custom_properties/script.hrx                             |    7 →    7 MB (+0)
+[ 250] COMPILING                        css/custom_properties/simple.hrx | RSS=7MB
+[250 ] OK   css/custom_properties/simple.hrx                             |    7 →    7 MB (+0)
+[ 251] COMPILING                       css/custom_properties/strings.hrx | RSS=7MB
+[251 ] OK   css/custom_properties/strings.hrx                            |    7 →    7 MB (+0)
+[ 252] COMPILING                         css/custom_properties/empty.hrx | RSS=7MB
+[252 ] OK   css/custom_properties/empty.hrx                              |    7 →    7 MB (+0)
+[ 253] COMPILING              css/custom_properties/trailing_comment.hrx | RSS=7MB
+[253 ] OK   css/custom_properties/trailing_comment.hrx                   |    7 →    7 MB (+0)
+[ 254] COMPILING                   css/custom_properties/indentation.hrx | RSS=7MB
+[254 ] OK   css/custom_properties/indentation.hrx                        |    7 →    7 MB (+0)
+[ 255] COMPILING           css/custom_properties/trailing_whitespace.hrx | RSS=7MB
+[255 ] OK   css/custom_properties/trailing_whitespace.hrx                |    7 →    7 MB (+0)
+[ 256] COMPILING                        css/custom_properties/syntax.hrx | RSS=7MB
+[256 ] OK   css/custom_properties/syntax.hrx                             |    7 →    7 MB (+0)
+[ 257] COMPILING                         css/moz_document/whitespace.hrx | RSS=7MB
+[257 ] OK   css/moz_document/whitespace.hrx                              |    7 →    7 MB (+0)
+[ 258] COMPILING                            css/moz_document/comment.hrx | RSS=7MB
+[258 ] OK   css/moz_document/comment.hrx                                 |    7 →    7 MB (+0)
+[ 259] COMPILING             css/moz_document/functions/interpolated.hrx | RSS=7MB
+[259 ] OK   css/moz_document/functions/interpolated.hrx                  |    7 →    7 MB (+0)
+[ 260] COMPILING                   css/moz_document/functions/static.hrx | RSS=7MB
+[260 ] OK   css/moz_document/functions/static.hrx                        |    7 →    7 MB (+0)
+[ 261] COMPILING                     css/moz_document/multi_function.hrx | RSS=7MB
+[261 ] OK   css/moz_document/multi_function.hrx                          |    7 →    7 MB (+0)
+[ 262] COMPILING                       css/moz_document/empty_prefix.hrx | RSS=7MB
+[262 ] OK   css/moz_document/empty_prefix.hrx                            |    7 →    7 MB (+0)
+[ 263] COMPILING            css/unknown_directive/name_interpolation.hrx | RSS=7MB
+[263 ] OK   css/unknown_directive/name_interpolation.hrx                 |    7 →    7 MB (+0)
+[ 264] COMPILING           css/unknown_directive/value_interpolation.hrx | RSS=7MB
+[264 ] OK   css/unknown_directive/value_interpolation.hrx                |    7 →    7 MB (+0)
+[ 265] COMPILING                    css/unknown_directive/whitespace.hrx | RSS=7MB
+[265 ] OK   css/unknown_directive/whitespace.hrx                         |    7 →    7 MB (+0)
+[ 266] COMPILING                     css/unknown_directive/semicolon.hrx | RSS=7MB
+[266 ] OK   css/unknown_directive/semicolon.hrx                          |    7 →    7 MB (+0)
+[ 267] COMPILING                       css/unknown_directive/comment.hrx | RSS=7MB
+[267 ] OK   css/unknown_directive/comment.hrx                            |    7 →    7 MB (+0)
+[ 268] COMPILING                         css/unknown_directive/plain.hrx | RSS=7MB
+[268 ] OK   css/unknown_directive/plain.hrx                              |    7 →    7 MB (+0)
+[ 269] COMPILING                         css/unknown_directive/error.hrx | RSS=7MB
+[269 ] OK   css/unknown_directive/error.hrx                              |    7 →    7 MB (+0)
+[ 270] COMPILING                           css/ms_long_filter_syntax.hrx | RSS=7MB
+[270 ] OK   css/ms_long_filter_syntax.hrx                                |    7 →    7 MB (+0)
+[ 271] COMPILING                                       css/font-face.hrx | RSS=7MB
+[271 ] OK   css/font-face.hrx                                            |    7 →    7 MB (+0)
+[ 272] COMPILING                                           css/mixin.hrx | RSS=7MB
+[272 ] OK   css/mixin.hrx                                                |    7 →    7 MB (+0)
+[ 273] COMPILING                                         css/propset.hrx | RSS=7MB
+[273 ] OK   css/propset.hrx                                              |    7 →    7 MB (+0)
+[ 274] COMPILING                                        css/function.hrx | RSS=7MB
+[274 ] OK   css/function.hrx                                             |    7 →    7 MB (+0)
+[ 275] COMPILING               css/directive_with_lots_of_whitespace.hrx | RSS=7MB
+[275 ] OK   css/directive_with_lots_of_whitespace.hrx                    |    7 →    7 MB (+0)
+[ 276] COMPILING                                       css/important.hrx | RSS=7MB
+[276 ] OK   css/important.hrx                                            |    7 →    7 MB (+0)
+[ 277] COMPILING                      css/functions/special_variable.hrx | RSS=7MB
+[277 ] OK   css/functions/special_variable.hrx                           |    7 →    7 MB (+0)
+[ 278] COMPILING                                 css/functions/error.hrx | RSS=7MB
+[278 ] OK   css/functions/error.hrx                                      |    7 →    7 MB (+0)
+[ 279] COMPILING                    css/functions/special/unprefixed.hrx | RSS=7MB
+[279 ] OK   css/functions/special/unprefixed.hrx                         |    7 →    7 MB (+0)
+[ 280] COMPILING                       css/functions/special/comment.hrx | RSS=7MB
+[280 ] OK   css/functions/special/comment.hrx                            |    7 →    7 MB (+0)
+[ 281] COMPILING                         css/functions/special/error.hrx | RSS=7MB
+[281 ] OK   css/functions/special/error.hrx                              |    7 →    7 MB (+0)
+[ 282] COMPILING            css/functions/special/prefixed/uppercase.hrx | RSS=7MB
+[282 ] OK   css/functions/special/prefixed/uppercase.hrx                 |    7 →    7 MB (+0)
+[ 283] COMPILING            css/functions/special/prefixed/lowercase.hrx | RSS=7MB
+[283 ] OK   css/functions/special/prefixed/lowercase.hrx                 |    7 →    7 MB (+0)
+[ 284] COMPILING                              css/functions/newlines.hrx | RSS=7MB
+[284 ] OK   css/functions/newlines.hrx                                   |    7 →    7 MB (+0)
+[ 285] COMPILING                                   css/functions/var.hrx | RSS=7MB
+[285 ] OK   css/functions/var.hrx                                        |    7 →    7 MB (+0)
+[ 286] COMPILING                           css/functions/not_special.hrx | RSS=7MB
+[286 ] OK   css/functions/not_special.hrx                                |    7 →    7 MB (+0)
+[ 287] COMPILING                                         css/charset.hrx | RSS=7MB
+[287 ] OK   css/charset.hrx                                              |    7 →    7 MB (+0)
+[ 288] COMPILING           css/blockless_directive_without_semicolon.hrx | RSS=7MB
+[288 ] OK   css/blockless_directive_without_semicolon.hrx                |    7 →    7 MB (+0)
+[ 289] COMPILING                             css/unicode_range/range.hrx | RSS=7MB
+[289 ] OK   css/unicode_range/range.hrx                                  |    7 →    7 MB (+0)
+[ 290] COMPILING                             css/unicode_range/error.hrx | RSS=7MB
+[290 ] OK   css/unicode_range/error.hrx                                  |    7 →    7 MB (+0)
+[ 291] COMPILING                            css/unicode_range/simple.hrx | RSS=7MB
+[291 ] OK   css/unicode_range/simple.hrx                                 |    7 →    7 MB (+0)
+[ 292] COMPILING                     css/unicode_range/question_mark.hrx | RSS=7MB
+[292 ] OK   css/unicode_range/question_mark.hrx                          |    7 →    7 MB (+0)
+[ 293] COMPILING                                css/media/whitespace.hrx | RSS=7MB
+[293 ] OK   css/media/whitespace.hrx                                     |    7 →    7 MB (+0)
+[ 294] COMPILING                                   css/media/comment.hrx | RSS=7MB
+[294 ] OK   css/media/comment.hrx                                        |    7 →    7 MB (+0)
+[ 295] COMPILING                                 css/media/logic/not.hrx | RSS=7MB
+[295 ] OK   css/media/logic/not.hrx                                      |    7 →    7 MB (+0)
+[ 296] COMPILING                                  css/media/logic/or.hrx | RSS=7MB
+[296 ] OK   css/media/logic/or.hrx                                       |    7 →    7 MB (+0)
+[ 297] COMPILING                             css/media/logic/and_not.hrx | RSS=7MB
+[297 ] OK   css/media/logic/and_not.hrx                                  |    7 →    7 MB (+0)
+[ 298] COMPILING                               css/media/logic/error.hrx | RSS=7MB
+[298 ] OK   css/media/logic/error.hrx                                    |    7 →    7 MB (+0)
+[ 299] COMPILING                                 css/media/logic/and.hrx | RSS=7MB
+[299 ] OK   css/media/logic/and.hrx                                      |    7 →    7 MB (+0)
+[ 300] COMPILING                              css/media/logic/nested.hrx | RSS=7MB
+[300 ] OK   css/media/logic/nested.hrx                                   |    7 →    7 MB (+0)
+[ 301] COMPILING                                  css/media/bubbling.hrx | RSS=7MB
+[301 ] OK   css/media/bubbling.hrx                                       |    7 →    7 MB (+0)
+[ 302] COMPILING                                      css/media/type.hrx | RSS=7MB
+[302 ] OK   css/media/type.hrx                                           |    7 →    7 MB (+0)
+[ 303] COMPILING                               css/media/indentation.hrx | RSS=7MB
+[303 ] OK   css/media/indentation.hrx                                    |    7 →    7 MB (+0)
+[ 304] COMPILING                               css/media/range/error.hrx | RSS=7MB
+[304 ] OK   css/media/range/error.hrx                                    |    7 →    7 MB (+0)
+[ 305] COMPILING                  css/media/range/from_interpolation.hrx | RSS=7MB
+[305 ] OK   css/media/range/from_interpolation.hrx                       |    7 →    7 MB (+0)
+[ 306] COMPILING                    css/media/range/with_expressions.hrx | RSS=7MB
+[306 ] OK   css/media/range/with_expressions.hrx                         |    7 →    7 MB (+0)
+[ 307] COMPILING                              css/media/range/static.hrx | RSS=7MB
+[307 ] OK   css/media/range/static.hrx                                   |    7 →    7 MB (+0)
+[ 308] COMPILING                              values/maps/map-values.hrx | RSS=7MB
+[308 ] OK   values/maps/map-values.hrx                                   |    7 →    7 MB (+0)
+[ 309] COMPILING                                  values/maps/length.hrx | RSS=7MB
+[309 ] OK   values/maps/length.hrx                                       |    7 →    7 MB (+0)
+[ 310] COMPILING                            values/maps/key_equality.hrx | RSS=7MB
+[310 ] OK   values/maps/key_equality.hrx                                 |    7 →    7 MB (+0)
+[ 311] COMPILING                          values/maps/duplicate-keys.hrx | RSS=7MB
+[311 ] OK   values/maps/duplicate-keys.hrx                               |    7 →    7 MB (+0)
+[ 312] COMPILING                             values/maps/invalid-key.hrx | RSS=7MB
+[312 ] OK   values/maps/invalid-key.hrx                                  |    7 →    7 MB (+0)
+[ 313] COMPILING                                    values/maps/sass.hrx | RSS=7MB
+[313 ] OK   values/maps/sass.hrx                                         |    7 →    7 MB (+0)
+[ 314] COMPILING                                  values/maps/errors.hrx | RSS=7MB
+[314 ] OK   values/maps/errors.hrx                                       |    7 →    7 MB (+0)
+[ 315] COMPILING                                       values/mixins.hrx | RSS=7MB
+[315 ] OK   values/mixins.hrx                                            |    7 →    7 MB (+0)
+[ 316] COMPILING                           values/numbers/degenerate.hrx | RSS=7MB
+[316 ] OK   values/numbers/degenerate.hrx                                |    7 →    7 MB (+0)
+[ 317] COMPILING              values/numbers/divide/slash_free/value.hrx | RSS=7MB
+[317 ] OK   values/numbers/divide/slash_free/value.hrx                   |    7 →    7 MB (+0)
+[ 318] COMPILING             values/numbers/divide/slash_free/return.hrx | RSS=7MB
+[318 ] OK   values/numbers/divide/slash_free/return.hrx                  |    7 →    7 MB (+0)
+[ 319] COMPILING           values/numbers/divide/slash_free/variable.hrx | RSS=7MB
+[319 ] OK   values/numbers/divide/slash_free/variable.hrx                |    7 →    7 MB (+0)
+[ 320] COMPILING           values/numbers/divide/slash_free/argument.hrx | RSS=7MB
+[320 ] OK   values/numbers/divide/slash_free/argument.hrx                |    7 →    7 MB (+0)
+[ 321] COMPILING               values/numbers/divide/slash_separated.hrx | RSS=7MB
+[321 ] OK   values/numbers/divide/slash_separated.hrx                    |    7 →    7 MB (+0)
+[ 322] COMPILING                            values/numbers/precision.hrx | RSS=7MB
+[322 ] OK   values/numbers/precision.hrx                                 |    7 →    7 MB (+0)
+[ 323] COMPILING                                values/numbers/error.hrx | RSS=7MB
+[323 ] OK   values/numbers/error.hrx                                     |    7 →    7 MB (+0)
+[ 324] COMPILING                       values/numbers/units/multiple.hrx | RSS=7MB
+[324 ] OK   values/numbers/units/multiple.hrx                            |    7 →    7 MB (+0)
+[ 325] COMPILING                               values/numbers/bounds.hrx | RSS=7MB
+[325 ] OK   values/numbers/bounds.hrx                                    |    7 →    7 MB (+0)
+[ 326] COMPILING                          values/numbers/modulo/ints.hrx | RSS=7MB
+[326 ] OK   values/numbers/modulo/ints.hrx                               |    7 →    7 MB (+0)
+[ 327] COMPILING                        values/numbers/modulo/floats.hrx | RSS=7MB
+[327 ] OK   values/numbers/modulo/floats.hrx                             |    7 →    7 MB (+0)
+[ 328] COMPILING                         values/numbers/modulo/zeros.hrx | RSS=7MB
+[328 ] OK   values/numbers/modulo/zeros.hrx                              |    7 →    7 MB (+0)
+[ 329] COMPILING                           values/numbers/very_large.hrx | RSS=7MB
+[329 ] OK   values/numbers/very_large.hrx                                |    7 →    7 MB (+0)
+[ 330] COMPILING                                          values/ids.hrx | RSS=7MB
+[330 ] OK   values/ids.hrx                                               |    7 →    7 MB (+0)
+[ 331] COMPILING                               values/lists/equality.hrx | RSS=7MB
+[331 ] OK   values/lists/equality.hrx                                    |    7 →    7 MB (+0)
+[ 332] COMPILING                                   values/lists/sass.hrx | RSS=7MB
+[332 ] OK   values/lists/sass.hrx                                        |    7 →    7 MB (+0)
+[ 333] COMPILING                               values/lists/brackets.hrx | RSS=7MB
+[333 ] OK   values/lists/brackets.hrx                                    |    7 →    7 MB (+0)
+[ 334] COMPILING                                  values/lists/slash.hrx | RSS=7MB
+[334 ] OK   values/lists/slash.hrx                                       |    7 →    7 MB (+0)
+[ 335] COMPILING                                      values/strings.hrx | RSS=7MB
+[335 ] OK   values/strings.hrx                                           |    7 →    7 MB (+0)
+[ 336] COMPILING                 values/identifiers/escape/normalize.hrx | RSS=7MB
+[336 ] OK   values/identifiers/escape/normalize.hrx                      |    7 →    7 MB (+0)
+[ 337] COMPILING                    values/identifiers/escape/script.hrx | RSS=7MB
+[337 ] OK   values/identifiers/escape/script.hrx                         |    7 →    7 MB (+0)
+[ 338] COMPILING                               values/identifiers/if.hrx | RSS=7MB
+[338 ] OK   values/identifiers/if.hrx                                    |    7 →    7 MB (+0)
+[ 339] COMPILING                        values/calculation/calc-size.hrx | RSS=7MB
+[339 ] OK   values/calculation/calc-size.hrx                             |    7 →    7 MB (+0)
+[ 340] COMPILING                            values/calculation/atan2.hrx | RSS=7MB
+[340 ] OK   values/calculation/atan2.hrx                                 |    7 →    7 MB (+0)
+[ 341] COMPILING                              values/calculation/log.hrx | RSS=7MB
+[341 ] OK   values/calculation/log.hrx                                   |    7 →    7 MB (+0)
+[ 342] COMPILING                             values/calculation/sqrt.hrx | RSS=7MB
+[342 ] OK   values/calculation/sqrt.hrx                                  |    7 →    7 MB (+0)
+[ 343] COMPILING                             values/calculation/acos.hrx | RSS=7MB
+[343 ] OK   values/calculation/acos.hrx                                  |    7 →    7 MB (+0)
+[ 344] COMPILING                             values/calculation/asin.hrx | RSS=7MB
+[344 ] OK   values/calculation/asin.hrx                                  |    7 →    7 MB (+0)
+[ 345] COMPILING                            values/calculation/hypot.hrx | RSS=7MB
+[345 ] OK   values/calculation/hypot.hrx                                 |    7 →    7 MB (+0)
+[ 346] COMPILING                              values/calculation/mod.hrx | RSS=7MB
+[346 ] OK   values/calculation/mod.hrx                                   |    7 →    7 MB (+0)
+[ 347] COMPILING                              values/calculation/max.hrx | RSS=7MB
+[347 ] OK   values/calculation/max.hrx                                   |    7 →    7 MB (+0)
+[ 348] COMPILING                              values/calculation/pow.hrx | RSS=7MB
+[348 ] OK   values/calculation/pow.hrx                                   |    7 →    7 MB (+0)
+[ 349] COMPILING                              values/calculation/exp.hrx | RSS=7MB
+[349 ] OK   values/calculation/exp.hrx                                   |    7 →    7 MB (+0)
+[ 350] COMPILING                              values/calculation/tan.hrx | RSS=7MB
+[350 ] OK   values/calculation/tan.hrx                                   |    7 →    7 MB (+0)
+[ 351] COMPILING                              values/calculation/sin.hrx | RSS=7MB
+[351 ] OK   values/calculation/sin.hrx                                   |    7 →    7 MB (+0)
+[ 352] COMPILING                      values/calculation/calc/parens.hrx | RSS=7MB
+[352 ] OK   values/calculation/calc/parens.hrx                           |    7 →    7 MB (+0)
+[ 353] COMPILING                    values/calculation/calc/operator.hrx | RSS=7MB
+[353 ] OK   values/calculation/calc/operator.hrx                         |    7 →    7 MB (+0)
+[ 354] COMPILING                    values/calculation/calc/simplify.hrx | RSS=7MB
+[354 ] OK   values/calculation/calc/simplify.hrx                         |    7 →    7 MB (+0)
+[ 355] COMPILING                 values/calculation/calc/no_operator.hrx | RSS=7MB
+[355 ] OK   values/calculation/calc/no_operator.hrx                      |    7 →    7 MB (+0)
+[ 356] COMPILING                       values/calculation/calc/space.hrx | RSS=7MB
+[356 ] OK   values/calculation/calc/space.hrx                            |    7 →    7 MB (+0)
+[ 357] COMPILING         values/calculation/calc/error/complex_units.hrx | RSS=7MB
+[357 ] OK   values/calculation/calc/error/complex_units.hrx              |    7 →    7 MB (+0)
+[ 358] COMPILING              values/calculation/calc/error/operator.hrx | RSS=7MB
+[358 ] OK   values/calculation/calc/error/operator.hrx                   |    7 →    7 MB (+0)
+[ 359] COMPILING                 values/calculation/calc/error/value.hrx | RSS=7MB
+[359 ] OK   values/calculation/calc/error/value.hrx                      |    7 →    7 MB (+0)
+[ 360] COMPILING                 values/calculation/calc/error/space.hrx | RSS=7MB
+[360 ] OK   values/calculation/calc/error/space.hrx                      |    7 →    7 MB (+0)
+[ 361] COMPILING                values/calculation/calc/error/syntax.hrx | RSS=7MB
+[361 ] OK   values/calculation/calc/error/syntax.hrx                     |    7 →    7 MB (+0)
+[ 362] COMPILING values/calculation/calc/error/known_incompatible/minus.hrx | RSS=7MB
+[362 ] OK   values/calculation/calc/error/known_incompatible/minus.hrx   |    7 →    7 MB (+0)
+[ 363] COMPILING values/calculation/calc/error/known_incompatible/length/vmax.hrx | RSS=7MB
+[363 ] OK   values/calculation/calc/error/known_incompatible/length/vmax.hrx |    7 →    7 MB (+0)
+[ 364] COMPILING values/calculation/calc/error/known_incompatible/length/vw.hrx | RSS=7MB
+[364 ] OK   values/calculation/calc/error/known_incompatible/length/vw.hrx |    7 →    7 MB (+0)
+[ 365] COMPILING values/calculation/calc/error/known_incompatible/length/q.hrx | RSS=7MB
+[365 ] OK   values/calculation/calc/error/known_incompatible/length/q.hrx |    7 →    7 MB (+0)
+[ 366] COMPILING values/calculation/calc/error/known_incompatible/length/mm.hrx | RSS=7MB
+[366 ] OK   values/calculation/calc/error/known_incompatible/length/mm.hrx |    7 →    7 MB (+0)
+[ 367] COMPILING values/calculation/calc/error/known_incompatible/length/pc.hrx | RSS=7MB
+[367 ] OK   values/calculation/calc/error/known_incompatible/length/pc.hrx |    7 →    7 MB (+0)
+[ 368] COMPILING values/calculation/calc/error/known_incompatible/length/pt.hrx | RSS=7MB
+[368 ] OK   values/calculation/calc/error/known_incompatible/length/pt.hrx |    7 →    7 MB (+0)
+[ 369] COMPILING values/calculation/calc/error/known_incompatible/length/vmin.hrx | RSS=7MB
+[369 ] OK   values/calculation/calc/error/known_incompatible/length/vmin.hrx |    7 →    7 MB (+0)
+[ 370] COMPILING values/calculation/calc/error/known_incompatible/length/em.hrx | RSS=7MB
+[370 ] OK   values/calculation/calc/error/known_incompatible/length/em.hrx |    7 →    7 MB (+0)
+[ 371] COMPILING values/calculation/calc/error/known_incompatible/length/in.hrx | RSS=7MB
+[371 ] OK   values/calculation/calc/error/known_incompatible/length/in.hrx |    7 →    7 MB (+0)
+[ 372] COMPILING values/calculation/calc/error/known_incompatible/length/ex.hrx | RSS=7MB
+[372 ] OK   values/calculation/calc/error/known_incompatible/length/ex.hrx |    7 →    7 MB (+0)
+[ 373] COMPILING values/calculation/calc/error/known_incompatible/length/px.hrx | RSS=7MB
+[373 ] OK   values/calculation/calc/error/known_incompatible/length/px.hrx |    7 →    7 MB (+0)
+[ 374] COMPILING values/calculation/calc/error/known_incompatible/length/vh.hrx | RSS=7MB
+[374 ] OK   values/calculation/calc/error/known_incompatible/length/vh.hrx |    7 →    7 MB (+0)
+[ 375] COMPILING values/calculation/calc/error/known_incompatible/length/ch.hrx | RSS=7MB
+[375 ] OK   values/calculation/calc/error/known_incompatible/length/ch.hrx |    7 →    7 MB (+0)
+[ 376] COMPILING values/calculation/calc/error/known_incompatible/length/rem.hrx | RSS=7MB
+[376 ] OK   values/calculation/calc/error/known_incompatible/length/rem.hrx |    7 →    7 MB (+0)
+[ 377] COMPILING values/calculation/calc/error/known_incompatible/length/cm.hrx | RSS=7MB
+[377 ] OK   values/calculation/calc/error/known_incompatible/length/cm.hrx |    7 →    7 MB (+0)
+[ 378] COMPILING values/calculation/calc/error/known_incompatible/frequency.hrx | RSS=7MB
+[378 ] OK   values/calculation/calc/error/known_incompatible/frequency.hrx |    7 →    7 MB (+0)
+[ 379] COMPILING values/calculation/calc/error/known_incompatible/complex.hrx | RSS=7MB
+[379 ] OK   values/calculation/calc/error/known_incompatible/complex.hrx |    7 →    7 MB (+0)
+[ 380] COMPILING values/calculation/calc/error/known_incompatible/angle.hrx | RSS=7MB
+[380 ] OK   values/calculation/calc/error/known_incompatible/angle.hrx   |    7 →    7 MB (+0)
+[ 381] COMPILING values/calculation/calc/error/known_incompatible/time.hrx | RSS=7MB
+[381 ] OK   values/calculation/calc/error/known_incompatible/time.hrx    |    7 →    7 MB (+0)
+[ 382] COMPILING values/calculation/calc/error/known_incompatible/unknown_and_none.hrx | RSS=7MB
+[382 ] OK   values/calculation/calc/error/known_incompatible/unknown_and_none.hrx |    7 →    7 MB (+0)
+[ 383] COMPILING                    values/calculation/calc/constant.hrx | RSS=7MB
+[383 ] OK   values/calculation/calc/constant.hrx                         |    7 →    7 MB (+0)
+[ 384] COMPILING                              values/calculation/cos.hrx | RSS=7MB
+[384 ] OK   values/calculation/cos.hrx                                   |    7 →    7 MB (+0)
+[ 385] COMPILING                             values/calculation/sign.hrx | RSS=7MB
+[385 ] OK   values/calculation/sign.hrx                                  |    7 →    7 MB (+0)
+[ 386] COMPILING                            values/calculation/clamp.hrx | RSS=7MB
+[386 ] OK   values/calculation/clamp.hrx                                 |    7 →    7 MB (+0)
+[ 387] COMPILING                             values/calculation/atan.hrx | RSS=7MB
+[387 ] OK   values/calculation/atan.hrx                                  |    7 →    7 MB (+0)
+[ 388] COMPILING                              values/calculation/abs.hrx | RSS=7MB
+[388 ] OK   values/calculation/abs.hrx                                   |    7 →    7 MB (+0)
+[ 389] COMPILING                              values/calculation/rem.hrx | RSS=7MB
+[389 ] OK   values/calculation/rem.hrx                                   |    7 →    7 MB (+0)
+[ 390] COMPILING            values/calculation/round/three_arguments.hrx | RSS=7MB
+[390 ] OK   values/calculation/round/three_arguments.hrx                 |    7 →    7 MB (+0)
+[ 391] COMPILING               values/calculation/round/one_argument.hrx | RSS=7MB
+[391 ] OK   values/calculation/round/one_argument.hrx                    |    7 →    7 MB (+0)
+[ 392] COMPILING                      values/calculation/round/error.hrx | RSS=7MB
+[392 ] OK   values/calculation/round/error.hrx                           |    7 →    7 MB (+0)
+[ 393] COMPILING              values/calculation/round/two_arguments.hrx | RSS=7MB
+[393 ] OK   values/calculation/round/two_arguments.hrx                   |    7 →    7 MB (+0)
+[ 394] COMPILING              values/calculation/round/strategy/down.hrx | RSS=7MB
+[394 ] OK   values/calculation/round/strategy/down.hrx                   |    7 →    7 MB (+0)
+[ 395] COMPILING                values/calculation/round/strategy/up.hrx | RSS=7MB
+[395 ] OK   values/calculation/round/strategy/up.hrx                     |    7 →    7 MB (+0)
+[ 396] COMPILING           values/calculation/round/strategy/to-zero.hrx | RSS=7MB
+[396 ] OK   values/calculation/round/strategy/to-zero.hrx                |    7 →    7 MB (+0)
+[ 397] COMPILING           values/calculation/round/strategy/nearest.hrx | RSS=7MB
+[397 ] OK   values/calculation/round/strategy/nearest.hrx                |    7 →    7 MB (+0)
+[ 398] COMPILING                              values/calculation/min.hrx | RSS=7MB
+[398 ] OK   values/calculation/min.hrx                                   |    7 →    7 MB (+0)
+[ 399] COMPILING                              values/colors/equality.hrx | RSS=7MB
+[399 ] OK   values/colors/equality.hrx                                   |    7 →    7 MB (+0)
+[ 400] COMPILING              values/colors/alpha_hex/initial_letter.hrx | RSS=7MB
+[400 ] OK   values/colors/alpha_hex/initial_letter.hrx                   |    7 →    7 MB (+0)
+[ 401] COMPILING               values/colors/alpha_hex/initial_digit.hrx | RSS=7MB
+[401 ] OK   values/colors/alpha_hex/initial_digit.hrx                    |    7 →    7 MB (+0)
+[ 402] COMPILING                          parser/operator_precedence.hrx | RSS=7MB
+[402 ] OK   parser/operator_precedence.hrx                               |    7 →    7 MB (+0)
+[ 403] COMPILING                                parser/interpolation.hrx | RSS=7MB
+[403 ] OK   parser/interpolation.hrx                                     |    7 →    7 MB (+0)
+[ 404] COMPILING                                  parser/indentation.hrx | RSS=7MB
+[404 ] OK   parser/indentation.hrx                                       |    7 →    7 MB (+0)
+[ 405] COMPILING                                     parser/selector.hrx | RSS=7MB
+[405 ] OK   parser/selector.hrx                                          |    7 →    7 MB (+0)
+[ 406] COMPILING                                variables/whitespace.hrx | RSS=7MB
+[406 ] OK   variables/whitespace.hrx                                     |    7 →    7 MB (+0)
+[ 407] COMPILING                                 variables/semicolon.hrx | RSS=7MB
+[407 ] OK   variables/semicolon.hrx                                      |    7 →    7 MB (+0)
+[ 408] COMPILING                                  variables/comments.hrx | RSS=7MB
+[408 ] OK   variables/comments.hrx                                       |    7 →    7 MB (+0)
+[ 409] COMPILING                               variables/semi_global.hrx | RSS=7MB
+[409 ] OK   variables/semi_global.hrx                                    |    7 →    7 MB (+0)
+[ 410] COMPILING                               variables/double_flag.hrx | RSS=7MB
+[410 ] OK   variables/double_flag.hrx                                    |    7 →    7 MB (+0)
+[ 411] COMPILING                                 expressions/if/else.hrx | RSS=7MB
+[411 ] OK   expressions/if/else.hrx                                      |    7 →    7 MB (+0)
+[ 412] COMPILING                                  expressions/if/css.hrx | RSS=7MB
+[412 ] OK   expressions/if/css.hrx                                       |    7 →    7 MB (+0)
+[ 413] COMPILING                        expressions/if/short_circuit.hrx | RSS=7MB
+[413 ] OK   expressions/if/short_circuit.hrx                             |    7 →    7 MB (+0)
+[ 414] COMPILING                                 expressions/if/sass.hrx | RSS=7MB
+[414 ] OK   expressions/if/sass.hrx                                      |    7 →    7 MB (+0)
+[ 415] COMPILING                                  expressions/if/raw.hrx | RSS=7MB
+[415 ] OK   expressions/if/raw.hrx                                       |    7 →    7 MB (+0)
+[ 416] COMPILING                            expressions/if/error/not.hrx | RSS=7MB
+[416 ] OK   expressions/if/error/not.hrx                                 |    7 →    7 MB (+0)
+[ 417] COMPILING                        expressions/if/error/missing.hrx | RSS=7MB
+[417 ] OK   expressions/if/error/missing.hrx                             |    7 →    7 MB (+0)
+[ 418] COMPILING                          expressions/if/error/paren.hrx | RSS=7MB
+[418 ] OK   expressions/if/error/paren.hrx                               |    7 →    7 MB (+0)
+[ 419] COMPILING                             expressions/if/error/or.hrx | RSS=7MB
+[419 ] OK   expressions/if/error/or.hrx                                  |    7 →    7 MB (+0)
+[ 420] COMPILING                      expressions/if/error/semicolon.hrx | RSS=7MB
+[420 ] OK   expressions/if/error/semicolon.hrx                           |    7 →    7 MB (+0)
+[ 421] COMPILING          expressions/if/error/invalid_function_name.hrx | RSS=7MB
+[421 ] OK   expressions/if/error/invalid_function_name.hrx               |    7 →    7 MB (+0)
+[ 422] COMPILING             expressions/if/error/missing_whitepsace.hrx | RSS=7MB
+[422 ] OK   expressions/if/error/missing_whitepsace.hrx                  |    7 →    7 MB (+0)
+[ 423] COMPILING                            expressions/if/error/and.hrx | RSS=7MB
+[423 ] OK   expressions/if/error/and.hrx                                 |    7 →    7 MB (+0)
+[ 424] COMPILING                          expressions/if/error/empty.hrx | RSS=7MB
+[424 ] OK   expressions/if/error/empty.hrx                               |    7 →    7 MB (+0)
+[ 425] COMPILING                            expressions/if/error/raw.hrx | RSS=7MB
+[425 ] OK   expressions/if/error/raw.hrx                                 |    7 →    7 MB (+0)
+[ 426] COMPILING                               expressions/if/syntax.hrx | RSS=7MB
+[426 ] OK   expressions/if/syntax.hrx                                    |    7 →    7 MB (+0)
+[ 427] COMPILING                                expressions/comments.hrx | RSS=7MB
+[427 ] OK   expressions/comments.hrx                                     |    7 →    7 MB (+0)
+[ 428] COMPILING                               expressions/functions.hrx | RSS=7MB
+[428 ] OK   expressions/functions.hrx                                    |    7 →    7 MB (+0)
+[ 429] COMPILING                                  expressions/syntax.hrx | RSS=7MB
+[429 ] OK   expressions/syntax.hrx                                       |    7 →    7 MB (+0)
+[ 430] COMPILING                      core_functions/selector/append.hrx | RSS=7MB
+[430 ] OK   core_functions/selector/append.hrx                           |    7 →    7 MB (+0)
+[ 431] COMPILING               core_functions/selector/extend/format.hrx | RSS=7MB
+[431 ] OK   core_functions/selector/extend/format.hrx                    |    7 →    7 MB (+0)
+[ 432] COMPILING core_functions/selector/extend/complex/with_unification.hrx | RSS=7MB
+[432 ] OK   core_functions/selector/extend/complex/with_unification.hrx  |    7 →    7 MB (+0)
+[ 433] COMPILING core_functions/selector/extend/complex/combinator_only.hrx | RSS=7MB
+[433 ] OK   core_functions/selector/extend/complex/combinator_only.hrx   |    7 →    7 MB (+0)
+[ 434] COMPILING core_functions/selector/extend/complex/without_unification.hrx | RSS=7MB
+[434 ] OK   core_functions/selector/extend/complex/without_unification.hrx |    7 →    7 MB (+0)
+[ 435] COMPILING                core_functions/selector/extend/no_op.hrx | RSS=7MB
+[435 ] OK   core_functions/selector/extend/no_op.hrx                     |    7 →    7 MB (+0)
+[ 436] COMPILING                core_functions/selector/extend/error.hrx | RSS=7MB
+[436 ] OK   core_functions/selector/extend/error.hrx                     |    7 →    7 MB (+0)
+[ 437] COMPILING    core_functions/selector/extend/simple/pseudo/arg.hrx | RSS=7MB
+[437 ] OK   core_functions/selector/extend/simple/pseudo/arg.hrx         |    7 →    7 MB (+0)
+[ 438] COMPILING core_functions/selector/extend/simple/pseudo/selector/non_idempotent.hrx | RSS=7MB
+[438 ] OK   core_functions/selector/extend/simple/pseudo/selector/non_idempotent.hrx |    7 →    7 MB (+0)
+[ 439] COMPILING core_functions/selector/extend/simple/pseudo/selector/match.hrx | RSS=7MB
+[439 ] OK   core_functions/selector/extend/simple/pseudo/selector/match.hrx |    7 →    7 MB (+0)
+[ 440] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/not.hrx | RSS=7MB
+[440 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/not.hrx |    7 →    7 MB (+0)
+[ 441] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/nth_child.hrx | RSS=7MB
+[441 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/nth_child.hrx |    7 →    7 MB (+0)
+[ 442] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/current.hrx | RSS=7MB
+[442 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/current.hrx |    7 →    7 MB (+0)
+[ 443] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/is.hrx | RSS=7MB
+[443 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/is.hrx |    7 →    7 MB (+0)
+[ 444] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/any.hrx | RSS=7MB
+[444 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/any.hrx |    7 →    7 MB (+0)
+[ 445] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/matches.hrx | RSS=7MB
+[445 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/matches.hrx |    7 →    7 MB (+0)
+[ 446] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/where.hrx | RSS=7MB
+[446 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/where.hrx |    7 →    7 MB (+0)
+[ 447] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/prefixed.hrx | RSS=7MB
+[447 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/prefixed.hrx |    7 →    7 MB (+0)
+[ 448] COMPILING core_functions/selector/extend/simple/pseudo/selector/idempotent/nth_last_child.hrx | RSS=7MB
+[448 ] OK   core_functions/selector/extend/simple/pseudo/selector/idempotent/nth_last_child.hrx |    7 →    7 MB (+0)
+[ 449] COMPILING core_functions/selector/extend/simple/pseudo/no_arg.hrx | RSS=7MB
+[449 ] OK   core_functions/selector/extend/simple/pseudo/no_arg.hrx      |    7 →    7 MB (+0)
+[ 450] COMPILING   core_functions/selector/extend/simple/placeholder.hrx | RSS=7MB
+[450 ] OK   core_functions/selector/extend/simple/placeholder.hrx        |    7 →    7 MB (+0)
+[ 451] COMPILING            core_functions/selector/extend/simple/id.hrx | RSS=7MB
+[451 ] OK   core_functions/selector/extend/simple/id.hrx                 |    7 →    7 MB (+0)
+[ 452] COMPILING     core_functions/selector/extend/simple/attribute.hrx | RSS=7MB
+[452 ] OK   core_functions/selector/extend/simple/attribute.hrx          |    7 →    7 MB (+0)
+[ 453] COMPILING     core_functions/selector/extend/simple/universal.hrx | RSS=7MB
+[453 ] OK   core_functions/selector/extend/simple/universal.hrx          |    7 →    7 MB (+0)
+[ 454] COMPILING          core_functions/selector/extend/simple/type.hrx | RSS=7MB
+[454 ] OK   core_functions/selector/extend/simple/type.hrx               |    7 →    7 MB (+0)
+[ 455] COMPILING         core_functions/selector/extend/simple/class.hrx | RSS=7MB
+[455 ] OK   core_functions/selector/extend/simple/class.hrx              |    7 →    7 MB (+0)
+[ 456] COMPILING                 core_functions/selector/extend/list.hrx | RSS=7MB
+[456 ] OK   core_functions/selector/extend/list.hrx                      |    7 →    7 MB (+0)
+[ 457] COMPILING                core_functions/selector/extend/named.hrx | RSS=7MB
+[457 ] OK   core_functions/selector/extend/named.hrx                     |    7 →    7 MB (+0)
+[ 458] COMPILING                core_functions/selector/unify/format.hrx | RSS=7MB
+[458 ] OK   core_functions/selector/unify/format.hrx                     |    7 →    7 MB (+0)
+[ 459] COMPILING              core_functions/selector/unify/compound.hrx | RSS=7MB
+[459 ] OK   core_functions/selector/unify/compound.hrx                   |    7 →    7 MB (+0)
+[ 460] COMPILING           core_functions/selector/unify/complex/lcs.hrx | RSS=7MB
+[460 ] OK   core_functions/selector/unify/complex/lcs.hrx                |    7 →    7 MB (+0)
+[ 461] COMPILING core_functions/selector/unify/complex/superselector.hrx | RSS=7MB
+[461 ] OK   core_functions/selector/unify/complex/superselector.hrx      |    7 →    7 MB (+0)
+[ 462] COMPILING core_functions/selector/unify/complex/combinators/child.hrx | RSS=7MB
+[462 ] OK   core_functions/selector/unify/complex/combinators/child.hrx  |    7 →    7 MB (+0)
+[ 463] COMPILING core_functions/selector/unify/complex/combinators/sibling.hrx | RSS=7MB
+[463 ] OK   core_functions/selector/unify/complex/combinators/sibling.hrx |    7 →    7 MB (+0)
+[ 464] COMPILING core_functions/selector/unify/complex/combinators/multiple.hrx | RSS=7MB
+[464 ] OK   core_functions/selector/unify/complex/combinators/multiple.hrx |    7 →    7 MB (+0)
+[ 465] COMPILING core_functions/selector/unify/complex/combinators/initial.hrx | RSS=7MB
+[465 ] OK   core_functions/selector/unify/complex/combinators/initial.hrx |    7 →    7 MB (+0)
+[ 466] COMPILING core_functions/selector/unify/complex/combinators/next_sibling.hrx | RSS=7MB
+[466 ] OK   core_functions/selector/unify/complex/combinators/next_sibling.hrx |    7 →    7 MB (+0)
+[ 467] COMPILING     core_functions/selector/unify/complex/identical.hrx | RSS=7MB
+[467 ] OK   core_functions/selector/unify/complex/identical.hrx          |    7 →    7 MB (+0)
+[ 468] COMPILING       core_functions/selector/unify/complex/rootish.hrx | RSS=7MB
+[468 ] OK   core_functions/selector/unify/complex/rootish.hrx            |    7 →    7 MB (+0)
+[ 469] COMPILING      core_functions/selector/unify/complex/distinct.hrx | RSS=7MB
+[469 ] OK   core_functions/selector/unify/complex/distinct.hrx           |    7 →    7 MB (+0)
+[ 470] COMPILING       core_functions/selector/unify/complex/overlap.hrx | RSS=7MB
+[470 ] OK   core_functions/selector/unify/complex/overlap.hrx            |    7 →    7 MB (+0)
+[ 471] COMPILING                 core_functions/selector/unify/error.hrx | RSS=7MB
+[471 ] OK   core_functions/selector/unify/error.hrx                      |    7 →    7 MB (+0)
+[ 472] COMPILING         core_functions/selector/unify/simple/pseudo.hrx | RSS=7MB
+[472 ] OK   core_functions/selector/unify/simple/pseudo.hrx              |    7 →    7 MB (+0)
+[ 473] COMPILING    core_functions/selector/unify/simple/placeholder.hrx | RSS=7MB
+[473 ] OK   core_functions/selector/unify/simple/placeholder.hrx         |    7 →    7 MB (+0)
+[ 474] COMPILING             core_functions/selector/unify/simple/id.hrx | RSS=7MB
+[474 ] OK   core_functions/selector/unify/simple/id.hrx                  |    7 →    7 MB (+0)
+[ 475] COMPILING      core_functions/selector/unify/simple/attribute.hrx | RSS=7MB
+[475 ] OK   core_functions/selector/unify/simple/attribute.hrx           |    7 →    7 MB (+0)
+[ 476] COMPILING      core_functions/selector/unify/simple/universal.hrx | RSS=7MB
+[476 ] OK   core_functions/selector/unify/simple/universal.hrx           |    7 →    7 MB (+0)
+[ 477] COMPILING core_functions/selector/unify/simple/type/and_universal.hrx | RSS=7MB
+[477 ] OK   core_functions/selector/unify/simple/type/and_universal.hrx  |    7 →    7 MB (+0)
+[ 478] COMPILING  core_functions/selector/unify/simple/type/and_type.hrx | RSS=7MB
+[478 ] OK   core_functions/selector/unify/simple/type/and_type.hrx       |    7 →    7 MB (+0)
+[ 479] COMPILING core_functions/selector/unify/simple/different_types.hrx | RSS=7MB
+[479 ] OK   core_functions/selector/unify/simple/different_types.hrx     |    7 →    7 MB (+0)
+[ 480] COMPILING          core_functions/selector/unify/simple/class.hrx | RSS=7MB
+[480 ] OK   core_functions/selector/unify/simple/class.hrx               |    7 →    7 MB (+0)
+[ 481] COMPILING core_functions/selector/unify/chooses_superselector.hrx | RSS=7MB
+[481 ] OK   core_functions/selector/unify/chooses_superselector.hrx      |    7 →    7 MB (+0)
+[ 482] COMPILING                 core_functions/selector/parse/error.hrx | RSS=7MB
+[482 ] OK   core_functions/selector/parse/error.hrx                      |    7 →    7 MB (+0)
+[ 483] COMPILING             core_functions/selector/parse/structure.hrx | RSS=7MB
+[483 ] OK   core_functions/selector/parse/structure.hrx                  |    7 →    7 MB (+0)
+[ 484] COMPILING                 core_functions/selector/parse/named.hrx | RSS=7MB
+[484 ] OK   core_functions/selector/parse/named.hrx                      |    7 →    7 MB (+0)
+[ 485] COMPILING              core_functions/selector/parse/selector.hrx | RSS=7MB
+[485 ] OK   core_functions/selector/parse/selector.hrx                   |    7 →    7 MB (+0)
+[ 486] COMPILING                     core_functions/selector/replace.hrx | RSS=7MB
+[486 ] OK   core_functions/selector/replace.hrx                          |    7 →    7 MB (+0)
+[ 487] COMPILING      core_functions/selector/is_superselector/input.hrx | RSS=7MB
+[487 ] OK   core_functions/selector/is_superselector/input.hrx           |    7 →    7 MB (+0)
+[ 488] COMPILING   core_functions/selector/is_superselector/compound.hrx | RSS=7MB
+[488 ] OK   core_functions/selector/is_superselector/compound.hrx        |    7 →    7 MB (+0)
+[ 489] COMPILING core_functions/selector/is_superselector/complex/adjacent_sibling.hrx | RSS=7MB
+[489 ] OK   core_functions/selector/is_superselector/complex/adjacent_sibling.hrx |    7 →    7 MB (+0)
+[ 490] COMPILING core_functions/selector/is_superselector/complex/bogus.hrx | RSS=7MB
+[490 ] OK   core_functions/selector/is_superselector/complex/bogus.hrx   |    7 →    7 MB (+0)
+[ 491] COMPILING core_functions/selector/is_superselector/complex/child.hrx | RSS=7MB
+[491 ] OK   core_functions/selector/is_superselector/complex/child.hrx   |    7 →    7 MB (+0)
+[ 492] COMPILING core_functions/selector/is_superselector/complex/sibling.hrx | RSS=7MB
+[492 ] OK   core_functions/selector/is_superselector/complex/sibling.hrx |    7 →    7 MB (+0)
+[ 493] COMPILING core_functions/selector/is_superselector/complex/descendant.hrx | RSS=7MB
+[493 ] OK   core_functions/selector/is_superselector/complex/descendant.hrx |    7 →    7 MB (+0)
+[ 494] COMPILING      core_functions/selector/is_superselector/error.hrx | RSS=7MB
+[494 ] OK   core_functions/selector/is_superselector/error.hrx           |    7 →    7 MB (+0)
+[ 495] COMPILING core_functions/selector/is_superselector/simple/pseudo/arg.hrx | RSS=7MB
+[495 ] OK   core_functions/selector/is_superselector/simple/pseudo/arg.hrx |    7 →    7 MB (+0)
+[ 496] COMPILING core_functions/selector/is_superselector/simple/pseudo/no_arg.hrx | RSS=7MB
+[496 ] OK   core_functions/selector/is_superselector/simple/pseudo/no_arg.hrx |    7 →    7 MB (+0)
+[ 497] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/not.hrx | RSS=7MB
+[497 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/not.hrx |    7 →    7 MB (+0)
+[ 498] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/nth_child.hrx | RSS=7MB
+[498 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/nth_child.hrx |    7 →    7 MB (+0)
+[ 499] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/current.hrx | RSS=7MB
+[499 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/current.hrx |    7 →    7 MB (+0)
+[ 500] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/slotted.hrx | RSS=7MB
+[500 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/slotted.hrx |    7 →    7 MB (+0)
+[ 501] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/is.hrx | RSS=7MB
+[501 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/is.hrx |    7 →    7 MB (+0)
+[ 502] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/any.hrx | RSS=7MB
+[502 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/any.hrx |    7 →    7 MB (+0)
+[ 503] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/matches.hrx | RSS=7MB
+[503 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/matches.hrx |    7 →    7 MB (+0)
+[ 504] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/where.hrx | RSS=7MB
+[504 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/where.hrx |    7 →    7 MB (+0)
+[ 505] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/host_context.hrx | RSS=7MB
+[505 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/host_context.hrx |    7 →    7 MB (+0)
+[ 506] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/nth_last_child.hrx | RSS=7MB
+[506 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/nth_last_child.hrx |    7 →    7 MB (+0)
+[ 507] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/has.hrx | RSS=7MB
+[507 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/has.hrx |    7 →    7 MB (+0)
+[ 508] COMPILING core_functions/selector/is_superselector/simple/pseudo/selector_arg/host.hrx | RSS=7MB
+[508 ] OK   core_functions/selector/is_superselector/simple/pseudo/selector_arg/host.hrx |    7 →    7 MB (+0)
+[ 509] COMPILING core_functions/selector/is_superselector/simple/placeholder.hrx | RSS=7MB
+[509 ] OK   core_functions/selector/is_superselector/simple/placeholder.hrx |    7 →    7 MB (+0)
+[ 510] COMPILING  core_functions/selector/is_superselector/simple/id.hrx | RSS=7MB
+[510 ] OK   core_functions/selector/is_superselector/simple/id.hrx       |    7 →    7 MB (+0)
+[ 511] COMPILING core_functions/selector/is_superselector/simple/attribute.hrx | RSS=7MB
+[511 ] OK   core_functions/selector/is_superselector/simple/attribute.hrx |    7 →    7 MB (+0)
+[ 512] COMPILING core_functions/selector/is_superselector/simple/universal.hrx | RSS=7MB
+[512 ] OK   core_functions/selector/is_superselector/simple/universal.hrx |    7 →    7 MB (+0)
+[ 513] COMPILING core_functions/selector/is_superselector/simple/type.hrx | RSS=7MB
+[513 ] OK   core_functions/selector/is_superselector/simple/type.hrx     |    7 →    7 MB (+0)
+[ 514] COMPILING core_functions/selector/is_superselector/simple/class.hrx | RSS=7MB
+[514 ] OK   core_functions/selector/is_superselector/simple/class.hrx    |    7 →    7 MB (+0)
+[ 515] COMPILING       core_functions/selector/is_superselector/list.hrx | RSS=7MB
+[515 ] OK   core_functions/selector/is_superselector/list.hrx            |    7 →    7 MB (+0)
+[ 516] COMPILING      core_functions/selector/is_superselector/named.hrx | RSS=7MB
+[516 ] OK   core_functions/selector/is_superselector/named.hrx           |    7 →    7 MB (+0)
+[ 517] COMPILING                 core_functions/selector/nest/format.hrx | RSS=7MB
+[517 ] OK   core_functions/selector/nest/format.hrx                      |    7 →    7 MB (+0)
+[ 518] COMPILING                 core_functions/selector/nest/parent.hrx | RSS=7MB
+[518 ] OK   core_functions/selector/nest/parent.hrx                      |    7 →    7 MB (+0)
+[ 519] COMPILING                  core_functions/selector/nest/error.hrx | RSS=7MB
+[519 ] OK   core_functions/selector/nest/error.hrx                       |    7 →    7 MB (+0)
+[ 520] COMPILING             core_functions/selector/nest/combinator.hrx | RSS=7MB
+[520 ] OK   core_functions/selector/nest/combinator.hrx                  |    7 →    7 MB (+0)
+[ 521] COMPILING                   core_functions/selector/nest/list.hrx | RSS=7MB
+[521 ] OK   core_functions/selector/nest/list.hrx                        |    7 →    7 MB (+0)
+[ 522] COMPILING                core_functions/selector/nest/one_arg.hrx | RSS=7MB
+[522 ] OK   core_functions/selector/nest/one_arg.hrx                     |    7 →    7 MB (+0)
+[ 523] COMPILING              core_functions/selector/nest/many_args.hrx | RSS=7MB
+[523 ] OK   core_functions/selector/nest/many_args.hrx                   |    7 →    7 MB (+0)
+[ 524] COMPILING                              core_functions/general.hrx | RSS=7MB
+[524 ] OK   core_functions/general.hrx                                   |    7 →    7 MB (+0)
+[ 525] COMPILING                  core_functions/color/invert/legacy.hrx | RSS=7MB
+[525 ] OK   core_functions/color/invert/legacy.hrx                       |    7 →    7 MB (+0)
+[ 526] COMPILING                  core_functions/color/invert/modern.hrx | RSS=7MB
+[526 ] OK   core_functions/color/invert/modern.hrx                       |    7 →    7 MB (+0)
+[ 527] COMPILING                   core_functions/color/invert/error.hrx | RSS=7MB
+[527 ] OK   core_functions/color/invert/error.hrx                        |    7 →    7 MB (+0)
+[ 528] COMPILING                   core_functions/color/invert/alpha.hrx | RSS=7MB
+[528 ] OK   core_functions/color/invert/alpha.hrx                        |    7 →    7 MB (+0)
+[ 529] COMPILING                   core_functions/color/invert/named.hrx | RSS=7MB
+[529 ] OK   core_functions/color/invert/named.hrx                        |    7 →    7 MB (+0)
+[ 530] COMPILING                  core_functions/color/invert/number.hrx | RSS=7MB
+[530 ] OK   core_functions/color/invert/number.hrx                       |    7 →    7 MB (+0)
+[ 531] COMPILING                  core_functions/color/invert/global.hrx | RSS=7MB
+[531 ] OK   core_functions/color/invert/global.hrx                       |    7 →    7 MB (+0)
+[ 532] COMPILING                       core_functions/color/saturate.hrx | RSS=7MB
+[532 ] OK   core_functions/color/saturate.hrx                            |    7 →    7 MB (+0)
+[ 533] COMPILING                            core_functions/color/red.hrx | RSS=7MB
+[533 ] OK   core_functions/color/red.hrx                                 |    7 →    7 MB (+0)
+[ 534] COMPILING                     core_functions/color/change/hwb.hrx | RSS=7MB
+[534 ] OK   core_functions/color/change/hwb.hrx                          |    7 →    7 MB (+0)
+[ 535] COMPILING              core_functions/color/change/display_p3.hrx | RSS=7MB
+[535 ] OK   core_functions/color/change/display_p3.hrx                   |    7 →    7 MB (+0)
+[ 536] COMPILING                 core_functions/color/change/xyz_d50.hrx | RSS=7MB
+[536 ] OK   core_functions/color/change/xyz_d50.hrx                      |    7 →    7 MB (+0)
+[ 537] COMPILING                   core_functions/color/change/oklch.hrx | RSS=7MB
+[537 ] OK   core_functions/color/change/oklch.hrx                        |    7 →    7 MB (+0)
+[ 538] COMPILING                core_functions/color/change/no_space.hrx | RSS=7MB
+[538 ] OK   core_functions/color/change/no_space.hrx                     |    7 →    7 MB (+0)
+[ 539] COMPILING                   core_functions/color/change/oklab.hrx | RSS=7MB
+[539 ] OK   core_functions/color/change/oklab.hrx                        |    7 →    7 MB (+0)
+[ 540] COMPILING             core_functions/color/change/srgb_linear.hrx | RSS=7MB
+[540 ] OK   core_functions/color/change/srgb_linear.hrx                  |    7 →    7 MB (+0)
+[ 541] COMPILING                    core_functions/color/change/srgb.hrx | RSS=7MB
+[541 ] OK   core_functions/color/change/srgb.hrx                         |    7 →    7 MB (+0)
+[ 542] COMPILING                     core_functions/color/change/hsl.hrx | RSS=7MB
+[542 ] OK   core_functions/color/change/hsl.hrx                          |    7 →    7 MB (+0)
+[ 543] COMPILING                 core_functions/color/change/rec2020.hrx | RSS=7MB
+[543 ] OK   core_functions/color/change/rec2020.hrx                      |    7 →    7 MB (+0)
+[ 544] COMPILING       core_functions/color/change/display_p3_linear.hrx | RSS=7MB
+[544 ] OK   core_functions/color/change/display_p3_linear.hrx            |    7 →    7 MB (+0)
+[ 545] COMPILING            core_functions/color/change/prophoto_rgb.hrx | RSS=7MB
+[545 ] OK   core_functions/color/change/prophoto_rgb.hrx                 |    7 →    7 MB (+0)
+[ 546] COMPILING                     core_functions/color/change/xyz.hrx | RSS=7MB
+[546 ] OK   core_functions/color/change/xyz.hrx                          |    7 →    7 MB (+0)
+[ 547] COMPILING                   core_functions/color/change/space.hrx | RSS=7MB
+[547 ] OK   core_functions/color/change/space.hrx                        |    7 →    7 MB (+0)
+[ 548] COMPILING                     core_functions/color/change/lab.hrx | RSS=7MB
+[548 ] OK   core_functions/color/change/lab.hrx                          |    7 →    7 MB (+0)
+[ 549] COMPILING                     core_functions/color/change/lch.hrx | RSS=7MB
+[549 ] OK   core_functions/color/change/lch.hrx                          |    7 →    7 MB (+0)
+[ 550] COMPILING              core_functions/color/change/error/args.hrx | RSS=7MB
+[550 ] OK   core_functions/color/change/error/args.hrx                   |    7 →    7 MB (+0)
+[ 551] COMPILING     core_functions/color/change/error/mixed_formats.hrx | RSS=7MB
+[551 ] OK   core_functions/color/change/error/mixed_formats.hrx          |    7 →    7 MB (+0)
+[ 552] COMPILING         core_functions/color/change/error/units/hwb.hrx | RSS=7MB
+[552 ] OK   core_functions/color/change/error/units/hwb.hrx              |    7 →    7 MB (+0)
+[ 553] COMPILING  core_functions/color/change/error/units/display_p3.hrx | RSS=7MB
+[553 ] OK   core_functions/color/change/error/units/display_p3.hrx       |    7 →    7 MB (+0)
+[ 554] COMPILING     core_functions/color/change/error/units/xyz_d50.hrx | RSS=7MB
+[554 ] OK   core_functions/color/change/error/units/xyz_d50.hrx          |    7 →    7 MB (+0)
+[ 555] COMPILING       core_functions/color/change/error/units/oklch.hrx | RSS=7MB
+[555 ] OK   core_functions/color/change/error/units/oklch.hrx            |    7 →    7 MB (+0)
+[ 556] COMPILING       core_functions/color/change/error/units/oklab.hrx | RSS=7MB
+[556 ] OK   core_functions/color/change/error/units/oklab.hrx            |    7 →    7 MB (+0)
+[ 557] COMPILING core_functions/color/change/error/units/srgb_linear.hrx | RSS=7MB
+[557 ] OK   core_functions/color/change/error/units/srgb_linear.hrx      |    7 →    7 MB (+0)
+[ 558] COMPILING        core_functions/color/change/error/units/srgb.hrx | RSS=7MB
+[558 ] OK   core_functions/color/change/error/units/srgb.hrx             |    7 →    7 MB (+0)
+[ 559] COMPILING     core_functions/color/change/error/units/rec2020.hrx | RSS=7MB
+[559 ] OK   core_functions/color/change/error/units/rec2020.hrx          |    7 →    7 MB (+0)
+[ 560] COMPILING core_functions/color/change/error/units/display_p3_linear.hrx | RSS=7MB
+[560 ] OK   core_functions/color/change/error/units/display_p3_linear.hrx |    7 →    7 MB (+0)
+[ 561] COMPILING core_functions/color/change/error/units/prophoto_rgb.hrx | RSS=7MB
+[561 ] OK   core_functions/color/change/error/units/prophoto_rgb.hrx     |    7 →    7 MB (+0)
+[ 562] COMPILING         core_functions/color/change/error/units/xyz.hrx | RSS=7MB
+[562 ] OK   core_functions/color/change/error/units/xyz.hrx              |    7 →    7 MB (+0)
+[ 563] COMPILING         core_functions/color/change/error/units/lab.hrx | RSS=7MB
+[563 ] OK   core_functions/color/change/error/units/lab.hrx              |    7 →    7 MB (+0)
+[ 564] COMPILING         core_functions/color/change/error/units/lch.hrx | RSS=7MB
+[564 ] OK   core_functions/color/change/error/units/lch.hrx              |    7 →    7 MB (+0)
+[ 565] COMPILING     core_functions/color/change/error/units/a98_rgb.hrx | RSS=7MB
+[565 ] OK   core_functions/color/change/error/units/a98_rgb.hrx          |    7 →    7 MB (+0)
+[ 566] COMPILING             core_functions/color/change/error/space.hrx | RSS=7MB
+[566 ] OK   core_functions/color/change/error/space.hrx                  |    7 →    7 MB (+0)
+[ 567] COMPILING              core_functions/color/change/error/type.hrx | RSS=7MB
+[567 ] OK   core_functions/color/change/error/type.hrx                   |    7 →    7 MB (+0)
+[ 568] COMPILING            core_functions/color/change/error/bounds.hrx | RSS=7MB
+[568 ] OK   core_functions/color/change/error/bounds.hrx                 |    7 →    7 MB (+0)
+[ 569] COMPILING core_functions/color/change/error/incompatible_channel.hrx | RSS=7MB
+[569 ] OK   core_functions/color/change/error/incompatible_channel.hrx   |    7 →    7 MB (+0)
+[ 570] COMPILING                  core_functions/color/change/global.hrx | RSS=7MB
+[570 ] OK   core_functions/color/change/global.hrx                       |    7 →    7 MB (+0)
+[ 571] COMPILING                 core_functions/color/change/a98_rgb.hrx | RSS=7MB
+[571 ] OK   core_functions/color/change/a98_rgb.hrx                      |    7 →    7 MB (+0)
+[ 572] COMPILING                     core_functions/color/change/rgb.hrx | RSS=7MB
+[572 ] OK   core_functions/color/change/rgb.hrx                          |    7 →    7 MB (+0)
+[ 573] COMPILING                     core_functions/color/adjust/hwb.hrx | RSS=7MB
+[573 ] OK   core_functions/color/adjust/hwb.hrx                          |    7 →    7 MB (+0)
+[ 574] COMPILING              core_functions/color/adjust/display_p3.hrx | RSS=7MB
+[574 ] OK   core_functions/color/adjust/display_p3.hrx                   |    7 →    7 MB (+0)
+[ 575] COMPILING                 core_functions/color/adjust/xyz_d50.hrx | RSS=7MB
+[575 ] OK   core_functions/color/adjust/xyz_d50.hrx                      |    7 →    7 MB (+0)
+[ 576] COMPILING                   core_functions/color/adjust/oklch.hrx | RSS=7MB
+[576 ] OK   core_functions/color/adjust/oklch.hrx                        |    7 →    7 MB (+0)
+[ 577] COMPILING                   core_functions/color/adjust/units.hrx | RSS=7MB
+[577 ] OK   core_functions/color/adjust/units.hrx                        |    7 →    7 MB (+0)
+[ 578] COMPILING                   core_functions/color/adjust/oklab.hrx | RSS=7MB
+[578 ] OK   core_functions/color/adjust/oklab.hrx                        |    7 →    7 MB (+0)
+[ 579] COMPILING             core_functions/color/adjust/srgb_linear.hrx | RSS=7MB
+[579 ] OK   core_functions/color/adjust/srgb_linear.hrx                  |    7 →    7 MB (+0)
+[ 580] COMPILING             core_functions/color/adjust/no_channels.hrx | RSS=7MB
+[580 ] OK   core_functions/color/adjust/no_channels.hrx                  |    7 →    7 MB (+0)
+[ 581] COMPILING                    core_functions/color/adjust/srgb.hrx | RSS=7MB
+[581 ] OK   core_functions/color/adjust/srgb.hrx                         |    7 →    7 MB (+0)
+[ 582] COMPILING                     core_functions/color/adjust/hsl.hrx | RSS=7MB
+[582 ] OK   core_functions/color/adjust/hsl.hrx                          |    7 →    7 MB (+0)
+[ 583] COMPILING                 core_functions/color/adjust/rec2020.hrx | RSS=7MB
+[583 ] OK   core_functions/color/adjust/rec2020.hrx                      |    7 →    7 MB (+0)
+[ 584] COMPILING       core_functions/color/adjust/display_p3_linear.hrx | RSS=7MB
+[584 ] OK   core_functions/color/adjust/display_p3_linear.hrx            |    7 →    7 MB (+0)
+[ 585] COMPILING            core_functions/color/adjust/prophoto_rgb.hrx | RSS=7MB
+[585 ] OK   core_functions/color/adjust/prophoto_rgb.hrx                 |    7 →    7 MB (+0)
+[ 586] COMPILING                   core_functions/color/adjust/space.hrx | RSS=7MB
+[586 ] OK   core_functions/color/adjust/space.hrx                        |    7 →    7 MB (+0)
+[ 587] COMPILING                     core_functions/color/adjust/lab.hrx | RSS=7MB
+[587 ] OK   core_functions/color/adjust/lab.hrx                          |    7 →    7 MB (+0)
+[ 588] COMPILING                     core_functions/color/adjust/lch.hrx | RSS=7MB
+[588 ] OK   core_functions/color/adjust/lch.hrx                          |    7 →    7 MB (+0)
+[ 589] COMPILING              core_functions/color/adjust/error/args.hrx | RSS=7MB
+[589 ] OK   core_functions/color/adjust/error/args.hrx                   |    7 →    7 MB (+0)
+[ 590] COMPILING           core_functions/color/adjust/error/missing.hrx | RSS=7MB
+[590 ] OK   core_functions/color/adjust/error/missing.hrx                |    7 →    7 MB (+0)
+[ 591] COMPILING     core_functions/color/adjust/error/mixed_formats.hrx | RSS=7MB
+[591 ] OK   core_functions/color/adjust/error/mixed_formats.hrx          |    7 →    7 MB (+0)
+[ 592] COMPILING         core_functions/color/adjust/error/units/hwb.hrx | RSS=7MB
+[592 ] OK   core_functions/color/adjust/error/units/hwb.hrx              |    7 →    7 MB (+0)
+[ 593] COMPILING  core_functions/color/adjust/error/units/display_p3.hrx | RSS=7MB
+[593 ] OK   core_functions/color/adjust/error/units/display_p3.hrx       |    7 →    7 MB (+0)
+[ 594] COMPILING     core_functions/color/adjust/error/units/xyz_d50.hrx | RSS=7MB
+[594 ] OK   core_functions/color/adjust/error/units/xyz_d50.hrx          |    7 →    7 MB (+0)
+[ 595] COMPILING       core_functions/color/adjust/error/units/oklch.hrx | RSS=7MB
+[595 ] OK   core_functions/color/adjust/error/units/oklch.hrx            |    7 →    7 MB (+0)
+[ 596] COMPILING       core_functions/color/adjust/error/units/oklab.hrx | RSS=7MB
+[596 ] OK   core_functions/color/adjust/error/units/oklab.hrx            |    7 →    7 MB (+0)
+[ 597] COMPILING core_functions/color/adjust/error/units/srgb_linear.hrx | RSS=7MB
+[597 ] OK   core_functions/color/adjust/error/units/srgb_linear.hrx      |    7 →    7 MB (+0)
+[ 598] COMPILING        core_functions/color/adjust/error/units/srgb.hrx | RSS=7MB
+[598 ] OK   core_functions/color/adjust/error/units/srgb.hrx             |    7 →    7 MB (+0)
+[ 599] COMPILING     core_functions/color/adjust/error/units/rec2020.hrx | RSS=7MB
+[599 ] OK   core_functions/color/adjust/error/units/rec2020.hrx          |    7 →    7 MB (+0)
+[ 600] COMPILING core_functions/color/adjust/error/units/display_p3_linear.hrx | RSS=7MB
+[600 ] OK   core_functions/color/adjust/error/units/display_p3_linear.hrx |    7 →    7 MB (+0)
+[ 601] COMPILING core_functions/color/adjust/error/units/prophoto_rgb.hrx | RSS=7MB
+[601 ] OK   core_functions/color/adjust/error/units/prophoto_rgb.hrx     |    7 →    7 MB (+0)
+[ 602] COMPILING         core_functions/color/adjust/error/units/xyz.hrx | RSS=7MB
+[602 ] OK   core_functions/color/adjust/error/units/xyz.hrx              |    7 →    7 MB (+0)
+[ 603] COMPILING         core_functions/color/adjust/error/units/lab.hrx | RSS=7MB
+[603 ] OK   core_functions/color/adjust/error/units/lab.hrx              |    7 →    7 MB (+0)
+[ 604] COMPILING         core_functions/color/adjust/error/units/lch.hrx | RSS=7MB
+[604 ] OK   core_functions/color/adjust/error/units/lch.hrx              |    7 →    7 MB (+0)
+[ 605] COMPILING     core_functions/color/adjust/error/units/a98_rgb.hrx | RSS=7MB
+[605 ] OK   core_functions/color/adjust/error/units/a98_rgb.hrx          |    7 →    7 MB (+0)
+[ 606] COMPILING             core_functions/color/adjust/error/space.hrx | RSS=7MB
+[606 ] OK   core_functions/color/adjust/error/space.hrx                  |    7 →    7 MB (+0)
+[ 607] COMPILING              core_functions/color/adjust/error/type.hrx | RSS=7MB
+[607 ] OK   core_functions/color/adjust/error/type.hrx                   |    7 →    7 MB (+0)
+[ 608] COMPILING core_functions/color/adjust/error/incompatible_channel.hrx | RSS=7MB
+[608 ] OK   core_functions/color/adjust/error/incompatible_channel.hrx   |    7 →    7 MB (+0)
+[ 609] COMPILING                  core_functions/color/adjust/global.hrx | RSS=7MB
+[609 ] OK   core_functions/color/adjust/global.hrx                       |    7 →    7 MB (+0)
+[ 610] COMPILING                 core_functions/color/adjust/xyz_d65.hrx | RSS=7MB
+[610 ] OK   core_functions/color/adjust/xyz_d65.hrx                      |    7 →    7 MB (+0)
+[ 611] COMPILING                 core_functions/color/adjust/a98_rgb.hrx | RSS=7MB
+[611 ] OK   core_functions/color/adjust/a98_rgb.hrx                      |    7 →    7 MB (+0)
+[ 612] COMPILING                     core_functions/color/adjust/rgb.hrx | RSS=7MB
+[612 ] OK   core_functions/color/adjust/rgb.hrx                          |    7 →    7 MB (+0)
+[ 613] COMPILING                      core_functions/color/scale/hwb.hrx | RSS=7MB
+[613 ] OK   core_functions/color/scale/hwb.hrx                           |    7 →    7 MB (+0)
+[ 614] COMPILING               core_functions/color/scale/display_p3.hrx | RSS=7MB
+[614 ] OK   core_functions/color/scale/display_p3.hrx                    |    7 →    7 MB (+0)
+[ 615] COMPILING                  core_functions/color/scale/xyz_d50.hrx | RSS=7MB
+[615 ] OK   core_functions/color/scale/xyz_d50.hrx                       |    7 →    7 MB (+0)
+[ 616] COMPILING                 core_functions/color/scale/no_space.hrx | RSS=7MB
+[616 ] OK   core_functions/color/scale/no_space.hrx                      |    7 →    7 MB (+0)
+[ 617] COMPILING                    core_functions/color/scale/oklab.hrx | RSS=7MB
+[617 ] OK   core_functions/color/scale/oklab.hrx                         |    7 →    7 MB (+0)
+[ 618] COMPILING              core_functions/color/scale/srgb_linear.hrx | RSS=7MB
+[618 ] OK   core_functions/color/scale/srgb_linear.hrx                   |    7 →    7 MB (+0)
+[ 619] COMPILING              core_functions/color/scale/no_channels.hrx | RSS=7MB
+[619 ] OK   core_functions/color/scale/no_channels.hrx                   |    7 →    7 MB (+0)
+[ 620] COMPILING                     core_functions/color/scale/srgb.hrx | RSS=7MB
+[620 ] OK   core_functions/color/scale/srgb.hrx                          |    7 →    7 MB (+0)
+[ 621] COMPILING                      core_functions/color/scale/hsl.hrx | RSS=7MB
+[621 ] OK   core_functions/color/scale/hsl.hrx                           |    7 →    7 MB (+0)
+[ 622] COMPILING                  core_functions/color/scale/rec2020.hrx | RSS=7MB
+[622 ] OK   core_functions/color/scale/rec2020.hrx                       |    7 →    7 MB (+0)
+[ 623] COMPILING        core_functions/color/scale/display_p3_linear.hrx | RSS=7MB
+[623 ] OK   core_functions/color/scale/display_p3_linear.hrx             |    7 →    7 MB (+0)
+[ 624] COMPILING             core_functions/color/scale/prophoto_rgb.hrx | RSS=7MB
+[624 ] OK   core_functions/color/scale/prophoto_rgb.hrx                  |    7 →    7 MB (+0)
+[ 625] COMPILING                    core_functions/color/scale/space.hrx | RSS=7MB
+[625 ] OK   core_functions/color/scale/space.hrx                         |    7 →    7 MB (+0)
+[ 626] COMPILING                      core_functions/color/scale/lab.hrx | RSS=7MB
+[626 ] OK   core_functions/color/scale/lab.hrx                           |    7 →    7 MB (+0)
+[ 627] COMPILING             core_functions/color/scale/out_of_gamut.hrx | RSS=7MB
+[627 ] OK   core_functions/color/scale/out_of_gamut.hrx                  |    7 →    7 MB (+0)
+[ 628] COMPILING                      core_functions/color/scale/lch.hrx | RSS=7MB
+[628 ] OK   core_functions/color/scale/lch.hrx                           |    7 →    7 MB (+0)
+[ 629] COMPILING               core_functions/color/scale/error/args.hrx | RSS=7MB
+[629 ] OK   core_functions/color/scale/error/args.hrx                    |    7 →    7 MB (+0)
+[ 630] COMPILING            core_functions/color/scale/error/missing.hrx | RSS=7MB
+[630 ] OK   core_functions/color/scale/error/missing.hrx                 |    7 →    7 MB (+0)
+[ 631] COMPILING              core_functions/color/scale/error/polar.hrx | RSS=7MB
+[631 ] OK   core_functions/color/scale/error/polar.hrx                   |    7 →    7 MB (+0)
+[ 632] COMPILING      core_functions/color/scale/error/mixed_formats.hrx | RSS=7MB
+[632 ] OK   core_functions/color/scale/error/mixed_formats.hrx           |    7 →    7 MB (+0)
+[ 633] COMPILING          core_functions/color/scale/error/units/hwb.hrx | RSS=7MB
+[633 ] OK   core_functions/color/scale/error/units/hwb.hrx               |    7 →    7 MB (+0)
+[ 634] COMPILING   core_functions/color/scale/error/units/display_p3.hrx | RSS=7MB
+[634 ] OK   core_functions/color/scale/error/units/display_p3.hrx        |    7 →    7 MB (+0)
+[ 635] COMPILING      core_functions/color/scale/error/units/xyz_d50.hrx | RSS=7MB
+[635 ] OK   core_functions/color/scale/error/units/xyz_d50.hrx           |    7 →    7 MB (+0)
+[ 636] COMPILING        core_functions/color/scale/error/units/oklch.hrx | RSS=7MB
+[636 ] OK   core_functions/color/scale/error/units/oklch.hrx             |    7 →    7 MB (+0)
+[ 637] COMPILING        core_functions/color/scale/error/units/oklab.hrx | RSS=7MB
+[637 ] OK   core_functions/color/scale/error/units/oklab.hrx             |    7 →    7 MB (+0)
+[ 638] COMPILING  core_functions/color/scale/error/units/srgb_linear.hrx | RSS=7MB
+[638 ] OK   core_functions/color/scale/error/units/srgb_linear.hrx       |    7 →    7 MB (+0)
+[ 639] COMPILING         core_functions/color/scale/error/units/srgb.hrx | RSS=7MB
+[639 ] OK   core_functions/color/scale/error/units/srgb.hrx              |    7 →    7 MB (+0)
+[ 640] COMPILING          core_functions/color/scale/error/units/hsl.hrx | RSS=7MB
+[640 ] OK   core_functions/color/scale/error/units/hsl.hrx               |    7 →    7 MB (+0)
+[ 641] COMPILING      core_functions/color/scale/error/units/rec2020.hrx | RSS=7MB
+[641 ] OK   core_functions/color/scale/error/units/rec2020.hrx           |    7 →    7 MB (+0)
+[ 642] COMPILING core_functions/color/scale/error/units/display_p3_linear.hrx | RSS=7MB
+[642 ] OK   core_functions/color/scale/error/units/display_p3_linear.hrx |    7 →    7 MB (+0)
+[ 643] COMPILING core_functions/color/scale/error/units/prophoto_rgb.hrx | RSS=7MB
+[643 ] OK   core_functions/color/scale/error/units/prophoto_rgb.hrx      |    7 →    7 MB (+0)
+[ 644] COMPILING          core_functions/color/scale/error/units/lab.hrx | RSS=7MB
+[644 ] OK   core_functions/color/scale/error/units/lab.hrx               |    7 →    7 MB (+0)
+[ 645] COMPILING          core_functions/color/scale/error/units/lch.hrx | RSS=7MB
+[645 ] OK   core_functions/color/scale/error/units/lch.hrx               |    7 →    7 MB (+0)
+[ 646] COMPILING      core_functions/color/scale/error/units/xyz_d65.hrx | RSS=7MB
+[646 ] OK   core_functions/color/scale/error/units/xyz_d65.hrx           |    7 →    7 MB (+0)
+[ 647] COMPILING      core_functions/color/scale/error/units/a98_rgb.hrx | RSS=7MB
+[647 ] OK   core_functions/color/scale/error/units/a98_rgb.hrx           |    7 →    7 MB (+0)
+[ 648] COMPILING          core_functions/color/scale/error/units/rgb.hrx | RSS=7MB
+[648 ] OK   core_functions/color/scale/error/units/rgb.hrx               |    7 →    7 MB (+0)
+[ 649] COMPILING              core_functions/color/scale/error/space.hrx | RSS=7MB
+[649 ] OK   core_functions/color/scale/error/space.hrx                   |    7 →    7 MB (+0)
+[ 650] COMPILING               core_functions/color/scale/error/type.hrx | RSS=7MB
+[650 ] OK   core_functions/color/scale/error/type.hrx                    |    7 →    7 MB (+0)
+[ 651] COMPILING             core_functions/color/scale/error/bounds.hrx | RSS=7MB
+[651 ] OK   core_functions/color/scale/error/bounds.hrx                  |    7 →    7 MB (+0)
+[ 652] COMPILING core_functions/color/scale/error/incompatible_channel.hrx | RSS=7MB
+[652 ] OK   core_functions/color/scale/error/incompatible_channel.hrx    |    7 →    7 MB (+0)
+[ 653] COMPILING                   core_functions/color/scale/global.hrx | RSS=7MB
+[653 ] OK   core_functions/color/scale/global.hrx                        |    7 →    7 MB (+0)
+[ 654] COMPILING                  core_functions/color/scale/xyz_d65.hrx | RSS=7MB
+[654 ] OK   core_functions/color/scale/xyz_d65.hrx                       |    7 →    7 MB (+0)
+[ 655] COMPILING                  core_functions/color/scale/a98_rgb.hrx | RSS=7MB
+[655 ] OK   core_functions/color/scale/a98_rgb.hrx                       |    7 →    7 MB (+0)
+[ 656] COMPILING                      core_functions/color/scale/rgb.hrx | RSS=7MB
+[656 ] OK   core_functions/color/scale/rgb.hrx                           |    7 →    7 MB (+0)
+[ 657] COMPILING                     core_functions/color/saturation.hrx | RSS=7MB
+[657 ] OK   core_functions/color/saturation.hrx                          |    7 →    7 MB (+0)
+[ 658] COMPILING                        core_functions/color/lighten.hrx | RSS=7MB
+[658 ] OK   core_functions/color/lighten.hrx                             |    7 →    7 MB (+0)
+[ 659] COMPILING               core_functions/color/color/degenerate.hrx | RSS=7MB
+[659 ] OK   core_functions/color/color/degenerate.hrx                    |    7 →    7 MB (+0)
+[ 660] COMPILING                 core_functions/color/color/no_alpha.hrx | RSS=7MB
+[660 ] OK   core_functions/color/color/no_alpha.hrx                      |    7 →    7 MB (+0)
+[ 661] COMPILING        core_functions/color/color/spaces/display_p3.hrx | RSS=7MB
+[661 ] OK   core_functions/color/color/spaces/display_p3.hrx             |    7 →    7 MB (+0)
+[ 662] COMPILING           core_functions/color/color/spaces/xyz_d50.hrx | RSS=7MB
+[662 ] OK   core_functions/color/color/spaces/xyz_d50.hrx                |    7 →    7 MB (+0)
+[ 663] COMPILING       core_functions/color/color/spaces/srgb_linear.hrx | RSS=7MB
+[663 ] OK   core_functions/color/color/spaces/srgb_linear.hrx            |    7 →    7 MB (+0)
+[ 664] COMPILING              core_functions/color/color/spaces/srgb.hrx | RSS=7MB
+[664 ] OK   core_functions/color/color/spaces/srgb.hrx                   |    7 →    7 MB (+0)
+[ 665] COMPILING           core_functions/color/color/spaces/rec2020.hrx | RSS=7MB
+[665 ] OK   core_functions/color/color/spaces/rec2020.hrx                |    7 →    7 MB (+0)
+[ 666] COMPILING core_functions/color/color/spaces/display_p3_linear.hrx | RSS=7MB
+[666 ] OK   core_functions/color/color/spaces/display_p3_linear.hrx      |    7 →    7 MB (+0)
+[ 667] COMPILING      core_functions/color/color/spaces/prophoto_rgb.hrx | RSS=7MB
+[667 ] OK   core_functions/color/color/spaces/prophoto_rgb.hrx           |    7 →    7 MB (+0)
+[ 668] COMPILING               core_functions/color/color/spaces/xyz.hrx | RSS=7MB
+[668 ] OK   core_functions/color/color/spaces/xyz.hrx                    |    7 →    7 MB (+0)
+[ 669] COMPILING           core_functions/color/color/spaces/a98_rgb.hrx | RSS=7MB
+[669 ] OK   core_functions/color/color/spaces/a98_rgb.hrx                |    7 →    7 MB (+0)
+[ 670] COMPILING                    core_functions/color/color/error.hrx | RSS=7MB
+[670 ] OK   core_functions/color/color/error.hrx                         |    7 →    7 MB (+0)
+[ 671] COMPILING                    core_functions/color/color/alpha.hrx | RSS=7MB
+[671 ] OK   core_functions/color/color/alpha.hrx                         |    7 →    7 MB (+0)
+[ 672] COMPILING           core_functions/color/color/relative_color.hrx | RSS=7MB
+[672 ] OK   core_functions/color/color/relative_color.hrx                |    7 →    7 MB (+0)
+[ 673] COMPILING        core_functions/color/color/special_functions.hrx | RSS=7MB
+[673 ] OK   core_functions/color/color/special_functions.hrx             |    7 →    7 MB (+0)
+[ 674] COMPILING                         core_functions/color/darken.hrx | RSS=7MB
+[674 ] OK   core_functions/color/darken.hrx                              |    7 →    7 MB (+0)
+[ 675] COMPILING                    core_functions/color/mix/missing.hrx | RSS=7MB
+[675 ] OK   core_functions/color/mix/missing.hrx                         |    7 →    7 MB (+0)
+[ 676] COMPILING               core_functions/color/mix/both_weights.hrx | RSS=7MB
+[676 ] OK   core_functions/color/mix/both_weights.hrx                    |    7 →    7 MB (+0)
+[ 677] COMPILING                      core_functions/color/mix/units.hrx | RSS=7MB
+[677 ] OK   core_functions/color/mix/units.hrx                           |    7 →    7 MB (+0)
+[ 678] COMPILING                 core_functions/color/mix/predefined.hrx | RSS=7MB
+[678 ] OK   core_functions/color/mix/predefined.hrx                      |    7 →    7 MB (+0)
+[ 679] COMPILING               core_functions/color/mix/mixed_spaces.hrx | RSS=7MB
+[679 ] OK   core_functions/color/mix/mixed_spaces.hrx                    |    7 →    7 MB (+0)
+[ 680] COMPILING            core_functions/color/mix/explicit_method.hrx | RSS=7MB
+[680 ] OK   core_functions/color/mix/explicit_method.hrx                 |    7 →    7 MB (+0)
+[ 681] COMPILING                      core_functions/color/mix/error.hrx | RSS=7MB
+[681 ] OK   core_functions/color/mix/error.hrx                           |    7 →    7 MB (+0)
+[ 682] COMPILING                      core_functions/color/mix/alpha.hrx | RSS=7MB
+[682 ] OK   core_functions/color/mix/alpha.hrx                           |    7 →    7 MB (+0)
+[ 683] COMPILING            core_functions/color/mix/explicit_weight.hrx | RSS=7MB
+[683 ] OK   core_functions/color/mix/explicit_weight.hrx                 |    7 →    7 MB (+0)
+[ 684] COMPILING                      core_functions/color/mix/named.hrx | RSS=7MB
+[684 ] OK   core_functions/color/mix/named.hrx                           |    7 →    7 MB (+0)
+[ 685] COMPILING          core_functions/color/mix/hue_interpolation.hrx | RSS=7MB
+[685 ] OK   core_functions/color/mix/hue_interpolation.hrx               |    7 →    7 MB (+0)
+[ 686] COMPILING                 core_functions/color/mix/unweighted.hrx | RSS=7MB
+[686 ] OK   core_functions/color/mix/unweighted.hrx                      |    7 →    7 MB (+0)
+[ 687] COMPILING         core_functions/color/rgb/multi_argument_var.hrx | RSS=7MB
+[687 ] OK   core_functions/color/rgb/multi_argument_var.hrx              |    7 →    7 MB (+0)
+[ 688] COMPILING        core_functions/color/rgb/three_args/percents.hrx | RSS=7MB
+[688 ] OK   core_functions/color/rgb/three_args/percents.hrx             |    7 →    7 MB (+0)
+[ 689] COMPILING        core_functions/color/rgb/three_args/unitless.hrx | RSS=7MB
+[689 ] OK   core_functions/color/rgb/three_args/unitless.hrx             |    7 →    7 MB (+0)
+[ 690] COMPILING core_functions/color/rgb/three_args/special_functions.hrx | RSS=7MB
+[690 ] OK   core_functions/color/rgb/three_args/special_functions.hrx    |    7 →    7 MB (+0)
+[ 691] COMPILING           core_functions/color/rgb/one_arg/no_alpha.hrx | RSS=7MB
+[691 ] OK   core_functions/color/rgb/one_arg/no_alpha.hrx                |    7 →    7 MB (+0)
+[ 692] COMPILING core_functions/color/rgb/one_arg/special_functions/no_alpha.hrx | RSS=7MB
+[692 ] OK   core_functions/color/rgb/one_arg/special_functions/no_alpha.hrx |    7 →    7 MB (+0)
+[ 693] COMPILING core_functions/color/rgb/one_arg/special_functions/slash_list.hrx | RSS=7MB
+[693 ] OK   core_functions/color/rgb/one_arg/special_functions/slash_list.hrx |    7 →    7 MB (+0)
+[ 694] COMPILING core_functions/color/rgb/one_arg/special_functions/alpha.hrx | RSS=7MB
+[694 ] OK   core_functions/color/rgb/one_arg/special_functions/alpha.hrx |    7 →    7 MB (+0)
+[ 695] COMPILING              core_functions/color/rgb/one_arg/alpha.hrx | RSS=7MB
+[695 ] OK   core_functions/color/rgb/one_arg/alpha.hrx                   |    7 →    7 MB (+0)
+[ 696] COMPILING     core_functions/color/rgb/one_arg/relative_color.hrx | RSS=7MB
+[696 ] OK   core_functions/color/rgb/one_arg/relative_color.hrx          |    7 →    7 MB (+0)
+[ 697] COMPILING                   core_functions/color/rgb/two_args.hrx | RSS=7MB
+[697 ] OK   core_functions/color/rgb/two_args.hrx                        |    7 →    7 MB (+0)
+[ 698] COMPILING            core_functions/color/rgb/error/four_args.hrx | RSS=7MB
+[698 ] OK   core_functions/color/rgb/error/four_args.hrx                 |    7 →    7 MB (+0)
+[ 699] COMPILING            core_functions/color/rgb/error/five_args.hrx | RSS=7MB
+[699 ] OK   core_functions/color/rgb/error/five_args.hrx                 |    7 →    7 MB (+0)
+[ 700] COMPILING              core_functions/color/rgb/error/one_arg.hrx | RSS=7MB
+[700 ] OK   core_functions/color/rgb/error/one_arg.hrx                   |    7 →    7 MB (+0)
+[ 701] COMPILING             core_functions/color/rgb/error/two_args.hrx | RSS=7MB
+[701 ] OK   core_functions/color/rgb/error/two_args.hrx                  |    7 →    7 MB (+0)
+[ 702] COMPILING           core_functions/color/rgb/error/three_args.hrx | RSS=7MB
+[702 ] OK   core_functions/color/rgb/error/three_args.hrx                |    7 →    7 MB (+0)
+[ 703] COMPILING            core_functions/color/rgb/error/zero_args.hrx | RSS=7MB
+[703 ] OK   core_functions/color/rgb/error/zero_args.hrx                 |    7 →    7 MB (+0)
+[ 704] COMPILING            core_functions/color/rgb/four_args/alpha.hrx | RSS=7MB
+[704 ] OK   core_functions/color/rgb/four_args/alpha.hrx                 |    7 →    7 MB (+0)
+[ 705] COMPILING          core_functions/color/rgb/four_args/clamped.hrx | RSS=7MB
+[705 ] OK   core_functions/color/rgb/four_args/clamped.hrx               |    7 →    7 MB (+0)
+[ 706] COMPILING core_functions/color/rgb/four_args/special_functions.hrx | RSS=7MB
+[706 ] OK   core_functions/color/rgb/four_args/special_functions.hrx     |    7 →    7 MB (+0)
+[ 707] COMPILING         core_functions/color/rgb/four_args/in_gamut.hrx | RSS=7MB
+[707 ] OK   core_functions/color/rgb/four_args/in_gamut.hrx              |    7 →    7 MB (+0)
+[ 708] COMPILING                          core_functions/color/green.hrx | RSS=7MB
+[708 ] OK   core_functions/color/green.hrx                               |    7 →    7 MB (+0)
+[ 709] COMPILING         core_functions/color/hsl/multi_argument_var.hrx | RSS=7MB
+[709 ] OK   core_functions/color/hsl/multi_argument_var.hrx              |    7 →    7 MB (+0)
+[ 710] COMPILING core_functions/color/hsl/three_args/w3c/black_to_white_through.hrx | RSS=7MB
+[710 ] OK   core_functions/color/hsl/three_args/w3c/black_to_white_through.hrx |    7 →    7 MB (+0)
+[ 711] COMPILING core_functions/color/hsl/three_args/w3c/blue_to_red.hrx | RSS=7MB
+[711 ] OK   core_functions/color/hsl/three_args/w3c/blue_to_red.hrx      |    7 →    7 MB (+0)
+[ 712] COMPILING core_functions/color/hsl/three_args/w3c/red_to_green.hrx | RSS=7MB
+[712 ] OK   core_functions/color/hsl/three_args/w3c/red_to_green.hrx     |    7 →    7 MB (+0)
+[ 713] COMPILING core_functions/color/hsl/three_args/w3c/green_to_blue.hrx | RSS=7MB
+[713 ] OK   core_functions/color/hsl/three_args/w3c/green_to_blue.hrx    |    7 →    7 MB (+0)
+[ 714] COMPILING     core_functions/color/hsl/three_args/w3c/gray_to.hrx | RSS=7MB
+[714 ] OK   core_functions/color/hsl/three_args/w3c/gray_to.hrx          |    7 →    7 MB (+0)
+[ 715] COMPILING         core_functions/color/hsl/three_args/w3c/hue.hrx | RSS=7MB
+[715 ] OK   core_functions/color/hsl/three_args/w3c/hue.hrx              |    7 →    7 MB (+0)
+[ 716] COMPILING           core_functions/color/hsl/three_args/units.hrx | RSS=7MB
+[716 ] OK   core_functions/color/hsl/three_args/units.hrx                |    7 →    7 MB (+0)
+[ 717] COMPILING           core_functions/color/hsl/three_args/named.hrx | RSS=7MB
+[717 ] OK   core_functions/color/hsl/three_args/named.hrx                |    7 →    7 MB (+0)
+[ 718] COMPILING    core_functions/color/hsl/three_args/out_of_gamut.hrx | RSS=7MB
+[718 ] OK   core_functions/color/hsl/three_args/out_of_gamut.hrx         |    7 →    7 MB (+0)
+[ 719] COMPILING          core_functions/color/hsl/three_args/bounds.hrx | RSS=7MB
+[719 ] OK   core_functions/color/hsl/three_args/bounds.hrx               |    7 →    7 MB (+0)
+[ 720] COMPILING core_functions/color/hsl/three_args/special_functions.hrx | RSS=7MB
+[720 ] OK   core_functions/color/hsl/three_args/special_functions.hrx    |    7 →    7 MB (+0)
+[ 721] COMPILING           core_functions/color/hsl/one_arg/no_alpha.hrx | RSS=7MB
+[721 ] OK   core_functions/color/hsl/one_arg/no_alpha.hrx                |    7 →    7 MB (+0)
+[ 722] COMPILING core_functions/color/hsl/one_arg/special_functions/no_alpha.hrx | RSS=7MB
+[722 ] OK   core_functions/color/hsl/one_arg/special_functions/no_alpha.hrx |    7 →    7 MB (+0)
+[ 723] COMPILING core_functions/color/hsl/one_arg/special_functions/slash_list.hrx | RSS=7MB
+[723 ] OK   core_functions/color/hsl/one_arg/special_functions/slash_list.hrx |    7 →    7 MB (+0)
+[ 724] COMPILING core_functions/color/hsl/one_arg/special_functions/alpha.hrx | RSS=7MB
+[724 ] OK   core_functions/color/hsl/one_arg/special_functions/alpha.hrx |    7 →    7 MB (+0)
+[ 725] COMPILING              core_functions/color/hsl/one_arg/alpha.hrx | RSS=7MB
+[725 ] OK   core_functions/color/hsl/one_arg/alpha.hrx                   |    7 →    7 MB (+0)
+[ 726] COMPILING     core_functions/color/hsl/one_arg/relative_color.hrx | RSS=7MB
+[726 ] OK   core_functions/color/hsl/one_arg/relative_color.hrx          |    7 →    7 MB (+0)
+[ 727] COMPILING            core_functions/color/hsl/error/four_args.hrx | RSS=7MB
+[727 ] OK   core_functions/color/hsl/error/four_args.hrx                 |    7 →    7 MB (+0)
+[ 728] COMPILING            core_functions/color/hsl/error/five_args.hrx | RSS=7MB
+[728 ] OK   core_functions/color/hsl/error/five_args.hrx                 |    7 →    7 MB (+0)
+[ 729] COMPILING              core_functions/color/hsl/error/one_arg.hrx | RSS=7MB
+[729 ] OK   core_functions/color/hsl/error/one_arg.hrx                   |    7 →    7 MB (+0)
+[ 730] COMPILING             core_functions/color/hsl/error/two_args.hrx | RSS=7MB
+[730 ] OK   core_functions/color/hsl/error/two_args.hrx                  |    7 →    7 MB (+0)
+[ 731] COMPILING           core_functions/color/hsl/error/three_args.hrx | RSS=7MB
+[731 ] OK   core_functions/color/hsl/error/three_args.hrx                |    7 →    7 MB (+0)
+[ 732] COMPILING            core_functions/color/hsl/error/zero_args.hrx | RSS=7MB
+[732 ] OK   core_functions/color/hsl/error/zero_args.hrx                 |    7 →    7 MB (+0)
+[ 733] COMPILING            core_functions/color/hsl/four_args/alpha.hrx | RSS=7MB
+[733 ] OK   core_functions/color/hsl/four_args/alpha.hrx                 |    7 →    7 MB (+0)
+[ 734] COMPILING     core_functions/color/hsl/four_args/out_of_gamut.hrx | RSS=7MB
+[734 ] OK   core_functions/color/hsl/four_args/out_of_gamut.hrx          |    7 →    7 MB (+0)
+[ 735] COMPILING core_functions/color/hsl/four_args/special_functions.hrx | RSS=7MB
+[735 ] OK   core_functions/color/hsl/four_args/special_functions.hrx     |    7 →    7 MB (+0)
+[ 736] COMPILING         core_functions/color/hsl/four_args/in_gamut.hrx | RSS=7MB
+[736 ] OK   core_functions/color/hsl/four_args/in_gamut.hrx              |    7 →    7 MB (+0)
+[ 737] COMPILING                    core_functions/color/channel/hwb.hrx | RSS=7MB
+[737 ] OK   core_functions/color/channel/hwb.hrx                         |    7 →    7 MB (+0)
+[ 738] COMPILING                core_functions/color/channel/missing.hrx | RSS=7MB
+[738 ] OK   core_functions/color/channel/missing.hrx                     |    7 →    7 MB (+0)
+[ 739] COMPILING                  core_functions/color/channel/oklch.hrx | RSS=7MB
+[739 ] OK   core_functions/color/channel/oklch.hrx                       |    7 →    7 MB (+0)
+[ 740] COMPILING                  core_functions/color/channel/oklab.hrx | RSS=7MB
+[740 ] OK   core_functions/color/channel/oklab.hrx                       |    7 →    7 MB (+0)
+[ 741] COMPILING                core_functions/color/channel/xyz-d50.hrx | RSS=7MB
+[741 ] OK   core_functions/color/channel/xyz-d50.hrx                     |    7 →    7 MB (+0)
+[ 742] COMPILING            core_functions/color/channel/srgb-linear.hrx | RSS=7MB
+[742 ] OK   core_functions/color/channel/srgb-linear.hrx                 |    7 →    7 MB (+0)
+[ 743] COMPILING                   core_functions/color/channel/srgb.hrx | RSS=7MB
+[743 ] OK   core_functions/color/channel/srgb.hrx                        |    7 →    7 MB (+0)
+[ 744] COMPILING                    core_functions/color/channel/hsl.hrx | RSS=7MB
+[744 ] OK   core_functions/color/channel/hsl.hrx                         |    7 →    7 MB (+0)
+[ 745] COMPILING                  core_functions/color/channel/error.hrx | RSS=7MB
+[745 ] OK   core_functions/color/channel/error.hrx                       |    7 →    7 MB (+0)
+[ 746] COMPILING                core_functions/color/channel/rec2020.hrx | RSS=7MB
+[746 ] OK   core_functions/color/channel/rec2020.hrx                     |    7 →    7 MB (+0)
+[ 747] COMPILING                core_functions/color/channel/a98-rgb.hrx | RSS=7MB
+[747 ] OK   core_functions/color/channel/a98-rgb.hrx                     |    7 →    7 MB (+0)
+[ 748] COMPILING      core_functions/color/channel/display_p3_linear.hrx | RSS=7MB
+[748 ] OK   core_functions/color/channel/display_p3_linear.hrx           |    7 →    7 MB (+0)
+[ 749] COMPILING             core_functions/color/channel/positional.hrx | RSS=7MB
+[749 ] OK   core_functions/color/channel/positional.hrx                  |    7 →    7 MB (+0)
+[ 750] COMPILING                    core_functions/color/channel/xyz.hrx | RSS=7MB
+[750 ] OK   core_functions/color/channel/xyz.hrx                         |    7 →    7 MB (+0)
+[ 751] COMPILING             core_functions/color/channel/display-p3.hrx | RSS=7MB
+[751 ] OK   core_functions/color/channel/display-p3.hrx                  |    7 →    7 MB (+0)
+[ 752] COMPILING                  core_functions/color/channel/named.hrx | RSS=7MB
+[752 ] OK   core_functions/color/channel/named.hrx                       |    7 →    7 MB (+0)
+[ 753] COMPILING           core_functions/color/channel/prophoto-rgb.hrx | RSS=7MB
+[753 ] OK   core_functions/color/channel/prophoto-rgb.hrx                |    7 →    7 MB (+0)
+[ 754] COMPILING                    core_functions/color/channel/lab.hrx | RSS=7MB
+[754 ] OK   core_functions/color/channel/lab.hrx                         |    7 →    7 MB (+0)
+[ 755] COMPILING                    core_functions/color/channel/lch.hrx | RSS=7MB
+[755 ] OK   core_functions/color/channel/lch.hrx                         |    7 →    7 MB (+0)
+[ 756] COMPILING                    core_functions/color/channel/rgb.hrx | RSS=7MB
+[756 ] OK   core_functions/color/channel/rgb.hrx                         |    7 →    7 MB (+0)
+[ 757] COMPILING                     core_functions/color/complement.hrx | RSS=7MB
+[757 ] OK   core_functions/color/complement.hrx                          |    7 →    7 MB (+0)
+[ 758] COMPILING                          core_functions/color/alpha.hrx | RSS=7MB
+[758 ] OK   core_functions/color/alpha.hrx                               |    7 →    7 MB (+0)
+[ 759] COMPILING              core_functions/color/adjust_hue/middle.hrx | RSS=7MB
+[759 ] OK   core_functions/color/adjust_hue/middle.hrx                   |    7 →    7 MB (+0)
+[ 760] COMPILING            core_functions/color/adjust_hue/fraction.hrx | RSS=7MB
+[760 ] OK   core_functions/color/adjust_hue/fraction.hrx                 |    7 →    7 MB (+0)
+[ 761] COMPILING               core_functions/color/adjust_hue/units.hrx | RSS=7MB
+[761 ] OK   core_functions/color/adjust_hue/units.hrx                    |    7 →    7 MB (+0)
+[ 762] COMPILING           core_functions/color/adjust_hue/above_max.hrx | RSS=7MB
+[762 ] OK   core_functions/color/adjust_hue/above_max.hrx                |    7 →    7 MB (+0)
+[ 763] COMPILING                 core_functions/color/adjust_hue/max.hrx | RSS=7MB
+[763 ] OK   core_functions/color/adjust_hue/max.hrx                      |    7 →    7 MB (+0)
+[ 764] COMPILING               core_functions/color/adjust_hue/error.hrx | RSS=7MB
+[764 ] OK   core_functions/color/adjust_hue/error.hrx                    |    7 →    7 MB (+0)
+[ 765] COMPILING            core_functions/color/adjust_hue/negative.hrx | RSS=7MB
+[765 ] OK   core_functions/color/adjust_hue/negative.hrx                 |    7 →    7 MB (+0)
+[ 766] COMPILING               core_functions/color/adjust_hue/alpha.hrx | RSS=7MB
+[766 ] OK   core_functions/color/adjust_hue/alpha.hrx                    |    7 →    7 MB (+0)
+[ 767] COMPILING               core_functions/color/adjust_hue/named.hrx | RSS=7MB
+[767 ] OK   core_functions/color/adjust_hue/named.hrx                    |    7 →    7 MB (+0)
+[ 768] COMPILING                 core_functions/color/adjust_hue/min.hrx | RSS=7MB
+[768 ] OK   core_functions/color/adjust_hue/min.hrx                      |    7 →    7 MB (+0)
+[ 769] COMPILING                           core_functions/color/rgba.hrx | RSS=7MB
+[769 ] OK   core_functions/color/rgba.hrx                                |    7 →    7 MB (+0)
+[ 770] COMPILING                     core_functions/color/ie_hex_str.hrx | RSS=7MB
+[770 ] OK   core_functions/color/ie_hex_str.hrx                          |    7 →    7 MB (+0)
+[ 771] COMPILING                           core_functions/color/blue.hrx | RSS=7MB
+[771 ] OK   core_functions/color/blue.hrx                                |    7 →    7 MB (+0)
+[ 772] COMPILING                      core_functions/color/grayscale.hrx | RSS=7MB
+[772 ] OK   core_functions/color/grayscale.hrx                           |    7 →    7 MB (+0)
+[ 773] COMPILING                     core_functions/color/desaturate.hrx | RSS=7MB
+[773 ] OK   core_functions/color/desaturate.hrx                          |    7 →    7 MB (+0)
+[ 774] COMPILING                        core_functions/color/fade_in.hrx | RSS=7MB
+[774 ] OK   core_functions/color/fade_in.hrx                             |    7 →    7 MB (+0)
+[ 775] COMPILING                       core_functions/color/fade_out.hrx | RSS=7MB
+[775 ] OK   core_functions/color/fade_out.hrx                            |    7 →    7 MB (+0)
+[ 776] COMPILING core_functions/color/adjust_color/error/missing_globals.hrx | RSS=7MB
+[776 ] OK   core_functions/color/adjust_color/error/missing_globals.hrx  |    7 →    7 MB (+0)
+[ 777] COMPILING                           core_functions/color/same.hrx | RSS=7MB
+[777 ] OK   core_functions/color/same.hrx                                |    7 →    7 MB (+0)
+[ 778] COMPILING                            core_functions/color/hue.hrx | RSS=7MB
+[778 ] OK   core_functions/color/hue.hrx                                 |    7 →    7 MB (+0)
+[ 779] COMPILING                      core_functions/color/lightness.hrx | RSS=7MB
+[779 ] OK   core_functions/color/lightness.hrx                           |    7 →    7 MB (+0)
+[ 780] COMPILING                           core_functions/color/hsla.hrx | RSS=7MB
+[780 ] OK   core_functions/color/hsla.hrx                                |    7 →    7 MB (+0)
+[ 781] COMPILING                   core_functions/meta/inspect/color.hrx | RSS=7MB
+[781 ] OK   core_functions/meta/inspect/color.hrx                        |    7 →    7 MB (+0)
+[ 782] COMPILING                  core_functions/meta/inspect/string.hrx | RSS=7MB
+[782 ] OK   core_functions/meta/inspect/string.hrx                       |    7 →    7 MB (+0)
+[ 783] COMPILING                   core_functions/meta/inspect/error.hrx | RSS=7MB
+[783 ] OK   core_functions/meta/inspect/error.hrx                        |    7 →    7 MB (+0)
+[ 784] COMPILING                    core_functions/meta/inspect/null.hrx | RSS=7MB
+[784 ] OK   core_functions/meta/inspect/null.hrx                         |    7 →    7 MB (+0)
+[ 785] COMPILING                 core_functions/meta/inspect/inspect.hrx | RSS=7MB
+[785 ] OK   core_functions/meta/inspect/inspect.hrx                      |    7 →    7 MB (+0)
+[ 786] COMPILING                     core_functions/meta/inspect/map.hrx | RSS=7MB
+[786 ] OK   core_functions/meta/inspect/map.hrx                          |    7 →    7 MB (+0)
+[ 787] COMPILING                   core_functions/meta/inspect/mixin.hrx | RSS=7MB
+[787 ] OK   core_functions/meta/inspect/mixin.hrx                        |    7 →    7 MB (+0)
+[ 788] COMPILING             core_functions/meta/inspect/list/single.hrx | RSS=7MB
+[788 ] OK   core_functions/meta/inspect/list/single.hrx                  |    7 →    7 MB (+0)
+[ 789] COMPILING              core_functions/meta/inspect/list/empty.hrx | RSS=7MB
+[789 ] OK   core_functions/meta/inspect/list/empty.hrx                   |    7 →    7 MB (+0)
+[ 790] COMPILING          core_functions/meta/inspect/list/bracketed.hrx | RSS=7MB
+[790 ] OK   core_functions/meta/inspect/list/bracketed.hrx               |    7 →    7 MB (+0)
+[ 791] COMPILING              core_functions/meta/inspect/list/space.hrx | RSS=7MB
+[791 ] OK   core_functions/meta/inspect/list/space.hrx                   |    7 →    7 MB (+0)
+[ 792] COMPILING             core_functions/meta/inspect/list/nested.hrx | RSS=7MB
+[792 ] OK   core_functions/meta/inspect/list/nested.hrx                  |    7 →    7 MB (+0)
+[ 793] COMPILING              core_functions/meta/inspect/list/comma.hrx | RSS=7MB
+[793 ] OK   core_functions/meta/inspect/list/comma.hrx                   |    7 →    7 MB (+0)
+[ 794] COMPILING                core_functions/meta/inspect/function.hrx | RSS=7MB
+[794 ] OK   core_functions/meta/inspect/function.hrx                     |    7 →    7 MB (+0)
+[ 795] COMPILING                  core_functions/meta/inspect/number.hrx | RSS=7MB
+[795 ] OK   core_functions/meta/inspect/number.hrx                       |    7 →    7 MB (+0)
+[ 796] COMPILING                 core_functions/meta/inspect/boolean.hrx | RSS=7MB
+[796 ] OK   core_functions/meta/inspect/boolean.hrx                      |    7 →    7 MB (+0)
+[ 797] COMPILING                       core_functions/meta/calc_args.hrx | RSS=7MB
+[797 ] OK   core_functions/meta/calc_args.hrx                            |    7 →    7 MB (+0)
+[ 798] COMPILING                         core_functions/meta/type_of.hrx | RSS=7MB
+[798 ] OK   core_functions/meta/type_of.hrx                              |    7 →    7 MB (+0)
+[ 799] COMPILING   core_functions/meta/get_function/different_module.hrx | RSS=7MB
+[799 ] OK   core_functions/meta/get_function/different_module.hrx        |    7 →    7 MB (+0)
+[ 800] COMPILING        core_functions/meta/get_function/same_module.hrx | RSS=7MB
+[800 ] OK   core_functions/meta/get_function/same_module.hrx             |    7 →    7 MB (+0)
+[ 801] COMPILING              core_functions/meta/get_function/error.hrx | RSS=7MB
+[801 ] OK   core_functions/meta/get_function/error.hrx                   |    7 →    7 MB (+0)
+[ 802] COMPILING               core_functions/meta/get_function/meta.hrx | RSS=7MB
+[802 ] OK   core_functions/meta/get_function/meta.hrx                    |    7 →    7 MB (+0)
+[ 803] COMPILING           core_functions/meta/get_function/equality.hrx | RSS=7MB
+[803 ] OK   core_functions/meta/get_function/equality.hrx                |    7 →    7 MB (+0)
+[ 804] COMPILING              core_functions/meta/get_function/scope.hrx | RSS=7MB
+[804 ] OK   core_functions/meta/get_function/scope.hrx                   |    7 →    7 MB (+0)
+[ 805] COMPILING                            core_functions/meta/call.hrx | RSS=7MB
+[805 ] OK   core_functions/meta/call.hrx                                 |    7 →    7 MB (+0)
+[ 806] COMPILING          core_functions/meta/global_variable_exists.hrx | RSS=7MB
+[806 ] OK   core_functions/meta/global_variable_exists.hrx               |    7 →    7 MB (+0)
+[ 807] COMPILING                       core_functions/meta/calc_name.hrx | RSS=7MB
+[807 ] OK   core_functions/meta/calc_name.hrx                            |    7 →    7 MB (+0)
+[ 808] COMPILING      core_functions/meta/get_mixin/different_module.hrx | RSS=7MB
+[808 ] OK   core_functions/meta/get_mixin/different_module.hrx           |    7 →    7 MB (+0)
+[ 809] COMPILING           core_functions/meta/get_mixin/same_module.hrx | RSS=7MB
+[809 ] OK   core_functions/meta/get_mixin/same_module.hrx                |    7 →    7 MB (+0)
+[ 810] COMPILING                 core_functions/meta/get_mixin/error.hrx | RSS=7MB
+[810 ] OK   core_functions/meta/get_mixin/error.hrx                      |    7 →    7 MB (+0)
+[ 811] COMPILING               core_functions/meta/get_mixin/content.hrx | RSS=7MB
+[811 ] OK   core_functions/meta/get_mixin/content.hrx                    |    7 →    7 MB (+0)
+[ 812] COMPILING              core_functions/meta/get_mixin/equality.hrx | RSS=7MB
+[812 ] OK   core_functions/meta/get_mixin/equality.hrx                   |    7 →    7 MB (+0)
+[ 813] COMPILING                 core_functions/meta/get_mixin/scope.hrx | RSS=7MB
+[813 ] OK   core_functions/meta/get_mixin/scope.hrx                      |    7 →    7 MB (+0)
+[ 814] COMPILING                core_functions/meta/module_functions.hrx | RSS=7MB
+[814 ] OK   core_functions/meta/module_functions.hrx                     |    7 →    7 MB (+0)
+[ 815] COMPILING                 core_functions/meta/function_exists.hrx | RSS=7MB
+[815 ] OK   core_functions/meta/function_exists.hrx                      |    7 →    7 MB (+0)
+[ 816] COMPILING        core_functions/meta/load_css/with/multi_load.hrx | RSS=7MB
+[816 ] OK   core_functions/meta/load_css/with/multi_load.hrx             |    7 →    7 MB (+0)
+[ 817] COMPILING       core_functions/meta/load_css/with/core_module.hrx | RSS=7MB
+[817 ] OK   core_functions/meta/load_css/with/core_module.hrx            |    7 →    7 MB (+0)
+[ 818] COMPILING core_functions/meta/load_css/with/some_unconfigured.hrx | RSS=7MB
+[818 ] OK   core_functions/meta/load_css/with/some_unconfigured.hrx      |    7 →    7 MB (+0)
+[ 819] COMPILING            core_functions/meta/load_css/with/single.hrx | RSS=7MB
+[819 ] OK   core_functions/meta/load_css/with/single.hrx                 |    7 →    7 MB (+0)
+[ 820] COMPILING   core_functions/meta/load_css/with/through_forward.hrx | RSS=7MB
+[820 ] OK   core_functions/meta/load_css/with/through_forward.hrx        |    7 →    7 MB (+0)
+[ 821] COMPILING          core_functions/meta/load_css/with/multiple.hrx | RSS=7MB
+[821 ] OK   core_functions/meta/load_css/with/multiple.hrx               |    7 →    7 MB (+0)
+[ 822] COMPILING core_functions/meta/load_css/with/doesnt_run_default.hrx | RSS=7MB
+[822 ] OK   core_functions/meta/load_css/with/doesnt_run_default.hrx     |    7 →    7 MB (+0)
+[ 823] COMPILING              core_functions/meta/load_css/with/null.hrx | RSS=7MB
+[823 ] OK   core_functions/meta/load_css/with/null.hrx                   |    7 →    7 MB (+0)
+[ 824] COMPILING             core_functions/meta/load_css/with/empty.hrx | RSS=7MB
+[824 ] OK   core_functions/meta/load_css/with/empty.hrx                  |    7 →    7 MB (+0)
+[ 825] COMPILING    core_functions/meta/load_css/with/through_import.hrx | RSS=7MB
+[825 ] OK   core_functions/meta/load_css/with/through_import.hrx         |    7 →    7 MB (+0)
+[ 826] COMPILING   core_functions/meta/load_css/with/variable_exists.hrx | RSS=7MB
+[826 ] OK   core_functions/meta/load_css/with/variable_exists.hrx        |    7 →    7 MB (+0)
+[ 827] COMPILING  core_functions/meta/load_css/with/dash_insensitive.hrx | RSS=7MB
+[827 ] OK   core_functions/meta/load_css/with/dash_insensitive.hrx       |    7 →    7 MB (+0)
+[ 828] COMPILING                  core_functions/meta/load_css/twice.hrx | RSS=7MB
+[828 ] OK   core_functions/meta/load_css/twice.hrx                       |    7 →    7 MB (+0)
+[ 829] COMPILING              core_functions/meta/load_css/plain_css.hrx | RSS=7MB
+[829 ] OK   core_functions/meta/load_css/plain_css.hrx                   |    7 →    7 MB (+0)
+[ 830] COMPILING                 core_functions/meta/load_css/extend.hrx | RSS=7MB
+[830 ] OK   core_functions/meta/load_css/extend.hrx                      |    7 →    7 MB (+0)
+[ 831] COMPILING       core_functions/meta/load_css/error/from_other.hrx | RSS=7MB
+[831 ] OK   core_functions/meta/load_css/error/from_other.hrx            |    7 →    7 MB (+0)
+[ 832] COMPILING          core_functions/meta/load_css/error/content.hrx | RSS=7MB
+[832 ] OK   core_functions/meta/load_css/error/content.hrx               |    7 →    7 MB (+0)
+[ 833] COMPILING             core_functions/meta/load_css/error/with.hrx | RSS=7MB
+[833 ] OK   core_functions/meta/load_css/error/with.hrx                  |    7 →    7 MB (+0)
+[ 834] COMPILING     core_functions/meta/load_css/error/too_few_args.hrx | RSS=7MB
+[834 ] OK   core_functions/meta/load_css/error/too_few_args.hrx          |    7 →    7 MB (+0)
+[ 835] COMPILING           core_functions/meta/load_css/error/member.hrx | RSS=7MB
+[835 ] OK   core_functions/meta/load_css/error/member.hrx                |    7 →    7 MB (+0)
+[ 836] COMPILING             core_functions/meta/load_css/error/type.hrx | RSS=7MB
+[836 ] OK   core_functions/meta/load_css/error/type.hrx                  |    7 →    7 MB (+0)
+[ 837] COMPILING    core_functions/meta/load_css/error/too_many_args.hrx | RSS=7MB
+[837 ] OK   core_functions/meta/load_css/error/too_many_args.hrx         |    7 →    7 MB (+0)
+[ 838] COMPILING             core_functions/meta/load_css/error/load.hrx | RSS=7MB
+[838 ] OK   core_functions/meta/load_css/error/load.hrx                  |    7 →    7 MB (+0)
+[ 839] COMPILING                 core_functions/meta/accepts_content.hrx | RSS=7MB
+[839 ] OK   core_functions/meta/accepts_content.hrx                      |    7 →    7 MB (+0)
+[ 840] COMPILING                           core_functions/meta/apply.hrx | RSS=7MB
+[840 ] OK   core_functions/meta/apply.hrx                                |    7 →    7 MB (+0)
+[ 841] COMPILING                 core_functions/meta/variable_exists.hrx | RSS=7MB
+[841 ] OK   core_functions/meta/variable_exists.hrx                      |    7 →    7 MB (+0)
+[ 842] COMPILING                  core_functions/meta/feature_exists.hrx | RSS=7MB
+[842 ] OK   core_functions/meta/feature_exists.hrx                       |    7 →    7 MB (+0)
+[ 843] COMPILING                    core_functions/meta/mixin_exists.hrx | RSS=7MB
+[843 ] OK   core_functions/meta/mixin_exists.hrx                         |    7 →    7 MB (+0)
+[ 844] COMPILING                        core_functions/meta/keywords.hrx | RSS=7MB
+[844 ] OK   core_functions/meta/keywords.hrx                             |    7 →    7 MB (+0)
+[ 845] COMPILING                core_functions/meta/module_variables.hrx | RSS=7MB
+[845 ] OK   core_functions/meta/module_variables.hrx                     |    7 →    7 MB (+0)
+[ 846] COMPILING                  core_functions/meta/content_exists.hrx | RSS=7MB
+[846 ] OK   core_functions/meta/content_exists.hrx                       |    7 →    7 MB (+0)
+[ 847] COMPILING                   core_functions/meta/module_mixins.hrx | RSS=7MB
+[847 ] OK   core_functions/meta/module_mixins.hrx                        |    7 →    7 MB (+0)
+[ 848] COMPILING                      core_functions/math/comparable.hrx | RSS=7MB
+[848 ] OK   core_functions/math/comparable.hrx                           |    7 →    7 MB (+0)
+[ 849] COMPILING      core_functions/math/pow/base_greater_than_zero.hrx | RSS=7MB
+[849 ] OK   core_functions/math/pow/base_greater_than_zero.hrx           |    7 →    7 MB (+0)
+[ 850] COMPILING                   core_functions/math/pow/arguments.hrx | RSS=7MB
+[850 ] OK   core_functions/math/pow/arguments.hrx                        |    7 →    7 MB (+0)
+[ 851] COMPILING          core_functions/math/pow/base_negative_zero.hrx | RSS=7MB
+[851 ] OK   core_functions/math/pow/base_negative_zero.hrx               |    7 →    7 MB (+0)
+[ 852] COMPILING      core_functions/math/pow/base_positive_infinity.hrx | RSS=7MB
+[852 ] OK   core_functions/math/pow/base_positive_infinity.hrx           |    7 →    7 MB (+0)
+[ 853] COMPILING          core_functions/math/pow/base_positive_zero.hrx | RSS=7MB
+[853 ] OK   core_functions/math/pow/base_positive_zero.hrx               |    7 →    7 MB (+0)
+[ 854] COMPILING      core_functions/math/pow/base_negative_infinity.hrx | RSS=7MB
+[854 ] OK   core_functions/math/pow/base_negative_infinity.hrx           |    7 →    7 MB (+0)
+[ 855] COMPILING         core_functions/math/pow/base_less_than_zero.hrx | RSS=7MB
+[855 ] OK   core_functions/math/pow/base_less_than_zero.hrx              |    7 →    7 MB (+0)
+[ 856] COMPILING                             core_functions/math/log.hrx | RSS=7MB
+[856 ] OK   core_functions/math/log.hrx                                  |    7 →    7 MB (+0)
+[ 857] COMPILING                            core_functions/math/sqrt.hrx | RSS=7MB
+[857 ] OK   core_functions/math/sqrt.hrx                                 |    7 →    7 MB (+0)
+[ 858] COMPILING                            core_functions/math/acos.hrx | RSS=7MB
+[858 ] OK   core_functions/math/acos.hrx                                 |    7 →    7 MB (+0)
+[ 859] COMPILING                            core_functions/math/asin.hrx | RSS=7MB
+[859 ] OK   core_functions/math/asin.hrx                                 |    7 →    7 MB (+0)
+[ 860] COMPILING                           core_functions/math/hypot.hrx | RSS=7MB
+[860 ] OK   core_functions/math/hypot.hrx                                |    7 →    7 MB (+0)
+[ 861] COMPILING                           core_functions/math/floor.hrx | RSS=7MB
+[861 ] OK   core_functions/math/floor.hrx                                |    7 →    7 MB (+0)
+[ 862] COMPILING                             core_functions/math/max.hrx | RSS=7MB
+[862 ] OK   core_functions/math/max.hrx                                  |    7 →    7 MB (+0)
+[ 863] COMPILING                          core_functions/math/random.hrx | RSS=7MB
+[863 ] OK   core_functions/math/random.hrx                               |    7 →    7 MB (+0)
+[ 864] COMPILING                             core_functions/math/tan.hrx | RSS=7MB
+[864 ] OK   core_functions/math/tan.hrx                                  |    7 →    7 MB (+0)
+[ 865] COMPILING                             core_functions/math/sin.hrx | RSS=7MB
+[865 ] OK   core_functions/math/sin.hrx                                  |    7 →    7 MB (+0)
+[ 866] COMPILING                       core_functions/math/variables.hrx | RSS=7MB
+[866 ] OK   core_functions/math/variables.hrx                            |    7 →    7 MB (+0)
+[ 867] COMPILING                             core_functions/math/cos.hrx | RSS=7MB
+[867 ] OK   core_functions/math/cos.hrx                                  |    7 →    7 MB (+0)
+[ 868] COMPILING                 core_functions/math/atan2/arguments.hrx | RSS=7MB
+[868 ] OK   core_functions/math/atan2/arguments.hrx                      |    7 →    7 MB (+0)
+[ 869] COMPILING                    core_functions/math/atan2/y_zero.hrx | RSS=7MB
+[869 ] OK   core_functions/math/atan2/y_zero.hrx                         |    7 →    7 MB (+0)
+[ 870] COMPILING                core_functions/math/atan2/y_infinite.hrx | RSS=7MB
+[870 ] OK   core_functions/math/atan2/y_infinite.hrx                     |    7 →    7 MB (+0)
+[ 871] COMPILING         core_functions/math/atan2/y_non_zero_finite.hrx | RSS=7MB
+[871 ] OK   core_functions/math/atan2/y_non_zero_finite.hrx              |    7 →    7 MB (+0)
+[ 872] COMPILING                           core_functions/math/clamp.hrx | RSS=7MB
+[872 ] OK   core_functions/math/clamp.hrx                                |    7 →    7 MB (+0)
+[ 873] COMPILING                             core_functions/math/div.hrx | RSS=7MB
+[873 ] OK   core_functions/math/div.hrx                                  |    7 →    7 MB (+0)
+[ 874] COMPILING                            core_functions/math/unit.hrx | RSS=7MB
+[874 ] OK   core_functions/math/unit.hrx                                 |    7 →    7 MB (+0)
+[ 875] COMPILING                           core_functions/math/round.hrx | RSS=7MB
+[875 ] OK   core_functions/math/round.hrx                                |    7 →    7 MB (+0)
+[ 876] COMPILING                            core_functions/math/atan.hrx | RSS=7MB
+[876 ] OK   core_functions/math/atan.hrx                                 |    7 →    7 MB (+0)
+[ 877] COMPILING                             core_functions/math/abs.hrx | RSS=7MB
+[877 ] OK   core_functions/math/abs.hrx                                  |    7 →    7 MB (+0)
+[ 878] COMPILING                            core_functions/math/ceil.hrx | RSS=7MB
+[878 ] OK   core_functions/math/ceil.hrx                                 |    7 →    7 MB (+0)
+[ 879] COMPILING                      core_functions/math/percentage.hrx | RSS=7MB
+[879 ] OK   core_functions/math/percentage.hrx                           |    7 →    7 MB (+0)
+[ 880] COMPILING                        core_functions/math/unitless.hrx | RSS=7MB
+[880 ] OK   core_functions/math/unitless.hrx                             |    7 →    7 MB (+0)
+[ 881] COMPILING                             core_functions/math/min.hrx | RSS=7MB
+[881 ] OK   core_functions/math/min.hrx                                  |    7 →    7 MB (+0)
+[ 882] COMPILING                             core_functions/newlines.hrx | RSS=7MB
+[882 ] OK   core_functions/newlines.hrx                                  |    7 →    7 MB (+0)
+[ 883] COMPILING                      core_functions/map/deep_remove.hrx | RSS=7MB
+[883 ] OK   core_functions/map/deep_remove.hrx                           |    7 →    7 MB (+0)
+[ 884] COMPILING                           core_functions/map/remove.hrx | RSS=7MB
+[884 ] OK   core_functions/map/remove.hrx                                |    7 →    7 MB (+0)
+[ 885] COMPILING                              core_functions/map/set.hrx | RSS=7MB
+[885 ] OK   core_functions/map/set.hrx                                   |    7 →    7 MB (+0)
+[ 886] COMPILING                            core_functions/map/merge.hrx | RSS=7MB
+[886 ] OK   core_functions/map/merge.hrx                                 |    7 →    7 MB (+0)
+[ 887] COMPILING                          core_functions/map/has_key.hrx | RSS=7MB
+[887 ] OK   core_functions/map/has_key.hrx                               |    7 →    7 MB (+0)
+[ 888] COMPILING                           core_functions/map/values.hrx | RSS=7MB
+[888 ] OK   core_functions/map/values.hrx                                |    7 →    7 MB (+0)
+[ 889] COMPILING                             core_functions/map/keys.hrx | RSS=7MB
+[889 ] OK   core_functions/map/keys.hrx                                  |    7 →    7 MB (+0)
+[ 890] COMPILING                              core_functions/map/get.hrx | RSS=7MB
+[890 ] OK   core_functions/map/get.hrx                                   |    7 →    7 MB (+0)
+[ 891] COMPILING                       core_functions/map/deep_merge.hrx | RSS=7MB
+[891 ] OK   core_functions/map/deep_merge.hrx                            |    7 →    7 MB (+0)
+[ 892] COMPILING                          core_functions/list/append.hrx | RSS=7MB
+[892 ] OK   core_functions/list/append.hrx                               |    7 →    7 MB (+0)
+[ 893] COMPILING                             core_functions/list/nth.hrx | RSS=7MB
+[893 ] OK   core_functions/list/nth.hrx                                  |    7 →    7 MB (+0)
+[ 894] COMPILING                       core_functions/list/separator.hrx | RSS=7MB
+[894 ] OK   core_functions/list/separator.hrx                            |    7 →    7 MB (+0)
+[ 895] COMPILING                          core_functions/list/length.hrx | RSS=7MB
+[895 ] OK   core_functions/list/length.hrx                               |    7 →    7 MB (+0)
+[ 896] COMPILING                           core_functions/list/utils.hrx | RSS=7MB
+[896 ] OK   core_functions/list/utils.hrx                                |    7 →    7 MB (+0)
+[ 897] COMPILING                     core_functions/list/join/single.hrx | RSS=7MB
+[897 ] OK   core_functions/list/join/single.hrx                          |    7 →    7 MB (+0)
+[ 898] COMPILING                      core_functions/list/join/error.hrx | RSS=7MB
+[898 ] OK   core_functions/list/join/error.hrx                           |    7 →    7 MB (+0)
+[ 899] COMPILING                      core_functions/list/join/empty.hrx | RSS=7MB
+[899 ] OK   core_functions/list/join/empty.hrx                           |    7 →    7 MB (+0)
+[ 900] COMPILING                      core_functions/list/join/multi.hrx | RSS=7MB
+[900 ] OK   core_functions/list/join/multi.hrx                           |    7 →    7 MB (+0)
+[ 901] COMPILING                         core_functions/list/set_nth.hrx | RSS=7MB
+[901 ] OK   core_functions/list/set_nth.hrx                              |    7 →    7 MB (+0)
+[ 902] COMPILING                           core_functions/list/index.hrx | RSS=7MB
+[902 ] OK   core_functions/list/index.hrx                                |    7 →    7 MB (+0)
+[ 903] COMPILING                             core_functions/list/zip.hrx | RSS=7MB
+[903 ] OK   core_functions/list/zip.hrx                                  |    7 →    7 MB (+0)
+[ 904] COMPILING                           core_functions/list/slash.hrx | RSS=7MB
+[904 ] OK   core_functions/list/slash.hrx                                |    7 →    7 MB (+0)
+[ 905] COMPILING                    core_functions/list/is_bracketed.hrx | RSS=7MB
+[905 ] OK   core_functions/list/is_bracketed.hrx                         |    7 →    7 MB (+0)
+[ 906] COMPILING                         core_functions/string/split.hrx | RSS=7MB
+[906 ] OK   core_functions/string/split.hrx                              |    7 →    7 MB (+0)
+[ 907] COMPILING                 core_functions/string/to_lower_case.hrx | RSS=7MB
+[907 ] OK   core_functions/string/to_lower_case.hrx                      |    7 →    7 MB (+0)
+[ 908] COMPILING                     core_functions/string/unique_id.hrx | RSS=7MB
+[908 ] OK   core_functions/string/unique_id.hrx                          |    7 →    7 MB (+0)
+[ 909] COMPILING                        core_functions/string/length.hrx | RSS=7MB
+[909 ] OK   core_functions/string/length.hrx                             |    7 →    7 MB (+0)
+[ 910] COMPILING                core_functions/string/slice/unquoted.hrx | RSS=7MB
+[910 ] OK   core_functions/string/slice/unquoted.hrx                     |    7 →    7 MB (+0)
+[ 911] COMPILING     core_functions/string/slice/combining_character.hrx | RSS=7MB
+[911 ] OK   core_functions/string/slice/combining_character.hrx          |    7 →    7 MB (+0)
+[ 912] COMPILING                   core_functions/string/slice/start.hrx | RSS=7MB
+[912 ] OK   core_functions/string/slice/start.hrx                        |    7 →    7 MB (+0)
+[ 913] COMPILING  core_functions/string/slice/double_width_character.hrx | RSS=7MB
+[913 ] OK   core_functions/string/slice/double_width_character.hrx       |    7 →    7 MB (+0)
+[ 914] COMPILING                   core_functions/string/slice/error.hrx | RSS=7MB
+[914 ] OK   core_functions/string/slice/error.hrx                        |    7 →    7 MB (+0)
+[ 915] COMPILING                     core_functions/string/slice/end.hrx | RSS=7MB
+[915 ] OK   core_functions/string/slice/end.hrx                          |    7 →    7 MB (+0)
+[ 916] COMPILING                   core_functions/string/slice/empty.hrx | RSS=7MB
+[916 ] OK   core_functions/string/slice/empty.hrx                        |    7 →    7 MB (+0)
+[ 917] COMPILING                   core_functions/string/slice/named.hrx | RSS=7MB
+[917 ] OK   core_functions/string/slice/named.hrx                        |    7 →    7 MB (+0)
+[ 918] COMPILING                 core_functions/string/to_upper_case.hrx | RSS=7MB
+[918 ] OK   core_functions/string/to_upper_case.hrx                      |    7 →    7 MB (+0)
+[ 919] COMPILING                         core_functions/string/quote.hrx | RSS=7MB
+[919 ] OK   core_functions/string/quote.hrx                              |    7 →    7 MB (+0)
+[ 920] COMPILING                       core_functions/string/unquote.hrx | RSS=7MB
+[920 ] OK   core_functions/string/unquote.hrx                            |    7 →    7 MB (+0)
+[ 921] COMPILING                         core_functions/string/index.hrx | RSS=7MB
+[921 ] OK   core_functions/string/index.hrx                              |    7 →    7 MB (+0)
+[ 922] COMPILING                        core_functions/string/insert.hrx | RSS=7MB
+[922 ] OK   core_functions/string/insert.hrx                             |    7 →    7 MB (+0)
+[ 923] COMPILING                    core_functions/modules/color/red.hrx | RSS=7MB
+[923 ] OK   core_functions/modules/color/red.hrx                         |    7 →    7 MB (+0)
+[ 924] COMPILING                 core_functions/modules/color/invert.hrx | RSS=7MB
+[924 ] OK   core_functions/modules/color/invert.hrx                      |    7 →    7 MB (+0)
+[ 925] COMPILING                 core_functions/modules/color/adjust.hrx | RSS=7MB
+[925 ] OK   core_functions/modules/color/adjust.hrx                      |    7 →    7 MB (+0)
+[ 926] COMPILING             core_functions/modules/color/saturation.hrx | RSS=7MB
+[926 ] OK   core_functions/modules/color/saturation.hrx                  |    7 →    7 MB (+0)
+[ 927] COMPILING                  core_functions/modules/color/error.hrx | RSS=7MB
+[927 ] OK   core_functions/modules/color/error.hrx                       |    7 →    7 MB (+0)
+[ 928] COMPILING                  core_functions/modules/color/green.hrx | RSS=7MB
+[928 ] OK   core_functions/modules/color/green.hrx                       |    7 →    7 MB (+0)
+[ 929] COMPILING             core_functions/modules/color/complement.hrx | RSS=7MB
+[929 ] OK   core_functions/modules/color/complement.hrx                  |    7 →    7 MB (+0)
+[ 930] COMPILING                 core_functions/modules/color/change.hrx | RSS=7MB
+[930 ] OK   core_functions/modules/color/change.hrx                      |    7 →    7 MB (+0)
+[ 931] COMPILING                  core_functions/modules/color/alpha.hrx | RSS=7MB
+[931 ] OK   core_functions/modules/color/alpha.hrx                       |    7 →    7 MB (+0)
+[ 932] COMPILING          core_functions/modules/color/css_overloads.hrx | RSS=7MB
+[932 ] OK   core_functions/modules/color/css_overloads.hrx               |    7 →    7 MB (+0)
+[ 933] COMPILING             core_functions/modules/color/ie_hex_str.hrx | RSS=7MB
+[933 ] OK   core_functions/modules/color/ie_hex_str.hrx                  |    7 →    7 MB (+0)
+[ 934] COMPILING                   core_functions/modules/color/blue.hrx | RSS=7MB
+[934 ] OK   core_functions/modules/color/blue.hrx                        |    7 →    7 MB (+0)
+[ 935] COMPILING                    core_functions/modules/color/mix.hrx | RSS=7MB
+[935 ] OK   core_functions/modules/color/mix.hrx                         |    7 →    7 MB (+0)
+[ 936] COMPILING                    core_functions/modules/color/hue.hrx | RSS=7MB
+[936 ] OK   core_functions/modules/color/hue.hrx                         |    7 →    7 MB (+0)
+[ 937] COMPILING                  core_functions/modules/color/scale.hrx | RSS=7MB
+[937 ] OK   core_functions/modules/color/scale.hrx                       |    7 →    7 MB (+0)
+[ 938] COMPILING              core_functions/modules/color/lightness.hrx | RSS=7MB
+[938 ] OK   core_functions/modules/color/lightness.hrx                   |    7 →    7 MB (+0)
+[ 939] COMPILING                core_functions/global/color/saturate.hrx | RSS=7MB
+[939 ] OK   core_functions/global/color/saturate.hrx                     |    7 →    7 MB (+0)
+[ 940] COMPILING                     core_functions/global/color/red.hrx | RSS=7MB
+[940 ] OK   core_functions/global/color/red.hrx                          |    7 →    7 MB (+0)
+[ 941] COMPILING                 core_functions/global/color/opacity.hrx | RSS=7MB
+[941 ] OK   core_functions/global/color/opacity.hrx                      |    7 →    7 MB (+0)
+[ 942] COMPILING                  core_functions/global/color/invert.hrx | RSS=7MB
+[942 ] OK   core_functions/global/color/invert.hrx                       |    7 →    7 MB (+0)
+[ 943] COMPILING              core_functions/global/color/saturation.hrx | RSS=7MB
+[943 ] OK   core_functions/global/color/saturation.hrx                   |    7 →    7 MB (+0)
+[ 944] COMPILING                 core_functions/global/color/lighten.hrx | RSS=7MB
+[944 ] OK   core_functions/global/color/lighten.hrx                      |    7 →    7 MB (+0)
+[ 945] COMPILING                  core_functions/global/color/darken.hrx | RSS=7MB
+[945 ] OK   core_functions/global/color/darken.hrx                       |    7 →    7 MB (+0)
+[ 946] COMPILING                 core_functions/global/color/fade-in.hrx | RSS=7MB
+[946 ] OK   core_functions/global/color/fade-in.hrx                      |    7 →    7 MB (+0)
+[ 947] COMPILING                   core_functions/global/color/error.hrx | RSS=7MB
+[947 ] OK   core_functions/global/color/error.hrx                        |    7 →    7 MB (+0)
+[ 948] COMPILING                   core_functions/global/color/green.hrx | RSS=7MB
+[948 ] OK   core_functions/global/color/green.hrx                        |    7 →    7 MB (+0)
+[ 949] COMPILING                 core_functions/global/color/opacify.hrx | RSS=7MB
+[949 ] OK   core_functions/global/color/opacify.hrx                      |    7 →    7 MB (+0)
+[ 950] COMPILING              core_functions/global/color/complement.hrx | RSS=7MB
+[950 ] OK   core_functions/global/color/complement.hrx                   |    7 →    7 MB (+0)
+[ 951] COMPILING                  core_functions/global/color/change.hrx | RSS=7MB
+[951 ] OK   core_functions/global/color/change.hrx                       |    7 →    7 MB (+0)
+[ 952] COMPILING                   core_functions/global/color/alpha.hrx | RSS=7MB
+[952 ] OK   core_functions/global/color/alpha.hrx                        |    7 →    7 MB (+0)
+[ 953] COMPILING          core_functions/global/color/transparentize.hrx | RSS=7MB
+[953 ] OK   core_functions/global/color/transparentize.hrx               |    7 →    7 MB (+0)
+[ 954] COMPILING                core_functions/global/color/fade-out.hrx | RSS=7MB
+[954 ] OK   core_functions/global/color/fade-out.hrx                     |    7 →    7 MB (+0)
+[ 955] COMPILING              core_functions/global/color/ie_hex_str.hrx | RSS=7MB
+[955 ] OK   core_functions/global/color/ie_hex_str.hrx                   |    7 →    7 MB (+0)
+[ 956] COMPILING                    core_functions/global/color/blue.hrx | RSS=7MB
+[956 ] OK   core_functions/global/color/blue.hrx                         |    7 →    7 MB (+0)
+[ 957] COMPILING               core_functions/global/color/grayscale.hrx | RSS=7MB
+[957 ] OK   core_functions/global/color/grayscale.hrx                    |    7 →    7 MB (+0)
+[ 958] COMPILING              core_functions/global/color/desaturate.hrx | RSS=7MB
+[958 ] OK   core_functions/global/color/desaturate.hrx                   |    7 →    7 MB (+0)
+[ 959] COMPILING                     core_functions/global/color/mix.hrx | RSS=7MB
+[959 ] OK   core_functions/global/color/mix.hrx                          |    7 →    7 MB (+0)
+[ 960] COMPILING                     core_functions/global/color/hue.hrx | RSS=7MB
+[960 ] OK   core_functions/global/color/hue.hrx                          |    7 →    7 MB (+0)
+[ 961] COMPILING                   core_functions/global/color/scale.hrx | RSS=7MB
+[961 ] OK   core_functions/global/color/scale.hrx                        |    7 →    7 MB (+0)
+[ 962] COMPILING               core_functions/global/color/lightness.hrx | RSS=7MB
+[962 ] OK   core_functions/global/color/lightness.hrx                    |    7 →    7 MB (+0)
+[ 963] COMPILING                        core_functions/global/string.hrx | RSS=7MB
+[963 ] OK   core_functions/global/string.hrx                             |    7 →    7 MB (+0)
+[ 964] COMPILING                          core_functions/global/math.hrx | RSS=7MB
+[964 ] OK   core_functions/global/math.hrx                               |    7 →    7 MB (+0)
+[ 965] COMPILING                          core_functions/global/meta.hrx | RSS=7MB
+[965 ] OK   core_functions/global/meta.hrx                               |    7 →    7 MB (+0)
+[ 966] COMPILING                          core_functions/global/list.hrx | RSS=7MB
+[966 ] OK   core_functions/global/list.hrx                               |    7 →    7 MB (+0)
+[ 967] COMPILING                           core_functions/global/map.hrx | RSS=7MB
+[967 ] OK   core_functions/global/map.hrx                                |    7 →    7 MB (+0)
+[ 968] COMPILING                      core_functions/global/selector.hrx | RSS=7MB
+[968 ] OK   core_functions/global/selector.hrx                           |    7 →    7 MB (+0)
+[ 969] COMPILING                                  callable/arguments.hrx | RSS=7MB
+[969 ] OK   callable/arguments.hrx                                       |    7 →    7 MB (+0)
+[ 970] COMPILING                                 callable/whitespace.hrx | RSS=7MB
+[970 ] OK   callable/whitespace.hrx                                      |    7 →    7 MB (+0)
+[ 971] COMPILING                                 callable/parameters.hrx | RSS=7MB
+[971 ] OK   callable/parameters.hrx                                      |    7 →    7 MB (+0)
+
+完成！

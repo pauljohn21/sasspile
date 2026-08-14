@@ -31,7 +31,6 @@ exclude = [
 
 [dependencies]
 thiserror = "2"
-im = "15"  # 不可变 HashMap —— 支持函数式状态传递
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
 

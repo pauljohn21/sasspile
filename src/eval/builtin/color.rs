@@ -7,8 +7,7 @@
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use im::HashMap;
-
+use std::collections::HashMap;
 /// 展开空格分隔的 List 参数——用于 color.hsl(0 100% 50%) 等 CSS Level 4 语法。
 /// 当参数只有一个且为 space-separated list 时，展开为独立参数。
 fn flatten_space_list(args: &[Value]) -> Vec<Value> {

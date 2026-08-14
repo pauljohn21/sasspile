@@ -4,8 +4,7 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use im::HashMap;
-
+use std::collections::HashMap;
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
         "length" | "list-length" => match args {

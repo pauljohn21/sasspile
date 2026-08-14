@@ -9,6 +9,8 @@ use crate::error::{Result, SassError};
 pub struct CompoundSelector {
     /// 类型选择器（div, span, *），None 表示未指定。
     pub element: Option<String>,
+    /// 命名空间前缀（如 `c|*` 中的 `c`），None 表示无前缀，Some("") 表示显式空命名空间 `|*`。
+    pub namespace: Option<String>,
     /// 类选择器列表。
     pub classes: Vec<String>,
     /// ID 选择器列表。
@@ -124,6 +126,15 @@ fn parse_complex_selector(s: &str) -> Result<ComplexSelector> {
 
         // 解析复合选择器
         let compound = parse_compound_selector(&chars, &mut i)?;
+        // 防死循环：空 compound 说明解析无法继续
+        if compound.element.is_none()
+            && compound.classes.is_empty()
+            && compound.ids.is_empty()
+            && compound.attrs.is_empty()
+            && compound.pseudos.is_empty()
+        {
+            break;
+        }
         parts.push(CompoundWithCombinator {
             compound,
             combinator,
@@ -135,10 +146,29 @@ fn parse_complex_selector(s: &str) -> Result<ComplexSelector> {
 
 fn parse_compound_selector(chars: &[char], i: &mut usize) -> Result<CompoundSelector> {
     let mut element = None;
+    let mut namespace: Option<String> = None;
     let mut classes = Vec::new();
     let mut ids = Vec::new();
     let mut attrs = Vec::new();
     let mut pseudos = Vec::new();
+
+    // 检查是否有命名空间前缀: ident|elem 或 |elem
+    if *i < chars.len() && chars[*i] == '|' {
+        // |* 或 |div —— 显式空命名空间
+        *i += 1;
+        namespace = Some(String::new());
+    } else if *i < chars.len() && (chars[*i].is_ascii_alphabetic() || !chars[*i].is_ascii()) {
+        let saved_i = *i;
+        let ident = parse_ident(chars, i);
+        if *i < chars.len() && chars[*i] == '|' {
+            // c| —— ident 是命名空间前缀
+            *i += 1;
+            namespace = Some(ident);
+        } else {
+            // 不是命名空间前缀，回退
+            *i = saved_i;
+        }
+    }
 
     while *i < chars.len() {
         match chars[*i] {
@@ -210,6 +240,7 @@ fn parse_compound_selector(chars: &[char], i: &mut usize) -> Result<CompoundSele
 
     Ok(CompoundSelector {
         element,
+        namespace,
         classes,
         ids,
         attrs,

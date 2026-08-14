@@ -5,8 +5,24 @@
 
 use std::path::{Path, PathBuf};
 
-/// 跳过的 spec 子目录——当前无跳过（3.x/CSS4 文件已物理删除）。
-pub const SKIP_DIRS: &[&str] = &[];
+/// 跳过的 spec 子目录——CSS4 色彩空间等 sasspile 暂不支持的功能。
+pub const SKIP_DIRS: &[&str] = &[
+    // CSS4 色彩空间（sasspile 暂不支持）
+    "core_functions/color/hwb",
+    "core_functions/color/lab",
+    "core_functions/color/lch",
+    "core_functions/color/oklab",
+    "core_functions/color/oklch",
+    "core_functions/color/to_gamut",
+    "core_functions/color/to_space",
+    "core_functions/color/is_in_gamut",
+    "core_functions/color/is_legacy",
+    "core_functions/color/is_missing",
+    "core_functions/color/is_powerless",
+    "core_functions/color/space",
+    "core_functions/color/blackness",
+    "core_functions/color/whiteness",
+];
 
 /// 检查文件相对 spec_root 的路径是否在跳过列表中。
 fn should_skip(rel_path: &str) -> bool {
