@@ -26,8 +26,13 @@ impl Node {
                 let imp = if *important { " !important" } else { "" };
                 format!("{pad}{property}: {value}{imp};")
             }
-            Node::Variable { name, value, flags } => {
-                let mut s = format!("{pad}${name}: {value}");
+            Node::Variable { name, value, flags, namespace } => {
+                let qualified = if let Some(ns) = namespace {
+                    format!("{ns}.${name}")
+                } else {
+                    format!("${name}")
+                };
+                let mut s = format!("{pad}{qualified}: {value}");
                 if flags.default {
                     s.push_str(" !default");
                 }
@@ -217,6 +222,7 @@ impl Node {
                 show,
                 hide,
                 prefix,
+                config,
             } => {
                 let mut s = format!("{pad}@forward \"{url}\"");
                 if let Some(p) = prefix {
@@ -227,6 +233,14 @@ impl Node {
                 }
                 if !hide.is_empty() {
                     s.push_str(&format!(" hide {}", hide.join(", ")));
+                }
+                if !config.is_empty() {
+                    let cfg: String = config
+                        .iter()
+                        .map(|(k, v)| format!("${k}: {v}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    s.push_str(&format!(" with ({cfg})"));
                 }
                 s.push(';');
                 s

@@ -55,7 +55,7 @@ pub enum Node {
         /// 是否标记 `!important`。
         important: bool,
     },
-    /// 变量声明——`$name: value;`。
+    /// 变量声明——`$name: value;` 或 `namespace.$name: value;`。
     Variable {
         /// 变量名（不含 `$`）。
         name: String,
@@ -63,6 +63,8 @@ pub enum Node {
         value: Value,
         /// `!default` / `!global` 标志。
         flags: VarFlags,
+        /// 可选的命名空间前缀（如 `upstream.$a` 中的 `upstream`）。
+        namespace: Option<String>,
     },
     /// 注释。
     Comment(String, bool), // (text, is_silent)
@@ -160,6 +162,8 @@ pub enum Node {
         hide: Vec<String>,
         /// `as prefix-*` 前缀重映射。
         prefix: Option<String>,
+        /// `with ($x: val)` 配置参数列表。
+        config: Vec<(String, Value)>,
     },
     /// `@import` 导入。
     Import {

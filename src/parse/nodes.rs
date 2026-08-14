@@ -203,6 +203,21 @@ impl<'tok> Parser<'tok> {
     }
 
     pub(crate) fn parse_variable(&mut self) -> Result<Node> {
+        // 命名空间限定变量（如 upstream.$a: value）
+        let namespace = if matches!(self.peek(), Some(Token::Ident(_)))
+            && matches!(self.peek_n(1), Some(Token::Dot))
+            && matches!(self.peek_n(2), Some(Token::Dollar(_)))
+        {
+            let ns = match self.peek() {
+                Some(Token::Ident(s)) => s.clone(),
+                _ => String::new(),
+            };
+            self.advance(); // 消费 namespace
+            self.advance(); // 消费 .
+            Some(ns)
+        } else {
+            None
+        };
         let name = match self.peek() {
             Some(Token::Dollar(n)) => {
                 let n = n.clone();
@@ -229,7 +244,12 @@ impl<'tok> Parser<'tok> {
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
-        Ok(Node::Variable { name, value, flags })
+        Ok(Node::Variable {
+            name,
+            value,
+            flags,
+            namespace,
+        })
     }
 
     pub(crate) fn parse_var_flags(&mut self) -> Result<VarFlags> {
@@ -257,6 +277,11 @@ impl<'tok> Parser<'tok> {
             self.skip_ws();
             match self.peek() {
                 Some(Token::RBrace) | None | Some(Token::Eof) => break,
+                Some(Token::Semicolon) => {
+                    // 消费额外的空分号
+                    self.advance();
+                    continue;
+                }
                 _ => nodes.push(self.parse_node()?),
             }
         }
@@ -516,6 +541,17 @@ impl<'tok> Parser<'tok> {
             self.skip_ws();
             // 使用 parse_expr 而不是 parse_value，避免消费逗号分隔的列表
             let value = self.parse_expr(0)?;
+            // 消费可选的 !default / !global 标志（with() 配置中允许）
+            self.skip_ws();
+            if matches!(self.peek(), Some(Token::Bang)) {
+                self.advance(); // 消费 !
+                self.skip_ws();
+                // 消费 default / global 关键字（但不需要存储，只是跳过）
+                if matches!(self.peek(), Some(Token::Ident(s)) if s == "default" || s == "global")
+                {
+                    self.advance();
+                }
+            }
             config.push((name, value));
             self.skip_ws();
             if self.peek() == Some(&Token::Comma) {

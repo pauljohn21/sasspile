@@ -54,6 +54,8 @@ pub struct Env {
     /// 作用域栈——每个元素是一个 HashMap，记录该作用域内绑定的变量名及其原始值。
     /// 用于实现词法作用域：离开作用域时恢复原始值（支持变量遮蔽）。
     scope_stack: Vec<HashMap<String, Option<Value>>>,
+    /// 当前模块加载栈——记录正在加载的文件路径，用于循环导入检测。
+    loading: Vec<PathBuf>,
 }
 
 /// mixin 定义存储。
@@ -313,7 +315,7 @@ impl Evaluator {
                     env.clone(),
                 ))
             }
-            Node::Variable { name, value, flags } => Self::eval_variable(name, value, flags, env),
+            Node::Variable { name, value, flags, namespace } => Self::eval_variable(name, value, flags, namespace.as_deref(), env),
             Node::Comment(text, silent) => {
                 if *silent {
                     Ok((vec![], env.clone()))
@@ -418,13 +420,14 @@ impl Evaluator {
                 show: _,
                 hide: _,
                 prefix,
+                config,
             } => {
                 // @forward 'url' —— 转发模块成员到当前作用域
                 // as prefix-* 时，成员名加前缀（如 c → d-c）
                 let base = env.base_path.as_ref();
                 let load_paths = env.get_load_paths();
                 if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    let exports = Self::load_module(&path, &[], env)?;
+                    let exports = Self::load_module(&path, &config, env)?;
                     let mut new_env = env.clone();
                     if let Some(prefix) = prefix {
                         // 带前缀重映射：c → prefix-c

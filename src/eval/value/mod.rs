@@ -22,8 +22,18 @@ impl Evaluator {
         name: &str,
         value: &Value,
         flags: &VarFlags,
+        namespace: Option<&str>,
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        // 命名空间限定变量赋值：namespace.$a: value — 更新模块变量
+        if let Some(ns) = namespace {
+            let module_key = format!("{ns}.{name}");
+            if flags.default && env.has_var(&module_key) {
+                return Ok((vec![], env.clone()));
+            }
+            let val = Self::eval_value(value, env)?;
+            return Ok((vec![], env.bind(module_key, val)));
+        }
         if flags.default && env.has_var(name) {
             return Ok((vec![], env.clone()));
         }

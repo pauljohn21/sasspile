@@ -177,6 +177,11 @@ impl<'tok> Parser<'tok> {
         self.in_declaration = false;
         let body = self.parse_body()?;
         self.in_declaration = prev_decl;
+        self.skip_ws();
+        // 消费可选的 ; — @mixin a {b: 1}; 允许分号结尾
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
         Ok(Node::MixinDef { name, params, body })
     }
 
@@ -294,6 +299,7 @@ impl<'tok> Parser<'tok> {
         let mut show = Vec::new();
         let mut hide = Vec::new();
         let mut prefix = None;
+        let mut config = Vec::new();
         self.skip_ws();
         if self.peek_keyword("as") {
             self.advance(); // 消费 as
@@ -316,6 +322,13 @@ impl<'tok> Parser<'tok> {
             hide = self.parse_member_list();
         }
         self.skip_ws();
+        if self.peek_keyword("with") {
+            self.advance(); // 消费 with 关键字
+            self.skip_ws();
+            self.expect(&Token::LParen)?;
+            config = self.parse_config()?;
+        }
+        self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
@@ -324,6 +337,7 @@ impl<'tok> Parser<'tok> {
             show,
             hide,
             prefix,
+            config,
         })
     }
 

@@ -82,9 +82,15 @@ impl Evaluator {
     ) -> Result<ModuleExports> {
         let span = crate::__tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
         let _enter = span.enter();
-        // 防止循环导入导致栈溢出
-        if caller_env.depth > 50 {
-            return Ok(ModuleExports::default());
+        // 循环导入检测：如果该文件已在加载栈中，返回错误
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        if caller_env.loading.iter().any(|p| {
+            p == &canonical || path == p || p.canonicalize().ok().as_deref() == Some(&*canonical)
+        }) {
+            return Err(SassError::Module(
+                format!("Module loop: this module is already being loaded.\n  {}  @use\n  {}  root stylesheet",
+                    path.display(), caller_env.base_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default())
+            ));
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
@@ -101,6 +107,9 @@ impl Evaluator {
             .with_load_paths(caller_env.get_load_paths().to_vec());
         env.depth = caller_env.depth + 1;
         env.plain_css = is_plain_css;
+        // 将当前路径加入加载栈（循环导入检测）
+        env.loading = caller_env.loading.clone();
+        env.loading.push(path.to_path_buf());
         // 注入 with() 配置变量（求值后注入，使 !default 尊重覆盖值）
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
@@ -128,8 +137,11 @@ impl Evaluator {
     pub(crate) fn load_import(path: &Path, caller_env: &Env) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
         let _enter = span.enter();
-        // 防止循环导入导致栈溢出
-        if caller_env.depth > 50 {
+        // 循环导入检测：如果该文件已在加载栈中，静默跳过
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        if caller_env.loading.iter().any(|p| {
+            p == &canonical || path == p || p.canonicalize().ok().as_deref() == Some(&*canonical)
+        }) {
             return Ok((vec![], caller_env.clone()));
         }
         let source = std::fs::read_to_string(path)
@@ -150,6 +162,8 @@ impl Evaluator {
         env.base_path = Some(path.to_path_buf());
         env.depth = caller_env.depth + 1;
         env.plain_css = is_plain_css;
+        // 将当前路径加入加载栈（循环导入检测）
+        env.loading.push(path.to_path_buf());
         let (css, mut final_env) = Self::eval_nodes(&ast.nodes, &env)?;
         // 恢复调用者的 base_path 和 depth，使父作用域后续 @import 使用正确的基准目录
         final_env.base_path = caller_env.base_path.clone();
