@@ -84,57 +84,48 @@ impl Evaluator {
                         _ => Err(SassError::Eval("max 需要数字参数".into())),
                     }
                 }),
-            "percentage" => match pos_args {
-                [Value::Number(n, _)] => Ok(Value::Number(n * 100.0, Some("%".into()))),
-                _ => Err(SassError::Eval("percentage 需要 1 个数字参数".into())),
-            },
-            "math.div" | "div" => match pos_args {
-                [Value::Number(a, u1), Value::Number(b, u2)] => {
-                    // 构建结果单位：分子单位/分母单位
-                    let result_unit = match (u1, u2) {
-                        (Some(n), Some(d)) => Some(format!("{n}/{d}")),
-                        (Some(n), None) => Some(n.clone()),
-                        (None, Some(d)) => Some(format!("/{d}")),
-                        (None, None) => None,
-                    };
-                    if *b == 0.0 {
-                        if *a == 0.0 {
-                            return Ok(Value::Number(f64::NAN, result_unit));
-                        }
-                        return Ok(Value::Number(a / b, result_unit));
-                    }
-                    Ok(Value::Number(a / b, result_unit))
+            "percentage" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => Ok(Value::Number(n * 100.0, Some("%".into()))),
+                    _ => Err(SassError::Eval("percentage 需要 1 个数字参数".into())),
                 }
-                _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
-            },
-            "pow" => {
-                let (a, b) = if pos_args.len() == 2 {
-                    match (&pos_args[0], &pos_args[1]) {
-                        (Value::Number(a, _), Value::Number(b, _)) => (*a, *b),
-                        _ => return Err(SassError::Eval("pow 需要 2 个数字参数".into())),
+            }
+            "math.div" | "div" => {
+                let a_arg = pos_args.first()
+                    .or_else(|| kw_args.get("number1").or_else(|| kw_args.get("$number1")));
+                let b_arg = pos_args.get(1)
+                    .or_else(|| kw_args.get("number2").or_else(|| kw_args.get("$number2")));
+                match (a_arg, b_arg) {
+                    (Some(Value::Number(a, u1)), Some(Value::Number(b, u2))) => {
+                        // 构建结果单位：分子单位/分母单位
+                        let result_unit = match (u1, u2) {
+                            (Some(n), Some(d)) => Some(format!("{n}/{d}")),
+                            (Some(n), None) => Some(n.clone()),
+                            (None, Some(d)) => Some(format!("/{d}")),
+                            (None, None) => None,
+                        };
+                        if *b == 0.0 {
+                            if *a == 0.0 {
+                                return Ok(Value::Number(f64::NAN, result_unit));
+                            }
+                            return Ok(Value::Number(a / b, result_unit));
+                        }
+                        Ok(Value::Number(a / b, result_unit))
                     }
-                } else if pos_args.len() == 1 {
-                    let a = match &pos_args[0] {
-                        Value::Number(a, _) => *a,
-                        _ => return Err(SassError::Eval("pow 需要 2 个数字参数".into())),
-                    };
-                    let b = match kw_args.get("exponent") {
-                        Some(Value::Number(b, _)) => *b,
-                        _ => return Err(SassError::Eval("pow 需要 exponent 参数".into())),
-                    };
-                    (a, b)
-                } else {
-                    let a = match kw_args.get("base") {
-                        Some(Value::Number(a, _)) => *a,
-                        _ => return Err(SassError::Eval("pow 需要 base 参数".into())),
-                    };
-                    let b = match kw_args.get("exponent") {
-                        Some(Value::Number(b, _)) => *b,
-                        _ => return Err(SassError::Eval("pow 需要 exponent 参数".into())),
-                    };
-                    (a, b)
-                };
-                Ok(Value::Number(a.powf(b), None))
+                    _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
+                }
+            }
+            "pow" => {
+                let base_arg = pos_args.first()
+                    .or_else(|| kw_args.get("base").or_else(|| kw_args.get("$base")));
+                let exp_arg = pos_args.get(1)
+                    .or_else(|| kw_args.get("exponent").or_else(|| kw_args.get("$exponent")));
+                match (base_arg, exp_arg) {
+                    (Some(Value::Number(a, _)), Some(Value::Number(b, _))) => {
+                        Ok(Value::Number(a.powf(*b), None))
+                    }
+                    _ => Err(SassError::Eval("pow 需要 base 和 exponent 参数".into())),
+                }
             }
             "sqrt" => {
                 match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
@@ -252,29 +243,41 @@ impl Evaluator {
                 )),
                 _ => Err(SassError::Eval("random 需要 0-1 个参数".into())),
             },
-            "clamp" => match pos_args {
-                [
-                    Value::Number(min, _),
-                    Value::Number(val, _),
-                    Value::Number(max, _),
-                ] => Ok(Value::Number(val.max(*min).min(*max), None)),
-                _ => Err(SassError::Eval("clamp 需要 3 个数字参数".into())),
-            },
-            "unit" => match pos_args {
-                [Value::Number(_, Some(u))] => Ok(Value::String(u.clone(), false)),
-                [Value::Number(_, None)] => Ok(Value::String("".into(), false)),
-                _ => Err(SassError::Eval("unit 需要 1 个数字参数".into())),
-            },
-            "is-unitless" => match pos_args {
-                [Value::Number(_, None)] => Ok(Value::Bool(true)),
-                [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),
-                _ => Err(SassError::Eval("is-unitless 需要 1 个数字参数".into())),
-            },
-            "unitless" => match pos_args {
-                [Value::Number(_, None)] => Ok(Value::Bool(true)),
-                [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),
-                _ => Err(SassError::Eval("unitless 需要 1 个数字参数".into())),
-            },
+            "clamp" => {
+                let min_arg = pos_args.first()
+                    .or_else(|| kw_args.get("min").or_else(|| kw_args.get("$min")));
+                let val_arg = pos_args.get(1)
+                    .or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number")));
+                let max_arg = pos_args.get(2)
+                    .or_else(|| kw_args.get("max").or_else(|| kw_args.get("$max")));
+                match (min_arg, val_arg, max_arg) {
+                    (Some(Value::Number(min, _)), Some(Value::Number(val, _)), Some(Value::Number(max, _))) => {
+                        Ok(Value::Number(val.max(*min).min(*max), None))
+                    }
+                    _ => Err(SassError::Eval("clamp 需要 3 个数字参数".into())),
+                }
+            }
+            "unit" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(_, Some(u))) => Ok(Value::String(u.clone(), false)),
+                    Some(Value::Number(_, None)) => Ok(Value::String("".into(), false)),
+                    _ => Err(SassError::Eval("unit 需要 1 个数字参数".into())),
+                }
+            }
+            "is-unitless" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(_, None)) => Ok(Value::Bool(true)),
+                    Some(Value::Number(_, Some(_))) => Ok(Value::Bool(false)),
+                    _ => Err(SassError::Eval("is-unitless 需要 1 个数字参数".into())),
+                }
+            }
+            "unitless" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(_, None)) => Ok(Value::Bool(true)),
+                    Some(Value::Number(_, Some(_))) => Ok(Value::Bool(false)),
+                    _ => Err(SassError::Eval("unitless 需要 1 个数字参数".into())),
+                }
+            }
             "compatible" | "comparable" => {
                 // 支持位置参数和关键字参数（$number1/$number2）
                 let n1 = match pos_args.first() {
