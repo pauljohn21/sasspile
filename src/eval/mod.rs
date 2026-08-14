@@ -427,7 +427,7 @@ impl Evaluator {
                 let base = env.base_path.as_ref();
                 let load_paths = env.get_load_paths();
                 if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    let exports = Self::load_module(&path, &config, env)?;
+                    let exports = Self::load_module(&path, config, env)?;
                     let mut new_env = env.clone();
                     if let Some(prefix) = prefix {
                         // 带前缀重映射：c → prefix-c
@@ -524,6 +524,7 @@ impl Evaluator {
 }
 
 mod builtin;
+mod cache;
 mod color;
 mod control_flow;
 mod extend;

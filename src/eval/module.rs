@@ -1,4 +1,5 @@
 use super::*;
+use crate::eval::cache::{self, get_or_canonicalize};
 use crate::error::{Result, SassError};
 use std::path::{Path, PathBuf};
 
@@ -83,25 +84,33 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
         let _enter = span.enter();
         // 循环导入检测：如果该文件已在加载栈中，返回错误
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        if caller_env.loading.iter().any(|p| {
-            p == &canonical || path == p || p.canonicalize().ok().as_deref() == Some(&*canonical)
-        }) {
+        let canonical = get_or_canonicalize(&path.to_path_buf());
+        if caller_env.loading.iter().any(|p| *p == canonical) {
             return Err(SassError::Module(
                 format!("Module loop: this module is already being loaded.\n  {}  @use\n  {}  root stylesheet",
                     path.display(), caller_env.base_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default())
             ));
         }
-        let source = std::fs::read_to_string(path)
-            .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
-
+        // ModuleExports 缓存——无 config 的 @use 跳过整个 eval
+        if config.is_empty() {
+            if let Some(cached) = cache::get_cached_module(&canonical) {
+                return Ok((*cached).clone());
+            }
+        }
+        // AST 缓存——跳过读文件 + lex + parse
+        let ast = if let Some(cached) = cache::get_cached_ast(&canonical) {
+            cached
+        } else {
+            let source = std::fs::read_to_string(path)
+                .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+            let tokens: Vec<Token> = Lexer::new(&source)
+                .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
+                .collect::<Result<Vec<_>>>()?;
+            let ast = crate::parse::Parser::parse(&tokens)?;
+            cache::put_cached_ast(canonical.clone(), ast)
+        };
         // `.css` 文件——以 plain CSS 模式解析，保留嵌套不展开选择器
         let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
-
-        let tokens: Vec<Token> = Lexer::new(&source)
-            .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
-            .collect::<Result<Vec<_>>>()?;
-        let ast = crate::parse::Parser::parse(&tokens)?;
         let mut env = Env::default()
             .with_base_path(path.to_path_buf())
             .with_load_paths(caller_env.get_load_paths().to_vec());
@@ -122,12 +131,17 @@ impl Evaluator {
         } else {
             module_css
         };
-        Ok(ModuleExports {
+        let exports = ModuleExports {
             vars: final_env.vars,
             mixins: final_env.mixins,
             functions: final_env.functions,
             css,
-        })
+        };
+        // 缓存无 config 的结果（后续同文件 @use 可复用）
+        if config.is_empty() {
+            cache::put_cached_module(canonical, exports.clone());
+        }
+        Ok(exports)
     }
 
     /// 加载 @import 文件——内联模式：继承当前环境的所有成员。
@@ -138,25 +152,27 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
         let _enter = span.enter();
         // 循环导入检测：如果该文件已在加载栈中，静默跳过
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        if caller_env.loading.iter().any(|p| {
-            p == &canonical || path == p || p.canonicalize().ok().as_deref() == Some(&*canonical)
-        }) {
+        let canonical = get_or_canonicalize(&path.to_path_buf());
+        if caller_env.loading.iter().any(|p| *p == canonical) {
             return Ok((vec![], caller_env.clone()));
         }
-        let source = std::fs::read_to_string(path)
-            .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
-
+        // AST 缓存——跳过读文件 + lex + parse
+        let ast = if let Some(cached) = cache::get_cached_ast(&canonical) {
+            cached
+        } else {
+            let source = std::fs::read_to_string(path)
+                .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+            let tokens: Vec<Token> = Lexer::new(&source)
+                .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
+                .collect::<Result<Vec<_>>>()?;
+            let ast = crate::parse::Parser::parse(&tokens).map_err(|e| SassError::Parse {
+                expected: format!("在 {} 中: {}", path.display(), e),
+                found: "see above".into(),
+            })?;
+            cache::put_cached_ast(canonical.clone(), ast)
+        };
         // `.css` 文件——以 plain CSS 模式解析
         let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
-
-        let tokens: Vec<Token> = Lexer::new(&source)
-            .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
-            .collect::<Result<Vec<_>>>()?;
-        let ast = crate::parse::Parser::parse(&tokens).map_err(|e| SassError::Parse {
-            expected: format!("在 {} 中: {}", path.display(), e),
-            found: "see above".into(),
-        })?;
         // 继承当前环境的所有成员（变量、mixin、函数、命名空间）
         let mut env = caller_env.clone();
         env.base_path = Some(path.to_path_buf());
