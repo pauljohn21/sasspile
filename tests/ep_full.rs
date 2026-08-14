@@ -12,7 +12,10 @@ fn get_rss_mb() -> usize {
         .args(["-o", "rss=", "-p", &pid.to_string()])
         .output();
     match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse::<usize>().unwrap_or(0),
+        Ok(out) => String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .parse::<usize>()
+            .unwrap_or(0),
         Err(_) => 0,
     }
 }
@@ -61,7 +64,8 @@ fn test_ep_full_stats() {
 
     let mut ok = 0;
     let mut fail = 0;
-    let mut categories: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut categories: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     for (name, res) in &result.outputs {
         match res {
@@ -87,7 +91,10 @@ fn test_ep_full_stats() {
                 } else {
                     "其他"
                 };
-                categories.entry(cat.to_string()).or_default().push(name.clone());
+                categories
+                    .entry(cat.to_string())
+                    .or_default()
+                    .push(name.clone());
                 tracing::warn!(file = %name, error = %msg, "FAIL");
             }
         }

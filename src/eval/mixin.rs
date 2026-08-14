@@ -16,9 +16,10 @@ impl Evaluator {
             let ns = &name[..dot];
             let mixin_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
-                && let Some(mixin) = module.mixins.get(mixin_name) {
-                    return Self::exec_mixin(mixin, args, content, env);
-                }
+                && let Some(mixin) = module.mixins.get(mixin_name)
+            {
+                return Self::exec_mixin(mixin, args, content, env);
+            }
         }
         let mixin = env
             .get_mixin(name)
@@ -34,16 +35,16 @@ impl Evaluator {
         content: &Option<Vec<Node>>,
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-// 绑定参数
-let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
-// 合并 mixin 定义时捕获的命名空间
-let mut mixin_env = mixin_env;
-for (ns, exports) in &mixin.captured_namespaces {
-    if !mixin_env.namespaces.contains_key(ns) {
-        mixin_env.namespaces.insert(ns.clone(), exports.clone());
-    }
-}
-// 注入 @content 块
+        // 绑定参数
+        let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
+        // 合并 mixin 定义时捕获的命名空间
+        let mut mixin_env = mixin_env;
+        for (ns, exports) in &mixin.captured_namespaces {
+            if !mixin_env.namespaces.contains_key(ns) {
+                mixin_env.namespaces.insert(ns.clone(), exports.clone());
+            }
+        }
+        // 注入 @content 块
         let mixin_env = if let Some(content_nodes) = content {
             mixin_env.set_content(content_nodes.clone(), env.clone())
         } else {
@@ -114,8 +115,14 @@ for (ns, exports) in &mixin.captured_namespaces {
     }
 
     /// 调用函数（内建或用户定义）。
-    pub(crate) fn call_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
-        let span = crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
+    pub(crate) fn call_function(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        env: &Env,
+    ) -> Result<Value> {
+        let span =
+            crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
         let _enter = span.enter();
         // 用户函数
         if let Some(func) = env.get_function(name) {
@@ -153,7 +160,10 @@ for (ns, exports) in &mixin.captured_namespaces {
             if param.rest {
                 // 剩余参数——收集剩余位置参数
                 let rest: Vec<Value> = pos_args[pos_idx..].to_vec();
-                func_env = func_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
+                func_env = func_env.bind(
+                    param.name.clone(),
+                    Value::List(rest, Separator::Comma, false),
+                );
                 break;
             }
             // 优先用关键字参数
@@ -210,41 +220,42 @@ for (ns, exports) in &mixin.captured_namespaces {
         // 将声明包裹在当前选择器的规则中，嵌套规则保持原样（选择器已合并）。
         if matches!(name, "media" | "supports" | "container")
             && let Some(sel) = env.get_selector()
-                && !sel.is_empty() {
-                    let mut new_children = Vec::new();
-                    let mut current_decls = Vec::new();
-                    for child in children {
-                        match &child {
-                            CssNode::Declaration { .. } => current_decls.push(child),
-                            _ => {
-                                if !current_decls.is_empty() {
-                                    new_children.push(CssNode::Rule {
-                                        selector: sel.to_string(),
-                                        declarations: std::mem::take(&mut current_decls),
-                                        children: vec![],
-                                    });
-                                }
-                                new_children.push(child);
-                            }
+            && !sel.is_empty()
+        {
+            let mut new_children = Vec::new();
+            let mut current_decls = Vec::new();
+            for child in children {
+                match &child {
+                    CssNode::Declaration { .. } => current_decls.push(child),
+                    _ => {
+                        if !current_decls.is_empty() {
+                            new_children.push(CssNode::Rule {
+                                selector: sel.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
                         }
+                        new_children.push(child);
                     }
-                    if !current_decls.is_empty() {
-                        new_children.push(CssNode::Rule {
-                            selector: sel.to_string(),
-                            declarations: current_decls,
-                            children: vec![],
-                        });
-                    }
-                    return Ok((
-                        vec![CssNode::AtRule {
-                            name: name.to_string(),
-                            params: params.clone(),
-                            children: new_children,
-                            has_body,
-                        }],
-                        env.clone(),
-                    ));
                 }
+            }
+            if !current_decls.is_empty() {
+                new_children.push(CssNode::Rule {
+                    selector: sel.to_string(),
+                    declarations: current_decls,
+                    children: vec![],
+                });
+            }
+            return Ok((
+                vec![CssNode::AtRule {
+                    name: name.to_string(),
+                    params: params.clone(),
+                    children: new_children,
+                    has_body,
+                }],
+                env.clone(),
+            ));
+        }
 
         Ok((
             vec![CssNode::AtRule {

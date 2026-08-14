@@ -24,10 +24,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 return Ok(Some(Value::String(String::new(), false)));
             }
             // 将每个参数展平为选择器字符串列表
-            let lists: Vec<Vec<String>> = args
-                .iter()
-                .map(value_to_selector_strings)
-                .collect();
+            let lists: Vec<Vec<String>> = args.iter().map(value_to_selector_strings).collect();
             // 笛卡尔积组合
             let mut result = vec![String::new()];
             for list in &lists {
@@ -47,7 +44,10 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 Ok(Some(Value::String(result[0].clone(), false)))
             } else {
                 Ok(Some(Value::List(
-                    result.into_iter().map(|s| Value::String(s, false)).collect(),
+                    result
+                        .into_iter()
+                        .map(|s| Value::String(s, false))
+                        .collect(),
                     Separator::Comma,
                     false,
                 )))

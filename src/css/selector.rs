@@ -187,15 +187,17 @@ fn find_pseudo_name(tokens: &[SelToken]) -> Option<String> {
     for window in tokens.windows(2) {
         if let SelToken::Selector(name) = &window[0]
             && let SelToken::Selector(colon) = &window[1]
-                && colon == ":" {
-                    return Some(name.clone());
-                }
+            && colon == ":"
+        {
+            return Some(name.clone());
+        }
     }
     // 检查最后一个 token 是否是 `:name` 形式
     if let Some(SelToken::Selector(last)) = tokens.last()
-        && last.starts_with(':') {
-            return Some(last[1..].to_string());
-        }
+        && last.starts_with(':')
+    {
+        return Some(last[1..].to_string());
+    }
     None
 }
 
@@ -215,9 +217,10 @@ fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> boo
         }
         // 单个前导组合器允许，但第二个不能是组合器
         if tokens.len() >= 2
-            && let SelToken::Combinator = tokens[1] {
-                return true; // 连续组合器
-            }
+            && let SelToken::Combinator = tokens[1]
+        {
+            return true; // 连续组合器
+        }
     }
     // 检查中间连续组合器
     for window in tokens.windows(2) {
@@ -334,8 +337,13 @@ fn normalize_attr_content(inner: &str) -> String {
                 // 检查是否是合法 CSS 标识符（但 --foo 需保留引号）
                 let is_ident = !val.is_empty()
                     && !val.starts_with("--")
-                    && val.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '-')
-                    && val.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+                    && val
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '-')
+                    && val
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
                 if is_ident {
                     // 去除引号
                     result.push_str(&val);

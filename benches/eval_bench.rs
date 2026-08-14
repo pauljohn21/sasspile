@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use sasspile::{compile, OutputStyle};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use sasspile::{OutputStyle, compile};
 
 fn sample_scss() -> String {
     r#"
@@ -55,7 +55,8 @@ nav {
     background-color: $primary-color;
     color: white;
 }
-"#.repeat(5)
+"#
+    .repeat(5)
 }
 
 fn bench_eval_expanded(c: &mut Criterion) {

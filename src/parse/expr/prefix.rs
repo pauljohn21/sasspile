@@ -1,5 +1,5 @@
-use super::super::ast::*;
 use super::super::Parser;
+use super::super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
@@ -112,8 +112,10 @@ impl<'tok> Parser<'tok> {
                         let next = self.tokens.get(self.pos + 1);
                         matches!(next, Some(Token::String(_, _)))
                     };
-                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url" | "css" | "attr")
-                        && !is_url_with_string
+                    if matches!(
+                        name.as_str(),
+                        "calc" | "clamp" | "env" | "var" | "url" | "css" | "attr"
+                    ) && !is_url_with_string
                     {
                         self.advance(); // 消费 (
                         let mut content = String::new();
@@ -182,10 +184,20 @@ impl<'tok> Parser<'tok> {
                             }
                             let mut args: Vec<Arg> = items
                                 .into_iter()
-                                .map(|v| Arg { name: None, value: v, spread: false, condition: None })
+                                .map(|v| Arg {
+                                    name: None,
+                                    value: v,
+                                    spread: false,
+                                    condition: None,
+                                })
                                 .collect();
                             if let Some(a) = alpha {
-                                args.push(Arg { name: None, value: a, spread: false, condition: None });
+                                args.push(Arg {
+                                    name: None,
+                                    value: a,
+                                    spread: false,
+                                    condition: None,
+                                });
                             }
                             return Ok(Value::Call(name, args));
                         }
@@ -403,9 +415,13 @@ impl<'tok> Parser<'tok> {
                 if self.peek() == Some(&Token::RBracket) {
                     self.advance();
                 }
-                let sep = if saw_comma { Separator::Comma }
-                    else if items.len() <= 1 { Separator::Undecided }
-                    else { Separator::Space };
+                let sep = if saw_comma {
+                    Separator::Comma
+                } else if items.len() <= 1 {
+                    Separator::Undecided
+                } else {
+                    Separator::Space
+                };
                 Ok(Value::List(items, sep, true))
             }
             Some(Token::Amp) => {
@@ -428,14 +444,11 @@ impl<'tok> Parser<'tok> {
                 match self.peek() {
                     Some(
                         Token::RBrace
-                            | Token::RParen
-                            | Token::Semicolon
-                            | Token::RBracket
-                            | Token::Comma,
-                    ) =>
-                    {
-                        Ok(Value::Null)
-                    }
+                        | Token::RParen
+                        | Token::Semicolon
+                        | Token::RBracket
+                        | Token::Comma,
+                    ) => Ok(Value::Null),
                     Some(t) => {
                         let v = Value::String(t.to_string(), false);
                         self.advance();

@@ -5,7 +5,9 @@
 //! - selector-extend
 
 use crate::error::Result;
-use crate::eval::selector::{parse_selector_list, Combinator, CompoundSelector, CompoundWithCombinator, ComplexSelector};
+use crate::eval::selector::{
+    Combinator, ComplexSelector, CompoundSelector, CompoundWithCombinator, parse_selector_list,
+};
 use crate::parse::ast::*;
 
 // —— selector-is-superselector ——
@@ -132,7 +134,9 @@ fn unify_complex(s1: &ComplexSelector, s2: &ComplexSelector) -> Option<ComplexSe
         return None;
     }
 
-    for (p1, p2) in s1.parts[..s1.parts.len() - 1].iter().zip(s2.parts[..s2.parts.len() - 1].iter())
+    for (p1, p2) in s1.parts[..s1.parts.len() - 1]
+        .iter()
+        .zip(s2.parts[..s2.parts.len() - 1].iter())
     {
         if p1.combinator != p2.combinator || p1.compound != p2.compound {
             return None;

@@ -1,8 +1,8 @@
 use super::*;
+use crate::__tracing::warn;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
-use crate::__tracing::warn;
 
 mod display;
 mod ops;
@@ -59,32 +59,32 @@ impl Evaluator {
                 }
             }
             Value::BinOp(b) => match b.op {
-                BinOpKind::And => {
-                    match Self::partial_eval_condition(&b.left, env)? {
-                        PartialCond::False => Ok(PartialCond::False),
-                        PartialCond::True => Self::partial_eval_condition(&b.right, env),
-                        PartialCond::Css(left_css) => {
-                            match Self::partial_eval_condition(&b.right, env)? {
-                                PartialCond::False => Ok(PartialCond::False),
-                                PartialCond::True => Ok(PartialCond::Css(left_css)),
-                                PartialCond::Css(right_css) => Ok(PartialCond::Css(format!("{left_css} and {right_css}"))),
+                BinOpKind::And => match Self::partial_eval_condition(&b.left, env)? {
+                    PartialCond::False => Ok(PartialCond::False),
+                    PartialCond::True => Self::partial_eval_condition(&b.right, env),
+                    PartialCond::Css(left_css) => {
+                        match Self::partial_eval_condition(&b.right, env)? {
+                            PartialCond::False => Ok(PartialCond::False),
+                            PartialCond::True => Ok(PartialCond::Css(left_css)),
+                            PartialCond::Css(right_css) => {
+                                Ok(PartialCond::Css(format!("{left_css} and {right_css}")))
                             }
                         }
                     }
-                }
-                BinOpKind::Or => {
-                    match Self::partial_eval_condition(&b.left, env)? {
-                        PartialCond::True => Ok(PartialCond::True),
-                        PartialCond::False => Self::partial_eval_condition(&b.right, env),
-                        PartialCond::Css(left_css) => {
-                            match Self::partial_eval_condition(&b.right, env)? {
-                                PartialCond::True => Ok(PartialCond::True),
-                                PartialCond::False => Ok(PartialCond::Css(left_css)),
-                                PartialCond::Css(right_css) => Ok(PartialCond::Css(format!("{left_css} or {right_css}"))),
+                },
+                BinOpKind::Or => match Self::partial_eval_condition(&b.left, env)? {
+                    PartialCond::True => Ok(PartialCond::True),
+                    PartialCond::False => Self::partial_eval_condition(&b.right, env),
+                    PartialCond::Css(left_css) => {
+                        match Self::partial_eval_condition(&b.right, env)? {
+                            PartialCond::True => Ok(PartialCond::True),
+                            PartialCond::False => Ok(PartialCond::Css(left_css)),
+                            PartialCond::Css(right_css) => {
+                                Ok(PartialCond::Css(format!("{left_css} or {right_css}")))
                             }
                         }
                     }
-                }
+                },
                 _ => {
                     let val = Self::eval_value(condition, env)?;
                     if Self::is_truthy(&val) {
@@ -140,7 +140,9 @@ impl Evaluator {
             // sass() 函数——求值参数
             Value::Call(name, _args) if name == "sass" => {
                 if env.plain_css {
-                    return Err(SassError::Eval("sass() conditions aren't allowed in plain CSS".into()));
+                    return Err(SassError::Eval(
+                        "sass() conditions aren't allowed in plain CSS".into(),
+                    ));
                 }
                 let val = Self::eval_value(condition, env)?;
                 if Self::is_truthy(&val) {
@@ -152,10 +154,13 @@ impl Evaluator {
             // 插值——plain CSS 中不允许
             Value::Interp(s) => {
                 if env.plain_css {
-                    return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into()));
+                    return Err(SassError::Eval(
+                        "Interpolation isn't allowed in plain CSS.".into(),
+                    ));
                 }
                 // 用 eval_simple_expr 求值插值内容（正确处理字符串引号）
-                let val = eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
+                let val =
+                    eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
                 // 求值结果为 Calc/Raw——CSS 透传
                 if let Value::Calc(_) | Value::Raw(_) = val {
                     return Ok(PartialCond::Css(val.to_string()));
@@ -222,9 +227,10 @@ impl Evaluator {
                     let ns = &name[..dot];
                     let var_name = &name[dot + 1..];
                     if let Some(module) = env.get_namespace(ns)
-                        && let Some(val) = module.vars.get(var_name) {
-                            return Ok(val.clone());
-                        }
+                        && let Some(val) = module.vars.get(var_name)
+                    {
+                        return Ok(val.clone());
+                    }
                 }
                 env.lookup(name)
                     .cloned()
@@ -249,16 +255,23 @@ impl Evaluator {
                 // if() 惰性求值：只求值选中的分支，避免副作用和类型错误
                 // 支持位置参数 if(cond, t, f) 和命名参数 if(cond, $if-true:, $if-false:)
                 if name == "if" {
-                    let (cond_idx, t_idx, f_idx) = if args.len() == 3 && args.iter().all(|a| a.condition.is_none()) {
-                        (0, 1, 2)
-                    } else if args.len() == 3 && args[0].condition.is_none() {
-                        // 命名参数形式：if(cond, $if-true: t, $if-false: f)
-                        let t_idx = args.iter().position(|a| a.name.as_deref() == Some("if-true")).unwrap_or(1);
-                        let f_idx = args.iter().position(|a| a.name.as_deref() == Some("if-false")).unwrap_or(2);
-                        (0, t_idx, f_idx)
-                    } else {
-                        (3, 3, 3) // 标记：不走快速路径
-                    };
+                    let (cond_idx, t_idx, f_idx) =
+                        if args.len() == 3 && args.iter().all(|a| a.condition.is_none()) {
+                            (0, 1, 2)
+                        } else if args.len() == 3 && args[0].condition.is_none() {
+                            // 命名参数形式：if(cond, $if-true: t, $if-false: f)
+                            let t_idx = args
+                                .iter()
+                                .position(|a| a.name.as_deref() == Some("if-true"))
+                                .unwrap_or(1);
+                            let f_idx = args
+                                .iter()
+                                .position(|a| a.name.as_deref() == Some("if-false"))
+                                .unwrap_or(2);
+                            (0, t_idx, f_idx)
+                        } else {
+                            (3, 3, 3) // 标记：不走快速路径
+                        };
                     if cond_idx < 3 {
                         let cond = Self::eval_value(&args[cond_idx].value, env)?;
                         return if Self::is_truthy(&cond) {
@@ -275,7 +288,11 @@ impl Evaluator {
                 if name == "if" && args.iter().any(|a| a.condition.is_some()) {
                     let else_arg = args.iter().find(|a| a.name.as_deref() == Some("else"));
                     // 逐个部分求值条件
-                    for (i, cond_arg) in args.iter().enumerate().filter(|(_, a)| a.condition.is_some()) {
+                    for (i, cond_arg) in args
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, a)| a.condition.is_some())
+                    {
                         let condition = cond_arg.condition.as_ref().expect("已检查");
                         match Self::partial_eval_condition(condition, env)? {
                             PartialCond::True => {
@@ -293,9 +310,11 @@ impl Evaluator {
                                 // 已求值条件（之前的 false 条件被跳过）
                                 parts.push(format!("{css_str}: {}", cond_arg.value));
                                 // 后续未求值条件保持原样
-                                for (_, a) in args.iter().enumerate().filter(|(j, a)| {
-                                    *j > i && a.condition.is_some()
-                                }) {
+                                for (_, a) in args
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(j, a)| *j > i && a.condition.is_some())
+                                {
                                     let cond = a.condition.as_ref().expect("已检查");
                                     parts.push(format!("{cond}: {}", a.value));
                                 }
@@ -318,7 +337,10 @@ impl Evaluator {
                     }
                 }
                 // if(else: value) — else-only 语法，始终返回 value
-                if name == "if" && !args.is_empty() && args.iter().all(|a| a.name.as_deref() == Some("else")) {
+                if name == "if"
+                    && !args.is_empty()
+                    && args.iter().all(|a| a.name.as_deref() == Some("else"))
+                {
                     return Self::eval_value(&args[0].value, env);
                 }
                 // 分离位置参数和关键字参数，展开 spread
@@ -348,20 +370,26 @@ impl Evaluator {
                 match Self::call_function(name, &pos_args, &kw_args, env) {
                     Ok(result) => Ok(result),
                     Err(SassError::UndefinedFunction(_))
-                        if !name.contains('.') && !Self::is_known_builtin(name) => {
+                        if !name.contains('.') && !Self::is_known_builtin(name) =>
+                    {
                         // 真正未定义的非模块限定函数 → CSS 透传（如 c(%), my-func(1px) 等）
-                        let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
+                        let mut parts: Vec<String> =
+                            pos_args.iter().map(|v| v.to_string()).collect();
                         for (k, v) in &kw_args {
                             parts.push(format!("{k}={v}"));
                         }
-                        Ok(Value::String(format!("{name}({})", parts.join(", ")), false))
+                        Ok(Value::String(
+                            format!("{name}({})", parts.join(", ")),
+                            false,
+                        ))
                     }
                     Err(e) => Err(e),
                 }
             }
             Value::Interp(s) => {
                 // 将插值内容作为表达式求值
-                let val = eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
+                let val =
+                    eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
                 // 插值上下文中字符串去引号
                 let val_str = match &val {
                     Value::String(inner, _) => inner.clone(),
@@ -400,17 +428,17 @@ impl Evaluator {
             BinOpKind::And => {
                 let l = Self::eval_value(left, env)?;
                 if !Self::is_truthy(&l) {
-                    return Ok(l);  // falsy → 返回左侧
+                    return Ok(l); // falsy → 返回左侧
                 }
                 let r = Self::eval_value(right, env)?;
-                return Ok(r);  // truthy → 返回右侧
+                return Ok(r); // truthy → 返回右侧
             }
             BinOpKind::Or => {
                 let l = Self::eval_value(left, env)?;
                 if Self::is_truthy(&l) {
-                    return Ok(l);  // truthy → 返回左侧
+                    return Ok(l); // truthy → 返回左侧
                 }
-                return Self::eval_value(right, env);  // falsy → 返回右侧
+                return Self::eval_value(right, env); // falsy → 返回右侧
             }
             _ => {}
         }

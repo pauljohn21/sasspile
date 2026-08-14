@@ -40,4 +40,3 @@ impl Parsed {
         Ok(Evaluated { nodes })
     }
 }
-

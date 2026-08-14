@@ -399,10 +399,11 @@ impl<'tok> Parser<'tok> {
                     self.advance();
                     self.skip_ws();
                     if let Some(Token::Ident(s)) = self.peek()
-                        && s == "optional" {
-                            optional = true;
-                            self.advance();
-                        }
+                        && s == "optional"
+                    {
+                        optional = true;
+                        self.advance();
+                    }
                 }
                 Token::Whitespace => {
                     selector.push(' ');

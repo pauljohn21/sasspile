@@ -3,10 +3,10 @@
 pub mod ast;
 mod ast_impl;
 
+use crate::__tracing::warn;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use ast::*;
-use crate::__tracing::warn;
 
 /// 语法分析器。
 pub struct Parser<'tok> {

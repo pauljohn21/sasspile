@@ -138,13 +138,17 @@ impl<'src> Lexer<'src> {
                             }
                         }
                         // 跳过尾部一个空白字符
-                        if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') {
+                        if self
+                            .peek()
+                            .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
+                        {
                             self.next_char();
                         }
                         if let Ok(code) = u32::from_str_radix(&hex, 16)
-                            && let Some(ch) = char::from_u32(code) {
-                                content.push(ch);
-                            }
+                            && let Some(ch) = char::from_u32(code)
+                        {
+                            content.push(ch);
+                        }
                     } else {
                         // 非十六进制转义：\X → X（如 \" → ", \\ → \）
                         self.next_char();
@@ -176,9 +180,16 @@ impl<'src> Lexer<'src> {
                     if let Some(h) = self.peek().filter(|c| c.is_ascii_hexdigit()) {
                         hex.push(h);
                         self.next_char();
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
-                if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') { self.next_char(); }
+                if self
+                    .peek()
+                    .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
+                {
+                    self.next_char();
+                }
                 if let Ok(code) = u32::from_str_radix(&hex, 16) {
                     if let Some(ch) = char::from_u32(code) {
                         text.push(ch);
@@ -189,7 +200,10 @@ impl<'src> Lexer<'src> {
                         });
                     }
                 }
-            } else { self.next_char(); text.push(next); }
+            } else {
+                self.next_char();
+                text.push(next);
+            }
         }
         // 继续扫描后续标识符字符
         while let Some(c) = self.peek() {

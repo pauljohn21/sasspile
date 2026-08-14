@@ -2,12 +2,12 @@
 
 pub(crate) mod selector;
 
+use crate::__tracing::warn;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::lex::Lexer;
 use crate::lex::token::Token;
 use crate::parse::ast::*;
-use crate::__tracing::warn;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -89,10 +89,10 @@ impl Env {
     pub fn bind(&self, name: String, value: Value) -> Self {
         let mut new = self.clone();
         // 如果有作用域栈，保存原始值（如果变量尚未在当前作用域中记录）
-        if let Some(scope) = new.scope_stack.last_mut() {
-            if !scope.contains_key(&name) {
-                scope.insert(name.clone(), new.vars.get(&name).cloned());
-            }
+        if let Some(scope) = new.scope_stack.last_mut()
+            && !scope.contains_key(&name)
+        {
+            scope.insert(name.clone(), new.vars.get(&name).cloned());
         }
         new.vars.insert(name, value);
         new
@@ -467,7 +467,11 @@ impl Evaluator {
                         return Ok((vec![], env.add_module(url.clone())));
                     }
                     // CSS @import 透传：以 .css 结尾或 url() 包裹
-                    if url.ends_with(".css") || url.starts_with("http://") || url.starts_with("https://") || url.starts_with("url(") {
+                    if url.ends_with(".css")
+                        || url.starts_with("http://")
+                        || url.starts_with("https://")
+                        || url.starts_with("url(")
+                    {
                         css_nodes.push(CssNode::AtRule {
                             name: "import".to_string(),
                             params: Some(format!("\"{url}\"{mod_str}")),

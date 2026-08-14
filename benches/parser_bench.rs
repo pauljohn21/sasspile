@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sasspile::{Lexer, Parser};
 
 fn sample_scss() -> String {
@@ -67,7 +67,8 @@ nav {
         width: 100%;
     }
 }
-"#.repeat(10)
+"#
+    .repeat(10)
 }
 
 fn bench_parser(c: &mut Criterion) {

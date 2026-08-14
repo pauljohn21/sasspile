@@ -21,9 +21,7 @@ fn test_eval_interp_and_keyword() {
     sasspile::init_tracing();
     // 测试 if(#{"and"}: c) — 插值 and 应作为 CSS 透传
     let input = r#"a {b: if(#{"and"}: c)}"#;
-    let css = compile_expanded(input).unwrap_or_else(|_e| {
-        String::new()
-    });
+    let css = compile_expanded(input).unwrap_or_else(|_e| String::new());
     // and 应作为 CSS 透传，条件无法求值为 true
     assert_eq!(css, "a {\n  b: if(and: c);\n}\n");
 }

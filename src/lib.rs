@@ -105,9 +105,7 @@
 /// `#[instrument]` 属性用 `#[cfg_attr(feature = "tracing", tracing::instrument)]` 处理。
 #[cfg(feature = "tracing")]
 pub(crate) mod __tracing {
-    pub use tracing::{
-        debug, debug_span, error, info, info_span, trace, warn,
-    };
+    pub use tracing::{debug, debug_span, error, info, info_span, trace, warn};
 }
 
 #[cfg(not(feature = "tracing"))]
@@ -115,14 +113,18 @@ pub(crate) mod __tracing {
     /// No-op span 类型——使 `span.enter()` 有效。
     pub struct DummySpan;
     impl DummySpan {
-        pub fn enter(&self) -> DummyGuard { DummyGuard }
+        pub fn enter(&self) -> DummyGuard {
+            DummyGuard
+        }
     }
     pub struct DummyGuard;
 
     /// No-op span 宏——返回 DummySpan 实例。
     #[macro_export]
     macro_rules! __noop_span {
-        ($($args:tt)*) => { $crate::__tracing::DummySpan };
+        ($($args:tt)*) => {
+            $crate::__tracing::DummySpan
+        };
     }
 
     pub use crate::__noop_span as debug_span;
@@ -351,7 +353,8 @@ pub fn compile_file_with_load_paths(
     let lexed = source.lex()?;
     let parsed = lexed.parse()?;
     use crate::eval::Evaluator;
-    let nodes = Evaluator::evaluate_with_path_and_load_paths(&parsed.ast, path.clone(), load_paths)?;
+    let nodes =
+        Evaluator::evaluate_with_path_and_load_paths(&parsed.ast, path.clone(), load_paths)?;
     let serialized = crate::css::Serializer::serialize(&nodes, style);
     Ok(serialized)
 }
@@ -380,10 +383,7 @@ pub struct BatchResult {
 /// let result = compile_batch(&files, OutputStyle::Expanded);
 /// println!("编译了 {} 个文件", result.outputs.len());
 /// ```
-pub fn compile_batch<P: AsRef<std::path::Path>>(
-    paths: &[P],
-    style: OutputStyle,
-) -> BatchResult {
+pub fn compile_batch<P: AsRef<std::path::Path>>(paths: &[P], style: OutputStyle) -> BatchResult {
     let mut outputs = Vec::with_capacity(paths.len());
 
     for path in paths.iter() {
@@ -401,5 +401,3 @@ pub fn compile_batch<P: AsRef<std::path::Path>>(
 
     BatchResult { outputs }
 }
-
-

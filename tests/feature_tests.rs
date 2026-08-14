@@ -3,7 +3,7 @@
 //! 这些测试使用公共 API（compile_expanded / compile_file），
 //! 在独立编译单元中运行，与源码隔离。
 
-use sasspile::{compile_expanded, compile_file, OutputStyle};
+use sasspile::{OutputStyle, compile_expanded, compile_file};
 use std::path::PathBuf;
 
 // —— 颜色函数关键字参数 ——
@@ -43,7 +43,11 @@ fn test_forward_as_prefix_variable() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_var");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("_upstream.scss"), "$c: e;\n").unwrap();
-    std::fs::write(dir.join("_midstream.scss"), "@forward \"upstream\" as d-*;\n").unwrap();
+    std::fs::write(
+        dir.join("_midstream.scss"),
+        "@forward \"upstream\" as d-*;\n",
+    )
+    .unwrap();
     let main = dir.join("main.scss");
     std::fs::write(&main, "@use \"midstream\";\na {b: midstream.$d-c}\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
@@ -56,7 +60,11 @@ fn test_forward_as_prefix_function() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_fn");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("_upstream.scss"), "@function c() {@return e}\n").unwrap();
-    std::fs::write(dir.join("_midstream.scss"), "@forward \"upstream\" as d-*;\n").unwrap();
+    std::fs::write(
+        dir.join("_midstream.scss"),
+        "@forward \"upstream\" as d-*;\n",
+    )
+    .unwrap();
     let main = dir.join("main.scss");
     std::fs::write(&main, "@use \"midstream\";\na {b: midstream.d-c()}\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
@@ -69,7 +77,11 @@ fn test_forward_as_prefix_underscore() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_us");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("_upstream.scss"), "$c: e;\n").unwrap();
-    std::fs::write(dir.join("_midstream.scss"), "@forward \"upstream\" as d_*;\n").unwrap();
+    std::fs::write(
+        dir.join("_midstream.scss"),
+        "@forward \"upstream\" as d_*;\n",
+    )
+    .unwrap();
     let main = dir.join("main.scss");
     std::fs::write(&main, "@use \"midstream\";\na {b: midstream.$d_c}\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
@@ -82,7 +94,11 @@ fn test_forward_as_prefix_mixin() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_mx");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("_upstream.scss"), "@mixin a() {c {d: e}}\n").unwrap();
-    std::fs::write(dir.join("_midstream.scss"), "@forward \"upstream\" as b-*;\n").unwrap();
+    std::fs::write(
+        dir.join("_midstream.scss"),
+        "@forward \"upstream\" as b-*;\n",
+    )
+    .unwrap();
     let main = dir.join("main.scss");
     std::fs::write(&main, "@use \"midstream\";\n@include midstream.b-a;\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
@@ -107,11 +123,8 @@ fn test_compile_load_path() {
         "@use \"core_functions/list/utils\";\na {b: utils.real-separator(())}\n",
     )
     .unwrap();
-    let result = sasspile::compile_file_with_load_paths(
-        &input,
-        OutputStyle::Expanded,
-        vec![spec_root],
-    );
+    let result =
+        sasspile::compile_file_with_load_paths(&input, OutputStyle::Expanded, vec![spec_root]);
     std::fs::remove_dir_all(&tmp).ok();
     match result {
         Ok(css) => assert!(css.contains("undecided"), "should contain undecided: {css}"),

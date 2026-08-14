@@ -2,7 +2,7 @@
 //!
 //! 验证 @use 'module' with ($var: value) 能正确覆盖模块中的 !default 变量。
 
-use sasspile::{compile_file, OutputStyle};
+use sasspile::{OutputStyle, compile_file};
 
 #[test]
 fn test_use_with_single_config() {
@@ -14,11 +14,7 @@ fn test_use_with_single_config() {
     )
     .unwrap();
     let main = dir.join("main.scss");
-    std::fs::write(
-        &main,
-        "@use \"other\" with ($a: configured);\n",
-    )
-    .unwrap();
+    std::fs::write(&main, "@use \"other\" with ($a: configured);\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
     assert!(
         css.contains("c: configured"),
@@ -47,9 +43,18 @@ fn test_use_with_multiple_configs() {
     )
     .unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
-    assert!(css.contains("a: configured a"), "应该包含 a: configured a, 得到: {css}");
-    assert!(css.contains("b: configured b"), "应该包含 b: configured b, 得到: {css}");
-    assert!(css.contains("c: configured c"), "应该包含 c: configured c, 得到: {css}");
+    assert!(
+        css.contains("a: configured a"),
+        "应该包含 a: configured a, 得到: {css}"
+    );
+    assert!(
+        css.contains("b: configured b"),
+        "应该包含 b: configured b, 得到: {css}"
+    );
+    assert!(
+        css.contains("c: configured c"),
+        "应该包含 c: configured c, 得到: {css}"
+    );
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -82,16 +87,9 @@ fn test_use_with_partial_config() {
     )
     .unwrap();
     let main = dir.join("main.scss");
-    std::fs::write(
-        &main,
-        "@use \"other\" with ($a: configured a);\n",
-    )
-    .unwrap();
+    std::fs::write(&main, "@use \"other\" with ($a: configured a);\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
-    assert!(
-        css.contains("a: configured a"),
-        "应该覆盖 $a, 得到: {css}"
-    );
+    assert!(css.contains("a: configured a"), "应该覆盖 $a, 得到: {css}");
     assert!(
         css.contains("b: original b"),
         "未配置的 $b 应该保留默认值, 得到: {css}"
@@ -109,11 +107,7 @@ fn test_use_with_null_config() {
     )
     .unwrap();
     let main = dir.join("main.scss");
-    std::fs::write(
-        &main,
-        "@use \"other\" with ($a: null);\n",
-    )
-    .unwrap();
+    std::fs::write(&main, "@use \"other\" with ($a: null);\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
     // null 配置应该将变量设为 null（在 Sass 中 null 值声明不输出）
     assert!(
@@ -133,11 +127,7 @@ fn test_use_with_config_trailing_comma() {
     )
     .unwrap();
     let main = dir.join("main.scss");
-    std::fs::write(
-        &main,
-        "@use \"other\" with ($a: configured,);\n",
-    )
-    .unwrap();
+    std::fs::write(&main, "@use \"other\" with ($a: configured,);\n").unwrap();
     let css = compile_file(&main, OutputStyle::Expanded).unwrap();
     assert!(
         css.contains("c: configured"),

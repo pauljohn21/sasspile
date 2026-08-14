@@ -275,18 +275,18 @@ fn parse_attr_selector(chars: &[char], i: &mut usize) -> Result<AttrSelector> {
             val.push(chars[*i]);
             *i += 1;
         }
-        value = Some(val.trim().trim_matches(|c| c == '"' || c == '\'').to_string());
+        value = Some(
+            val.trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string(),
+        );
     }
 
     if *i < chars.len() && chars[*i] == ']' {
         *i += 1;
     }
 
-    Ok(AttrSelector {
-        name,
-        op,
-        value,
-    })
+    Ok(AttrSelector { name, op, value })
 }
 
 fn parse_paren_args(chars: &[char], i: &mut usize) -> Result<String> {

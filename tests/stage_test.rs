@@ -3,6 +3,7 @@
 //! 物理隔离：所有阶段类型测试集中于此，不使用内联 #[cfg(test)] 模块。
 //! 同时包含 CSS Serializer 的单元测试。
 
+use sasspile::OutputStyle;
 use sasspile::css::Serializer;
 use sasspile::css::node::CssNode;
 use sasspile::lex::token::Token;
@@ -12,7 +13,6 @@ use sasspile::stage::lexed::Lexed;
 use sasspile::stage::parsed::Parsed;
 use sasspile::stage::serialized::Serialized;
 use sasspile::stage::source::Source;
-use sasspile::OutputStyle;
 
 // —— Source 阶段 ——
 

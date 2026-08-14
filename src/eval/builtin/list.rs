@@ -80,12 +80,18 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             [Value::Map(pairs), val] => {
                 if pairs.is_empty() {
                     // 空映射 = 空列表 → 返回单元素 space 列表
-                    Ok(Some(Value::List(vec![val.clone()], Separator::Space, false)))
+                    Ok(Some(Value::List(
+                        vec![val.clone()],
+                        Separator::Space,
+                        false,
+                    )))
                 } else {
                     // 非空 Map → comma-separated list of space-separated pairs
                     let items: Vec<Value> = pairs
                         .iter()
-                        .map(|(k, v)| Value::List(vec![k.clone(), v.clone()], Separator::Space, false))
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
                         .collect();
                     let mut new_items = items;
                     new_items.push(val.clone());
@@ -121,9 +127,12 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             let (a_items, a_sep, a_bracketed) = match &args[0] {
                 Value::List(items, sep, br) => (items.clone(), sep.clone(), *br),
                 Value::Map(pairs) => {
-                    let items: Vec<Value> = pairs.iter().map(|(k, v)| {
-                        Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
-                    }).collect();
+                    let items: Vec<Value> = pairs
+                        .iter()
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .collect();
                     (items, Separator::Comma, false)
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
@@ -132,21 +141,31 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             let (b_items, b_sep, _) = match &args[1] {
                 Value::List(items, sep, _) => (items.clone(), sep.clone(), false),
                 Value::Map(pairs) => {
-                    let items: Vec<Value> = pairs.iter().map(|(k, v)| {
-                        Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
-                    }).collect();
+                    let items: Vec<Value> = pairs
+                        .iter()
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .collect();
                     (items, Separator::Comma, false)
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
             };
             // 解析 separator 参数（支持 keyword argument $separator，kw_args 中键名不带 $）
-            let sep = if let Some(Value::String(s, _)) = kw_args.get("separator").or_else(|| kw_args.get("$separator")) {
+            let sep = if let Some(Value::String(s, _)) = kw_args
+                .get("separator")
+                .or_else(|| kw_args.get("$separator"))
+            {
                 match s.as_str() {
                     "comma" => Separator::Comma,
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
                     _ => {
-                        if a_sep == Separator::Undecided { b_sep } else { a_sep }
+                        if a_sep == Separator::Undecided {
+                            b_sep
+                        } else {
+                            a_sep
+                        }
                     }
                 }
             } else if let Some(Value::String(s, _)) = args.get(2) {
@@ -155,17 +174,31 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
                     _ => {
-                        if a_sep == Separator::Undecided { b_sep } else { a_sep }
+                        if a_sep == Separator::Undecided {
+                            b_sep
+                        } else {
+                            a_sep
+                        }
                     }
                 }
             } else {
                 // 无 separator 参数 → auto
-                if a_sep == Separator::Undecided { b_sep } else { a_sep }
+                if a_sep == Separator::Undecided {
+                    b_sep
+                } else {
+                    a_sep
+                }
             };
             // 解析 bracketed 参数（支持 keyword argument $bracketed，kw_args 中键名不带 $）
-            let bracketed = if let Some(Value::Bool(b)) = kw_args.get("bracketed").or_else(|| kw_args.get("$bracketed")) {
+            let bracketed = if let Some(Value::Bool(b)) = kw_args
+                .get("bracketed")
+                .or_else(|| kw_args.get("$bracketed"))
+            {
                 *b
-            } else if let Some(Value::String(s, _)) = kw_args.get("bracketed").or_else(|| kw_args.get("$bracketed")) {
+            } else if let Some(Value::String(s, _)) = kw_args
+                .get("bracketed")
+                .or_else(|| kw_args.get("$bracketed"))
+            {
                 s == "auto"
             } else if let Some(Value::Bool(b)) = args.get(3) {
                 *b
@@ -227,7 +260,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                 }
                 _ => Ok(Some(Value::String("space".into(), false))),
             }
-        },
+        }
         "set-nth" => match args {
             [Value::List(items, sep, false), Value::Number(n, _), val] => {
                 let idx = *n as usize;
@@ -247,12 +280,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             if args.is_empty() {
                 return Err(SassError::Eval("list-slash 需要 1+ 个参数".into()));
             }
-            Ok(Some(Value::List(
-                args.to_vec(),
-                Separator::Slash,
-                false,
-            )))
-        },
+            Ok(Some(Value::List(args.to_vec(), Separator::Slash, false)))
+        }
         "zip" => {
             if args.len() < 2 {
                 return Err(SassError::Eval("zip 需要 2+ 个列表参数".into()));

@@ -16,9 +16,7 @@ impl Evaluator {
                     return Err(SassError::Eval("str-length 需要 1 个字符串参数".into()));
                 }
                 match &args[0] {
-                    Value::String(s, _) => {
-                        Value::Number(s.chars().count() as f64, None)
-                    }
+                    Value::String(s, _) => Value::Number(s.chars().count() as f64, None),
                     _ => return Err(SassError::Eval("str-length 需要 1 个字符串参数".into())),
                 }
             }
@@ -91,16 +89,24 @@ impl Evaluator {
                 }
                 let s = match &args[0] {
                     Value::String(s, _) => s.clone(),
-                    other => return Err(SassError::Eval(format!("$string: {} is not a string.", other))),
+                    other => {
+                        return Err(SassError::Eval(format!(
+                            "$string: {} is not a string.",
+                            other
+                        )));
+                    }
                 };
                 let needle = match &args[1] {
                     Value::String(needle, _) => needle.clone(),
-                    other => return Err(SassError::Eval(format!("$substring: {} is not a string.", other))),
+                    other => {
+                        return Err(SassError::Eval(format!(
+                            "$substring: {} is not a string.",
+                            other
+                        )));
+                    }
                 };
                 match s.find(&needle) {
-                    Some(pos) => {
-                        Value::Number((s[..pos].chars().count() + 1) as f64, None)
-                    }
+                    Some(pos) => Value::Number((s[..pos].chars().count() + 1) as f64, None),
                     None => Value::Null,
                 }
             }
@@ -131,7 +137,12 @@ impl Evaluator {
         }
         let (s, q) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
-            other => return Err(SassError::Eval(format!("$string: {} is not a string.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$string: {} is not a string.",
+                    other
+                )));
+            }
         };
         let start = match &args[1] {
             Value::Number(n, u) => {
@@ -139,11 +150,19 @@ impl Evaluator {
                     return Err(SassError::Eval(format!("$start-at: {} is not an int.", n)));
                 }
                 if u.is_some() {
-                    return Err(SassError::Eval(format!("$start-at: Expected {} to have no units.", n)));
+                    return Err(SassError::Eval(format!(
+                        "$start-at: Expected {} to have no units.",
+                        n
+                    )));
                 }
                 *n as isize
             }
-            other => return Err(SassError::Eval(format!("$start-at: {} is not a number.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$start-at: {} is not a number.",
+                    other
+                )));
+            }
         };
         let end = match args.get(2) {
             Some(Value::Number(n, u)) => {
@@ -151,12 +170,20 @@ impl Evaluator {
                     return Err(SassError::Eval(format!("$end-at: {} is not an int.", n)));
                 }
                 if u.is_some() {
-                    return Err(SassError::Eval(format!("$end-at: Expected {} to have no units.", n)));
+                    return Err(SassError::Eval(format!(
+                        "$end-at: Expected {} to have no units.",
+                        n
+                    )));
                 }
                 Some(*n as isize)
             }
             None => None,
-            Some(other) => return Err(SassError::Eval(format!("$end-at: {} is not a number.", other))),
+            Some(other) => {
+                return Err(SassError::Eval(format!(
+                    "$end-at: {} is not a number.",
+                    other
+                )));
+            }
         };
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len() as isize;
@@ -188,23 +215,41 @@ impl Evaluator {
         }
         let (s, q) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
-            other => return Err(SassError::Eval(format!("$string: {} is not a string.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$string: {} is not a string.",
+                    other
+                )));
+            }
         };
         let insert = match &args[1] {
             Value::String(insert, _) => insert.clone(),
-            other => return Err(SassError::Eval(format!("$insert: {} is not a string.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$insert: {} is not a string.",
+                    other
+                )));
+            }
         };
         let idx = match &args[2] {
             Value::Number(n, u) => {
                 if u.is_some() {
-                    return Err(SassError::Eval(format!("$index: Expected {} to have no units.", n)));
+                    return Err(SassError::Eval(format!(
+                        "$index: Expected {} to have no units.",
+                        n
+                    )));
                 }
                 if n.fract() != 0.0 {
                     return Err(SassError::Eval(format!("$index: {} is not an int.", n)));
                 }
                 *n as isize
             }
-            other => return Err(SassError::Eval(format!("$index: {} is not a number.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$index: {} is not a number.",
+                    other
+                )));
+            }
         };
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len() as isize;
@@ -232,28 +277,49 @@ impl Evaluator {
         }
         let (s, input_quoted) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
-            other => return Err(SassError::Eval(format!("$string: {} is not a string.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$string: {} is not a string.",
+                    other
+                )));
+            }
         };
         let sep = match &args[1] {
             Value::String(sep, _) => Some(sep.clone()),
             Value::Null => None,
-            other => return Err(SassError::Eval(format!("$separator: {} is not a string.", other))),
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$separator: {} is not a string.",
+                    other
+                )));
+            }
         };
         let limit = match args.get(2) {
             Some(Value::Number(n, u)) => {
                 if u.is_some() {
-                    return Err(SassError::Eval(format!("$limit: Expected {} to have no units.", n)));
+                    return Err(SassError::Eval(format!(
+                        "$limit: Expected {} to have no units.",
+                        n
+                    )));
                 }
                 if n.fract() != 0.0 {
                     return Err(SassError::Eval(format!("$limit: {} is not an int.", n)));
                 }
                 if *n < 1.0 {
-                    return Err(SassError::Eval(format!("$limit: Must be 1 or greater, was {}.", *n as i64)));
+                    return Err(SassError::Eval(format!(
+                        "$limit: Must be 1 or greater, was {}.",
+                        *n as i64
+                    )));
                 }
                 Some(*n as usize)
             }
             Some(Value::Null) | None => None,
-            Some(other) => return Err(SassError::Eval(format!("$limit: {} is not a number.", other))),
+            Some(other) => {
+                return Err(SassError::Eval(format!(
+                    "$limit: {} is not a number.",
+                    other
+                )));
+            }
         };
 
         let parts: Vec<String> = if s.is_empty() {

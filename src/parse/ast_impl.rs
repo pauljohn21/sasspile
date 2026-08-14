@@ -232,7 +232,11 @@ impl Node {
                 s
             }
             Node::Import { urls, modifiers } => {
-                let urls_str = urls.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join(", ");
+                let urls_str = urls
+                    .iter()
+                    .map(|u| format!("\"{u}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 let mod_str = if modifiers.is_empty() {
                     String::new()
                 } else {

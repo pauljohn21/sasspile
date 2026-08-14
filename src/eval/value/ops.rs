@@ -64,9 +64,7 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             Ok(Value::Number(a - b, unit))
         }
         // 字符串拼接——用 - 连接
-        (Value::String(a, qa), Value::String(b, _)) => {
-            Ok(Value::String(format!("{a}-{b}"), qa))
-        }
+        (Value::String(a, qa), Value::String(b, _)) => Ok(Value::String(format!("{a}-{b}"), qa)),
         (Value::String(a, qa), Value::Number(n, u)) => Ok(Value::String(
             format!("{a}-{}{}", n, u.as_deref().unwrap_or("")),
             qa,
@@ -275,7 +273,9 @@ pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
         (Value::Null, Value::Null) => true,
         (Value::List(a, sa, ba), Value::List(b, sb, bb)) => {
             // 列表相等：长度、分隔符、括号状态、每个元素都相同
-            sa == sb && ba == bb && a.len() == b.len()
+            sa == sb
+                && ba == bb
+                && a.len() == b.len()
                 && a.iter().zip(b.iter()).all(|(x, y)| values_eq(x, y))
         }
         (Value::Map(a), Value::Map(b)) => {

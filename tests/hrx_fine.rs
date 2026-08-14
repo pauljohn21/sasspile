@@ -1,8 +1,8 @@
 //! 精细诊断：对 no_op.hrx 里的每个 input.scss 单独测内存。
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
@@ -31,7 +31,13 @@ fn get_rss_mb() -> usize {
         .args(["-o", "rss=", "-p", &std::process::id().to_string()])
         .output();
     match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse::<usize>().unwrap_or(0) / 1024,
+        Ok(out) => {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .parse::<usize>()
+                .unwrap_or(0)
+                / 1024
+        }
         Err(_) => 0,
     }
 }
@@ -87,15 +93,21 @@ fn diag_no_op_subtests() {
         files.push((current_path, current_content));
     }
 
-    let input_files: Vec<_> = files.iter().filter(|(p, _)| p.ends_with("input.scss")).collect();
+    let input_files: Vec<_> = files
+        .iter()
+        .filter(|(p, _)| p.ends_with("input.scss"))
+        .collect();
     log(&format!("找到 {} 个子测试\n", input_files.len()));
     log(&format!("初始 RSS: {} MB\n", get_rss_mb()));
 
     for (i, (path, _)) in input_files.iter().enumerate() {
         let rss_before = get_rss_mb();
-        log(
-            &format!("[{:>2}] COMPILING {:<50} | RSS={}MB", i + 1, path, rss_before)
-        );
+        log(&format!(
+            "[{:>2}] COMPILING {:<50} | RSS={}MB",
+            i + 1,
+            path,
+            rss_before
+        ));
 
         let tmp = std::env::temp_dir().join(format!("sass-fine-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&tmp);
@@ -118,7 +130,11 @@ fn diag_no_op_subtests() {
 
         let _ = std::fs::remove_dir_all(&tmp);
         let rss_after = get_rss_mb();
-        let growth = if rss_after > rss_before { rss_after - rss_before } else { 0 };
+        let growth = if rss_after > rss_before {
+            rss_after - rss_before
+        } else {
+            0
+        };
         let status = if result.is_ok() { "OK" } else { "PANIC" };
         log(&format!(
             "     {} | {:>4} → {:>4} MB (+{})",

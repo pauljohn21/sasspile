@@ -125,16 +125,42 @@ impl std::fmt::Display for Value {
                 match &c.format {
                     ColorFormat::Hsl(h, s, l) => {
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "hsl({}, {}%, {}%)", format_hue(*h), format_pct(*s), format_pct(*l))
+                            write!(
+                                f,
+                                "hsl({}, {}%, {}%)",
+                                format_hue(*h),
+                                format_pct(*s),
+                                format_pct(*l)
+                            )
                         } else {
-                            write!(f, "hsla({}, {}%, {}%, {})", format_hue(*h), format_pct(*s), format_pct(*l), format_alpha(c.a))
+                            write!(
+                                f,
+                                "hsla({}, {}%, {}%, {})",
+                                format_hue(*h),
+                                format_pct(*s),
+                                format_pct(*l),
+                                format_alpha(c.a)
+                            )
                         }
                     }
                     ColorFormat::Hwb(h, w, b) => {
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "hwb({} {}% {}%)", format_hue(*h), format_pct(*w), format_pct(*b))
+                            write!(
+                                f,
+                                "hwb({} {}% {}%)",
+                                format_hue(*h),
+                                format_pct(*w),
+                                format_pct(*b)
+                            )
                         } else {
-                            write!(f, "hwb({} {}% {}% / {})", format_hue(*h), format_pct(*w), format_pct(*b), format_alpha(c.a))
+                            write!(
+                                f,
+                                "hwb({} {}% {}% / {})",
+                                format_hue(*h),
+                                format_pct(*w),
+                                format_pct(*b),
+                                format_alpha(c.a)
+                            )
                         }
                     }
                     ColorFormat::Rgb => {
@@ -147,7 +173,9 @@ impl std::fmt::Display for Value {
                     ColorFormat::Auto => {
                         if (c.a - 1.0).abs() < f64::EPSILON {
                             // 检查是否为命名颜色，优先输出名称（如 red 而非 #ff0000）
-                            if let Some(name) = crate::eval::Evaluator::reverse_lookup_named_color(c) {
+                            if let Some(name) =
+                                crate::eval::Evaluator::reverse_lookup_named_color(c)
+                            {
                                 write!(f, "{name}")
                             } else {
                                 write!(f, "#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
@@ -204,7 +232,11 @@ impl std::fmt::Display for Value {
             Value::Null => f.write_str("null"),
             Value::Call(name, args) => {
                 // if() 冒号语法：condition: value; else: other
-                if name == "if" && args.iter().any(|a| a.condition.is_some() || a.name.as_deref() == Some("else")) {
+                if name == "if"
+                    && args
+                        .iter()
+                        .any(|a| a.condition.is_some() || a.name.as_deref() == Some("else"))
+                {
                     write!(f, "{name}(")?;
                     for (i, a) in args.iter().enumerate() {
                         if i > 0 {

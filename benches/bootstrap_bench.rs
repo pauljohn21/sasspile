@@ -4,7 +4,7 @@
 //!
 //! 运行：cargo bench --bench bootstrap_bench
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -20,7 +20,10 @@ fn bench_bootstrap_reboot(c: &mut Criterion) {
 
     c.bench_function("sasspile_bootstrap_reboot_48kb", |b| {
         b.iter(|| {
-            let _ = black_box(sasspile::compile(black_box(&input), sasspile::OutputStyle::Expanded));
+            let _ = black_box(sasspile::compile(
+                black_box(&input),
+                sasspile::OutputStyle::Expanded,
+            ));
         })
     });
 }
@@ -30,7 +33,10 @@ fn bench_bootstrap_grid(c: &mut Criterion) {
 
     c.bench_function("sasspile_bootstrap_grid_67kb", |b| {
         b.iter(|| {
-            let _ = black_box(sasspile::compile(black_box(&input), sasspile::OutputStyle::Expanded));
+            let _ = black_box(sasspile::compile(
+                black_box(&input),
+                sasspile::OutputStyle::Expanded,
+            ));
         })
     });
 }
@@ -40,7 +46,10 @@ fn bench_bootstrap_main(c: &mut Criterion) {
 
     c.bench_function("sasspile_bootstrap_main_158kb", |b| {
         b.iter(|| {
-            let _ = black_box(sasspile::compile(black_box(&input), sasspile::OutputStyle::Expanded));
+            let _ = black_box(sasspile::compile(
+                black_box(&input),
+                sasspile::OutputStyle::Expanded,
+            ));
         })
     });
 }

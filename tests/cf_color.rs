@@ -56,9 +56,10 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
                 collect_hrx(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 100_000
+            {
+                files.push(path);
+            }
         }
     }
 }

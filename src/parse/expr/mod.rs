@@ -8,8 +8,8 @@ mod prefix;
 #[allow(unused_imports)]
 pub(crate) use prefix::{parse_hash_color, parse_number};
 
-use super::ast::*;
 use super::Parser;
+use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
@@ -41,11 +41,15 @@ impl<'tok> Parser<'tok> {
         // 注意：(1)/2 → 除法（lhs 是 Paren）；1+1/2 → 除法（含其他运算符）
         // 1/(2) → 除法（/ 后跟括号表达式）；1/2+1 → 除法（含 + 运算符）
         // 检查 / 后是否紧跟 Number/Hash（LParen 开头的是除法，如 1/(2) = 0.5）
-        let slash_followed_by_value = matches!(self.tokens.get(self.pos + 1),
-            Some(Token::Number(_) | Token::Hash(_)))
-            || matches!(self.tokens.get(self.pos + 1), Some(Token::Whitespace))
-                && matches!(self.tokens.get(self.pos + 2),
-                    Some(Token::Number(_) | Token::Hash(_)));
+        let slash_followed_by_value =
+            matches!(
+                self.tokens.get(self.pos + 1),
+                Some(Token::Number(_) | Token::Hash(_))
+            ) || matches!(self.tokens.get(self.pos + 1), Some(Token::Whitespace))
+                && matches!(
+                    self.tokens.get(self.pos + 2),
+                    Some(Token::Number(_) | Token::Hash(_))
+                );
         if self.paren_depth == 0
             && min_bp == 0
             && self.in_declaration
@@ -128,14 +132,20 @@ impl<'tok> Parser<'tok> {
                 && after_op_idx == self.pos + 1
             {
                 return Err(SassError::Parse {
-                    expected: format!("Whitespace is required after {}", if matches!(op, BinOpKind::And) { "and" } else { "or" }),
+                    expected: format!(
+                        "Whitespace is required after {}",
+                        if matches!(op, BinOpKind::And) {
+                            "and"
+                        } else {
+                            "or"
+                        }
+                    ),
                     found: "(".into(),
                 });
             }
             // `and`/`or` 后面不能直接跟 `not`（需要括号）
             // 例如 `css(1) and not css(2)` 报错
-            if matches!(after_op, Some(Token::Not))
-                && matches!(op, BinOpKind::And | BinOpKind::Or)
+            if matches!(after_op, Some(Token::Not)) && matches!(op, BinOpKind::And | BinOpKind::Or)
             {
                 return Err(SassError::Parse {
                     expected: "(".into(),
@@ -152,7 +162,11 @@ impl<'tok> Parser<'tok> {
             {
                 return Err(SassError::Parse {
                     expected: ":".into(),
-                    found: if matches!(op, BinOpKind::And) { "and".into() } else { "or".into() },
+                    found: if matches!(op, BinOpKind::And) {
+                        "and".into()
+                    } else {
+                        "or".into()
+                    },
                 });
             }
             // 检查 and/or 混合：or 的右操作数不能是 BinOp(And, ...)，反之亦然
@@ -206,7 +220,14 @@ impl<'tok> Parser<'tok> {
                 && after_op_idx == self.pos + 1
             {
                 return Err(SassError::Parse {
-                    expected: format!("Whitespace is required after {}", if matches!(op, BinOpKind::And) { "and" } else { "or" }),
+                    expected: format!(
+                        "Whitespace is required after {}",
+                        if matches!(op, BinOpKind::And) {
+                            "and"
+                        } else {
+                            "or"
+                        }
+                    ),
                     found: "(".into(),
                 });
             }
@@ -243,8 +264,14 @@ impl<'tok> Parser<'tok> {
                     }
                 }
                 // 注意：Slash 不算"其他运算符"（它本身就是我们正在检查的）
-                Token::Eq | Token::NotEq | Token::Less | Token::Greater
-                | Token::LessEq | Token::GreaterEq | Token::And | Token::Or
+                Token::Eq
+                | Token::NotEq
+                | Token::Less
+                | Token::Greater
+                | Token::LessEq
+                | Token::GreaterEq
+                | Token::And
+                | Token::Or
                 | Token::Colon => {
                     if depth == 0 {
                         return true;
@@ -262,8 +289,19 @@ impl<'tok> Parser<'tok> {
     fn is_keyword(&self, s: &str) -> bool {
         matches!(
             s,
-            "through" | "from" | "to" | "and" | "or" | "not" | "in" | "with"
-                | "show" | "hide" | "as" | "using" | "else"
+            "through"
+                | "from"
+                | "to"
+                | "and"
+                | "or"
+                | "not"
+                | "in"
+                | "with"
+                | "show"
+                | "hide"
+                | "as"
+                | "using"
+                | "else"
         )
     }
 
@@ -272,8 +310,19 @@ impl<'tok> Parser<'tok> {
         if let Some(Token::Ident(s)) = self.peek()
             && matches!(
                 s.as_str(),
-                "through" | "from" | "to" | "and" | "or" | "not" | "in" | "with"
-                    | "show" | "hide" | "as" | "using" | "else"
+                "through"
+                    | "from"
+                    | "to"
+                    | "and"
+                    | "or"
+                    | "not"
+                    | "in"
+                    | "with"
+                    | "show"
+                    | "hide"
+                    | "as"
+                    | "using"
+                    | "else"
             )
         {
             return false;

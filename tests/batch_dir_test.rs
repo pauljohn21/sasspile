@@ -139,9 +139,7 @@ fn test_batch_partials_individual() {
 
     info!(
         partial_count,
-        ok_count,
-        err_count,
-        "_partial 单独编译统计（部分失败是预期的——缺少依赖上下文）"
+        ok_count, err_count, "_partial 单独编译统计（部分失败是预期的——缺少依赖上下文）"
     );
 
     // 验证：partial 单独编译会有失败（这是正常的）

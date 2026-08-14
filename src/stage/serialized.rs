@@ -66,4 +66,3 @@ impl std::fmt::Display for Serialized {
         write!(f, "{}", self.css)
     }
 }
-

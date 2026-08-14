@@ -12,7 +12,10 @@ fn get_rss_mb() -> usize {
         .args(["-o", "rss=", "-p", &pid.to_string()])
         .output();
     match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse::<usize>().unwrap_or(0),
+        Ok(out) => String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .parse::<usize>()
+            .unwrap_or(0),
         Err(_) => 0,
     }
 }
@@ -72,7 +75,12 @@ fn bs_entry_batch() {
         }
     }
 
-    tracing::info!(ok = ok, fail = fail, total = result.outputs.len(), "Bootstrap 入口批量编译完成");
+    tracing::info!(
+        ok = ok,
+        fail = fail,
+        total = result.outputs.len(),
+        "Bootstrap 入口批量编译完成"
+    );
     assert!(ok > 0, "至少一个入口文件应编译成功");
 }
 

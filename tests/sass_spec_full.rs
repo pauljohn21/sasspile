@@ -102,7 +102,6 @@ fn log_memory_per_case(case_idx: usize, file_hint: &str) {
     }
 }
 
-
 /// HRX 测试用例（借用引用，不克隆）。
 struct HrxCase<'a> {
     files: &'a [(String, String)],
@@ -127,9 +126,7 @@ fn parse_and_run_hrx(
 
     for line in content.lines() {
         // 跳过纯 = 分隔线（如 ========================================）
-        if line.trim().chars().all(|c| c == '=')
-            || line.trim().is_empty()
-        {
+        if line.trim().chars().all(|c| c == '=') || line.trim().is_empty() {
             continue;
         }
         if line.starts_with("<===>") {
@@ -378,46 +375,86 @@ fn run_one_spec_dir(dir_name: &str) {
 }
 
 #[test]
-fn test_variables() { run_one_spec_dir("variables"); }
+fn test_variables() {
+    run_one_spec_dir("variables");
+}
 #[test]
-fn test_values() { run_one_spec_dir("values"); }
+fn test_values() {
+    run_one_spec_dir("values");
+}
 #[test]
-fn test_css() { run_one_spec_dir("css"); }
+fn test_css() {
+    run_one_spec_dir("css");
+}
 #[test]
-fn test_operators() { run_one_spec_dir("operators"); }
+fn test_operators() {
+    run_one_spec_dir("operators");
+}
 #[test]
-fn test_expressions() { run_one_spec_dir("expressions"); }
+fn test_expressions() {
+    run_one_spec_dir("expressions");
+}
 #[test]
-fn test_directives() { run_one_spec_dir("directives"); }
+fn test_directives() {
+    run_one_spec_dir("directives");
+}
 
 // core_functions 子目录——独立测试（selector 拆开，防 OOM）
 #[test]
-fn test_core_list() { run_one_spec_dir("core_functions/list"); }
+fn test_core_list() {
+    run_one_spec_dir("core_functions/list");
+}
 #[test]
-fn test_core_map() { run_one_spec_dir("core_functions/map"); }
+fn test_core_map() {
+    run_one_spec_dir("core_functions/map");
+}
 #[test]
-fn test_core_math() { run_one_spec_dir("core_functions/math"); }
+fn test_core_math() {
+    run_one_spec_dir("core_functions/math");
+}
 #[test]
-fn test_core_meta() { run_one_spec_dir("core_functions/meta"); }
+fn test_core_meta() {
+    run_one_spec_dir("core_functions/meta");
+}
 #[test]
-fn test_core_string() { run_one_spec_dir("core_functions/string"); }
+fn test_core_string() {
+    run_one_spec_dir("core_functions/string");
+}
 #[test]
-fn test_core_selector_append() { run_one_spec_dir("core_functions/selector/append.hrx"); }
+fn test_core_selector_append() {
+    run_one_spec_dir("core_functions/selector/append.hrx");
+}
 #[test]
-fn test_core_selector_nest() { run_one_spec_dir("core_functions/selector/nest"); }
+fn test_core_selector_nest() {
+    run_one_spec_dir("core_functions/selector/nest");
+}
 #[test]
-fn test_core_selector_parse() { run_one_spec_dir("core_functions/selector/parse"); }
+fn test_core_selector_parse() {
+    run_one_spec_dir("core_functions/selector/parse");
+}
 #[test]
-fn test_core_selector_replace() { run_one_spec_dir("core_functions/selector/replace.hrx"); }
+fn test_core_selector_replace() {
+    run_one_spec_dir("core_functions/selector/replace.hrx");
+}
 #[test]
-fn test_core_selector_extend() { run_one_spec_dir("core_functions/selector/extend"); }
+fn test_core_selector_extend() {
+    run_one_spec_dir("core_functions/selector/extend");
+}
 #[test]
-fn test_core_selector_unify() { run_one_spec_dir("core_functions/selector/unify"); }
+fn test_core_selector_unify() {
+    run_one_spec_dir("core_functions/selector/unify");
+}
 #[test]
-fn test_core_selector_is_superselector() { run_one_spec_dir("core_functions/selector/is_superselector"); }
+fn test_core_selector_is_superselector() {
+    run_one_spec_dir("core_functions/selector/is_superselector");
+}
 
 // parser + callable
 #[test]
-fn test_parser() { run_one_spec_dir("parser"); }
+fn test_parser() {
+    run_one_spec_dir("parser");
+}
 #[test]
-fn test_callable() { run_one_spec_dir("callable"); }
+fn test_callable() {
+    run_one_spec_dir("callable");
+}

@@ -38,13 +38,18 @@ pub const SKIP_DIRS: &[&str] = &[
 /// 匹配文件名（不含路径）如果包含这些模式则跳过。
 const CSS4_COLOR_PATTERNS: &[&str] = &[
     // CSS4 色彩空间
-    "a98_rgb", "a98-rgb",
-    "display_p3", "display-p3",
+    "a98_rgb",
+    "a98-rgb",
+    "display_p3",
+    "display-p3",
     "display_p3_linear",
-    "prophoto_rgb", "prophoto-rgb",
+    "prophoto_rgb",
+    "prophoto-rgb",
     "rec2020",
-    "srgb_linear", "srgb-linear",
-    "xyz_d50", "xyz-d50",
+    "srgb_linear",
+    "srgb-linear",
+    "xyz_d50",
+    "xyz-d50",
     "xyz_d65",
     "xyz",
     // CSS4 色彩空间函数（hwb/lab/lch/oklab/oklch 在 adjust/change/scale 中）
@@ -58,7 +63,10 @@ const CSS4_COLOR_PATTERNS: &[&str] = &[
 /// 检查文件相对 spec_root 的路径是否在跳过列表中。
 fn should_skip(rel_path: &str) -> bool {
     // 目录级跳过
-    if SKIP_DIRS.iter().any(|skip| rel_path.starts_with(skip) || rel_path == *skip) {
+    if SKIP_DIRS
+        .iter()
+        .any(|skip| rel_path.starts_with(skip) || rel_path == *skip)
+    {
         return true;
     }
 
@@ -71,7 +79,10 @@ fn should_skip(rel_path: &str) -> bool {
             .unwrap_or("");
 
         // 跳过包含 CSS4 色彩空间模式的文件
-        if CSS4_COLOR_PATTERNS.iter().any(|pat| file_name.contains(pat)) {
+        if CSS4_COLOR_PATTERNS
+            .iter()
+            .any(|pat| file_name.contains(pat))
+        {
             // 但保留 hsl/rgb/srgb 相关的标准文件
             let is_standard = file_name == "hsl"
                 || file_name == "rgb"
@@ -120,12 +131,7 @@ pub fn collect_hrx_files(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) 
     (files, skipped)
 }
 
-fn collect_recursive(
-    dir: &Path,
-    spec_root: &Path,
-    files: &mut Vec<PathBuf>,
-    skipped: &mut usize,
-) {
+fn collect_recursive(dir: &Path, spec_root: &Path, files: &mut Vec<PathBuf>, skipped: &mut usize) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -142,9 +148,10 @@ fn collect_recursive(
                     continue;
                 }
                 if let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 50_000 {
-                        files.push(path);
-                    }
+                    && meta.len() < 50_000
+                {
+                    files.push(path);
+                }
             }
         }
     }
@@ -167,9 +174,10 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
                 collect_all_recursive(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 100_000
+            {
+                files.push(path);
+            }
         }
     }
 }
@@ -178,8 +186,7 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
 #[allow(dead_code)]
 pub fn stats_by_dir(spec_root: &Path) -> Vec<(String, usize)> {
     let all = collect_all_hrx(spec_root);
-    let mut counts: std::collections::BTreeMap<String, usize> =
-        std::collections::BTreeMap::new();
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for path in &all {
         let rel = path.strip_prefix(spec_root).unwrap_or(path);
         let first = rel

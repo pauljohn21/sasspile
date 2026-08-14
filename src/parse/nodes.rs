@@ -5,9 +5,9 @@
 
 use super::Parser;
 use super::ast::*;
+use crate::__tracing::{trace, warn};
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
-use crate::__tracing::{trace, warn};
 
 impl<'tok> Parser<'tok> {
     // —— 节点解析 ——
@@ -114,7 +114,17 @@ impl<'tok> Parser<'tok> {
                         if s.ends_with('[') || s.ends_with('=') {
                             // [ 或 = 后的空白跳过
                             self.advance();
-                        } else if matches!(next_non_ws, Some(Token::RBracket | Token::Assign | Token::Tilde | Token::Pipe | Token::Caret | Token::Star)) {
+                        } else if matches!(
+                            next_non_ws,
+                            Some(
+                                Token::RBracket
+                                    | Token::Assign
+                                    | Token::Tilde
+                                    | Token::Pipe
+                                    | Token::Caret
+                                    | Token::Star
+                            )
+                        ) {
                             // ] 前或属性操作符（= ~= |= ^= *=）前的空白跳过
                             self.advance();
                         } else {
@@ -183,10 +193,11 @@ impl<'tok> Parser<'tok> {
             self.advance();
             self.skip_ws();
             if let Some(Token::Ident(s)) = self.peek()
-                && s == "important" {
-                    self.advance();
-                    return Ok(true);
-                }
+                && s == "important"
+            {
+                self.advance();
+                return Ok(true);
+            }
         }
         Ok(false)
     }
@@ -404,22 +415,23 @@ impl<'tok> Parser<'tok> {
                         self.skip_ws();
                         // 期望 else : value 或 condition : value
                         if let Some(Token::Ident(s)) = self.peek()
-                            && s == "else" {
+                            && s == "else"
+                        {
+                            self.advance();
+                            self.skip_ws();
+                            if self.peek() == Some(&Token::Colon) {
                                 self.advance();
                                 self.skip_ws();
-                                if self.peek() == Some(&Token::Colon) {
-                                    self.advance();
-                                    self.skip_ws();
-                                }
-                                let else_val = self.parse_expr(0)?;
-                                args.push(Arg {
-                                    name: Some("else".to_string()),
-                                    value: else_val,
-                                    spread: false,
-                                    condition: None,
-                                });
-                                break; // else 是最后一个
                             }
+                            let else_val = self.parse_expr(0)?;
+                            args.push(Arg {
+                                name: Some("else".to_string()),
+                                value: else_val,
+                                spread: false,
+                                condition: None,
+                            });
+                            break; // else 是最后一个
+                        }
                         // 解析 condition : value
                         let cond2 = self.parse_expr(0)?;
                         self.skip_ws();

@@ -126,8 +126,7 @@ impl Evaluator {
     /// SCSS @import 语义：被导入文件在当前作用域执行，
     /// 能看到之前定义的所有变量/mixin/函数，且定义的成员在导入后可见。
     pub(crate) fn load_import(path: &Path, caller_env: &Env) -> Result<(Vec<CssNode>, Env)> {
-        let span =
-            crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
+        let span = crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
         let _enter = span.enter();
         // 防止循环导入导致栈溢出
         if caller_env.depth > 50 {
@@ -142,11 +141,9 @@ impl Evaluator {
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
-        let ast = crate::parse::Parser::parse(&tokens).map_err(|e| {
-            SassError::Parse {
-                expected: format!("在 {} 中: {}", path.display(), e),
-                found: "see above".into(),
-            }
+        let ast = crate::parse::Parser::parse(&tokens).map_err(|e| SassError::Parse {
+            expected: format!("在 {} 中: {}", path.display(), e),
+            found: "see above".into(),
         })?;
         // 继承当前环境的所有成员（变量、mixin、函数、命名空间）
         let mut env = caller_env.clone();
@@ -167,7 +164,12 @@ impl Evaluator {
     }
 
     /// 模块限定函数调用。
-    pub(crate) fn call_module_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
+    pub(crate) fn call_module_function(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        env: &Env,
+    ) -> Result<Value> {
         let span = crate::__tracing::info_span!("call_module_function", name = name);
         let _enter = span.enter();
         // 先检查文件加载的命名空间
@@ -175,9 +177,10 @@ impl Evaluator {
             let ns = &name[..dot];
             let func_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
-                && let Some(func) = module.functions.get(func_name) {
-                    return Self::call_user_function(func, pos_args, kw_args, env);
-                }
+                && let Some(func) = module.functions.get(func_name)
+            {
+                return Self::call_user_function(func, pos_args, kw_args, env);
+            }
         }
         // 将模块限定名映射到内建函数
         let builtin_name = match name {

@@ -45,4 +45,3 @@ impl Evaluated {
         Serialized { css }
     }
 }
-

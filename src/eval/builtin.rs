@@ -148,10 +148,11 @@ impl Evaluator {
                 [Value::Number(y, yu), Value::Number(x, xu)] => {
                     // 检查单位兼容性
                     if let (Some(yu), Some(xu)) = (yu, xu)
-                        && yu != xu {
-                            // 尝试兼容转换（如 cm 和 mm）
-                            // 简化处理：如果单位不同但都是长度单位，比值消去单位
-                        }
+                        && yu != xu
+                    {
+                        // 尝试兼容转换（如 cm 和 mm）
+                        // 简化处理：如果单位不同但都是长度单位，比值消去单位
+                    }
                     let result = y.atan2(*x).to_degrees();
                     Ok(Value::Number(result, Some("deg".to_string())))
                 }
@@ -182,14 +183,15 @@ impl Evaluator {
                 if pos_args.is_empty() {
                     return Err(SassError::Eval("hypot 需要 1+ 个参数".into()));
                 }
-                let sum: f64 = pos_args.iter()
+                let sum: f64 = pos_args
+                    .iter()
                     .map(|a| match a {
                         Value::Number(n, _) => n * n,
                         _ => 0.0,
                     })
                     .sum();
                 Ok(Value::Number(sum.sqrt(), None))
-            },
+            }
             "log" => match pos_args {
                 [Value::Number(n, _)] => {
                     if *n < 0.0 {
@@ -262,19 +264,15 @@ impl Evaluator {
             "lighten" => Self::builtin_lighten(pos_args),
             "mix" => Self::builtin_mix(pos_args),
             "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
-| "scale-color" | "hwb" | "complement" | "adjust-hue" | "saturate"
-| "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
-| "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness"
-| "whiteness" | "blackness" | "is-powerless" | "is-in-gamut" | "is-legacy"
-| "channel" | "to-space" | "to-gamut" => {
-color::call(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
+            | "scale-color" | "hwb" | "complement" | "adjust-hue" | "saturate" | "desaturate"
+            | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha" | "opacity"
+            | "red" | "green" | "blue" | "hue" | "saturation" | "lightness" | "whiteness"
+            | "blackness" | "is-powerless" | "is-in-gamut" | "is-legacy" | "channel"
+            | "to-space" | "to-gamut" => color::call(&name, pos_args, kw_args)?
+                .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
             // hsl/hsla 颜色构造函数——分派到 color::call 处理
-            "hsl" | "hsla" => {
-                color::call(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
+            "hsl" | "hsla" => color::call(&name, pos_args, kw_args)?
+                .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
 
             // ── map ──
             "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge" | "map-remove"
@@ -319,18 +317,28 @@ color::call(&name, pos_args, kw_args)?
                 let (cond, t, f) = if pos_args.len() == 3 {
                     (&pos_args[0], &pos_args[1], &pos_args[2])
                 } else if pos_args.len() == 1 {
-                    let t = kw_args.get("if-true").ok_or_else(|| SassError::Eval("if 需要 $if-true 参数或 3 个位置参数".into()))?;
-                    let f = kw_args.get("if-false").ok_or_else(|| SassError::Eval("if 需要 $if-false 参数或 3 个位置参数".into()))?;
+                    let t = kw_args.get("if-true").ok_or_else(|| {
+                        SassError::Eval("if 需要 $if-true 参数或 3 个位置参数".into())
+                    })?;
+                    let f = kw_args.get("if-false").ok_or_else(|| {
+                        SassError::Eval("if 需要 $if-false 参数或 3 个位置参数".into())
+                    })?;
                     (&pos_args[0], t, f)
                 } else {
-                    return Err(SassError::Eval("if 需要 3 个位置参数或 1+named 参数".into()));
+                    return Err(SassError::Eval(
+                        "if 需要 3 个位置参数或 1+named 参数".into(),
+                    ));
                 };
-                Ok(if Self::is_truthy(cond) { t.clone() } else { f.clone() })
+                Ok(if Self::is_truthy(cond) {
+                    t.clone()
+                } else {
+                    f.clone()
+                })
             }
             "content-exists" => {
                 // 检查当前环境是否有 @content 内容块
                 Ok(Value::Bool(env.content.is_some()))
-            },
+            }
             "feature-exists" => match pos_args {
                 [Value::String(name, _)] => {
                     // 支持的特性列表

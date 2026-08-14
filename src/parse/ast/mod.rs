@@ -340,15 +340,33 @@ impl Default for Color {
 impl Color {
     /// 创建 RGB 颜色。
     pub fn rgb(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b, a: 1.0, format: ColorFormat::Auto }
+        Self {
+            r,
+            g,
+            b,
+            a: 1.0,
+            format: ColorFormat::Auto,
+        }
     }
     /// 创建 RGBA 颜色。
     pub fn rgba(r: u8, g: u8, b: u8, a: f64) -> Self {
-        Self { r, g, b, a, format: ColorFormat::Auto }
+        Self {
+            r,
+            g,
+            b,
+            a,
+            format: ColorFormat::Auto,
+        }
     }
     /// 创建带格式的 RGB 颜色。
     pub fn rgb_fmt(r: u8, g: u8, b: u8, format: ColorFormat) -> Self {
-        Self { r, g, b, a: 1.0, format }
+        Self {
+            r,
+            g,
+            b,
+            a: 1.0,
+            format,
+        }
     }
     /// 创建带格式的 RGBA 颜色。
     pub fn rgba_fmt(r: u8, g: u8, b: u8, a: f64, format: ColorFormat) -> Self {

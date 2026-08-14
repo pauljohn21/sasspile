@@ -38,4 +38,3 @@ impl Lexed {
         Ok(Parsed { ast })
     }
 }
-

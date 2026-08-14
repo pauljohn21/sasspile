@@ -5,8 +5,8 @@ mod spec_manifest;
 
 use spec_manifest::collect_hrx_files;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
@@ -36,7 +36,13 @@ fn get_rss_mb() -> usize {
         .args(["-o", "rss=", "-p", &std::process::id().to_string()])
         .output();
     match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().parse::<usize>().unwrap_or(0) / 1024,
+        Ok(out) => {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .parse::<usize>()
+                .unwrap_or(0)
+                / 1024
+        }
         Err(_) => 0,
     }
 }
@@ -72,7 +78,10 @@ fn diag_memory_per_file() {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
 
     let (all_files, skipped) = collect_hrx_files(&spec_root, &spec_root);
-    log(&format!("找到 {} 个 HRX 文件 (跳过 {skipped})", all_files.len()));
+    log(&format!(
+        "找到 {} 个 HRX 文件 (跳过 {skipped})",
+        all_files.len()
+    ));
 
     let initial_rss = get_rss_mb();
     log(&format!("初始 RSS: {initial_rss} MB\n"));
@@ -93,7 +102,11 @@ fn diag_memory_per_file() {
         }));
 
         let rss_after = get_rss_mb();
-        let growth = if rss_after > rss_before { rss_after - rss_before } else { 0 };
+        let growth = if rss_after > rss_before {
+            rss_after - rss_before
+        } else {
+            0
+        };
 
         let rel = file.strip_prefix(&spec_root).unwrap_or(file);
         let status = if result.is_ok() { "OK  " } else { "PANIC" };

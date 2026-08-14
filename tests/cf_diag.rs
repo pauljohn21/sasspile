@@ -85,9 +85,10 @@ fn collect_hrx(dir: &Path, files: &mut Vec<PathBuf>) {
                 collect_hrx(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 50_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 50_000
+            {
+                files.push(path);
+            }
         }
     }
 }
@@ -96,7 +97,12 @@ fn collect_hrx(dir: &Path, files: &mut Vec<PathBuf>) {
 /// hrx_dir 是 HRX 文件所在目录，hrx_stem 是 HRX 文件名（不含扩展名）。
 /// 将 HRX 内容写入 tmp_dir/<hrx_stem>/，同时复制 hrx_dir 下的 .scss 文件到 tmp_dir/，
 /// 使 @use '../test-hue' 能正确解析到 tmp_dir/_test-hue.scss。
-fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str) -> Result<String, String> {
+fn compile_case(
+    case: &HrxCase,
+    spec_root: &Path,
+    hrx_dir: &Path,
+    hrx_stem: &str,
+) -> Result<String, String> {
     let tmp_dir = std::env::temp_dir().join(format!("cf-diag-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
@@ -123,10 +129,11 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
             let p = entry.path();
             if (p.extension().and_then(|s| s.to_str()) == Some("scss")
                 || p.extension().and_then(|s| s.to_str()) == Some("css"))
-                && let Ok(content) = std::fs::read_to_string(&p) {
-                    let filename = p.file_name().unwrap().to_string_lossy().to_string();
-                    std::fs::write(tmp_dir.join(&filename), content).ok();
-                }
+                && let Ok(content) = std::fs::read_to_string(&p)
+            {
+                let filename = p.file_name().unwrap().to_string_lossy().to_string();
+                std::fs::write(tmp_dir.join(&filename), content).ok();
+            }
         }
     }
 
@@ -175,12 +182,19 @@ fn diag(subdir: &str, max_show: usize) {
                     .unwrap_or(&case.input_path)
                     .trim_end_matches('/')
                     .to_string();
-                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
+                match compile_case(
+                    case,
+                    &spec_root,
+                    file.parent().unwrap_or(Path::new(".")),
+                    &stem,
+                ) {
                     Ok(actual) => {
                         if case.expect_error {
                             // 期望错误但实际成功了
                             shown += 1;
-                            *err_types.entry("expected_error_but_ok".to_string()).or_default() += 1;
+                            *err_types
+                                .entry("expected_error_but_ok".to_string())
+                                .or_default() += 1;
                             tracing::warn!(test = %format!("{stem}/{name}"), "FAIL: expected_error_but_ok");
                         } else if actual.trim() != case.expected_output.trim() {
                             shown += 1;
@@ -190,7 +204,11 @@ fn diag(subdir: &str, max_show: usize) {
                             tracing::warn!(test = %format!("{stem}/{name}"), kind = %key, n_diffs = diff.lines.len(), "FAIL");
                             for dl in diff.lines.iter().take(3) {
                                 match dl {
-                                    common::DiffLine::Changed { line, expected, actual } => {
+                                    common::DiffLine::Changed {
+                                        line,
+                                        expected,
+                                        actual,
+                                    } => {
                                         tracing::debug!(line = line, expected = %expected, actual = %actual, "diff: changed");
                                     }
                                     common::DiffLine::ExtraExpected { line, content } => {
@@ -325,7 +343,12 @@ fn diag_numbers_full() {
                     .trim_end_matches('/')
                     .to_string();
                 let full_name = format!("{stem}/{name}");
-                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
+                match compile_case(
+                    case,
+                    &spec_root,
+                    file.parent().unwrap_or(Path::new(".")),
+                    &stem,
+                ) {
                     Ok(actual) => {
                         if case.expect_error {
                             pass += 1;
@@ -367,8 +390,16 @@ fn diag_numbers_full() {
     // 按测试名聚合
     fails.sort_by(|a, b| a.0.cmp(&b.0));
     for (name, kind, expected, actual) in &fails {
-        let exp_short = expected.replace('\n', "\\n").chars().take(60).collect::<String>();
-        let act_short = actual.replace('\n', "\\n").chars().take(60).collect::<String>();
+        let exp_short = expected
+            .replace('\n', "\\n")
+            .chars()
+            .take(60)
+            .collect::<String>();
+        let act_short = actual
+            .replace('\n', "\\n")
+            .chars()
+            .take(60)
+            .collect::<String>();
         tracing::warn!(test = %name, kind = %kind, expected = %exp_short, actual = %act_short, "FAIL_DETAIL");
     }
     // 按 kind 分组统计
@@ -470,7 +501,12 @@ fn stats_subdir(subdir: &str) {
                 if case.expected_output.is_empty() && !case.expect_error {
                     continue;
                 }
-                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
+                match compile_case(
+                    case,
+                    &spec_root,
+                    file.parent().unwrap_or(Path::new(".")),
+                    &stem,
+                ) {
                     Ok(actual) => {
                         if case.expect_error {
                             fail += 1;

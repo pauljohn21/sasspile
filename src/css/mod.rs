@@ -50,20 +50,22 @@ impl Serializer {
                             children: last_children,
                             has_body: true,
                         } = last
-                            && last_name == name && last_params == params {
-                                // 合并 children
-                                let mut merged = last_children.clone();
-                                merged.extend(children.clone());
-                                if let Some(last_mut) = result.last_mut() {
-                                    *last_mut = CssNode::AtRule {
-                                        name: name.clone(),
-                                        params: params.clone(),
-                                        children: merged,
-                                        has_body: true,
-                                    };
-                                }
-                                continue;
-                            }
+                        && last_name == name
+                        && last_params == params
+                    {
+                        // 合并 children
+                        let mut merged = last_children.clone();
+                        merged.extend(children.clone());
+                        if let Some(last_mut) = result.last_mut() {
+                            *last_mut = CssNode::AtRule {
+                                name: name.clone(),
+                                params: params.clone(),
+                                children: merged,
+                                has_body: true,
+                            };
+                        }
+                        continue;
+                    }
                     result.push(node);
                 }
                 _ => result.push(node),

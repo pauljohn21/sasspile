@@ -461,16 +461,34 @@ impl Evaluator {
                 Value::Number(b, bu),
             ] => {
                 // 百分比参数转换为 0-255
-                let r_val = if ru.as_deref() == Some("%") { (r * 255.0 / 100.0).round() as u8 } else { *r as u8 };
-                let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
-                let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
+                let r_val = if ru.as_deref() == Some("%") {
+                    (r * 255.0 / 100.0).round() as u8
+                } else {
+                    *r as u8
+                };
+                let g_val = if gu.as_deref() == Some("%") {
+                    (g * 255.0 / 100.0).round() as u8
+                } else {
+                    *g as u8
+                };
+                let b_val = if bu.as_deref() == Some("%") {
+                    (b * 255.0 / 100.0).round() as u8
+                } else {
+                    *b as u8
+                };
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
                     r = *r, g = *g, b = *b,
                     "rgba 3-arg input"
                 );
-                Ok(Value::Color(Color::rgba_fmt(r_val, g_val, b_val, 1.0, ColorFormat::Rgb)))
+                Ok(Value::Color(Color::rgba_fmt(
+                    r_val,
+                    g_val,
+                    b_val,
+                    1.0,
+                    ColorFormat::Rgb,
+                )))
             }
             [
                 Value::Number(r, ru),
@@ -478,9 +496,21 @@ impl Evaluator {
                 Value::Number(b, bu),
                 Value::Number(a, ua),
             ] => {
-                let r_val = if ru.as_deref() == Some("%") { (r * 255.0 / 100.0).round() as u8 } else { *r as u8 };
-                let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
-                let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
+                let r_val = if ru.as_deref() == Some("%") {
+                    (r * 255.0 / 100.0).round() as u8
+                } else {
+                    *r as u8
+                };
+                let g_val = if gu.as_deref() == Some("%") {
+                    (g * 255.0 / 100.0).round() as u8
+                } else {
+                    *g as u8
+                };
+                let b_val = if bu.as_deref() == Some("%") {
+                    (b * 255.0 / 100.0).round() as u8
+                } else {
+                    *b as u8
+                };
                 let alpha = if ua.as_deref() == Some("%") {
                     *a / 100.0
                 } else {
@@ -493,18 +523,27 @@ impl Evaluator {
                     "rgba 4-arg input"
                 );
                 Ok(Value::Color(Color::rgba_fmt(
-                    r_val, g_val, b_val, alpha, ColorFormat::Rgb,
+                    r_val,
+                    g_val,
+                    b_val,
+                    alpha,
+                    ColorFormat::Rgb,
                 )))
             }
             // rgba($color, $alpha) — 修改颜色的 alpha 通道
-            [Value::Color(c), Value::Number(a, _)] => {
-                Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, c.format.clone())))
-            }
+            [Value::Color(c), Value::Number(a, _)] => Ok(Value::Color(Color::rgba_fmt(
+                c.r,
+                c.g,
+                c.b,
+                *a,
+                c.format.clone(),
+            ))),
             // CSS 透传：参数包含 var()/calc()/raw 等非数值时，原样输出
             _ if args.iter().any(|a| {
                 matches!(a, Value::Calc(_) | Value::Raw(_) | Value::String(_, false))
                     && !matches!(a, Value::Color(_))
-            }) => {
+            }) =>
+            {
                 let arg_str = args
                     .iter()
                     .map(|a| a.to_string())

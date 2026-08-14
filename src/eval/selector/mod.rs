@@ -8,6 +8,5 @@ pub mod algorithms;
 pub mod parse;
 
 pub use parse::{
-    parse_selector_list, Combinator, CompoundSelector,
-    CompoundWithCombinator, ComplexSelector,
+    Combinator, ComplexSelector, CompoundSelector, CompoundWithCombinator, parse_selector_list,
 };
