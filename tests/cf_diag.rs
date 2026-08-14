@@ -350,9 +350,7 @@ fn diag_numbers_full() {
                     &stem,
                 ) {
                     Ok(actual) => {
-                        if case.expect_error {
-                            pass += 1;
-                        } else if actual.trim() == case.expected_output.trim() {
+                        if case.expect_error || actual.trim() == case.expected_output.trim() {
                             pass += 1;
                         } else {
                             fails.push((

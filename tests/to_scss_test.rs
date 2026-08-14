@@ -36,6 +36,7 @@ fn test_variable_to_scss() {
             default: true,
             global: false,
         },
+        namespace: None,
     };
     let scss = node.to_scss(0);
     assert_eq!(scss, "$color: blue !default;");

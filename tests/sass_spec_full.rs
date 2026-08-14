@@ -87,25 +87,6 @@ fn get_rss_kb(pid: u32) -> usize {
     }
 }
 
-/// 每 N 个 case 发放一次诊断事件（含 RSS），定位内存增长来源。
-const RSS_LOG_INTERVAL: usize = 5;
-
-static LAST_RSS_KB: AtomicU64 = AtomicU64::new(0);
-
-fn log_memory_per_case(case_idx: usize, file_hint: &str) {
-    let rss = get_rss_kb(std::process::id());
-    let last = LAST_RSS_KB.swap(rss as u64, Ordering::Relaxed);
-    // 每 10 个 case 或 RSS 增长 >10MB 时打印
-    if case_idx % 10 == 0 || rss.abs_diff(last as usize) > 10_240 {
-        info!(
-            case_idx = case_idx,
-            rss_mb = rss / 1024,
-            file = file_hint,
-            "📊 内存进度"
-        );
-    }
-}
-
 /// HRX 测试用例（仅包含当前 case 的文件）。
 struct HrxCase {
     files: Vec<(String, String)>,

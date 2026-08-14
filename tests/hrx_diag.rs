@@ -102,11 +102,7 @@ fn diag_memory_per_file() {
         }));
 
         let rss_after = get_rss_mb();
-        let growth = if rss_after > rss_before {
-            rss_after - rss_before
-        } else {
-            0
-        };
+        let growth = rss_after.saturating_sub(rss_before);
 
         let rel = file.strip_prefix(&spec_root).unwrap_or(file);
         let status = if result.is_ok() { "OK  " } else { "PANIC" };

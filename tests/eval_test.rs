@@ -50,6 +50,7 @@ fn test_eval_variable() {
                 name: "x".into(),
                 value: Value::Number(10.0, Some("px".into())),
                 flags: VarFlags::default(),
+                namespace: None,
             },
             Node::Decl {
                 property: "w".into(),

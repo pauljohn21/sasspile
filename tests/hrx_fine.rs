@@ -130,11 +130,7 @@ fn diag_no_op_subtests() {
 
         let _ = std::fs::remove_dir_all(&tmp);
         let rss_after = get_rss_mb();
-        let growth = if rss_after > rss_before {
-            rss_after - rss_before
-        } else {
-            0
-        };
+        let growth = rss_after.saturating_sub(rss_before);
         let status = if result.is_ok() { "OK" } else { "PANIC" };
         log(&format!(
             "     {} | {:>4} → {:>4} MB (+{})",
