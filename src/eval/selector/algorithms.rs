@@ -6,7 +6,7 @@
 
 use crate::error::Result;
 use crate::eval::selector::{
-    Combinator, ComplexSelector, CompoundSelector, CompoundWithCombinator, parse_selector_list,
+    ComplexSelector, CompoundSelector, CompoundWithCombinator, SelectorList, parse_selector_list,
 };
 use crate::parse::ast::*;
 
@@ -112,7 +112,7 @@ pub fn unify(selector1: &str, selector2: &str) -> Result<Value> {
         Ok(Value::String(
             result
                 .iter()
-                .map(complex_to_string)
+                .map(|c| c.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
             false,
@@ -206,6 +206,7 @@ fn unify_compound(c1: &CompoundSelector, c2: &CompoundSelector) -> Option<Compou
     }
 
     Some(CompoundSelector {
+        namespace: None,
         element,
         classes,
         ids,
@@ -244,7 +245,7 @@ pub fn extend(selector: &str, target: &str, extender: &str) -> Result<Value> {
         Ok(Value::String(
             result
                 .iter()
-                .map(complex_to_string)
+                .map(|c| c.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
             false,
@@ -257,7 +258,7 @@ pub fn extend(selector: &str, target: &str, extender: &str) -> Result<Value> {
 fn extend_complex(
     sel: &ComplexSelector,
     target: &ComplexSelector,
-    extender_list: &[ComplexSelector],
+    extender_list: &SelectorList,
 ) -> Option<Vec<ComplexSelector>> {
     if target.parts.len() > sel.parts.len() {
         return None;
@@ -364,67 +365,4 @@ fn compound_matches(sel: &CompoundSelector, target: &CompoundSelector) -> bool {
     true
 }
 
-// —— 辅助函数：ComplexSelector → String ——
-
-fn complex_to_string(c: &ComplexSelector) -> String {
-    let mut result = String::new();
-    for (i, part) in c.parts.iter().enumerate() {
-        if let Some(comb) = &part.combinator {
-            match comb {
-                Combinator::Descendant => result.push(' '),
-                Combinator::Child => result.push_str(" > "),
-                Combinator::Adjacent => result.push_str(" + "),
-                Combinator::Sibling => result.push_str(" ~ "),
-            }
-        } else if i > 0 {
-            result.push(' ');
-        }
-        result.push_str(&compound_to_string(&part.compound));
-    }
-    result
-}
-
-fn compound_to_string(c: &CompoundSelector) -> String {
-    let mut result = String::new();
-
-    if let Some(elem) = &c.element {
-        result.push_str(elem);
-    }
-
-    for class in &c.classes {
-        result.push('.');
-        result.push_str(class);
-    }
-
-    for id in &c.ids {
-        result.push('#');
-        result.push_str(id);
-    }
-
-    for attr in &c.attrs {
-        result.push('[');
-        result.push_str(&attr.name);
-        if let Some(op) = &attr.op {
-            result.push_str(op);
-            if let Some(val) = &attr.value {
-                result.push_str(val);
-            }
-        }
-        result.push(']');
-    }
-
-    for pseudo in &c.pseudos {
-        result.push(':');
-        if !pseudo.is_class {
-            result.push(':');
-        }
-        result.push_str(&pseudo.name);
-        if let Some(arg) = &pseudo.argument {
-            result.push('(');
-            result.push_str(arg);
-            result.push(')');
-        }
-    }
-
-    result
-}
+// —— 辅助函数已迁移至 Display trait（见 parse.rs） ——
