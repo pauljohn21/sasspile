@@ -240,7 +240,10 @@ impl Evaluator {
 
     /// 求值 AST 入口（带基础路径，支持文件加载）。
     pub fn evaluate_with_path(ast: &Ast, base_path: PathBuf) -> Result<Vec<CssNode>> {
-        let env = Env::default().with_base_path(base_path);
+        let mut env = Env::default().with_base_path(base_path.clone());
+        // 根文件加入 loading 栈，使自引用 @use 能被循环检测拦截
+        let canonical = crate::eval::cache::get_or_canonicalize(&base_path);
+        env.loading.push(canonical);
         Self::evaluate_with_env(ast, env)
     }
 
@@ -250,9 +253,12 @@ impl Evaluator {
         base_path: PathBuf,
         load_paths: Vec<PathBuf>,
     ) -> Result<Vec<CssNode>> {
-        let env = Env::default()
-            .with_base_path(base_path)
+        let mut env = Env::default()
+            .with_base_path(base_path.clone())
             .with_load_paths(load_paths);
+        // 根文件加入 loading 栈，使自引用 @use 能被循环检测拦截
+        let canonical = crate::eval::cache::get_or_canonicalize(&base_path);
+        env.loading.push(canonical);
         Self::evaluate_with_env(ast, env)
     }
 
