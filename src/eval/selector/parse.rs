@@ -122,8 +122,14 @@ fn parse_complex_selector(s: &str) -> Result<ComplexSelector> {
             i += 1;
         }
 
-        // 解析复合选择器
+        // 解析复合选择器（必须前进，否则无限循环）
+        let prev_i = i;
         let compound = parse_compound_selector(&chars, &mut i)?;
+        if i == prev_i {
+            // 没有消费任何字符（如遇到 | 等不支持的语法）→ 跳过该字符
+            i += 1;
+            continue;
+        }
         parts.push(CompoundWithCombinator {
             compound,
             combinator,

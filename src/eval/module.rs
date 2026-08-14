@@ -45,7 +45,7 @@ impl Evaluator {
                 dir.join(parent).join(format!("{filename}.{ext}")),
             ];
             for c in &candidates {
-                if c.exists() {
+                if c.is_file() {
                     return Some(c.clone());
                 }
             }
@@ -67,7 +67,7 @@ impl Evaluator {
             dir.join(url).join("index.sass"),
         ];
         for c in &candidates {
-            if c.exists() {
+            if c.is_file() {
                 return Some(c.clone());
             }
         }

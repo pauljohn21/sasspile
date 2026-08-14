@@ -90,9 +90,13 @@ fn get_rss_kb(pid: u32) -> usize {
 /// 每 N 个 case 发放一次诊断事件（含 RSS），定位内存增长来源。
 const RSS_LOG_INTERVAL: usize = 5;
 
+static LAST_RSS_KB: AtomicU64 = AtomicU64::new(0);
+
 fn log_memory_per_case(case_idx: usize, file_hint: &str) {
-    if case_idx % RSS_LOG_INTERVAL == 0 {
-        let rss = get_rss_kb(std::process::id());
+    let rss = get_rss_kb(std::process::id());
+    let last = LAST_RSS_KB.swap(rss as u64, Ordering::Relaxed);
+    // 每 10 个 case 或 RSS 增长 >10MB 时打印
+    if case_idx % 10 == 0 || rss.abs_diff(last as usize) > 10_240 {
         info!(
             case_idx = case_idx,
             rss_mb = rss / 1024,
@@ -102,11 +106,11 @@ fn log_memory_per_case(case_idx: usize, file_hint: &str) {
     }
 }
 
-/// HRX 测试用例（借用引用，不克隆）。
-struct HrxCase<'a> {
-    files: &'a [(String, String)],
-    input_path: &'a str,
-    expected_output: &'a str,
+/// HRX 测试用例（仅包含当前 case 的文件）。
+struct HrxCase {
+    files: Vec<(String, String)>,
+    input_path: String,
+    expected_output: String,
     expect_error: bool,
 }
 
@@ -120,72 +124,107 @@ fn parse_and_run_hrx(
     skip: &mut usize,
     cases: &mut usize,
 ) {
-    let mut files: Vec<(String, String)> = Vec::new();
+    // 按 case 分组解析：==== 分隔线分隔不同 case，<===> 分隔同一 case 内的文件
+    let mut case_groups: Vec<Vec<(String, String)>> = Vec::new();
+    let mut current_group: Vec<(String, String)> = Vec::new();
     let mut current_path = String::new();
     let mut current_content = String::new();
 
+    let save_current_file = |path: &mut String, content: &mut String, group: &mut Vec<_>| {
+        if !path.is_empty() {
+            group.push((path.clone(), content.clone()));
+            content.clear();
+        }
+    };
+
     for line in content.lines() {
-        // 跳过纯 = 分隔线（如 ========================================）
-        if line.trim().chars().all(|c| c == '=') || line.trim().is_empty() {
+        // ==== 分隔线表示 case 边界
+        if line.trim().chars().all(|c| c == '=') && !line.trim().is_empty() {
+            save_current_file(&mut current_path, &mut current_content, &mut current_group);
+            if !current_group.is_empty() {
+                case_groups.push(std::mem::take(&mut current_group));
+            }
+            continue;
+        }
+        if line.trim().is_empty() {
             continue;
         }
         if line.starts_with("<===>") {
-            if !current_path.is_empty() {
-                files.push((current_path.clone(), current_content));
-                current_content = String::new(); // 复用分配
-            }
+            save_current_file(&mut current_path, &mut current_content, &mut current_group);
             current_path = line.trim_start_matches("<===>").trim().to_string();
         } else {
             current_content.push_str(line);
             current_content.push('\n');
         }
     }
-    if !current_path.is_empty() {
-        files.push((current_path, current_content));
+    save_current_file(&mut current_path, &mut current_content, &mut current_group);
+    if !current_group.is_empty() {
+        case_groups.push(current_group);
     }
 
-    // 直接运行每个 case，不 clone
-    for (path, _) in &files {
-        if !path.ends_with("input.scss") {
-            continue;
-        }
-        log_memory_per_case(*cases, path);
-        let base = path.strip_suffix("input.scss").unwrap_or(path);
-        let output_path = format!("{base}output.css");
-        let error_path = format!("{base}error");
+    // 直接运行每个 case
+    for group in &case_groups {
+        let input_files: Vec<&(String, String)> = group.iter().filter(|(p, _)| p.ends_with("input.scss")).collect();
+        for (path, _) in input_files {
+            let rss_before = get_rss_kb(std::process::id());
+            info!(
+                case_idx = *cases,
+                rss_before_mb = rss_before / 1024,
+                case = path,
+                "🔍 CASE 开始"
+            );
 
-        let expected_output = files
-            .iter()
-            .find(|(p, _)| p == &output_path)
-            .map(|(_, c)| c.as_str())
-            .unwrap_or("");
-        let expect_error = files.iter().any(|(p, _)| p == &error_path);
+            let base = path.strip_suffix("input.scss").unwrap_or(path);
+            let output_path = format!("{base}output.css");
+            let error_path = format!("{base}error");
 
-        *cases += 1;
-        if expected_output.is_empty() && !expect_error {
-            *skip += 1;
-            continue;
-        }
+            let expected_output = group.iter().find(|(p, _)| p == &output_path).map(|(_, c)| c.as_str()).unwrap_or("");
+            let expect_error = group.iter().any(|(p, _)| p == &error_path);
 
-        let case = HrxCase {
-            files: &files,
-            input_path: path,
-            expected_output,
-            expect_error,
-        };
-        if run_case(&case, load_paths) {
-            *pass += 1;
-        } else {
-            *fail += 1;
-        }
+            *cases += 1;
+            if expected_output.is_empty() && !expect_error {
+                *skip += 1;
+                continue;
+            }
 
-        // 同步断点：每个 case 编译完立刻查 RSS —— 比后台线程更早发现问题
-        let rss = get_rss_kb(std::process::id());
-        if rss > RSS_FATAL_KB {
-            error!(rss_mb = rss / 1024, case = path, "💥 CASE 触发内存爆炸");
-            panic!("💥 内存爆炸在 case '{}': RSS={}MB", path, rss / 1024);
-        } else if rss > RSS_WARN_KB {
-            warn!(rss_mb = rss / 1024, case = path, "⚠️ 该 case 内存异常");
+            let case = HrxCase {
+                files: group.clone(),
+                input_path: path.clone(),
+                expected_output: expected_output.to_string(),
+                expect_error,
+            };
+            let result = run_case(&case, load_paths);
+            if result {
+                *pass += 1;
+            } else {
+                *fail += 1;
+            }
+
+            // 每个 case 编译完立刻查 RSS，精确追踪内存增量
+            let rss_after = get_rss_kb(std::process::id());
+            let delta = rss_after.saturating_sub(rss_before);
+            if delta > 10_240 {
+                // 单个 case 吃 >10MB → 可疑
+                error!(
+                    case = path,
+                    rss_before_mb = rss_before / 1024,
+                    rss_after_mb = rss_after / 1024,
+                    delta_mb = delta / 1024,
+                    "💥 CASE 内存激增"
+                );
+            } else {
+                info!(
+                    case_idx = *cases - 1,
+                    rss_after_mb = rss_after / 1024,
+                    delta_kb = delta,
+                    case = path,
+                    "✅ CASE 完成"
+                );
+            }
+
+            if rss_after > RSS_FATAL_KB {
+                panic!("💥 内存爆炸在 case '{path}': RSS={}MB", rss_after / 1024);
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
 
 1. **禁止 #[cfg(test)] 内联测试**：所有测试放在 tests/ 目录，src/ 保持纯生产代码。
 2. **修复 bug 前必须 tracing 追踪**：RUST_LOG=info/debug cargo test 查看完整链路。
+3. **sass-spec 失败先查 HRX**：spec 测试报错时，优先排查 HRX 文件解析问题（路径冲突、目录/文件混淆、case 分组错误），不要先入为主归咎栈溢出或内存问题。
 
 ## 会话开始检查清单
 
