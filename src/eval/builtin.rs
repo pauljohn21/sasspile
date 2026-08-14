@@ -40,22 +40,30 @@ impl Evaluator {
                 Ok(pos_args[0].clone())
             }
             // ── math ──
-            "abs" => match pos_args {
-                [Value::Number(n, u)] => Ok(Value::Number(n.abs(), u.clone())),
-                _ => Err(SassError::Eval("abs 需要 1 个数字参数".into())),
-            },
-            "ceil" => match pos_args {
-                [Value::Number(n, u)] => Ok(Value::Number(n.ceil(), u.clone())),
-                _ => Err(SassError::Eval("ceil 需要 1 个数字参数".into())),
-            },
-            "floor" => match pos_args {
-                [Value::Number(n, u)] => Ok(Value::Number(n.floor(), u.clone())),
-                _ => Err(SassError::Eval("floor 需要 1 个数字参数".into())),
-            },
-            "round" => match pos_args {
-                [Value::Number(n, u)] => Ok(Value::Number(n.round(), u.clone())),
-                _ => Err(SassError::Eval("round 需要 1 个数字参数".into())),
-            },
+            "abs" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, u)) => Ok(Value::Number(n.abs(), u.clone())),
+                    _ => Err(SassError::Eval("abs 需要 1 个数字参数".into())),
+                }
+            }
+            "ceil" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, u)) => Ok(Value::Number(n.ceil(), u.clone())),
+                    _ => Err(SassError::Eval("ceil 需要 1 个数字参数".into())),
+                }
+            }
+            "floor" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, u)) => Ok(Value::Number(n.floor(), u.clone())),
+                    _ => Err(SassError::Eval("floor 需要 1 个数字参数".into())),
+                }
+            }
+            "round" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, u)) => Ok(Value::Number(n.round(), u.clone())),
+                    _ => Err(SassError::Eval("round 需要 1 个数字参数".into())),
+                }
+            }
             "min" => pos_args
                 .iter()
                 .try_fold(Value::Number(f64::INFINITY, None), |acc, v| {
@@ -128,57 +136,73 @@ impl Evaluator {
                 };
                 Ok(Value::Number(a.powf(b), None))
             }
-            "sqrt" => match pos_args {
-                [Value::Number(n, _)] => Ok(Value::Number(n.sqrt(), None)),
-                _ => Err(SassError::Eval("sqrt 需要 1 个数字参数".into())),
-            },
-            "sin" => match pos_args {
-                [Value::Number(n, _)] => Ok(Value::Number(n.sin(), None)),
-                _ => Err(SassError::Eval("sin 需要 1 个参数".into())),
-            },
-            "cos" => match pos_args {
-                [Value::Number(n, _)] => Ok(Value::Number(n.cos(), None)),
-                _ => Err(SassError::Eval("cos 需要 1 个参数".into())),
-            },
-            "tan" => match pos_args {
-                [Value::Number(n, _)] => Ok(Value::Number(n.tan(), None)),
-                _ => Err(SassError::Eval("tan 需要 1 个参数".into())),
-            },
-            "atan2" => match pos_args {
-                [Value::Number(y, yu), Value::Number(x, xu)] => {
-                    // 检查单位兼容性
-                    if let (Some(yu), Some(xu)) = (yu, xu)
-                        && yu != xu
-                    {
-                        // 尝试兼容转换（如 cm 和 mm）
-                        // 简化处理：如果单位不同但都是长度单位，比值消去单位
+            "sqrt" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => Ok(Value::Number(n.sqrt(), None)),
+                    _ => Err(SassError::Eval("sqrt 需要 1 个数字参数".into())),
+                }
+            }
+            "sin" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => Ok(Value::Number(n.sin(), None)),
+                    _ => Err(SassError::Eval("sin 需要 1 个参数".into())),
+                }
+            }
+            "cos" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => Ok(Value::Number(n.cos(), None)),
+                    _ => Err(SassError::Eval("cos 需要 1 个参数".into())),
+                }
+            }
+            "tan" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => Ok(Value::Number(n.tan(), None)),
+                    _ => Err(SassError::Eval("tan 需要 1 个参数".into())),
+                }
+            }
+            "atan2" => {
+                // 支持 $y/$x 关键字参数
+                let y_arg = pos_args.first()
+                    .or_else(|| kw_args.get("y"))
+                    .or_else(|| kw_args.get("$y"));
+                let x_arg = pos_args.get(1)
+                    .or_else(|| kw_args.get("x"))
+                    .or_else(|| kw_args.get("$x"));
+                match (y_arg, x_arg) {
+                    (Some(Value::Number(y, _)), Some(Value::Number(x, _))) => {
+                        let result = y.atan2(*x).to_degrees();
+                        Ok(Value::Number(result, Some("deg".to_string())))
                     }
-                    let result = y.atan2(*x).to_degrees();
-                    Ok(Value::Number(result, Some("deg".to_string())))
+                    _ => Err(SassError::Eval("atan2 需要 2 个数字参数".into())),
                 }
-                _ => Err(SassError::Eval("atan2 需要 2 个数字参数".into())),
-            },
-            "asin" => match pos_args {
-                [Value::Number(n, _)] => {
-                    let result = n.asin().to_degrees();
-                    Ok(Value::Number(result, Some("deg".to_string())))
+            }
+            "asin" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => {
+                        let result = n.asin().to_degrees();
+                        Ok(Value::Number(result, Some("deg".to_string())))
+                    }
+                    _ => Err(SassError::Eval("asin 需要 1 个参数".into())),
                 }
-                _ => Err(SassError::Eval("asin 需要 1 个参数".into())),
-            },
-            "acos" => match pos_args {
-                [Value::Number(n, _)] => {
-                    let result = n.acos().to_degrees();
-                    Ok(Value::Number(result, Some("deg".to_string())))
+            }
+            "acos" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => {
+                        let result = n.acos().to_degrees();
+                        Ok(Value::Number(result, Some("deg".to_string())))
+                    }
+                    _ => Err(SassError::Eval("acos 需要 1 个参数".into())),
                 }
-                _ => Err(SassError::Eval("acos 需要 1 个参数".into())),
-            },
-            "atan" => match pos_args {
-                [Value::Number(n, _)] => {
-                    let result = n.atan().to_degrees();
-                    Ok(Value::Number(result, Some("deg".to_string())))
+            }
+            "atan" => {
+                match pos_args.first().or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number"))) {
+                    Some(Value::Number(n, _)) => {
+                        let result = n.atan().to_degrees();
+                        Ok(Value::Number(result, Some("deg".to_string())))
+                    }
+                    _ => Err(SassError::Eval("atan 需要 1 个参数".into())),
                 }
-                _ => Err(SassError::Eval("atan 需要 1 个参数".into())),
-            },
+            }
             "hypot" => {
                 if pos_args.is_empty() {
                     return Err(SassError::Eval("hypot 需要 1+ 个参数".into()));
@@ -192,27 +216,34 @@ impl Evaluator {
                     .sum();
                 Ok(Value::Number(sum.sqrt(), None))
             }
-            "log" => match pos_args {
-                [Value::Number(n, _)] => {
-                    if *n < 0.0 {
-                        return Ok(Value::String("calc(NaN)".to_string(), false));
+            "log" => {
+                // 支持 $number 和 $base 关键字参数
+                let number_arg = pos_args.first()
+                    .or_else(|| kw_args.get("number").or_else(|| kw_args.get("$number")));
+                let base_arg = pos_args.get(1)
+                    .or_else(|| kw_args.get("base").or_else(|| kw_args.get("$base")));
+                match (number_arg, base_arg) {
+                    (Some(Value::Number(n, _)), Some(Value::Number(base, _))) => {
+                        if *n < 0.0 {
+                            return Ok(Value::String("calc(NaN)".to_string(), false));
+                        }
+                        if *n == 0.0 {
+                            return Ok(Value::String("calc(-infinity)".to_string(), false));
+                        }
+                        Ok(Value::Number(n.log(*base), None))
                     }
-                    if *n == 0.0 {
-                        return Ok(Value::String("calc(-infinity)".to_string(), false));
+                    (Some(Value::Number(n, _)), None) => {
+                        if *n < 0.0 {
+                            return Ok(Value::String("calc(NaN)".to_string(), false));
+                        }
+                        if *n == 0.0 {
+                            return Ok(Value::String("calc(-infinity)".to_string(), false));
+                        }
+                        Ok(Value::Number(n.ln(), None))
                     }
-                    Ok(Value::Number(n.ln(), None))
+                    _ => Err(SassError::Eval("log 需要 1-2 个数字参数".into())),
                 }
-                [Value::Number(n, _), Value::Number(base, _)] => {
-                    if *n < 0.0 {
-                        return Ok(Value::String("calc(NaN)".to_string(), false));
-                    }
-                    if *n == 0.0 {
-                        return Ok(Value::String("calc(-infinity)".to_string(), false));
-                    }
-                    Ok(Value::Number(n.log(*base), None))
-                }
-                _ => Err(SassError::Eval("log 需要 1-2 个数字参数".into())),
-            },
+            }
             "random" => match pos_args {
                 [] => Ok(Value::Number(Self::simple_random(), None)),
                 [Value::Number(n, _)] => Ok(Value::Number(
@@ -244,18 +275,23 @@ impl Evaluator {
                 [Value::Number(_, Some(_))] => Ok(Value::Bool(false)),
                 _ => Err(SassError::Eval("unitless 需要 1 个数字参数".into())),
             },
-            "compatible" => match pos_args {
-                [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
-                    crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
-                )),
-                _ => Err(SassError::Eval("compatible 需要 2 个数字参数".into())),
-            },
-            "comparable" => match pos_args {
-                [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Value::Bool(
-                    crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
-                )),
-                _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
-            },
+            "compatible" | "comparable" => {
+                // 支持位置参数和关键字参数（$number1/$number2）
+                let n1 = match pos_args.first() {
+                    Some(v) => Some(v),
+                    None => kw_args.get("number1").or_else(|| kw_args.get("$number1")),
+                };
+                let n2 = match pos_args.get(1) {
+                    Some(v) => Some(v),
+                    None => kw_args.get("number2").or_else(|| kw_args.get("$number2")),
+                };
+                match (n1, n2) {
+                    (Some(Value::Number(_, u1)), Some(Value::Number(_, u2))) => Ok(Value::Bool(
+                        crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
+                    )),
+                    _ => Err(SassError::Eval("compatible 需要 2 个数字参数".into())),
+                }
+            }
 
             // ── color ──
             "rgba" => Self::builtin_rgba(pos_args),

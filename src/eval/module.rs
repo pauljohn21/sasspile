@@ -222,7 +222,9 @@ impl Evaluator {
             "math.clamp" => "clamp",
             "math.unit" => "unit",
             "math.is-unitless" => "is-unitless",
+            "math.unitless" => "unitless",
             "math.compatible" => "compatible",
+            // 注意：math.comparable 在 Dart Sass 中不存在，保留让测试检测 "Undefined function"
             // sass:string
             "string.length" => "str-length",
             "string.index" => "str-index",
