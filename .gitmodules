@@ -1,0 +1,6 @@
+[submodule "ep"]
+	path = ep
+	url = git@github.com:element-plus/element-plus.git
+[submodule "bs"]
+	path = bs
+	url = git@github.com:twbs/bootstrap.git
