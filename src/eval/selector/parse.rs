@@ -323,6 +323,25 @@ fn parse_compound_selector(chars: &[char], i: &mut usize) -> Result<CompoundSele
                     argument,
                 });
             }
+            // 父选择器引用 &（SCSS 语法）
+            '&' => {
+                if element.is_none() {
+                    *i += 1; // 消费 &
+                    element = Some("&".to_string());
+                } else {
+                    break;
+                }
+            }
+            // 占位符选择器 %name（SCSS 语法）
+            '%' => {
+                if element.is_none() {
+                    *i += 1; // 消费 %
+                    let name = parse_ident(chars, i);
+                    element = Some(format!("%{name}"));
+                } else {
+                    break;
+                }
+            }
             // 通配符 *（可能带 namespace *|div）
             '*' => {
                 if element.is_none() && namespace.is_none() {
@@ -531,5 +550,17 @@ impl<'a> IntoIterator for &'a mut SelectorList {
 impl FromIterator<ComplexSelector> for SelectorList {
     fn from_iter<I: IntoIterator<Item = ComplexSelector>>(iter: I) -> Self {
         SelectorList(iter.into_iter().collect())
+    }
+}
+
+impl From<&str> for SelectorList {
+    fn from(s: &str) -> Self {
+        parse_selector_list(s).unwrap_or_default()
+    }
+}
+
+impl From<String> for SelectorList {
+    fn from(s: String) -> Self {
+        parse_selector_list(&s).unwrap_or_default()
     }
 }

@@ -1,6 +1,7 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
+use crate::eval::selector::parse::parse_selector_list;
 
 impl Evaluator {
     pub(crate) fn eval_include(
@@ -230,7 +231,7 @@ impl Evaluator {
                     _ => {
                         if !current_decls.is_empty() {
                             new_children.push(CssNode::Rule {
-                                selector: sel.to_string(),
+                                selector: parse_selector_list(sel).unwrap_or_default(),
                                 declarations: std::mem::take(&mut current_decls),
                                 children: vec![],
                             });
@@ -241,7 +242,7 @@ impl Evaluator {
             }
             if !current_decls.is_empty() {
                 new_children.push(CssNode::Rule {
-                    selector: sel.to_string(),
+                    selector: parse_selector_list(sel).unwrap_or_default(),
                     declarations: current_decls,
                     children: vec![],
                 });

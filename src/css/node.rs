@@ -6,6 +6,8 @@
 //! - @规则
 //! - 注释
 
+use crate::eval::selector::SelectorList;
+
 /// CSS 节点——求值器产出的中间表示。
 ///
 /// 由 AST 节点求值后产生，将被序列化为 CSS 字符串。
@@ -13,8 +15,8 @@
 pub enum CssNode {
     /// 样式规则——`selector { ... }`。
     Rule {
-        /// 选择器文本。
-        selector: String,
+        /// 选择器（结构化表示）。
+        selector: SelectorList,
         /// 声明列表。
         declarations: Vec<CssNode>,
         /// 子规则和 @规则。
@@ -73,7 +75,7 @@ impl std::fmt::Display for CssNode {
                 }
             }
             CssNode::Comment(text) => write!(f, "/* {text} */"),
-            CssNode::Rule { selector, .. } => write!(f, "{selector} {{ ... }}"),
+            CssNode::Rule { selector, .. } => write!(f, "{} {{ ... }}", selector),
             CssNode::AtRule { name, has_body, .. } => {
                 write!(f, "@{name}{}", if *has_body { " { ... }" } else { "" })
             }

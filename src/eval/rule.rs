@@ -1,6 +1,7 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::Result;
+use crate::eval::selector::parse::{parse_selector_list, SelectorList};
 
 impl Evaluator {
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。
@@ -23,6 +24,9 @@ impl Evaluator {
         // 离开作用域：移除规则体内定义的局部变量
         let restored_env = new_env.leave_scope();
 
+        // 将选择器解析为结构化表示
+        let selector_list = parse_selector_list(&selector).unwrap_or_default();
+
         // plain CSS 模式——不合并选择器，保留嵌套结构
         if env.plain_css {
             let mut declarations = Vec::new();
@@ -43,7 +47,7 @@ impl Evaluator {
             let mut result = Vec::new();
             if !declarations.is_empty() || !children.is_empty() {
                 result.push(CssNode::Rule {
-                    selector: selector.clone(),
+                    selector: selector_list.clone(),
                     declarations,
                     children,
                 });
@@ -68,13 +72,13 @@ impl Evaluator {
                     // 遇到嵌套规则——先刷新当前声明组
                     if !current_decls.is_empty() {
                         result.push(CssNode::Rule {
-                            selector: selector.clone(),
+                            selector: selector_list.clone(),
                             declarations: std::mem::take(&mut current_decls),
                             children: vec![],
                         });
                     }
                     // 合并选择器并输出嵌套规则
-                    let combined = Self::combine_selectors(&selector, &child_sel);
+                    let combined = Self::combine_selectors(&selector_list, &child_sel);
                     if !child_decls.is_empty() {
                         result.push(CssNode::Rule {
                             selector: combined.clone(),
@@ -107,7 +111,7 @@ impl Evaluator {
                     // 其他节点（AtRule 等）——先刷新当前声明组
                     if !current_decls.is_empty() {
                         result.push(CssNode::Rule {
-                            selector: selector.clone(),
+                            selector: selector_list.clone(),
                             declarations: std::mem::take(&mut current_decls),
                             children: vec![],
                         });
@@ -120,7 +124,7 @@ impl Evaluator {
         // 输出最后的声明组
         if !current_decls.is_empty() {
             result.push(CssNode::Rule {
-                selector: selector.clone(),
+                selector: selector_list.clone(),
                 declarations: current_decls,
                 children: vec![],
             });
@@ -129,7 +133,7 @@ impl Evaluator {
         // 如果没有任何输出，保留空规则
         if result.is_empty() && root_nodes.is_empty() {
             result.push(CssNode::Rule {
-                selector,
+                selector: selector_list,
                 declarations: vec![],
                 children: vec![],
             });
@@ -141,13 +145,21 @@ impl Evaluator {
     }
 
     /// 组合选择器——处理 & 替换和逗号分隔选择器。
-    pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
-        let parents: Vec<&str> = parent
+    /// 注意：此为临时实现，Phase 3 将改为纯结构化组合。
+    pub(crate) fn combine_selectors(
+        parent: &SelectorList,
+        child: &SelectorList,
+    ) -> SelectorList {
+        // 临时方案：使用字符串操作过渡
+        let parent_str = parent.to_string();
+        let child_str = child.to_string();
+
+        let parents: Vec<&str> = parent_str
             .split(',')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .collect();
-        let children: Vec<&str> = child
+        let children: Vec<&str> = child_str
             .split(',')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
@@ -164,6 +176,7 @@ impl Evaluator {
                 }
             }
         }
-        result.join(", ")
+        let combined_str = result.join(", ");
+        parse_selector_list(&combined_str).unwrap_or_default()
     }
 }

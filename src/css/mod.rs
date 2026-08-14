@@ -4,8 +4,8 @@ pub mod node;
 mod selector;
 
 pub use node::CssNode;
-use selector::sanitize_selector;
 
+use crate::eval::selector::SelectorList;
 use crate::OutputStyle;
 
 /// 序列化器。
@@ -99,7 +99,7 @@ impl Serializer {
         result
     }
 
-    fn flatten_children(_parent: &str, children: &[CssNode]) -> Vec<CssNode> {
+    fn flatten_children(_parent: &SelectorList, children: &[CssNode]) -> Vec<CssNode> {
         let mut result = Vec::new();
         for child in children {
             match child {
@@ -178,7 +178,7 @@ impl Serializer {
                 declarations,
                 children,
             } => {
-                let selector = sanitize_selector(selector);
+                let selector = selector.to_string();
                 if selector.is_empty() {
                     return;
                 }
@@ -295,11 +295,10 @@ impl Serializer {
                 declarations,
                 children,
             } => {
-                let sel = sanitize_selector(selector);
-                if sel.is_empty() {
+                if selector.is_empty() {
                     return;
                 }
-                buf.push_str(&sel);
+                buf.push_str(&selector.to_string());
                 buf.push('{');
                 for decl in declarations {
                     Self::write_node_compressed(buf, decl);
