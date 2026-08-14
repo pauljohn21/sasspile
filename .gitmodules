@@ -4,3 +4,6 @@
 [submodule "ep"]
 	path = ep
 	url = git@github.com:element-plus/element-plus.git
+[submodule "sass-spec-main"]
+	path = sass-spec-main
+	url = git@github.com:sass/sass-spec.git

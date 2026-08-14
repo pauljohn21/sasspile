@@ -33,10 +33,23 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
         // String + Calc / Calc + String — 拼接字符串表示
         (Value::String(a, qa), Value::Calc(c)) => Ok(Value::String(format!("{a}{c}"), qa)),
         (Value::Calc(c), Value::String(b, qb)) => Ok(Value::String(format!("{c}{b}"), qb)),
+        // Calc + Number / Number + Calc — 保留为 calc() 表达式
+        (Value::Calc(a), Value::Number(n, u)) => {
+            let unit_str = u.as_deref().unwrap_or("");
+            Ok(Value::Raw(format!("calc({a} + {n}{unit_str})")))
+        }
+        (Value::Number(n, u), Value::Calc(a)) => {
+            let unit_str = u.as_deref().unwrap_or("");
+            Ok(Value::Raw(format!("calc({n}{unit_str} + {a})")))
+        }
         (Value::Calc(a), Value::Calc(b)) => Ok(Value::Raw(format!("{a}{b}"))),
         // String + Bool / Bool + String
         (Value::String(a, qa), Value::Bool(b)) => Ok(Value::String(format!("{a}{b}"), qa)),
         (Value::Bool(a), Value::String(b, qb)) => Ok(Value::String(format!("{a}{b}"), qb)),
+        // Raw 拼接——字符串化后生成 Raw
+        (Value::Raw(a), Value::Raw(b)) => Ok(Value::Raw(format!("{a}{b}"))),
+        (Value::Raw(a), other) => Ok(Value::Raw(format!("{a}{other}"))),
+        (other, Value::Raw(b)) => Ok(Value::Raw(format!("{other}{b}"))),
         // 列表拼接
         (Value::List(mut items, sep, _), Value::List(items2, _, _)) => {
             items.extend(items2);
@@ -81,6 +94,19 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             format!("#{:02x}{:02x}{:02x}-{b}", c.r, c.g, c.b),
             qb,
         )),
+        // Calc 减法——保留为 calc() 表达式字符串
+        (Value::Calc(a), Value::Number(n, u)) => {
+            let unit_str = u.as_deref().unwrap_or("");
+            Ok(Value::Raw(format!("calc({a} - {n}{unit_str})")))
+        }
+        (Value::Number(n, u), Value::Calc(b)) => {
+            let unit_str = u.as_deref().unwrap_or("");
+            Ok(Value::Raw(format!("calc({n}{unit_str} - {b})")))
+        }
+        // Raw 减法——字符串化后生成 Raw（如 prefix-inner）
+        (Value::Raw(a), Value::Raw(b)) => Ok(Value::Raw(format!("{a}-{b}"))),
+        (Value::Raw(a), other) => Ok(Value::Raw(format!("{a}-{other}"))),
+        (other, Value::Raw(b)) => Ok(Value::Raw(format!("{other}-{b}"))),
         _ => Err(SassError::Eval("不支持的 - 运算".into())),
     }
 }

@@ -143,51 +143,14 @@ impl<'tok> Parser<'tok> {
                     found: "(".into(),
                 });
             }
-            // `and`/`or` 后面不能直接跟 `not`（需要括号）
-            // 例如 `css(1) and not css(2)` 报错
-            if matches!(after_op, Some(Token::Not)) && matches!(op, BinOpKind::And | BinOpKind::Or)
-            {
-                return Err(SassError::Parse {
-                    expected: "(".into(),
-                    found: "not".into(),
-                });
-            }
+            // 注意：Dart Sass 中 not 优先级最高，`X and not Y` = `X and (not Y)` — 合法
             self.advance(); // 消费运算符
             self.skip_ws();
             let rhs = self.parse_expr(bp + 1)?;
-            // 检查：and/or 的左操作数不能是 not
-            // 例如 `not css(1) and css(2)` 报错
-            if matches!(&lhs, Value::UnaryOp(UnaryOp::Not, _))
-                && matches!(op, BinOpKind::And | BinOpKind::Or)
-            {
-                return Err(SassError::Parse {
-                    expected: ":".into(),
-                    found: if matches!(op, BinOpKind::And) {
-                        "and".into()
-                    } else {
-                        "or".into()
-                    },
-                });
-            }
-            // 检查 and/or 混合：or 的右操作数不能是 BinOp(And, ...)，反之亦然
-            // 例如 `css(1) or css(2) and css(3)` 报错
-            // 注意：由于 and 的绑定优先级高于 or，`or css(2) and css(3)` 会被解析为
-            // `or (and css(2) css(3))`，所以需要检查右操作数
-            match (&op, &rhs) {
-                (BinOpKind::Or, Value::BinOp(b)) if matches!(b.op, BinOpKind::And) => {
-                    return Err(SassError::Parse {
-                        expected: ":".into(),
-                        found: "and".into(),
-                    });
-                }
-                (BinOpKind::And, Value::BinOp(b)) if matches!(b.op, BinOpKind::Or) => {
-                    return Err(SassError::Parse {
-                        expected: ":".into(),
-                        found: "or".into(),
-                    });
-                }
-                _ => {}
-            }
+            // 注意：Dart Sass 中 and 优先级高于 or，not 优先级最高
+            // `A or B and C` = `A or (B and C)` — 合法
+            // `not A and B` = `(not A) and B` — 合法
+            // 因此不再禁止 and/or 混合以及 not + and/or 组合
             lhs = Value::BinOp(Box::new(BinOp {
                 op,
                 left: lhs,
