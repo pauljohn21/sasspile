@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.6.0] — 2026-08-15
+
+### Changed
+
+- **结构化选择器重构**：`CssNode::Rule.selector` 从 `String` 改为 `SelectorList` 结构化类型
+  - `SelectorList` 从 type alias 升级为 newtype struct，实现 `Display`/`IntoIterator`/`FromIterator`
+  - 选择器解析器增强：支持 `&` 和 `%` 占位符、namespace 选择器
+- **`@extend` 结构匹配**：`Env.extends` 使用 `SelectorList` 替代字符串对
+  - 新增 `ExtendAction` 枚举：`Replace`（占位符）/ `Append`（普通选择器）
+  - 替换逻辑：`compound_includes` 结构包含检查替代 `String::contains`
+  - 占位符替换：complex selector 整体替换
+- **`combine_selectors` 纯结构化**：消除 `split(',')` + `replace('&')` 字符串操作
+  - `&` 替换：compound 属性合并
+  - 无 `&` 时：parent + Descendant 组合器 + child
+- **删除废弃代码**：移除 `src/css/selector.rs`（374 行字符串选择器处理代码）
+
+### Stats
+
+- 全部单元测试通过：41/41 + 10/10 + 8/8 + 5/5 + 2/2 + 1/1
+
 ## [0.5.2] — 2026-08-14
 
 ### Fixed
