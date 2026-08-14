@@ -1,7 +1,6 @@
 //! CSS 序列化器——CssNode 树 → CSS 字符串。
 
 pub mod node;
-mod selector;
 
 pub use node::CssNode;
 
