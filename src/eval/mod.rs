@@ -5,6 +5,7 @@ pub(crate) mod selector;
 use crate::__tracing::warn;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
+use crate::eval::selector::{parse_selector_list, SelectorList};
 use crate::lex::Lexer;
 use crate::lex::token::Token;
 use crate::parse::ast::*;
@@ -44,7 +45,8 @@ pub struct Env {
     /// 递归深度计数器。
     depth: usize,
     /// @extend 收集的继承关系 (extender, target)——Rc 共享避免深拷贝。
-    extends: Rc<Vec<(String, String)>>,
+    /// 使用结构化选择器。
+    extends: Rc<Vec<(SelectorList, SelectorList)>>,
     /// 当前选择器上下文（进入规则体时设置）。
     current_selector: Option<String>,
     /// 加载路径——`@use`/`@import` 无法从当前文件解析时回退搜索。
@@ -187,8 +189,8 @@ impl Env {
         new.base_path = Some(path);
         new
     }
-    /// 添加 @extend 关系。
-    pub fn add_extend(&self, extender: String, target: String) -> Self {
+    /// 添加 @extend 关系（结构化选择器版本）。
+    pub fn add_extend(&self, extender: SelectorList, target: SelectorList) -> Self {
         let mut new = self.clone();
         let mut extends = (*self.extends).clone();
         extends.push((extender, target));
@@ -196,7 +198,7 @@ impl Env {
         new
     }
     /// 获取所有 @extend 关系。
-    pub fn get_extends(&self) -> &[(String, String)] {
+    pub fn get_extends(&self) -> &[(SelectorList, SelectorList)] {
         &self.extends
     }
     /// 设置当前选择器。
@@ -510,9 +512,11 @@ impl Evaluator {
                 selector,
                 optional: _,
             } => {
-                // @extend selector —— 收集继承关系
+                // @extend selector —— 收集继承关系（结构化选择器版本）
                 if let Some(extender) = env.get_selector() {
-                    let new_env = env.add_extend(extender.to_string(), selector.clone());
+                    let extender_list = parse_selector_list(extender).unwrap_or_default();
+                    let target_list = parse_selector_list(selector).unwrap_or_default();
+                    let new_env = env.add_extend(extender_list, target_list);
                     Ok((vec![], new_env))
                 } else {
                     Ok((vec![], env.clone()))
