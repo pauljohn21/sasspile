@@ -1,13 +1,13 @@
 [workspace]
-members = ["hrx", "sasslipe"]
+members = ["hrx", "sasspile"]
 resolver = "3"
 
 [workspace.package]
 edition = "2024"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/sass/sasslipe"
-authors = ["sasslipe contributors"]
+repository = "https://github.com/pauljohn21/sasspile-next"
+authors = ["sasspile contributors"]
 
 [workspace.dependencies]
 # Async runtime

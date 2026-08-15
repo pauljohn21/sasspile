@@ -7,11 +7,11 @@ use clap::Parser;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
-use sasslipe::Compiler;
+use sasspile::Compiler;
 
 /// Command-line arguments.
 #[derive(Parser)]
-#[command(name = "sasslipe", about = "Pure Rust async SCSS compiler", version)]
+#[command(name = "sasspile", about = "Pure Rust async SCSS compiler", version)]
 struct Cli {
     /// Input SCSS file (stdin if not provided).
     input: Option<PathBuf>,
@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     init_logging(cli.verbose);
 
-    info!(version = sasslipe::VERSION, "sasslipe CLI starting");
+    info!(version = sasspile::VERSION, "sasspile CLI starting");
 
     let compiler = Compiler::new();
 

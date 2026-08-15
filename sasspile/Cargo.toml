@@ -1,5 +1,5 @@
 [package]
-name = "sasslipe"
+name = "sasspile"
 version = "0.1.0"
 description = "Pure Rust async SCSS compiler"
 readme = "README.md"
@@ -12,11 +12,11 @@ repository.workspace = true
 authors.workspace = true
 
 [lib]
-name = "sasslipe"
+name = "sasspile"
 path = "src/lib.rs"
 
 [[bin]]
-name = "sasslipe"
+name = "sasspile"
 path = "src/main.rs"
 
 [dependencies]

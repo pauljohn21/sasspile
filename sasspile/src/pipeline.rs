@@ -16,7 +16,7 @@ impl Compiler {
     /// Create a new compiler instance.
     #[instrument]
     pub fn new() -> Self {
-        info!("creating sasslipe compiler");
+        info!("creating sasspile compiler");
         Self {}
     }
 

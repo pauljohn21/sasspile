@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "HRX (Human Readable Archive) parser and writer for Rust"
 license = "MIT"
-repository.workspace = true
+repository = "https://github.com/pauljohn21/sasspile-next"
 
 [dependencies]
 tracing = "0.1"
