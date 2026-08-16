@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 use sasspile::{tokenize, parse};
-use tracing::{info, info_span, Span};
+use tracing::{info, info_span};
 
 /// 递归收集目录下所有 .scss 文件
 fn collect_scss(dir: &str) -> Vec<PathBuf> {
@@ -112,7 +112,7 @@ fn batch_validate_element_plus_theme_chalk() {
             detail.join("\n")
         );
     } else {
-        panic!("EP batch {success}/{} ({:.1}%) — ALL PASS", files.len(), pass_rate);
+        info!("EP batch {success}/{} ({:.1}%) — ALL PASS", files.len(), pass_rate);
     }
 }
 

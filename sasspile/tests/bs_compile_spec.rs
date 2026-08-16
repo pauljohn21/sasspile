@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use sasspile::{tokenize, parse};
-use tracing::{info, info_span, Span};
+use tracing::{info, info_span};
 
 fn collect_scss(dir: &str) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -47,7 +47,7 @@ fn batch_validate_bootstrap_scss() {
 
     let mut success = 0;
     let mut failed = 0;
-    let mut total_lex_warnings = 0;
+    let total_lex_warnings = 0;
     let mut total_tokens = 0;
     let mut total_nodes = 0;
     let mut failures: Vec<(String, String)> = Vec::new();
@@ -88,6 +88,6 @@ fn batch_validate_bootstrap_scss() {
         let detail: Vec<String> = failures.iter().take(30).map(|(p, e)| format!("{p}: {e}")).collect();
         panic!("BS batch {success}/{} ({:.1}%) | FAIL:\n{}", files.len(), pass_rate, detail.join("\n"));
     } else {
-        panic!("BS batch {success}/{} ({:.1}%) — ALL PASS", files.len(), pass_rate);
+        info!("BS batch {success}/{} ({:.1}%) — ALL PASS", files.len(), pass_rate);
     }
 }

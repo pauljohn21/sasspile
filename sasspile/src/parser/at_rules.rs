@@ -441,12 +441,17 @@ impl<'tok> Parser<'tok> {
     }
 
     /// Parse unknown at-rule by consuming until semicolon or balanced block.
+    /// Stops (without consuming) at RBrace when depth=0, letting the outer body handle it.
     fn parse_unknown_at_rule(&mut self) -> Option<AtRule> {
         let mut depth = 0u32;
         while !self.at_eof() {
             match self.peek_kind() {
                 Some(TokenKind::Semicolon) if depth == 0 => {
                     self.consume_semicolon();
+                    break;
+                }
+                Some(TokenKind::RBrace) if depth == 0 => {
+                    // Don't consume — outer body needs this }
                     break;
                 }
                 Some(TokenKind::LBrace) => {

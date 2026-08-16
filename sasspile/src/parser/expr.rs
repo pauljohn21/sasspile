@@ -55,7 +55,9 @@ impl<'tok> Parser<'tok> {
                 // Don't consume logical ops or add/mul ops
                 Some(TokenKind::And) | Some(TokenKind::Or) => break,
                 Some(TokenKind::Plus) | Some(TokenKind::Minus) => break,
-                Some(TokenKind::Star) | Some(TokenKind::Slash) | Some(TokenKind::Percent) => break,
+                Some(TokenKind::Star) | Some(TokenKind::Slash) => break,
+                // Percent is a valid standalone value in SCSS (e.g., `width: 50%`,
+                // or `a {b: c %}` where % is a literal value).
                 Some(TokenKind::Colon) => break,
                 // `!important`/`!global`/`!default` flags — Not 在值之后出现是标志前缀
                 Some(TokenKind::Not) => break,
@@ -123,12 +125,23 @@ impl<'tok> Parser<'tok> {
     }
 
     /// Parse multiplicative expressions (*, /, %).
+    /// If right side fails to parse after the operator, rollback and treat
+    /// the operator as not part of this expression (e.g., `c %` where % is a literal).
     fn parse_multiplicative(&mut self) -> Option<Expr> {
         let mut left = self.parse_unary()?;
         while let Some(op) = self.peek_mul_op() {
+            let saved = self.pos;
             self.advance();
-            let right = self.parse_unary()?;
-            left = Expr::Binary(op, Box::new(left), Box::new(right));
+            match self.parse_unary() {
+                Some(right) => {
+                    left = Expr::Binary(op, Box::new(left), Box::new(right));
+                }
+                None => {
+                    // Right side not parseable — rollback and stop
+                    self.pos = saved;
+                    break;
+                }
+            }
         }
         Some(left)
     }
@@ -347,6 +360,11 @@ impl<'tok> Parser<'tok> {
                 } else {
                     Some(Expr::Variable(n))
                 }
+            }
+            Some(TokenKind::Percent) => {
+                // Standalone % as a value (e.g., `a {b: c %}` or `a {b: %}`)
+                self.advance();
+                Some(Expr::Variable("%".to_string()))
             }
             _ => None,
         }
