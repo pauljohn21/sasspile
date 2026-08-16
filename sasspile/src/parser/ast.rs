@@ -34,7 +34,7 @@ pub struct Rule {
 /// Property declaration: name: value [!important].
 #[derive(Debug, Clone)]
 pub struct Declaration {
-    /// Property name.
+    /// Property name (for variables, without the `$` prefix).
     pub name: String,
     /// Value expression.
     pub value: Expr,
@@ -42,6 +42,8 @@ pub struct Declaration {
     pub important: bool,
     /// Source span.
     pub span: SourceSpan,
+    /// `true` if this is a variable declaration (parsed from `$name: value`).
+    pub is_variable: bool,
 }
 
 /// Selector expression.
@@ -265,8 +267,10 @@ pub struct Comment {
 /// Expression AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    /// Variable reference (`$var`).
+    /// Variable reference (`$var`). Name does NOT include the `$` prefix.
     Variable(String),
+    /// Bare identifier (CSS value like `red`, `bold`, `button`). Treated as a string literal in evaluation.
+    Identifier(String),
     /// Numeric literal.
     Number(f64, Option<String>),
     /// String literal.

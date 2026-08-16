@@ -86,9 +86,12 @@ impl Pipeline {
         // Stage 1-2: Parse (Lex + Parse happen synchronously in parse()).
         let (stylesheet, _diags) = crate::parser::parse(&input.source);
 
-        // Stage 3-4: Semantic + Eval (happens during CSS generation for current impl).
-        // Stage 5-7: CSS generation.
-        let css = css::generate(&stylesheet, OutputStyle::Expanded)?;
+        // Stage 3: Transform — resolve variables, expand mixins and control flow.
+        let mut transform_ctx = crate::transform::TransformCtx::new();
+        let transformed = transform_ctx.transform_stylesheet(stylesheet)?;
+
+        // Stage 4-7: CSS generation (transformed AST is fully evaluated).
+        let css = css::generate(&transformed, OutputStyle::Expanded)?;
 
         info!(css_len = css.len(), "pipeline compilation complete");
 
@@ -151,7 +154,12 @@ impl Default for Pipeline {
 /// Static compile function used as the pipeline body.
 async fn compile_static(input: &PipelineInput, style: OutputStyle) -> Result<PipelineOutput> {
     let (stylesheet, _) = crate::parser::parse(&input.source);
-    let css = css::generate(&stylesheet, style)?;
+
+    // Transform stage: resolve variables, expand mixins and control flow.
+    let mut transform_ctx = crate::transform::TransformCtx::new();
+    let transformed = transform_ctx.transform_stylesheet(stylesheet)?;
+
+    let css = css::generate(&transformed, style)?;
     Ok(PipelineOutput {
         css,
         path: input.path.clone(),

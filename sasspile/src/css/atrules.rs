@@ -1,9 +1,11 @@
 //! At-rule output generation.
 //!
-//! Handles @media, @supports, @import, @keyframes, and unknown at-rules.
+//! Handles @media, @supports, @import, and unknown at-rules.
+//! Control flow (@if, @for, @each, @while) is expanded by the transform stage,
+//! so it should not appear here.
 
 use crate::parser::{
-    AtRule, ForStmt, IfStmt, MediaRule, SupportsRule, WhileStmt, EachStmt,
+    AtRule, MediaRule, SupportsRule,
 };
 use crate::css::ast::{CssAtRule, CssDocument, CssRule};
 
@@ -32,47 +34,32 @@ pub fn expand_atrule(at_rule: &AtRule, doc: &mut CssDocument, parent_sel: &str) 
         AtRule::Use(_) | AtRule::Forward(_) => {
             // @use and @forward don't produce CSS output directly.
         }
-        AtRule::If(if_stmt) => {
-            expand_if_rule(if_stmt, doc, parent_sel);
-        }
-        AtRule::Else(body) => {
-            // Treat @else body as nested expansion.
-            crate::css::rules::expand_nodes(body, doc, parent_sel);
-        }
-        AtRule::For(for_stmt) => {
-            expand_for_rule(for_stmt, doc, parent_sel);
-        }
-        AtRule::Each(each_stmt) => {
-            expand_each_rule(each_stmt, doc, parent_sel);
-        }
-        AtRule::While(while_stmt) => {
-            expand_while_rule(while_stmt, doc, parent_sel);
-        }
         AtRule::AtRoot(body) => {
             // @at-root emits nodes at the document root level.
             crate::css::rules::expand_nodes(body, doc, "");
         }
         AtRule::Extend(_) => {
-            // @extend modifies selectors; handled in full pipeline.
-            // For now, skip (no CSS output from @extend alone).
+            // @extend modifies selectors; handled in transform stage.
         }
-        AtRule::Content => {
-            // @content is resolved at mixin include time.
-        }
-        AtRule::Debug(expr) | AtRule::Warn(expr) | AtRule::Error(expr) => {
-            // In CSS output, these are typically stripped.
-            let _ = expr;
-        }
-        AtRule::Mixin(_) | AtRule::Function(_) | AtRule::Return(_) => {
-            // Definitions don't produce CSS.
+        AtRule::Else(_body) => {
+            // @else is handled as part of @if in transform stage.
+            // If it reaches here, expand as fallback.
         }
         AtRule::Include(include) => {
-            // @include without body — typically handled in eval phase.
-            // Output comments for now (placeholder for full expansion).
+            // @include is expanded in transform stage.
+            // If it reaches here, include body nodes directly.
             if !include.body.is_empty() {
                 crate::css::rules::expand_nodes(&include.body, doc, parent_sel);
             }
         }
+        // Control flow should have been expanded by transform stage.
+        // Log a warning if any reach here.
+        AtRule::If(_) | AtRule::For(_) | AtRule::Each(_) | AtRule::While(_) => {
+            tracing::warn!("unexpected control-flow at-rule in CSS generation — should have been expanded by transform stage");
+        }
+        // Definitions and non-CSS at-rules produce no output.
+        AtRule::Mixin(_) | AtRule::Function(_) | AtRule::Return(_)
+        | AtRule::Content | AtRule::Debug(_) | AtRule::Warn(_) | AtRule::Error(_) => {}
     }
 }
 
@@ -162,29 +149,3 @@ fn expand_rule_body(
         }
     }
 }
-
-fn expand_if_rule(if_stmt: &IfStmt, doc: &mut CssDocument, parent_sel: &str) {
-    // Simple heuristic: always emit the if body (not the else).
-    // Full implementation would evaluate the condition.
-    crate::css::rules::expand_nodes(&if_stmt.body, doc, parent_sel);
-    if let Some(else_body) = &if_stmt.else_body {
-        crate::css::rules::expand_nodes(else_body, doc, parent_sel);
-    }
-}
-
-fn expand_for_rule(_for_stmt: &ForStmt, _doc: &mut CssDocument, _parent_sel: &str) {
-    // @for requires evaluation to iterate.
-    // In this simplified version, @for output is a placeholder.
-    // Full pipeline expands @for after evaluation.
-    tracing::debug!("@for expansion requires evaluator integration");
-}
-
-fn expand_each_rule(_each_stmt: &EachStmt, _doc: &mut CssDocument, _parent_sel: &str) {
-    tracing::debug!("@each expansion requires evaluator integration");
-}
-
-fn expand_while_rule(_while_stmt: &WhileStmt, _doc: &mut CssDocument, _parent_sel: &str) {
-    tracing::debug!("@while expansion requires evaluator integration");
-}
-
-

@@ -180,8 +180,14 @@ fn format_atrule_compact(atrule: &CssAtRule, out: &mut String, depth: usize) {
 fn format_atrule_compressed(atrule: &CssAtRule, out: &mut String, _depth: usize) {
     out.push('@');
     out.push_str(&atrule.name);
-    out.push(' ');
-    out.push_str(&atrule.query);
+    // For @media and @supports, no space before query; other at-rules keep space.
+    let query = atrule.query.trim();
+    if atrule.name == "media" || atrule.name == "supports" {
+        out.push_str(query);
+    } else if !query.is_empty() {
+        out.push(' ');
+        out.push_str(query);
+    }
     out.push('{');
     for rule in &atrule.children {
         format_rule_compressed(rule, out, 0);

@@ -136,6 +136,8 @@ impl<'tok> Parser<'tok> {
     /// Also supports CSS custom properties: --color: red; --#{$name}: red;
     #[instrument(skip(self))]
     fn parse_declaration(&mut self) -> Option<super::ast::Declaration> {
+        // Track whether this declaration came from a `$var` token (variable declaration).
+        let mut is_variable = false;
         let name = match self.peek_kind() {
             Some(TokenKind::Ident(s)) => {
                 let mut n = s.clone();
@@ -171,6 +173,7 @@ impl<'tok> Parser<'tok> {
                 n
             }
             Some(TokenKind::Variable(v)) => {
+                is_variable = true;
                 let n = v.clone();
                 self.advance();
                 n
@@ -281,7 +284,13 @@ impl<'tok> Parser<'tok> {
         }
 
         let span = SourceSpan::new(0, 0);
-        Some(super::ast::Declaration { name, value, important, span })
+        Some(super::ast::Declaration {
+            name,
+            value,
+            important,
+            span,
+            is_variable,
+        })
     }
 
     /// Parse body until closing brace.
@@ -322,11 +331,33 @@ impl<'tok> Parser<'tok> {
             match self.peek_kind() {
                 Some(TokenKind::Whitespace) => text.push(' '),
                 Some(TokenKind::Ident(ref s)) => text.push_str(s),
+                Some(TokenKind::Variable(ref s)) => {
+                    text.push('$');
+                    text.push_str(s);
+                }
                 Some(TokenKind::String(ref s)) => {
                     text.push('"');
                     text.push_str(s);
                     text.push('"');
                 }
+                Some(TokenKind::Number(ref val, ref unit)) => {
+                    if val.fract().abs() < f64::EPSILON {
+                        text.push_str(&(*val as i64).to_string());
+                    } else {
+                        text.push_str(&val.to_string());
+                    }
+                    if let Some(u) = unit {
+                        text.push_str(u);
+                    }
+                }
+                Some(TokenKind::Colon) => text.push(':'),
+                Some(TokenKind::LParen) => text.push('('),
+                Some(TokenKind::RParen) => text.push(')'),
+                Some(TokenKind::Dot) => text.push('.'),
+                Some(TokenKind::Comma) => text.push(','),
+                Some(TokenKind::Slash) => text.push('/'),
+                Some(TokenKind::Hash) => text.push('#'),
+                Some(TokenKind::Minus) => text.push('-'),
                 _ => {}
             }
             self.advance();

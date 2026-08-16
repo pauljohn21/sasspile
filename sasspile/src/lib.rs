@@ -20,6 +20,7 @@ pub mod parser;
 pub mod pipeline;
 pub mod semantic;
 pub mod source;
+pub mod transform;
 pub mod value;
 
 pub use error::SassError;

@@ -43,6 +43,8 @@ impl<'a> EvalContext<'a> {
         #[allow(unreachable_patterns)]
         match expr {
             Expr::Variable(name) => self.eval_variable(name),
+            // Bare identifier — treat as an unquoted string literal.
+            Expr::Identifier(s) => Ok(Value::String(s.clone(), crate::value::Quoted::Unquoted)),
             Expr::Number(value, unit) => {
                 let u = unit.as_deref().and_then(crate::value::Unit::parse)
                     .unwrap_or(crate::value::Unit::None);

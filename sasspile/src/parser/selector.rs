@@ -56,9 +56,16 @@ impl<'tok> Parser<'tok> {
                     match self.peek_kind() {
                         Some(crate::lexer::TokenKind::Interpolation) => {
                             self.advance();
-                            let _ = self.parse_expr();
+                            let expr = self.parse_expr();
                             self.consume(&crate::lexer::TokenKind::RBrace);
-                            name.push_str("#{...}");
+                            // Preserve variable name for transformer lookup.
+                            if let Some(Expr::Variable(var_name)) = &expr {
+                                name.push_str("${");
+                                name.push_str(var_name);
+                                name.push('}');
+                            } else {
+                                name.push_str("#{...}");
+                            }
                         }
                         Some(crate::lexer::TokenKind::Ident(ref s)) => {
                             name.push_str(s);
@@ -187,9 +194,16 @@ impl<'tok> Parser<'tok> {
                 // Interpolation in selector: #{...} or #{...}-foo
                 let mut name = String::new();
                 self.advance();
-                let _expr = self.parse_expr();
+                let expr = self.parse_expr();
                 self.consume(&crate::lexer::TokenKind::RBrace);
-                name.push_str("#{...}");
+                // Preserve variable name for transformer lookup.
+                if let Some(Expr::Variable(var_name)) = &expr {
+                    name.push_str("${");
+                    name.push_str(var_name);
+                    name.push('}');
+                } else {
+                    name.push_str("#{...}");
+                }
                 // Consume trailing -ident parts (e.g., #{$x}-foo)
                 while self.check(&crate::lexer::TokenKind::Minus) {
                     let saved = self.pos;

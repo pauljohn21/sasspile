@@ -358,13 +358,15 @@ impl<'tok> Parser<'tok> {
                 } else if n == "null" {
                     Some(Expr::Null)
                 } else {
-                    Some(Expr::Variable(n))
+                    // Bare identifier — treat as Identifier (CSS value or string),
+                    // NOT as a variable reference.
+                    Some(Expr::Identifier(n))
                 }
             }
             Some(TokenKind::Percent) => {
                 // Standalone % as a value (e.g., `a {b: c %}` or `a {b: %}`)
                 self.advance();
-                Some(Expr::Variable("%".to_string()))
+                Some(Expr::Identifier("%".to_string()))
             }
             _ => None,
         }

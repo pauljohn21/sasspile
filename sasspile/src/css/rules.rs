@@ -166,12 +166,16 @@ pub fn eval_expr_simple(expr: &Expr) -> Value {
             Value::List(evaluated, crate::value::Separator::Slash)
         }
         Expr::Parens(inner) => eval_expr_simple(inner),
-        Expr::Interpolation(_) => Value::String("#{...}".into(), crate::value::Quoted::Unquoted),
-        Expr::Variable(name) => {
-            // Variables not evaluated — output as css custom property fallback.
-            // In full pipeline, these would be resolved by EvalContext.
-            Value::String(format!("${name}"), crate::value::Quoted::Unquoted)
+        Expr::Interpolation(inner) => {
+            let inner_val = eval_expr_simple(inner);
+            Value::String(inner_val.to_css_string(), crate::value::Quoted::Unquoted)
         }
+        Expr::Variable(name) => {
+            tracing::warn!(variable = %name, "unresolved variable in CSS generation — transform stage should resolve");
+            Value::Null
+        }
+        // Bare identifier — treat as an unquoted string.
+        Expr::Identifier(s) => Value::String(s.clone(), crate::value::Quoted::Unquoted),
         Expr::Call(name, args) => {
             let arg_values: Vec<String> = args.iter().map(|a| eval_expr_simple(a).to_css_string()).collect();
             Value::String(format!("{}({})", name, arg_values.join(", ")), crate::value::Quoted::Unquoted)
