@@ -4,132 +4,131 @@
 
 sasslipe 采用**管道-过滤器**模式（Pipeline-Filter），每个编译阶段作为独立 Tokio 任务运行，通过异步 channel 通信。
 
-### 架构图
+### 架构图（当前状态）
 
 ```
-�──────────────────────────────────────────────────────────────────────────�
-│                     sasslipe Pipeline                                    │
-├──────────────────────────────────────────────────────────────────────────�
-│                                                                          │
-│   ┌────────┐    ┌────────┐    ┌─────────�    �──────────�               │
-│   │ Source │───▶│  Lex   │───▶│  Parse  │───▶            │               │
-│   │ Loader │    │        │    │         │    │ Semantic │               │
-│   └────────┘    └────────┘    └─────────┘    │ Analysis │               │
-│       │                                       │          │               │
-│       │         ┌──────────┐    ┌──────────┐  │          │               │
-│       │         │  Module  │◀──│  Graph   │�─┤          │               │
-│       │         │ Resolver │    │ Analysis │  └──────────�               │
-│       │         └──────────┘    └──────────┘       │                     │
-│       │              │                             ▼                     │
-│       │              │         ┌──────────┐  ┌──────────┐               │
-│       │              │         │Transform │◀─│Resolved  │               │
-│       │              │         │  Pass    │  │   AST    │               │
-│       │              │         └──────────�  └──────────┘               │
-│       │              │              │                                    │
-│       │              ▼              ▼                                    │
-│       │         ┌──────────┐  ┌──────────┐                             │
-│       │         │ Evaluate │─▶│   CSS    │                             │
-│       │         │  Engine  │  │   Gen    │                             │
-│       │         └──────────�  └──────────┘                             │
-│       │                             │                                   │
-│       │                             ▼                                   │
-│       │         ┌──────────┐  ┌──────────┐                             │
-│       └────────▶│  Watch   │─▶│  Format  │                             │
-│                 │  Service │  │  Output  │                             │
-│                 └──────────┘  └──────────�                             │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+sasslipe Pipeline
+
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐  │
+│  │ Source │───▶│  Lex   │───▶│  Parse │───▶│Semantic│  │
+│  │ Loader │    │   ✅   │    │   ✅   │    │   ✅   │  │
+│  └────────┘    └────────┘    └────────┘    └────────┘  │
+│      │                                          │       │
+│      │         ┌──────────┐    ┌──────────┐    ▼       │
+│      │         │  Module  │◀───│  Graph   ┌────────┐  │
+│      │         │ Resolver │    │ Analysis │Resolved│  │
+│      │         └──────────┘    └──────────┘  │  AST   │  │
+│      │                                │      └────────┘  │
+│      │              ┌──────────┐       │         │       │
+│      │              │Transform │       ▼         ▼       │
+│      │              │  (待定义) │   ┌────────┐          │
+│      │              └──────────┘   │ Eval   │          │
+│      │                    │        │   ✅   │          │
+│      │                    ▼        └────────┘          │
+│      │              ┌──────────┐       │                │
+│      │              │   CSS    │      ▼                │
+│      └────────────▶│   Gen    │   ┌────────┐          │
+│                    │   ❌     │◀──│ Builtin│          │
+│                    └──────────┘   │   ✅   │          │
+│                         │         └────────┘          │
+│                         ▼                              │
+│                    ┌──────────┐                        │
+│                    │  Format  │                        │
+│                    │  Output  │                        │
+│                    └──────────┘                        │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## 核心设计模式
 
-### 1. Pipeline Stage Trait
+### 1. 不可变值 (Arc<Value>)
 
-```rust
-#[async_trait]
-pub trait PipelineStage<Input, Output> {
-    async fn process(&self, input: Input) -> Result<Output>;
-}
-```
+所有 `Value` 变体都是不可变的，通过 `Arc<Value>` 在线程间共享。
+克隆 Value 是廉价的（Arc 引用计数递增）。
 
-每个阶段实现此 trait，通过 `then` 组合子串联。
+### 2. 符号表 (SymbolTable)
 
-### 2. Watch-based 响应式状态
+作用域栈结构，支持嵌套的变量、函数、混入、占位符查找。
 
-```rust
-pub struct ReactiveEnv {
-    vars: watch::Sender<Map<String, Value>>,
-}
+### 3. 模块依赖图 (ModuleGraph)
 
-// 订阅变量变更
-pub fn subscribe(&self) -> watch::Receiver<Map<String, Value>>;
-// 设置变量触发下游更新
-pub fn set_var(&self, name: &str, value: Value);
-```
+有向图结构，Kahn 算法拓扑排序，检测循环依赖。
 
-### 3. Async Builtin Function
+### 4. Dispatch 路由
 
-```rust
-#[async_trait]
-pub trait SassFn: Send + Sync {
-    async fn call(&self, args: &[Value], env: &Env) -> Result<Value>;
-}
-
-// 注册到 HashMap
-let mut registry: HashMap<String, Box<dyn SassFn>> = HashMap::new();
-registry.insert("rgb".into(), Box::new(RgbFn));
-```
+统一入口 `builtin::dispatch(name, args, ctx)` 按 `module.function` 格式路由。
 
 ## 数据流
 
 ```
-Bytes → Tokens → AST → Resolved AST → Transformed → Evaluated → CSS AST → String
-  │        │       │         │            │           │          │         │
+Bytes → Tokens → AST → ResolvedAST → Transformed → Evaluated → CSS AST → String
   │        │       │         │            │           │          │         │
   ▼        ▼       ▼         ▼            ▼           ▼          ▼         ▼
- Source  Token  Node     ResolvedNode  Value      Value      CssRule   String
+ ✅       ✅      ✅        ✅          (待定义)       ✅         ❌        ❌
 ```
 
-## 模块依赖关系
+## 模块依赖关系（实际）
 
 ```
-hrx ──（独立，HRX 解析器）
-  │
-  └── sasslipe（规划中）
-       ├── value-system      # 值类型系统（被所有阶段依赖）
-       ├── source            # SourceSpan, SourcePosition
-       ├── diagnostics       # 错误报告
-       ├── lexer             # 词法分析（依赖 source, diagnostics）
-       ├── parser            # 语法分析（依赖 lexer, source）
-       ├── semantic          # 语义分析（依赖 parser）
-       ├── eval              # 求值器（依赖 value-system, semantic）
-       ├── builtin-modules   # 内置模块（依赖 eval）
-       ├── css-gen           # CSS 生成（依赖 value-system）
-       ├── incremental       # 增量编译（依赖 eval, semantic）
-       └── pipeline          # 管道编排（依赖所有上述模块）
+hrx (独立)
+│
+sasspile
+├── source     ← 独立基础
+├── diagnostics← 独立基础
+├── value      ← 独立基础 (被所有阶段依赖)
+│
+├── lexer      ← source, diagnostics, value
+├── parser     ← lexer, source, value
+│
+├── semantic   ← parser, source, value
+│   ├── symbol_table
+│   ├── module (ModuleGraph, CycleCheck)
+│   ├── extend (SelectorRegistry)
+│   └── definitions (DefinitionRegistry)
+│
+├── eval       ← value, semantic, builtin
+│   ├── evaluator
+│   ├── ops
+│   ├── functions (dispatch to builtin)
+│   └── collections
+│
+├── builtin    ← value, eval
+│   ├── sass_color
+│   ├── sass_math
+│   ├── sass_list
+│   ├── sass_map
+│   ├── sass_string
+│   └── sass_meta
+│
+├── pipeline   ← 编排所有待完成
+│
+└── css_gen    ← ❌ 待开发
 ```
 
-## 类型系统概览
+## 值类型层级
 
 ```
 Value
 ├── Number { value: f64, unit: Unit }
-├── String(String)
+├── String(String, Quoted)
 ├── Boolean(bool)
 ├── Null
-├── Color(Color)           // sRGB
+├── Color(SassColor)         // RGBA
 ├── List(Vec<Value>, Separator)
 ├── Map(Vec<(Value, Value)>)
-├── ArgList(Vec<Value>)    // 带参数的列表
-├── Function(name: String)
-├── Calculation(String)    // calc() 表达式
-└── Error(String)
+├── ArgList(Vec<Value>)
+├── Function(String)
+├── Calculation(String)      // calc() 延迟
+└── Error(String)            // 哨兵值
 ```
 
 ## 错误处理策略
 
-- **沿途收集**：错误不中断管道，收集后统一报告
-- **源码位置**：每个 AST 节点附带 `SourceLocation`
+- **沿途收集**：错误不中断流程，收集到 Diagnostics 统一报告
+- **源码位置**：每个 Token/AST 节点附带 `SourceSpan`
 - **诊断级别**：Error / Warn / Info
 - **可恢复性**：Parser 实现错误恢复（synchronization points）
 
@@ -140,4 +139,12 @@ Value
 | 不可变数据内存开销 | `Arc<T>` 共享大对象 |
 | sass-spec 边缘 case | 每日 CI 运行 + 自动标记 |
 | 异步管道调试 | `tracing` span + `--trace` 标志 |
-| 编译速度 | `moka` 缓存、并行编译、流式处理 |
+| 编译速度 | 并行编译（待实现 moka 缓存） |
+
+## 线程安全约束
+
+所有跨 Task 共享的类型必须实现 `Clone + Send + Sync + 'static`：
+- `Value` ✅
+- `Token` ✅  
+- `Diagnostics` ✅
+- `SymbolTable`（通过 Arc 共享）✅

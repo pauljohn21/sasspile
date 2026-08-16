@@ -1,37 +1,39 @@
-# 语义分析（待开发）
+# 语义分析 ✅ 已完成
 
 ## 职责
 
 构建作用域、解析模块依赖、验证 @extend 目标、收集函数/混入定义。
 
-## 计划文件结构
+## 文件结构（实际）
 
 ```
 semantic/
-├── mod.rs             # 分析入口
-├── symbol_table.rs    # 作用域栈
-├── module.rs          # @use/@forward 解析
-├── extend.rs          # @extend 验证
-└── definitions.rs     # 定义收集
+├── mod.rs             # 分析入口 + re-exports
+├── symbol_table.rs    # 作用域栈 (Scope/ScopeKind/SymbolEntry)
+├── module.rs          # ModuleGraph/CycleCheck/NamespaceRegistry
+├── extend.rs          # @extend 选择器收集 (SelectorRegistry)
+└── definitions.rs     # 定义收集 (DefinitionRegistry/MixinEntry/FunctionEntry)
 ```
 
 ## 符号表
+
+**文件: `sasspile/src/semantic/symbol_table.rs`**
 
 ```rust
 pub struct SymbolTable {
     scopes: Vec<Scope>,
 }
 
-pub enum Scope {
+pub enum ScopeKind {
     Global,
     Local,
     Param,  // 函数/混入参数
 }
 
-pub struct Symbol {
-    name: String,
-    kind: SymbolKind,
-    span: SourceSpan,
+pub struct SymbolEntry {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub span: SourceSpan,
 }
 
 pub enum SymbolKind {
@@ -42,28 +44,66 @@ pub enum SymbolKind {
 }
 ```
 
-## 模块解析
+## 模块图
 
-- 构建依赖有向图
-- Kahn 算法拓扑排序
-- 循环依赖检测
-- 入度为 0 的模块可并行编译
+**文件: `sasspile/src/semantic/module.rs`**
 
-## @extend 验证
+```rust
+pub struct ModuleGraph {
+    modules: HashMap<String, Module>,
+    edges: Vec<(String, String)>,
+}
 
-- 检查目标选择器存在性
-- 验证伪类和组合子的有效性
+pub struct Module {
+    pub exports: SymbolTable,
+    pub spans: HashMap<String, SourceSpan>,
+}
+
+pub struct NamespaceRegistry { /* ... */ }
+pub struct CycleCheck { /* ... */ }
+```
+
+## @extend 注册表
+
+**文件: `sasspile/src/semantic/extend.rs`**
+
+```rust
+pub struct SelectorRegistry {
+    selectors: HashMap<String, Vec<ExtendSource>>,
+}
+
+pub fn collect_extends(ast: &Stylesheet) -> SelectorRegistry;
+```
 
 ## 定义收集
 
-- Mixin 注册表
-- Function 注册表
-- 重复定义检测
+**文件: `sasspile/src/semantic/definitions.rs`**
 
-## 测试重点
+```rust
+pub struct DefinitionRegistry /* MixinEntry, FunctionEntry, DuplicateInfo */;
 
-- 作用域链
-- @use / @forward 解析
-- 模块依赖图拓扑排序
-- 循环依赖检测
-- @extend 验证
+pub enum DefinitionKind {
+    Function,
+    Mixin,
+}
+```
+
+## 使用方式
+
+```rust
+use sasspile::semantic::{SymbolTable, DefinitionRegistry, collect_extends};
+
+let table = SymbolTable::new();
+table.push_scope(ScopeKind::Global);
+// ... 遍历 AST 填充符号表
+
+let registry = DefinitionRegistry::new();
+// ... 收集 mixin/function 定义
+```
+
+## 测试
+
+- `tests/symbol_table_spec.rs`
+- `tests/definitions_spec.rs`
+- `tests/extend_spec.rs`
+- `tests/module_spec.rs`

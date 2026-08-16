@@ -2,95 +2,67 @@
 
 ## 概述
 
-sass-sass Spec（约 1306 个测试用例）以 HRX 格式组织，每个用例包含输入 SCSS 和期望输出 CSS。
+sass-spec 是 Sass 官方测试套件，包含 1306+ 个测试用例，验证编译器的 CSS/Sass 语义符合规范。
 
 ## 目录结构
 
 ```
 sass-spec-main/
 ├── spec/
-│   ├── core_functions/
-│   │   ├── color/
-│   │   ├── list/
-│   │   ├── map/
-│   │   ├── math/
-│   │   ├── meta/
-│   │   ├── selector/
-│   │   ├── string/
-│   │   └── ...
-│   ├── css/
-│   ├── directives/
-│   ├── expressions/
-│   ├── interpolation/
-│   ├── media/
-│   ├── nesting/
-│   ├── number/
-│   ├── operations/
-│   ├── output_style/
-│   ├── parent_selector/
-│   ├── variables/
-│   └── ...
-└── spec Lista
+│   ├── basic/           # 基础语法
+│   ├── scss/            # SCSS 扩展
+│   ├── css/             # CSS 兼容
+│   ├── colors/          # CSS 颜色模块（462 文件，跳过）
+│   ├── media/           # @media 查询
+│   ├── nesting/         # 嵌套行为
+│   ├── directives/      # @规则
+│   ├── values/          # 值类型
+│   ├── functions/       # 内置函数
+│   ├── operators/       # 运算符
+│   ├── interpolation/   # #{} 插值
+│   ...
+└── .gitignore
 ```
 
-## 测试用例格式（HRX）
+## 测试格式
 
-```
-<===== input.scss
-.foo {
-  color: red;
-}
+每个测试用例是一个 `.hrx` 文件（HRX 归档格式），包含：
+- `input.scss` — 输入 Sass/SCSS
+- `output.css` — 期望输出
+- `options.yaml` — 编译选项
 
-<===== output.css
-.foo {
-  color: red;
-}
-```
+## 运行方式
 
-## 命令规范化
+```bash
+# 运行 sass-spec 测试
+cargo test -p sasspile --test sass_spec_parse
 
-```scss
-// 输入使用
-$var: 1 + 2 * 3;  // Sass 运算
-
-// 输出
-$var: 7;          // 预计算结果
+# 查看所有测试统计
+cargo test -p sasspile -- --list
 ```
 
-## 跳过策略
+## 当前统计（2026-08-15）
 
-创建 `css4_color_skip.rs` 集中的 skip 清单：
+| 指标 | 数值 |
+|------|------|
+| 总用例 | 1306 |
+| 解析通过 | 475 |
+| 通过率 | 36.4% |
+| CSS4 颜色跳过 | 462 |
+| 有效非颜色用例 | ~844 |
 
-```rust
-const CSS4_COLOR_SKIP: &[&str] = &[
-    "spec/core_functions/color/oklch/",
-    "spec/core_functions/color/oklab/",
-    "spec/css/color/",
-    // ... 462 个文件路径
-];
-```
+## 已知失败模式
 
-## 测试运行器
+| 优先级 | 问题 | 影响范围 |
+|--------|------|----------|
+| P0 | `and`/`or` 逻辑运算符缺失 | ~15% 用例 |
+| P1 | `@else`/`@else if` 解析 | ~8% 用例 |
+| P2 | `@if` 条件含 `and` | ~5% 用例 |
+| P3 | 大括号追踪 | ~3% 用例 |
+| P4 | `@extend` 多行 | ~2% 用例 |
 
-```rust
-pub struct SpecRunner {
-    skip_list: HashSet<PathBuf>,
-}
+## 测试文件
 
-impl SpecRunner {
-    pub async fn run_case(&self, path: &Path) -> Result<TestResult> { ... }
-    pub async fn run_all(&self) -> TestReport { ... }
-}
-```
-
-## 覆盖率统计
-
-| 类别 | 用例数 | 状态 |
-|------|--------|------|
-| Core Functions | ~500 | 待测试 |
-| CSS | ~150 | 待测试 |
-| Directives | ~200 | 待测试 |
-| Expressions | ~100 | 待测试 |
-| Variables | ~80 | 待测试 |
-| CSS4 Colors | ~462 | 跳过 |
-| **总计** | **~1306** | - |
+- `sasspile/tests/sass_spec_parse.rs` — 解析层集成测试
+- `sasspile/tests/builtin_spec.rs` — 内置模块测试
+- `sasspile/tests/eval_spec.rs` — 求值器测试

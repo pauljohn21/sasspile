@@ -1,4 +1,4 @@
-# CSS 生成（待开发）
+# CSS 生成 ❌ 待开发
 
 ## 职责
 
@@ -22,8 +22,6 @@ pub enum OutputStyle {
     Expanded,    // 多行，不压缩
     Compact,     // 单行多规则
     Compressed,  // 最小化
-    // Nested（仅用于内部），
-    // Compressed（压缩）
 }
 ```
 

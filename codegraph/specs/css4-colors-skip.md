@@ -1,59 +1,48 @@
-# CSS 4.0 颜色跳过说明
+# CSS4 颜色特性跳过
 
-## 跳过的特性
+## 背景
 
-CSS Color Level 4 引入的新特性，本期不实现：
+CSS Color Module Level 4 和 5 引入了新的颜色空间和函数：
+- `lab()`, `lch()`, `oklab()`, `oklch()`
+- `color()` 函数
+- `hwb()`, `color-mix()`, `color-contrast()`
+- 广色域 P3 支持
 
-| 特性 | 用例数 | 示例 |
-|------|--------|------|
-| `oklch()` | ~80 | `oklch(50% 0.2 240)` |
-| `oklab()` | ~80 | `oklab(50% 0.1 -0.2)` |
-| `lch()` | ~40 | `lch(50% 50 240)` |
-| `lab()` | ~40 | `lab(50% 20 -30)` |
-| `color()` | ~60 | `color(display-p3 1 0.5 0)` |
-| `color-mix()` | ~50 | `color-mix(in srgb, red 50%, blue)` |
-| 相对颜色语法 | ~40 | `from red` |
-| `light-dark()` | ~30 | `light-dark(red, blue)` |
-| `hwb()` | ~20 | `hwb(120 20% 30%)` |
+这些特性在 sass-spec 中占 462 个文件，**本阶段全部跳过**。
 
-**总计：约 462 个文件**
+## 跳过策略
 
-## 保留接口
-
-在 `value-system/color.rs` 中预留扩展点：
-
+在测试运行器中：
 ```rust
-pub enum ColorSpace {
-    SRgb,
-    // 预留未来扩展
-    // OKLch,
-    // OKLab,
-    // DisplayP3,
-    // Rec2020,
-}
+const CSS4_COLOR_DIRS: &[&str] = &[
+    "spec/css/colors/",
+    "spec/css/css-color/",
+    "spec/basic/color/",
+    // ...
+];
 
-#[allow(dead_code)]
-pub struct Color4 {
-    pub space: ColorSpace,
-    pub components: Vec<f64>,
-    pub alpha: f64,
+fn should_skip(path: &str) -> bool {
+    CSS4_COLOR_DIRS.iter().any(|dir| path.starts_with(dir))
 }
 ```
 
-## 启用条件
+## 预留接口
 
-- sass-spec 主流用例 100% 通过后
-- `unstable_css4_colors` feature flag
-- 独立分支开发
+`SassColor` 类型设计时预留扩展位：
+```rust
+pub struct SassColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: f64,
+    // 未来添加：color_space: ColorSpace
+}
+```
 
-## 跳过清单位置
+## 未来适配
 
-- `css4_color_skip.rs`：集中管理跳过文件路径
-- spec/ 中的子目录可批量跳过
-
-## 运行时行为
-
-遇到 CSS 4.0 颜色语法时：
-1. 解析为 `Value::Error("CSS 4.0 colors not supported")`
-2. 跳过该测试用例
-3. 记录统计信息
+Phase 10 计划：
+1. 扩展 SassColor 支持 lab/lch/oklab/oklch
+2. 实现 `color()` 解析
+3. 实现 color-mix/contrast
+4. 重新启用跳过的 462 个测试

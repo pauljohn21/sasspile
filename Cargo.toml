@@ -30,6 +30,8 @@ colored = "3"
 schemars = "1"
 # Timestamp
 chrono = "0.4"
+# Random numbers
+rand = "0.9"
 
 [profile.release]
 opt-level = 3

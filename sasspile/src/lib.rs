@@ -8,11 +8,25 @@
 //! Immutable data flows through; `watch` channels propagate variable changes for
 //! incremental recompilation.
 
+pub mod builtin;
+pub mod diagnostics;
 pub mod error;
+pub mod eval;
+pub mod lexer;
+pub mod parser;
 pub mod pipeline;
+pub mod semantic;
+pub mod source;
+pub mod value;
 
 pub use error::SassError;
+pub use eval::{EvalContext, EvalError};
 pub use pipeline::Compiler;
+pub use parser::*;
+pub use diagnostics::Diagnostics;
+pub use lexer::{tokenize, Token, TokenKind};
+pub use semantic::{DefinitionRegistry, SymbolTable};
+pub use value::{Separator, Value};
 
 /// Library version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

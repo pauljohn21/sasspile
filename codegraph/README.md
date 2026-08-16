@@ -19,9 +19,9 @@ CodeGraph 是本项目的"外部大脑"，由两部分组成：
 
 | 指标 | 数值 |
 |------|------|
-| 索引文件 | 2,500 |
-| 节点 | 20,068 |
-| 边（关系） | 52,230 |
+| 索引文件 | 2,500+ |
+| 节点 | 20,000+ |
+| 边（关系） | 50,000+ |
 | 数据库大小 | ~71 MB |
 
 ### 数据库 Schema
@@ -35,21 +35,6 @@ CodeGraph 是本项目的"外部大脑"，由两部分组成：
 | `nodes_fts` | 全文搜索索引（FTS5） |
 | `name_segment_vocab` | 名称分词词汇表 |
 | `project_metadata` | 项目元数据 |
-
-### Node 类型（kind）
-
-| 类型 | 数量 | 说明 |
-|------|------|------|
-| import | 7,586 | 导入/use 语句 |
-| constant | 4,178 | 常量定义 |
-| function | 2,268 | 函数定义 |
-| file | 2,192 | 文件节点 |
-| component | 1,109 | 组件（Vue/React） |
-| type_alias | 958 | 类型别名 |
-| interface | 390 | 接口定义 |
-| property | 659 | 属性/字段 |
-| method | 502 | 方法 |
-| variable | 126 | 变量 |
 
 ### CLI 命令
 
@@ -71,22 +56,6 @@ codegraph node <name>
 
 # 探索代码区域（相关符号 + 调用路径）
 codegraph explore <query...>
-
-# 查看文件结构
-codegraph files
-```
-
-### 使用示例
-
-```bash
-# 搜索 parse 函数
-codegraph query "parse" --limit 10
-
-# 查看 hrx::parse 的源码和调用链
-codegraph node parse
-
-# 探索 hrx 模块
-codegraph explore hrx module
 ```
 
 ---
@@ -100,17 +69,20 @@ codegraph/
 ├── README.md          # 本文件：使用说明
 ├── overview.md        # 项目概览：目标、范围、当前状态
 ├── architecture.md    # 架构设计：管道、模块依赖、数据流
+├── progress.md        # 开发进度跟踪
 ├── modules/           # 各模块详细知识
-│   ├── hrx.md         # HRX 解析器（已完成）
-│   ├── value-system.md
-│   ├── lexer.md
-│   ├── parser.md
-│   ├── semantic.md
-│   ├── eval.md
-│   ├── builtin-modules.md
-│   ├── css-gen.md
-│   ├── pipeline.md
-│   └── incremental.md
+│   ├── hrx.md         # ✅ HRX 解析器
+│   ├── value-system.md # ✅ 值类型系统
+│   ├── source.md      # ✅ 源码位置追踪
+│   ├── diagnostics.md # ✅ 诊断系统
+│   ├── lexer.md       # ✅ 词法分析器
+│   ├── parser.md      # ✅ 语法分析器
+│   ├── semantic.md    # ✅ 语义分析
+│   ├── eval.md        # ✅ 求值器
+│   ├── builtin-modules.md # ✅ 内置模块
+│   ├── pipeline.md    # 🔨 管道编排（骨架）
+│   ├── css-gen.md     # ❌ CSS 生成器（待开发）
+│   └── incremental.md # ❌ 增量编译（待开发）
 ├── decisions/         # 关键设计决策记录
 │   ├── 001-pipeline-tokio-mpsc.md
 │   ├── 002-immutable-value-arc.md
@@ -123,8 +95,13 @@ codegraph/
 │   ├── test-structure.md
 │   ├── css4-colors-skip.md
 │   └── compat-notes.md
-└── progress.md        # 开发进度跟踪
 ```
+
+### 图例
+
+- ✅ 已完成并工作
+- 🔨 骨架存在，核心逻辑待实现
+- ❌ 未开始
 
 ### 使用指南
 

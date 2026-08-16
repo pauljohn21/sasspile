@@ -2,12 +2,11 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  语言：所有制品（proposal/design/tasks 等）必须使用**中文**撰写。
+  技术栈：Rust 2024 edition, Tokio, thiserror, tracing
+  项目：sasslipe — 纯 Rust 异步 SCSS 编译器
+  约定：单文件 ≤ 400 行、tests/ 目录放测试、禁止 println!
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

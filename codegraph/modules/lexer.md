@@ -1,20 +1,22 @@
-# 词法分析器（待开发）
+# 词法分析器 ✅ 已完成
 
 ## 职责
 
 将 SCSS/Sass 源代码转换为 Token 序列，支持双语法（SCSS 和缩进语法）。
 
-## 计划文件结构
+## 文件结构（实际）
 
 ```
 lexer/
-├── mod.rs          # Lexer 入口
-├── token.rs        # Token 枚举定义
-├── lexer.rs        # 主词法分析逻辑
+├── mod.rs          # Lexer 入口 + tokenize 便捷函数
+├── token.rs        # Token/TokenKind 定义
+├── lex.rs          # 主词法分析逻辑
 └── sass_syntax.rs  # .sass 缩进语法支持
 ```
 
-## Token 类型
+## Token 定义
+
+**文件: `sasspile/src/lexer/token.rs`**
 
 ```rust
 pub struct Token {
@@ -25,7 +27,7 @@ pub struct Token {
 pub enum TokenKind {
     // 字面量
     Ident(String),
-    Number(f64),
+    Number { value: f64, raw: String },
     String(String),
     Url(String),
     Color(u32),       // #rgb / #rrggbb
@@ -41,14 +43,10 @@ pub enum TokenKind {
     
     // 特殊
     Interpolation,    // #{
-    AtKeyword,        // @use, @mixin 等
+    AtKeyword(String), // @use, @mixin 等
     Hash,             // #（用于 ID 选择器）
     Ampersand,        // &（父选择器）
     Pipe,             // | (选择器组合)
-    
-    // Sass 特有
-    Indent,           // .sass 缩进
-    Dedent,           // .sass 缩出
     
     // 其他
     Whitespace,
@@ -57,18 +55,33 @@ pub enum TokenKind {
 }
 ```
 
+## 使用方式
+
+```rust
+use sasspile::lexer::{Lexer, tokenize};
+
+// 方式一：便捷函数
+let (tokens, diagnostics) = tokenize(source);
+
+// 方式二：构建 Lexer
+let lexer = Lexer::new(source);
+let (tokens, diag) = lexer.tokenize();
+```
+
 ## 插值处理
 
-`#{}` 是关键难点，需要在以下上下文中正确识别：
+`#{}` 在以下上下文中正确识别：
 - 选择器中
 - 属性名中
 - 属性值中
 - 字符串内部
 
-## 测试重点
+## 已修复问题
 
-- 基本 token 识别
-- 数字（含科学计数法、单位）
-- 字符串（单引号、双引号、转义）
-- 插值边界识别
-- 缩进语法 Indent/Dent 序列
+- ✅ 反斜杠转义处理
+- ✅ 注释后中断 bug
+- ✅ 缩进语法的 Indent/Dedent
+
+## 测试
+
+- `tests/lexer_spec.rs`
