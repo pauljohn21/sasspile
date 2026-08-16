@@ -1,4 +1,4 @@
-# sasslipe
+# sasspile
 
 **Pure Rust + Tokio asynchronous SCSS compiler**, targeting compatibility with the Sass specification.
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-sasslipe is a from-scratch SCSS compiler written in Rust, built around a 7-stage Tokio asynchronous pipeline. It aims for broad compatibility with the [Sass specification](https://github.com/sass/sass-spec) while leveraging Rust's type system and async runtime for safe, performant compilation.
+sasspile is a from-scratch SCSS compiler written in Rust, built around a 7-stage Tokio asynchronous pipeline. It aims for broad compatibility with the [Sass specification](https://github.com/sass/sass-spec) while leveraging Rust's type system and async runtime for safe, performant compilation.
 
 **Status**: Core pipeline (Phase 1–11) complete — lexing, parsing, semantic analysis, expression evaluation, built-in modules (color/math/list/map/string/meta), CSS generation, CSS4 color spaces, incremental compilation, pipeline orchestration, and Sass spec test integration.
 
