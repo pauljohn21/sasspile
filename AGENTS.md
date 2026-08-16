@@ -49,7 +49,6 @@ sasslipe-next/
 │       ├── proposal.md # 项目提案
 │       ├── design.md   # 架构设计
 │       └── tasks.md    # 51 个任务清单
-└── .codegraph/         # 代码智能图谱（CodeGraph CLI 的 SQLite 数据库，自动生成维护）
 ```
 
 ## 开发工作流
@@ -85,41 +84,6 @@ cargo clippy -p sasspile -- -D warnings
 # 文件行数检查（确保 ≤ 400）
 find sasspile/src -name "*.rs" -exec wc -l {} \;
 ```
-
-### 3. CodeGraph CLI（代码智能图谱）
-
-`.codegraph/` 是 CodeGraph CLI 自动维护的 SQLite 数据库，提供函数/结构体/调用链索引。
-
-```bash
-# 同步索引到最新代码（增删文件后必须执行）
-codegraph sync
-
-# 查看索引状态
-codegraph status
-
-# 查询符号
-codegraph query "fn compile"
-
-# 探索符号（源码 + 调用路径）
-codegraph explore eval
-
-# 单个符号详情 + 调用链
-codegraph node evaluate_expr
-
-# 谁调用了这个符号
-codegraph callers evaluate
-
-# 这个符号调用了谁
-codegraph callees evaluate
-
-# 修改某符号会影响什么
-codegraph impact SymbolTable
-
-# 项目文件结构
-codegraph files
-```
-
-ℹ️ **注意**：`.codegraph/` 是 CLI 自动生成的，不要在里面手写 markdown 文档。
 
 ## 待实现模块（按 Phase）
 
@@ -208,7 +172,6 @@ cargo run -p sasspile -- input.scss --watch
 
 - **架构设计**：`openspec/changes/scss-compiler/design.md`
 - **任务清单**：`openspec/changes/scss-compiler/tasks.md`
-- **代码智能图谱**：`.codegraph/`（用 `codegraph sync` 更新，`codegraph query/node/callers` 查询）
 - **Sass Spec**：sass-spec 仓库（外部）
 
 ## 沟通语言

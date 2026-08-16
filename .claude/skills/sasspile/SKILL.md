@@ -29,10 +29,7 @@ description: "Sasspile SCSS 编译器开发技能。触发：实现编译器新�
 # 1. 读取相关 spec
 cat openspec/changes/scss-compiler/specs/{module}/spec.md
 
-# 2. 读取模块知识
-cat codegraph/modules/{module}.md
-
-# 3. 创建模块文件
+# 2. 创建模块文件
 mkdir -p sasspile/src/{module}
 
 # 4. 实现（严守行数限制）
