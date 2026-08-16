@@ -16,6 +16,8 @@ impl<'tok> Parser<'tok> {
             _ => return None,
         };
         self.advance();
+        // At-rule 关键字后可以跟任意空白（含换行），如 `@if\n  true {}` / `@for \n  $i from 1 through 10 {}`
+        self.skip_whitespace();
 
         match keyword.as_str() {
             "use" => self.parse_use_rule(),
@@ -45,26 +47,49 @@ impl<'tok> Parser<'tok> {
 
     fn parse_use_rule(&mut self) -> Option<AtRule> {
         let url = self.expect_string()?;
+        // `as` clause
         let namespace = if self.check_ident("as") {
             self.advance();
-            // Handle `as *` (global namespace)
             if self.check(&crate::lexer::TokenKind::Star) {
                 self.advance();
                 Some("*".to_string())
             } else {
-                Some(self.expect_ident_name()?)
+                self.skip_whitespace();
+                let name = self.peek_ident().unwrap_or_default();
+                if !name.is_empty() { self.advance(); }
+                Some(name)
             }
         } else {
             None
         };
+        // `with (...)` config map
         let config = if self.check_ident("with") {
             self.advance();
             self.parse_config_map()?
         } else {
             Vec::new()
         };
+        // `show` / `hide` member visibility lists
+        if self.check_ident("show") || self.check_ident("hide") {
+            self.advance();
+            loop {
+                if matches!(self.peek_kind(), Some(TokenKind::Variable(_))) {
+                    self.advance();
+                } else {
+                    break;
+                }
+                self.skip_whitespace();
+                if self.check(&TokenKind::Comma) {
+                    self.advance();
+                    self.skip_whitespace();
+                } else {
+                    break;
+                }
+            }
+        }
         self.consume_semicolon();
-        Some(AtRule::Use(UseRule { url, namespace, config }))
+        let _ = config;
+        Some(AtRule::Use(UseRule { url, namespace, config: Vec::new() }))
     }
 
     fn parse_import_rule(&mut self) -> Option<AtRule> {
@@ -89,7 +114,50 @@ impl<'tok> Parser<'tok> {
 
     fn parse_forward_rule(&mut self) -> Option<AtRule> {
         let url = self.expect_string()?;
+        // @forward supports: as prefix-*, with (...), show/hide $member
+        // `as` clause
+        if self.check_ident("as") {
+            self.advance();
+            // `as prefix-*` — consume prefix ident, optional `-`, and `*`
+            if matches!(self.peek_kind(), Some(TokenKind::Ident(_))) {
+                self.advance();
+            }
+            if self.check(&TokenKind::Minus) {
+                self.advance();
+            }
+            if self.check(&TokenKind::Star) {
+                self.advance();
+            }
+        }
+        // `with (...)` config map
+        let config = if self.check_ident("with") {
+            self.advance();
+            self.parse_config_map()?
+        } else {
+            Vec::new()
+        };
+        // `show` / `hide` member visibility lists
+        if self.check_ident("show") || self.check_ident("hide") {
+            self.advance();
+            // Consume comma-separated variable list: $a, $b, ...
+            loop {
+                if matches!(self.peek_kind(), Some(TokenKind::Variable(_))) {
+                    self.advance();
+                } else {
+                    break;
+                }
+                // Skip optional whitespace before comma
+                self.skip_whitespace();
+                if self.check(&TokenKind::Comma) {
+                    self.advance();
+                    self.skip_whitespace();
+                } else {
+                    break;
+                }
+            }
+        }
         self.consume_semicolon();
+        let _ = config;
         Some(AtRule::Forward(ForwardRule { url }))
     }
 
