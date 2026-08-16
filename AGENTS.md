@@ -174,8 +174,8 @@ codegraph files
 
 每个模块实现时，确认：
 
-- [ ] 文件 ≤ 400 行
-- [ ] mod.rs 仅做 re-export（≤ 100 行）
+- [ ] 文件 ≤ 1000 行
+- [ ] mod.rs 仅做 re-export（≤ 200 行）
 - [ ] 使用 tracing 宏而非 println!
 - [ ] 测试放在 tests/ 目录
 - [ ] thiserror 定义错误类型

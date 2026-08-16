@@ -6,7 +6,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/pauljohn21/sasspile-next"
+repository = "https://github.com/pauljohn21/sasspile"
 authors = ["sasspile contributors"]
 
 [workspace.dependencies]
