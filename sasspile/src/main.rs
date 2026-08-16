@@ -1,4 +1,4 @@
-//! sasslipe CLI — command-line SCSS compiler.
+//! sasspile CLI — command-line SCSS compiler.
 
 use std::path::PathBuf;
 

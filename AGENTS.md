@@ -36,9 +36,8 @@ Source → Lex → Parse → Semantic → Transform → Evaluate → Codegen
 
 ```
 sasslipe-next/
-├── Cargo.toml          # workspace 根（members: hrx, sasspile）
-├── hrx/                # HRX 测试归档解析器（已完成）
-├── sasspile/           # SCSS 编译器核心（开发中）
+├── Cargo.toml          # workspace 根（members: sasspile）
+├── sasspile/           # SCSS 编译器核心
 │   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs      # 公共 API
@@ -50,10 +49,7 @@ sasslipe-next/
 │       ├── proposal.md # 项目提案
 │       ├── design.md   # 架构设计
 │       └── tasks.md    # 51 个任务清单
-└── codegraph/          # 项目知识图谱（外部大脑）
-    ├── modules/        # 10 个模块知识文件
-    ├── decisions/      # 7 个关键决策记录
-    └── specs/          # sass-spec 测试知识
+└── .codegraph/         # 代码智能图谱（CodeGraph CLI 的 SQLite 数据库，自动生成维护）
 ```
 
 ## 开发工作流
@@ -80,9 +76,6 @@ openspec archive --change "scss-compiler"
 # 构建
 cargo build -p sasspile
 
-# 运行（仅 hrx 可用期）
-cargo run -p hrx -- <file.hrx>
-
 # 测试
 cargo test -p sasspile
 
@@ -93,20 +86,40 @@ cargo clippy -p sasspile -- -D warnings
 find sasspile/src -name "*.rs" -exec wc -l {} \;
 ```
 
-### 3. Codegraph 知识检索
+### 3. CodeGraph CLI（代码智能图谱）
+
+`.codegraph/` 是 CodeGraph CLI 自动维护的 SQLite 数据库，提供函数/结构体/调用链索引。
 
 ```bash
-# 查看模块知识
-cat codegraph/modules/value-system.md
-cat codegraph/modules/lexer.md
-cat codegraph/modules/parser.md
+# 同步索引到最新代码（增删文件后必须执行）
+codegraph sync
 
-# 查看架构决策
-cat codegraph/decisions/001-pipeline-tokio-mpsc.md
+# 查看索引状态
+codegraph status
 
-# 查看 SQLite 图谱（如 CLI 可用）
-codegraph query "SELECT * FROM nodes WHERE module='lexer'"
+# 查询符号
+codegraph query "fn compile"
+
+# 探索符号（源码 + 调用路径）
+codegraph explore eval
+
+# 单个符号详情 + 调用链
+codegraph node evaluate_expr
+
+# 谁调用了这个符号
+codegraph callers evaluate
+
+# 这个符号调用了谁
+codegraph callees evaluate
+
+# 修改某符号会影响什么
+codegraph impact SymbolTable
+
+# 项目文件结构
+codegraph files
 ```
+
+ℹ️ **注意**：`.codegraph/` 是 CLI 自动生成的，不要在里面手写 markdown 文档。
 
 ## 待实现模块（按 Phase）
 
@@ -195,8 +208,7 @@ cargo run -p sasspile -- input.scss --watch
 
 - **架构设计**：`openspec/changes/scss-compiler/design.md`
 - **任务清单**：`openspec/changes/scss-compiler/tasks.md`
-- **模块知识**：`codegraph/modules/{module}.md`
-- **决策记录**：`codegraph/decisions/{NNN}-{name}.md`
+- **代码智能图谱**：`.codegraph/`（用 `codegraph sync` 更新，`codegraph query/node/callers` 查询）
 - **Sass Spec**：sass-spec 仓库（外部）
 
 ## 沟通语言

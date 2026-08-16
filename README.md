@@ -1,18 +1,36 @@
 # sasspile
 
-**Pure Rust + Tokio asynchronous SCSS compiler**, targeting compatibility with the Sass specification.
+**纯 Rust + Tokio 异步 SCSS 编译器**，兼容 [Sass 规范](https://github.com/sass/sass-spec)。
 
+[![crates.io](https://img.shields.io/crates/v/sasspile.svg)](https://crates.io/crates/sasspile)
+[![docs.rs](https://img.shields.io/docsrs/sasspile)](https://docs.rs/sasspile)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](./LICENSE)
 [![Rust Edition 2024](https://img.shields.io/badge/rust-2024-orange.svg)](https://blog.rust-lang.org/2024/02/19/Rust-2024.html)
 [![Rust Toolchain 1.97](https://img.shields.io/badge/toolchain-1.97-blue.svg)](https://blog.rust-lang.org/2026/04/02/Rust-1.97.0.html)
+[![Downloads](https://img.shields.io/crates/d/sasspile.svg)](https://crates.io/crates/sasspile)
 
-## Overview
+## 目录
 
-sasspile is a from-scratch SCSS compiler written in Rust, built around a 7-stage Tokio asynchronous pipeline. It aims for broad compatibility with the [Sass specification](https://github.com/sass/sass-spec) while leveraging Rust's type system and async runtime for safe, performant compilation.
+- [概览](#概览)
+- [架构](#架构)
+- [安装](#安装)
+- [使用](#使用)
+- [功能](#功能)
+- [兼容性](#兼容性)
+- [测试](#测试)
+- [项目结构](#项目结构)
+- [设计原则](#设计原则)
+- [路线图](#路线图)
+- [贡献](#贡献)
+- [许可](#许可)
 
-**Status**: Core pipeline (Phase 1–11) complete — lexing, parsing, semantic analysis, expression evaluation, built-in modules (color/math/list/map/string/meta), CSS generation, CSS4 color spaces, incremental compilation, pipeline orchestration, and Sass spec test integration.
+## 概览
 
-## Architecture
+sasspile 是从零开始用 Rust 编写的 SCSS 编译器，围绕 **7 阶段 Tokio 异步管道**构建。它在利用 Rust 类型系统和异步运行时实现安全、高性能编译的同时，致力于与 [Sass 规范](https://sass-lang.com/documentation)广泛兼容。
+
+**当前状态**：核心管道已完成 — 词法分析、语法分析、语义分析、表达式求值、内置模块（color/math/list/map/string/meta）、CSS 生成、CSS4 颜色空间、增量编译、管道编排、Sass spec 测试集成。
+
+## 架构
 
 ```
 Source → Lex → Parse → Semantic → Transform → Evaluate → Codegen
@@ -21,27 +39,33 @@ Source → Lex → Parse → Semantic → Transform → Evaluate → Codegen
                     Tokio Tasks + mpsc Channels
 ```
 
-Each stage is an independent Tokio task connected via bounded `mpsc` channels. Immutable `Value` types flow through the pipeline, with `watch` channels propagating variable changes for incremental recompilation.
+每个阶段都是独立的 Tokio 任务，通过有界 `mpsc` 通道连接。不可变的 `Value` 类型流经管道，`watch` 通道传播变量变更以支持增量重编译。
 
-### Module Structure
+### 模块结构
 
-| Module | Purpose |
-|--------|---------|
-| `lexer` | Tokenization, interpolation parsing, indented syntax |
-| `parser` | Recursive-descent parser, AST construction, error recovery |
-| `semantic` | Symbol tables, dependency resolution, `@extend` validation |
-| `eval` | Expression evaluation, operators, function dispatch |
-| `builtin` | Built-in Sass modules: `sass:color`, `sass:math`, `sass:list`, `sass:map`, `sass:string`, `sass:meta` |
-| `css` | CSS output generation, rule expansion, at-rule handling |
-| `value` | Value system: numbers, colors, strings, maps, lists |
-| `color` | CSS4 color spaces: Oklab, Oklch, HWB |
-| `pipeline` | 7-stage Tokio orchestration with backpressure |
-| `incremental` | Reactive environment, dependency graph, caching, propagation |
-| `diagnostics` | Error reporting with source snippets |
+| 模块 | 用途 |
+|------|------|
+| `lexer` | 词法分析、插值解析、缩进语法 |
+| `parser` | 递归下降解析器、AST 构建、错误恢复 |
+| `semantic` | 符号表、依赖解析、`@extend` 验证 |
+| `eval` | 表达式求值、运算符、函数调度 |
+| `builtin` | 内置 Sass 模块：`sass:color`、`sass:math`、`sass:list`、`sass:map`、`sass:string`、`sass:meta` |
+| `css` | CSS 输出生成、规则展开、at-rule 处理 |
+| `value` | 值系统：数字、颜色、字符串、Map、List |
+| `color` | CSS4 颜色空间：Oklab、Oklch、HWB |
+| `pipeline` | 7 阶段 Tokio 编排 + 背压控制 |
+| `incremental` | 反应式环境、依赖图、缓存、传播 |
+| `diagnostics` | 带源代码片段的错误报告 |
 
-## Installation
+## 安装
 
-### From Source
+### 从 crates.io
+
+```bash
+cargo install sasspile
+```
+
+### 从源码
 
 ```bash
 git clone git@github.com:pauljohn21/sasspile-next.git
@@ -49,27 +73,22 @@ cd sasspile-next
 cargo build --release -p sasspile
 ```
 
-### Requirements
+### 依赖要求
 
 - Rust 1.97+ (edition 2024)
 - Tokio (features: full)
 
-## Usage
+## 使用
 
 ### CLI
 
 ```bash
-# Compile a file
-cargo run -p sasspile -- input.scss -o output.css
+# 编译单个文件
+sasspile input.scss -o output.css
 
-# Verbose mode with tracing
-RUST_LOG=info cargo run -p sasspile -- input.scss -o output.css -vv
 
-# Generate JSON trace logs for analysis
-cargo run -p sasspile --example trace_parse -- input.scss output.json
-```
 
-### Library
+### 作为库使用
 
 ```rust
 use sasspile::Compiler;
@@ -83,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Pipeline (Advanced)
+### Pipeline（高级）
 
 ```rust
 use sasspile::{Pipeline, PipelineInput};
@@ -104,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Batch Compilation (Concurrent)
+### 批量编译（并发）
 
 ```rust
 use sasspile::{Pipeline, PipelineInput};
@@ -131,99 +150,139 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Incremental Compilation
+### 增量编译
 
 ```rust
-use sasspile::incremental::{ReactiveEnv, DependencyGraph, SpanCache, PropagateMsg};
+use sasspile::incremental::{ReactiveEnv, DependencyGraph, SpanCache};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Reactive environment: variable changes trigger downstream updates.
+    // 反应式环境：变量变更触发下游更新
     let env = ReactiveEnv::new();
     env.set_var("theme", "dark");
 
-    // Track dependencies between nodes.
+    // 跟踪节点间的依赖关系
     let graph = DependencyGraph::new();
 
-    // Cache compiled spans.
+    // 缓存编译后的 span
     let cache = SpanCache::new();
 
-    // Propagate changes through the pipeline.
-    // (Use PropagateMsg::VarChanged, BatchChanged, or SourceEdited)
+    // 通过管道传播变更
+    // (使用 PropagateMsg::VarChanged, BatchChanged, 或 SourceEdited)
     Ok(())
 }
 ```
 
-## Features
+## 功能
 
-### Implemented
+### 已实现
 
-- Lexing: identifiers, numbers, strings, operators, interpolation `#{}`
-- Parsing: rules, declarations, at-rules, nesting, selectors
-- Semantic analysis: symbol table, module dependencies, `@extend`
-- Evaluation: arithmetic, comparisons, string ops, list/map access
-- Built-in modules: `sass:color`, `sass:math`, `sass:list`, `sass:map`, `sass:string`, `sass:meta`
-- CSS generation: expanded/compressed output, nested rules, at-rules
-- CSS4 colors: Oklab, Oklch, HWB, `color-mix()`, relative color syntax
-- Pipeline: 7-stage Tokio async pipeline with backpressure
-- Incremental: reactive env, dep graph, span cache, change propagation
-- Sass spec: HRX loader, spec runner, CSS4 color skip list
+- **词法分析**：标识符、数字、字符串、运算符、插值 `#{}`
+- **语法分析**：规则、声明、at-rule、嵌套、选择器
+- **语义分析**：符号表、模块依赖、`@extend`
+- **求值**：算术、比较、字符串操作、列表/Map 访问
+- **内置模块**：`sass:color`、`sass:math`、`sass:list`、`sass:map`、`sass:string`、`sass:meta`
+- **CSS 生成**：expanded/compressed 输出、嵌套规则、at-rules
+- **CSS4 颜色**：Oklab、Oklch、HWB、`color-mix()`、相对颜色语法
+- **管道**：7 阶段 Tokio 异步管道 + 背压
+- **增量编译**：反应式环境、依赖图、span 缓存、变更传播
+- **Sass 规范**：HRX 加载器、spec 运行器、CSS4 颜色跳过列表
 
-### CSS4 Color Spaces
+### CSS4 颜色空间
 
-| Space | Status |
-|-------|--------|
+| 颜色空间 | 状态 |
+|----------|------|
 | sRGB (hex, rgb(), hsl()) | ✅ |
 | Oklab / Oklch | ✅ |
 | HWB | ✅ |
 | `color-mix()` | ✅ |
-| Relative color syntax | ✅ |
-| `light-dark()` | ✅ via `color-mix()` |
+| 相对颜色语法 | ✅ |
+| `light-dark()` | ✅ 通过 `color-mix()` |
 
-## Testing
+## 兼容性
+
+| 测试套件 | 通过率 | 说明 |
+|----------|--------|---------|
+| **Bootstrap** | **100%** (99/99) | 完整 Bootstrap 5 SCSS 编译基线 |
+| **Element Plus** | **100%** (145/145) | 核心规范兼容性 |
+| **sass-spec (parse)** | 持续追踪 | 解析器兼容性 |
+
+> 完整兼容性数据通过 `cargo test -p sasspile --test sass_spec_parse` 获取实时报告。
+
+## 测试
 
 ```bash
-# Run all unit tests
+# 运行所有单元测试
 cargo test -p sasspile --lib
 
-# Run integration tests (spec runner)
+# 运行集成测试（spec runner）
 cargo test -p sasspile --test spec_runner
 
-# Run all tests
+# 运行全部测试
 cargo test -p sasspile --lib --tests
+
+# Clippy 检查（零警告）
+cargo clippy -p sasspile -- -D warnings
 ```
 
-## Benchmarks
+## 项目结构
 
-The project tracks compatibility with:
+```
+sasslipe-next/
+├── sasspile/              # SCSS 编译器核心 crate
+│   ├── Cargo.toml
+│   ├── examples/          # 示例代码
+│   │   ├── basic_compile.rs
+│   │   ├── concurrent_compile.rs
+│   │   ├── incremental_compile.rs
+│   │   └── trace_parse.rs
+│   ├── src/               # 源码（每文件 ≤ 400 行）
+│   │   ├── lib.rs         # 公共 API
+│   │   ├── main.rs        # CLI 入口
+│   │   ├── error.rs       # 错误类型
+│   │   ├── lexer/         # 词法分析
+│   │   ├── parser/        # 语法分析
+│   │   ├── semantic/      # 语义分析
+│   │   ├── eval/          # 表达式求值
+│   │   ├── builtin/       # 内置模块
+│   │   ├── css/           # CSS 生成
+│   │   ├── value/         # 值系统
+│   │   ├── color/         # CSS4 颜色
+│   │   ├── pipeline/      # 管道编排
+│   │   ├── incremental/   # 增量编译
+│   │   └── diagnostics/   # 诊断报告
+│   └── tests/             # 集成测试
+├── bs/                    # Bootstrap SCSS（子模块）
+├── ep/                    # Element Plus SCSS（子模块）
+```
 
-- **sass-spec**: Sass specification test suite (HRX archives)
-- **Bootstrap SCSS**: Full Bootstrap 5 SCSS compilation baseline (99/99 files passing)
+## 设计原则
 
-## Design Principles
+1. **零 `println!`** — 全部日志通过 `tracing` 宏
+2. **不可变数据** — 值使用 `Arc` 以便在任务间廉价共享
+3. **模块化文件** — 单文件 ≤ 400 行
+4. **异步优先** — 管道全流程 Tokio 任务
+5. **零 unsafe** — 纯安全 Rust
 
-1. **Zero `println!`** — All logging via `tracing` macros
-2. **Immutable data** — Values use `Arc` for cheap sharing across tasks
-3. **Modular files** — Single file ≤ 400 lines
-4. **Async-first** — Tokio tasks throughout the pipeline
-5. **Zero unsafe** — Pure safe Rust
 
-## Contributing
 
-Contributions welcome! Please ensure:
+## 贡献
 
-- `cargo build -p sasspile` passes
-- `cargo test -p sasspile` passes
-- `cargo clippy -p sasspile -- -D warnings` is clean
-- All logging uses `tracing` macros (no `println!`/`eprintln!`)
-- New tests go in `tests/` directory (not inline)
+欢迎贡献！请确保：
 
-## License
+- `cargo build -p sasspile` 通过
+- `cargo test -p sasspile` 通过
+- `cargo clippy -p sasspile -- -D warnings` 无警告
+- 所有日志使用 `tracing` 宏（禁止 `println!`/`eprintln!`）
+- 新测试放在 `tests/` 目录（不要内联）
+- 单文件 ≤ 400 行
 
-Dual-licensed under [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE).
+## 许可
 
-## Acknowledgments
+双许可：[MIT](./LICENSE-MIT) 或 [Apache-2.0](./LICENSE-APACHE)
 
-- [Sass specification](https://sass-lang.com/documentation) — the definitive reference
-- [sass-spec](https://github.com/sass/sass-spec) — official test suite
-- [Bootstrap](https://github.com/twbs/bootstrap) — real-world SCSS baseline
+## 致谢
+
+- [Sass specification](https://sass-lang.com/documentation) — 权威参考
+- [sass-spec](https://github.com/sass/sass-spec) — 官方测试套件
+- [Bootstrap](https://github.com/twbs/bootstrap) — 真实世界 SCSS 基线

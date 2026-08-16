@@ -1,4 +1,4 @@
-//! sasslipe — Pure Rust async SCSS compiler.
+//! sasspile — Pure Rust async SCSS compiler.
 //!
 //! Pipeline: Source → Lex → Parse → Semantic → Transform → Evaluate → Codegen
 //!

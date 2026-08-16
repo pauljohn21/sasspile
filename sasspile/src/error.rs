@@ -1,8 +1,8 @@
-//! Error types for sasslipe.
+//! Error types for sasspile.
 
 use thiserror::Error;
 
-/// Top-level error type for the sasslipe compiler.
+/// Top-level error type for the sasspile compiler.
 #[derive(Debug, Error)]
 pub enum SassError {
     /// IO error reading source files.

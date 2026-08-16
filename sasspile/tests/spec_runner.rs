@@ -3,12 +3,20 @@
 //! Iterates over loaded spec cases, runs the compiler on each input,
 //! and checks if the output matches the expected CSS.
 
-#[path = "hrx_loader.rs"]
-mod hrx_loader;
-
 use tracing::{info, info_span, instrument, warn};
 
-use hrx_loader::{load_hrx_file, load_hrx_dir, SpecCase};
+/// A loaded sass-spec test case.
+#[derive(Debug, Clone)]
+pub struct SpecCase {
+    /// Test name.
+    pub name: String,
+    /// Input SCSS text.
+    pub input: String,
+    /// Expected CSS output.
+    pub expected: String,
+    /// Optional output style override.
+    pub style: Option<String>,
+}
 
 /// Result of a single spec test run.
 #[derive(Debug, Clone)]
@@ -81,35 +89,21 @@ fn normalize_css(css: &str) -> String {
         .join(" ")
 }
 
-/// Run all HRX files in a directory.
-pub fn run_spec_dir(dir: impl AsRef<std::path::Path>) -> Vec<SpecResult> {
-    let cases = load_hrx_dir(dir);
-    let mut results = Vec::new();
-
-    for case in cases {
-        match case {
-            Ok(c) => results.push(run_case(&c)),
-            Err(e) => {
-                warn!(error = %e, "failed to load spec case");
-                results.push(SpecResult {
-                    name: "load_error".to_string(),
-                    passed: false,
-                    actual: None,
-                    expected: String::new(),
-                    error: Some(e),
-                });
-            }
-        }
-    }
-
-    results
-}
-
 /// Summarize spec results.
 pub fn summarize(results: &[SpecResult]) -> (usize, usize) {
     let passed = results.iter().filter(|r| r.passed).count();
     let failed = results.len() - passed;
     (passed, failed)
+}
+
+/// Create a spec case from raw parts (convenience constructor).
+pub fn case(name: &str, input: &str, expected: &str) -> SpecCase {
+    SpecCase {
+        name: name.to_string(),
+        input: input.to_string(),
+        expected: expected.to_string(),
+        style: None,
+    }
 }
 
 #[cfg(test)]
@@ -119,24 +113,14 @@ mod tests {
     #[test]
     fn run_simple_case() {
         // Use a hex color to avoid named-color/$variable ambiguity in current parser.
-        let case = SpecCase {
-            name: "simple".to_string(),
-            input: ".foo { color: #ff0000; }".to_string(),
-            expected: ".foo {\n  color: #ff0000;\n}\n".to_string(),
-            style: None,
-        };
+        let case = case("simple", ".foo { color: #ff0000; }", ".foo {\n  color: #ff0000;\n}\n");
         let result = run_case(&case);
         assert!(result.passed, "simple case should pass: {:?}, actual: {:?}", result.error, result.actual);
     }
 
     #[test]
     fn run_failing_case() {
-        let case = SpecCase {
-            name: "wrong".to_string(),
-            input: ".foo { color: red; }".to_string(),
-            expected: ".foo { color: blue; }".to_string(),
-            style: None,
-        };
+        let case = case("wrong", ".foo { color: red; }", ".foo { color: blue; }");
         let result = run_case(&case);
         assert!(!result.passed);
     }
