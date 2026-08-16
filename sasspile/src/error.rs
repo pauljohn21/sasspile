@@ -9,10 +9,6 @@ pub enum SassError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// HRX parsing error (from hrx crate).
-    #[error("hrx error: {0}")]
-    Hrx(#[from] hrx::HrxError),
-
     /// Generic compilation failure.
     #[error("compile error: {0}")]
     Compile(String),
