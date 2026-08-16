@@ -1,6 +1,6 @@
 [package]
 name = "sasspile"
-version = "0.8.1"
+version = "0.8.2"
 description = "Pure Rust async SCSS compiler"
 readme = "../README.md"
 keywords = ["scss", "sass", "css", "compiler"]
