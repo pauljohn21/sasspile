@@ -3,7 +3,7 @@
 use sasspile::{tokenize, parse};
 
 fn test_parse_debug(name: &str, src: &str) {
-    let (tokens, lex_diags) = tokenize(src);
+    let (_tokens, lex_diags) = tokenize(src);
     let lex_e = lex_diags.errors().len();
     let (_stylesheet, parse_diags) = parse(src);
     let parse_e = parse_diags.errors().len();

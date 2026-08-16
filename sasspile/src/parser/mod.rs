@@ -9,6 +9,7 @@ mod core;
 mod expr;
 mod selector;
 
+mod lookahead;
 pub mod interpolation;
 pub mod recovery;
 

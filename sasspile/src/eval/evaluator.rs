@@ -9,6 +9,12 @@ use crate::value::{SassColor, Value};
 const MAX_CALL_DEPTH: usize = 64;
 
 /// Evaluation context holding symbol table and definition registry.
+///
+/// Walks parsed AST expressions, resolves variables through the symbol table,
+/// applies operators, and dispatches function/mixin calls.
+///
+/// Create with [`EvalContext::new`] requiring mutable access to a [`SymbolTable`]
+/// and shared access to a [`DefinitionRegistry`].
 #[derive(Debug)]
 pub struct EvalContext<'a> {
     /// Reference to the symbol table for variable resolution.

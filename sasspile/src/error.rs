@@ -3,6 +3,28 @@
 use thiserror::Error;
 
 /// Top-level error type for the sasspile compiler.
+///
+/// Errors are created via the [`Error`](std::error::Error) trait and can carry
+/// additional context using the [`context`](SassError::context) method.
+///
+/// # Examples
+///
+/// ```
+/// use sasspile::SassError;
+///
+/// // Create a compile error
+/// let err = SassError::Compile("unexpected token".into());
+///
+/// // Add context
+/// let wrapped = err.context("while parsing foo.scss");
+/// println!("{wrapped}");
+/// ```
+///
+/// ## Error variants
+///
+/// - [`SassError::Io`] — wraps `std::io::Error` for file read failures
+/// - [`SassError::Compile`] — generic compilation failure with message
+/// - [`SassError::WithContext`] — wraps another error with additional context
 #[derive(Debug, Error)]
 pub enum SassError {
     /// IO error reading source files.

@@ -15,7 +15,26 @@ pub use number::{Number, Unit};
 
 use std::sync::Arc;
 
-/// Sass value enumeration.
+/// Every possible Sass runtime value.
+///
+/// Values are immutable and shareable across Tokio tasks via [`SharedValue`] (`Arc<Value>`).
+/// Use pattern matching to extract the inner data.
+///
+/// # Examples
+///
+/// ```
+/// use sasspile::Value;
+/// use sasspile::value::Number;
+///
+/// let num = Value::Number(Number::new(42.0, sasspile::value::Unit::None));
+/// let text = Value::String("hello".into(), sasspile::value::Quoted::Quoted);
+///
+/// match &text {
+///     Value::String(s, _) => println!("string: {s}"),
+///     Value::Number(n) => println!("number: {}", n.value),
+///     _ => println!("other"),
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub enum Value {
     /// Numeric value with optional unit.

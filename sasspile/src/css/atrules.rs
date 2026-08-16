@@ -187,12 +187,4 @@ fn expand_while_rule(_while_stmt: &WhileStmt, _doc: &mut CssDocument, _parent_se
     tracing::debug!("@while expansion requires evaluator integration");
 }
 
-// Re-export internal function so rules.rs can delegate.
-#[allow(dead_code)]
-pub(crate) fn expand_atrule_internal(
-    at_rule: &AtRule,
-    doc: &mut CssDocument,
-    parent_sel: &str,
-) {
-    expand_atrule(at_rule, doc, parent_sel);
-}
+

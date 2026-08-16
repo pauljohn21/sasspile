@@ -20,7 +20,7 @@ fn collect_scss(dir: &str) -> Vec<PathBuf> {
 
 fn validate_file(path: &PathBuf) -> Result<(), String> {
     let source = std::fs::read_to_string(path).map_err(|e| format!("read: {e}"))?;
-    let (tokens, lex_diags) = tokenize(&source);
+    let (_tokens, lex_diags) = tokenize(&source);
     let lex_e = lex_diags.errors().len();
     if lex_e > 0 {
         let detail: Vec<String> = lex_diags.errors().iter().take(3).map(|d| d.message.clone()).collect();

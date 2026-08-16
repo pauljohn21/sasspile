@@ -81,7 +81,10 @@ impl std::fmt::Display for Diagnostic {
     }
 }
 
-/// Collection of diagnostics.
+/// Collection of diagnostics produced during compilation.
+///
+/// Use [`Diagnostics::errors`] to iterate, [`Diagnostics::has_errors`] to check
+/// for failures, and [`Diagnostics::counts`] for a summary tuple `(errors, warns, infos)`.
 #[derive(Debug, Clone, Default)]
 pub struct Diagnostics {
     pub items: Vec<Diagnostic>,

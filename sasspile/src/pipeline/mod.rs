@@ -34,10 +34,29 @@ pub struct PipelineOutput {
     pub path: String,
 }
 
-/// Multi-stage compilation pipeline.
+/// Multi-stage async compilation pipeline.
 ///
-/// Spawns Tokio tasks for each stage:
-/// 1. Lex → 2. Parse → 3. Semantic → 4. Eval → 5. CSS Gen → 6. Format → 7. Output
+/// Spawns Tokio tasks for each stage of the compilation:
+/// 1. Lex → 2. Parse → 3. Semantic → 4. Eval → 5. CSS Gen → 6. Format → 7. Output.
+///
+/// Uses bounded `mpsc` channels for backpressure and supports cancellation.
+///
+/// # Examples
+///
+/// ```ignore
+/// use sasspile::{Pipeline, PipelineInput, css::OutputStyle};
+///
+/// # async fn example() -> Result<(), sasspile::SassError> {
+/// let pipeline = Pipeline::new();
+/// let inputs = vec![
+///     PipelineInput { path: "a.scss".into(), source: "a { color: red; }".into() },
+///     PipelineInput { path: "b.scss".into(), source: "b { color: blue; }".into() },
+/// ];
+/// let results = pipeline.compile_batch(inputs, OutputStyle::Expanded).await;
+/// assert_eq!(results.len(), 2);
+/// # Ok(())
+/// # }
+/// ```
 pub struct Pipeline {
     /// Channel capacity for backpressure.
     config: PipelineConfig,
@@ -139,9 +158,38 @@ async fn compile_static(input: &PipelineInput, style: OutputStyle) -> Result<Pip
     })
 }
 
-/// The main sasslipe compiler — backward-compatible façade.
+/// The main sasslipe compiler — a simple façade for one-off compilation.
 ///
-/// For full pipeline usage, prefer `Pipeline` directly.
+/// This is the easiest way to compile SCSS to CSS in simple scenarios.
+/// For batch/async compilation, prefer [`Pipeline`] directly.
+///
+/// # Examples
+///
+/// ## Compile inline SCSS
+///
+/// ```ignore
+/// use sasspile::Compiler;
+///
+/// # async fn example() -> Result<(), sasspile::SassError> {
+/// let compiler = Compiler::new();
+/// let css = compiler.compile("body { color: red; }").await?;
+/// assert!(css.contains("color: red"));
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Compile a file
+///
+/// ```ignore
+/// use sasspile::Compiler;
+///
+/// # async fn example() -> Result<(), sasspile::SassError> {
+/// let compiler = Compiler::new();
+/// let css = compiler.compile_file("styles.scss").await?;
+/// println!("{css}");
+/// # Ok(())
+/// # }
+/// ```
 pub struct Compiler;
 
 impl Compiler {

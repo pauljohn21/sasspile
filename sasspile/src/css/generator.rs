@@ -2,7 +2,19 @@
 
 use super::ast::{CssAtRule, CssDocument, CssRule};
 
-/// Output formatting style.
+/// Output formatting style for CSS generation.
+///
+/// Controls whitespace, indentation, and line breaks in the compiled CSS output.
+///
+/// # Examples
+///
+/// ```
+/// use sasspile::css::OutputStyle;
+///
+/// // Choose compressed for production
+/// let style = OutputStyle::Compressed;
+/// assert_eq!(style, OutputStyle::Compressed);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputStyle {
     /// Nested indented with 2-space indent (Sass original).

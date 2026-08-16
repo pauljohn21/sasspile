@@ -32,7 +32,16 @@ pub use lexer::{tokenize, Token, TokenKind};
 pub use semantic::{DefinitionRegistry, SymbolTable};
 pub use value::{Separator, Value};
 
-/// Library version.
+/// Library version string (from `CARGO_PKG_VERSION`).
+///
+/// # Examples
+///
+/// ```
+/// use sasspile::VERSION;
+///
+/// assert!(!VERSION.is_empty());
+/// println!("sasspile version: {VERSION}");
+/// ```
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Result type used throughout the crate.

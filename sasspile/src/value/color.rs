@@ -345,13 +345,4 @@ impl fmt::Display for SassColor {
     }
 }
 
-/// Named CSS colors.
-#[allow(dead_code)]
-pub const NAMED_COLORS: &[(&str, u32)] = &[
-    ("black", 0x000000),
-    ("white", 0xFFFFFF),
-    ("red", 0xFF0000),
-    ("green", 0x008000),
-    ("blue", 0x0000FF),
-    ("transparent", 0x000000),
-];
+

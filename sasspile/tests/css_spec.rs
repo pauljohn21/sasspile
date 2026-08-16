@@ -4,7 +4,7 @@
 //! parsed AST into CSS output.
 
 use sasspile::css::{self, OutputStyle};
-use sasspile::{Parser, Stylesheet};
+use sasspile::Parser;
 use sasspile::lexer;
 
 fn parse_and_generate(source: &str, style: OutputStyle) -> String {

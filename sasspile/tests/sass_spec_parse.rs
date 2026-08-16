@@ -10,6 +10,7 @@ use sasspile::{tokenize, parse};
 /// HRX 文件解析结果
 #[derive(Debug)]
 struct HrxFile {
+    #[allow(dead_code)]
     path: String,
     test_cases: Vec<HrxCase>,
 }
@@ -18,8 +19,10 @@ struct HrxFile {
 #[derive(Debug)]
 struct HrxCase {
     input_scss: String,
+    #[allow(dead_code)]
     expected_output: Option<String>,
     expected_error: Option<String>,
+    #[allow(dead_code)]
     options: Option<String>,
 }
 
@@ -166,7 +169,7 @@ fn sass_spec_parse_compat() {
 
     let total_files = all_files.len();
     let mut parse_success = 0;
-    let mut parse_fail = 0;
+    let mut _parse_fail = 0;
     let mut failed_paths: Vec<(String, String)> = Vec::new();
     let mut error_case_count = 0;  // error HRX cases parser 宽容通过了（不强求）
 
@@ -195,7 +198,7 @@ fn sass_spec_parse_compat() {
         if file_ok {
             parse_success += 1;
         } else {
-            parse_fail += 1;
+            _parse_fail += 1;
             let err_msg = valid_cases.iter().find_map(|case| {
                 validate_input(&case.input_scss, false).err()
             }).unwrap_or_default();

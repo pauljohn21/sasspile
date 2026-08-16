@@ -19,6 +19,13 @@ pub struct Parser<'tok> {
 }
 
 impl<'tok> Parser<'tok> {
+    /// Returns a reference to the token slice for lookahead operations.
+    pub(crate) fn tokens(&self) -> &'tok [Token] {
+        self.tokens
+    }
+}
+
+impl<'tok> Parser<'tok> {
     /// Create a new parser.
     pub fn new(tokens: &'tok [Token]) -> Self {
         Self {
@@ -69,12 +76,12 @@ impl<'tok> Parser<'tok> {
             }
             Some(_) => {
                 // 顶层函数调用（map.merge(...), calc() 等）— 当作 noop 消费
-                if self.is_top_level_expr_call() {
+                if super::lookahead::is_top_level_expr_call(self.tokens, self.pos) {
                     span.record("decision", "top-level-expr-call");
                     self.parse_expr();
                     return None;
                 }
-                let is_decl = self.looks_like_declaration();
+                let is_decl = super::lookahead::looks_like_declaration(self.tokens, self.pos);
                 span.record("decision", if is_decl { "declaration" } else { "rule" });
                 if is_decl {
                     self.parse_declaration().map(super::ast::Node::Declaration)
@@ -83,154 +90,6 @@ impl<'tok> Parser<'tok> {
                 }
             }
             None => None,
-        }
-    }
-
-    /// 检查当前是否是顶层表达式调用（Ident.Ident(...) 或 Ident(...)）。
-    /// 这类顶层调用不产生规则/声明节点，直接消费跳过。
-    fn is_top_level_expr_call(&self) -> bool {
-        let mut idx = self.pos;
-        while idx < self.tokens.len() && matches!(self.tokens[idx].kind, TokenKind::Whitespace) {
-            idx += 1;
-        }
-        // Ident.Ident( 或 Ident( 模式
-        let first_is_ident = matches!(self.tokens.get(idx), Some(t) if matches!(t.kind, TokenKind::Ident(_)));
-        if !first_is_ident {
-            return false;
-        }
-        // 跳过后续 .Ident 段
-        let mut j = idx + 1;
-        while matches!(self.tokens.get(j), Some(t) if matches!(t.kind, TokenKind::Dot)) {
-            j += 1;
-            if matches!(self.tokens.get(j), Some(t) if matches!(t.kind, TokenKind::Ident(_))) {
-                j += 1;
-            } else {
-                return false;
-            }
-        }
-        // 最后必须是 (
-        matches!(self.tokens.get(j), Some(t) if matches!(t.kind, TokenKind::LParen))
-    }
-
-    /// Look ahead to determine rule vs declaration.
-    /// 关键规则：Ident.Ident( 开头 → 函数调用（如 map.merge(...)），不是声明。
-    pub(super) fn looks_like_declaration(&self) -> bool {
-        let mut idx = self.pos;
-        while idx < self.tokens.len() && matches!(self.tokens[idx].kind, TokenKind::Whitespace) {
-            idx += 1;
-        }
-        match self.tokens.get(idx) {
-            // CSS 自定义属性: --#{$name}: red 或 --color: red
-            Some(t) if matches!(t.kind, TokenKind::Minus) => {
-                let mut j = idx + 1;
-                // 消费 -- 和 Interpolation/Ident 序列
-                while j < self.tokens.len() {
-                    match &self.tokens[j].kind {
-                        TokenKind::Minus => j += 1,
-                        TokenKind::Interpolation => {
-                            j += 1;
-                            // 消费插值的内部 tokens 直到 RBrace
-                            while j < self.tokens.len() && !matches!(self.tokens[j].kind, TokenKind::RBrace) {
-                                j += 1;
-                            }
-                            if j < self.tokens.len() { j += 1; } // consume RBrace
-                        }
-                        TokenKind::Ident(_) => j += 1,
-                        _ => break,
-                    }
-                }
-                // 跳 Whitespace
-                while j < self.tokens.len() && matches!(self.tokens[j].kind, TokenKind::Whitespace) {
-                    j += 1;
-                }
-                matches!(self.tokens.get(j), Some(t) if matches!(t.kind, TokenKind::Colon))
-            }
-            Some(t) if matches!(t.kind, TokenKind::Ampersand | TokenKind::Dot | TokenKind::Hash) => {
-                false
-            }
-            Some(t) if matches!(t.kind, TokenKind::Ident(_)) => {
-                // Ident.Ident( 模式是函数调用（如 map.merge(...), string.length()）
-                if matches!(self.tokens.get(idx + 1), Some(t) if matches!(t.kind, TokenKind::Dot))
-                    && matches!(self.tokens.get(idx + 2), Some(t) if matches!(t.kind, TokenKind::Ident(_)))
-                    && matches!(self.tokens.get(idx + 3), Some(t) if matches!(t.kind, TokenKind::LParen))
-                {
-                    return false;
-                }
-                // Ident( 模式也是函数调用
-                if matches!(self.tokens.get(idx + 1), Some(t) if matches!(t.kind, TokenKind::LParen)) {
-                    return false;
-                }
-                let mut j = idx + 1;
-                let mut paren_depth = 0;
-                while j < self.tokens.len() {
-                    match &self.tokens[j].kind {
-                        TokenKind::LParen => paren_depth += 1,
-                        TokenKind::RParen => {
-                            if paren_depth > 0 { paren_depth -= 1; }
-                        }
-                        TokenKind::Dot | TokenKind::Comma => return false, // Dot=element.class 选择器; Comma=选择器列表
-                        TokenKind::Colon if paren_depth == 0 => return true,
-                        TokenKind::LBrace | TokenKind::Semicolon | TokenKind::Eof => return false,
-                        _ => {}
-                    }
-                    j += 1;
-                }
-                false
-            }
-            Some(t) if matches!(t.kind, TokenKind::Variable(_)) => {
-                let mut j = idx + 1;
-                while j < self.tokens.len() {
-                    match &self.tokens[j].kind {
-                        TokenKind::Colon => return true,
-                        TokenKind::LBrace | TokenKind::Semicolon | TokenKind::Eof => return false,
-                        _ => j += 1,
-                    }
-                }
-                false
-            }
-            // Interpolation as property name: #{$var}: value
-            Some(t) if matches!(t.kind, TokenKind::Interpolation) => {
-                let mut j = idx + 1;
-                // Skip contents of interpolation until RBrace
-                while j < self.tokens.len() && !matches!(self.tokens[j].kind, TokenKind::RBrace) {
-                    j += 1;
-                }
-                if j < self.tokens.len() { j += 1; } // consume RBrace
-                // Skip trailing parts (-ident, -#{...})
-                while j < self.tokens.len() {
-                    match &self.tokens[j].kind {
-                        TokenKind::Interpolation => {
-                            j += 1;
-                            while j < self.tokens.len() && !matches!(self.tokens[j].kind, TokenKind::RBrace) {
-                                j += 1;
-                            }
-                            if j < self.tokens.len() { j += 1; }
-                        }
-                        TokenKind::Minus => {
-                            let saved = j;
-                            j += 1;
-                            if matches!(self.tokens.get(j).map(|t| &t.kind), Some(TokenKind::Ident(_)) | Some(TokenKind::Interpolation)) {
-                                continue;
-                            }
-                            j = saved;
-                            break;
-                        }
-                        _ => break,
-                    }
-                }
-                // Skip whitespace
-                while j < self.tokens.len() && matches!(self.tokens[j].kind, TokenKind::Whitespace) {
-                    j += 1;
-                }
-                // ::pseudo (::before, ::after) 是选择器的一部分，不是声明分隔符
-                if matches!(self.tokens.get(j), Some(t) if matches!(t.kind, TokenKind::Colon))
-                    && matches!(self.tokens.get(j + 1), Some(t) if matches!(t.kind, TokenKind::Colon))
-                {
-                    return false;
-                }
-                matches!(self.tokens.get(j), Some(t) if matches!(t.kind, TokenKind::Colon))
-            }
-            _ => false,
         }
     }
 
@@ -656,28 +515,6 @@ impl<'tok> Parser<'tok> {
         self.diagnostics.push(diag);
     }
 
-    /// Check if current position has map syntax: key: value.
-    pub(crate) fn is_map_syntax(&self) -> bool {
-        // Look ahead for key: value pattern, skipping whitespace
-        let mut idx = self.pos;
-        // Skip whitespace
-        while idx < self.tokens.len() && matches!(self.tokens[idx].kind, TokenKind::Whitespace) {
-            idx += 1;
-        }
-        // Skip first key (string or ident)
-        match self.tokens.get(idx) {
-            Some(t) if matches!(t.kind, TokenKind::Ident(_) | TokenKind::String(_)) => idx += 1,
-            Some(t) if matches!(t.kind, TokenKind::Variable(_)) => idx += 1,
-            _ => return false,
-        }
-        // Skip whitespace
-        while idx < self.tokens.len() && matches!(self.tokens[idx].kind, TokenKind::Whitespace) {
-            idx += 1;
-        }
-        // Check for colon
-        matches!(self.tokens.get(idx), Some(t) if matches!(t.kind, TokenKind::Colon))
-    }
-
     /// Parse a map literal: (key: value, key2: value2).
     /// 注意: 使用 parse_logical 避免双重逗号处理 (parse_expr 现在处理逗号列表).
     pub(crate) fn parse_map_literal(&mut self) -> Option<super::ast::Expr> {
@@ -704,25 +541,6 @@ impl<'tok> Parser<'tok> {
         }
         self.consume(&TokenKind::RParen);
         Some(Expr::Map(map))
-    }
-
-    /// Check if current position has list syntax: expr1, expr2.
-    pub(crate) fn is_list_syntax(&self) -> bool {
-        // Look ahead for comma after first expression, skipping whitespace
-        let mut idx = self.pos;
-        // Skip whitespace
-        while idx < self.tokens.len() && matches!(self.tokens[idx].kind, TokenKind::Whitespace) {
-            idx += 1;
-        }
-        // Simple heuristic: skip first token, look for comma
-        if matches!(self.tokens.get(idx), Some(t) if matches!(t.kind, TokenKind::Ident(_) | TokenKind::String(_) | TokenKind::Number(_, _) | TokenKind::Variable(_))) {
-            idx += 1;
-            while idx < self.tokens.len() && matches!(self.tokens[idx].kind, TokenKind::Whitespace) {
-                idx += 1;
-            }
-            return matches!(self.tokens.get(idx), Some(t) if matches!(t.kind, TokenKind::Comma));
-        }
-        false
     }
 
     /// Parse a list literal: (expr1, expr2, ...).

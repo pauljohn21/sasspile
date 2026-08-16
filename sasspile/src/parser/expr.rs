@@ -295,11 +295,11 @@ impl<'tok> Parser<'tok> {
             Some(TokenKind::LParen) => {
                 self.advance();
                 // Check if this is a map: (key: value, ...)
-                if self.is_map_syntax() {
+                if super::lookahead::is_map_syntax(self.tokens(), self.pos) {
                     return self.parse_map_literal();
                 }
                 // Check if it's a list: (a, b, c)
-                if self.is_list_syntax() {
+                if super::lookahead::is_list_syntax(self.tokens(), self.pos) {
                     return self.parse_list_literal();
                 }
                 // 空括号 () → 空 map（SCSS 中常用于 $theme-colors: () !default 这类写法）

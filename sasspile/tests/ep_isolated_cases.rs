@@ -4,8 +4,8 @@ use sasspile::{tokenize, parse};
 use tracing::info;
 
 fn test_case(name: &str, src: &str) -> Result<(), String> {
-    let (tokens, lex_diags) = tokenize(src);
-    let (lex_e, lex_w, _) = lex_diags.counts();
+    let (_tokens, lex_diags) = tokenize(src);
+    let (lex_e, _lex_w, _) = lex_diags.counts();
     if lex_e > 0 {
         let detail: Vec<String> = lex_diags.errors().iter().map(|d| d.message.clone()).collect();
         return Err(format!("lexer: {lex_e} errors — {}", detail.join("; ")));
