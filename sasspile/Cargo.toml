@@ -2,7 +2,7 @@
 name = "sasspile"
 version = "0.8.0"
 description = "Pure Rust async SCSS compiler"
-readme = "README.md"
+readme = "../README.md"
 keywords = ["scss", "sass", "css", "compiler"]
 categories = ["command-line-utilities", "development-tools"]
 license.workspace = true
