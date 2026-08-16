@@ -56,11 +56,11 @@ impl<'tok> Parser<'tok> {
         let pos = self.current_pos();
         span.record("pos", pos);
         if let Some(tok) = self.peek_kind() {
-            span.record("token", &format!("{tok:?}"));
+            span.record("token", format!("{tok:?}"));
         }
         match self.peek_kind() {
             Some(TokenKind::AtKeyword(kw)) => {
-                span.record("decision", &format!("at-rule:{kw}"));
+                span.record("decision", format!("at-rule:{kw}"));
                 self.parse_at_rule().map(super::ast::Node::AtRule)
             }
             Some(TokenKind::Whitespace) => {

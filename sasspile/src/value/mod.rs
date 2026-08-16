@@ -73,5 +73,5 @@ impl PartialEq for Value {
     }
 }
 
-/// Convenience alias for Arc<Value>.
+/// Convenience alias for `Arc<Value>`.
 pub type SharedValue = Arc<Value>;

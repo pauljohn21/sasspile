@@ -9,9 +9,12 @@
 //! incremental recompilation.
 
 pub mod builtin;
+pub mod color;
+pub mod css;
 pub mod diagnostics;
 pub mod error;
 pub mod eval;
+pub mod incremental;
 pub mod lexer;
 pub mod parser;
 pub mod pipeline;
@@ -22,6 +25,7 @@ pub mod value;
 pub use error::SassError;
 pub use eval::{EvalContext, EvalError};
 pub use pipeline::Compiler;
+pub use pipeline::{Pipeline, PipelineInput, PipelineOutput};
 pub use parser::*;
 pub use diagnostics::Diagnostics;
 pub use lexer::{tokenize, Token, TokenKind};

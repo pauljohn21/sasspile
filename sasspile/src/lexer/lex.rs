@@ -191,7 +191,7 @@ impl<'src> Lexer<'src> {
     fn scan_ident(&mut self, start: usize) -> Option<Token> {
         let name = self.scan_ident_body();
         let span = tracing::Span::current();
-        span.record("ident", &name.clone());
+        span.record("ident", name.clone());
         // Check for url(...) — 必须整体 token 化，否则内部的 : / 会破坏解析
         if name == "url" && self.src[self.pos..].starts_with('(') {
             span.record("is_url", true);

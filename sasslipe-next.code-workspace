@@ -4,9 +4,6 @@
 			"path": "."
 		},
 		{
-			"path": "../tracing-ai"
-		},
-		{
 			"path": "../sass-spec-main"
 		}
 	],
