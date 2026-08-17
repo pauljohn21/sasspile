@@ -5,6 +5,12 @@ edition = "2024"
 rust-version = "1.97"
 description = "A Rust-native Sass compiler built from spec, not from dart-sass"
 license = "MIT"
+repository = "https://gitee.com/pauljoihn21/sasspile"
+homepage = "https://gitee.com/pauljoihn21/sasspile"
+documentation = "https://docs.rs/sasspile"
+readme = "README.md"
+keywords = ["sass", "scss", "css", "compiler", "preprocessor"]
+categories = ["compilers", "development-tools", "web-programming"]
 
 [lib]
 name = "sasspile"
@@ -12,10 +18,9 @@ path = "src/lib.rs"
 
 [dependencies]
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
-# Test-only dependencies go here
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.release]
 debug = true  # Keep debug info for tracing in release builds
