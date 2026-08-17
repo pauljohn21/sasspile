@@ -41,6 +41,14 @@ impl Parser {
                     selector.push_str(", ");
                     self.advance();
                 }
+                Token::Gt => {
+                    selector.push_str(" > ");
+                    self.advance();
+                }
+                Token::Plus => {
+                    selector.push_str(" + ");
+                    self.advance();
+                }
                 Token::LBracket => {
                     selector.push('[');
                     self.advance();

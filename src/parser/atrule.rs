@@ -388,7 +388,10 @@ impl Parser {
             let default = if matches!(self.peek(), Token::Colon) {
                 self.advance();
                 let mut ep = ExprParser::new(self);
-                Some(ep.parse_expr()?)
+                // Use parse_space_list, not parse_expr, to avoid consuming commas
+                // — mixin params are separated by commas, so default values
+                // should not span across comma-separated list items.
+                Some(ep.parse_space_list()?)
             } else {
                 None
             };

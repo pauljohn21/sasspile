@@ -314,7 +314,7 @@ impl<'a> ExprParser<'a> {
     /// Parse a space-separated list (used inside function args).
     /// Parses a single expression with parse_or, then checks if there are
     /// more space-separated values to form a list.
-    fn parse_space_list(&mut self) -> Result<Expr, SassError> {
+    pub fn parse_space_list(&mut self) -> Result<Expr, SassError> {
         let first = self.parse_or()?;
         // Check if there are more space-separated items (not operators, not comma, not rparen)
         if self.is_space_separated() {
