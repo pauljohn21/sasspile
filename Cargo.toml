@@ -11,6 +11,13 @@ documentation = "https://docs.rs/sasspile"
 readme = "README.md"
 keywords = ["sass", "scss", "css", "compiler", "preprocessor"]
 categories = ["compilers", "development-tools", "web-programming"]
+exclude = [
+    "sass-spec/",
+    "bootstrap/",
+    "element-plus/",
+    "target/",
+    "tests/",
+]
 
 [lib]
 name = "sasspile"
