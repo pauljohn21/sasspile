@@ -2,6 +2,7 @@
 
 use crate::value::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Function pointer type for builtin functions.
 pub type BuiltinFn = fn(&[crate::ast::Arg], &mut Env) -> Result<Value, crate::error::SassError>;
@@ -31,9 +32,8 @@ pub struct Env {
     pub is_global: bool,
     /// Content block passed to a mixin via @include ... { @content }
     pub content: Option<Vec<crate::ast::Stmt>>,
-    /// Virtual file system for @use/@import resolution.
-    /// Maps module name (e.g. "plain") to file content.
-    pub vfs: HashMap<String, String>,
+    /// Base directory for resolving @use/@import from filesystem.
+    pub base_dir: Option<PathBuf>,
 }
 
 /// A loaded module's environment (separate namespace).
@@ -64,7 +64,7 @@ impl Env {
             parent: None,
             is_global: true,
             content: None,
-            vfs: HashMap::new(),
+            base_dir: None,
         }
     }
 
@@ -78,7 +78,7 @@ impl Env {
             parent: Some(Box::new(parent)),
             is_global: false,
             content: None,
-            vfs: HashMap::new(),
+            base_dir: None,
         }
     }
 
@@ -215,20 +215,15 @@ impl Env {
         self.builtins.insert(name, func);
     }
 
-    /// Look up a virtual file by module name.
-    pub fn get_vfs_file(&self, name: &str) -> Option<&str> {
-        if let Some(c) = self.vfs.get(name) {
-            return Some(c);
+    /// Get the base directory for @use resolution.
+    pub fn get_base_dir(&self) -> Option<&PathBuf> {
+        if self.base_dir.is_some() {
+            self.base_dir.as_ref()
+        } else if let Some(ref p) = self.parent {
+            p.get_base_dir()
+        } else {
+            None
         }
-        if let Some(ref p) = self.parent {
-            return p.get_vfs_file(name);
-        }
-        None
-    }
-
-    /// Register a virtual file.
-    pub fn set_vfs_file(&mut self, name: String, content: String) {
-        self.vfs.insert(name, content);
     }
 
     /// Get a variable from a module namespace.

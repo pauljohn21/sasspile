@@ -62,20 +62,18 @@ pub fn evaluate(stmts: Vec<Stmt>) -> Result<CssTree, SassError> {
     Ok(CssTree { rules, extends })
 }
 
-/// Evaluate AST statements with a virtual file system.
-#[instrument(name = "evaluate_with_vfs", skip_all, fields(stage = "eval"))]
-pub fn evaluate_with_vfs(
+/// Evaluate AST statements with a base directory for @use resolution.
+#[instrument(name = "evaluate_with_dir", skip_all, fields(stage = "eval"))]
+pub fn evaluate_with_dir(
     stmts: Vec<Stmt>,
-    vfs: &std::collections::HashMap<String, String>,
+    base_dir: std::path::PathBuf,
 ) -> Result<CssTree, SassError> {
     let span = tracing::info_span!("evaluate", stage = "eval", stmt_count = stmts.len());
     let _enter = span.enter();
 
     let mut env = Env::new_global();
+    env.base_dir = Some(base_dir);
     crate::builtins::register_all(&mut env);
-    for (name, content) in vfs {
-        env.set_vfs_file(name.clone(), content.clone());
-    }
     let parent_sel: Vec<String> = Vec::new();
     let mut extends = Vec::new();
     let rules = eval_stmts(&stmts, &mut env, &parent_sel, &mut extends)?;
@@ -297,7 +295,7 @@ pub(crate) fn eval_stmt(
 /// Evaluate `@use` rule — loads a module and registers it in the environment.
 /// For built-in modules (`sass:math`, `sass:string`, etc.), registers the
 /// module's functions and variables under a namespace.
-/// For external files, loads from VFS if available.
+/// For external files, resolves relative to `base_dir` on the filesystem.
 fn eval_use_rule(
     url: &str,
     namespace: Option<&str>,
@@ -320,52 +318,56 @@ fn eval_use_rule(
         return Ok(());
     }
 
-    // Try VFS resolution
-    let module_name = url.trim_start_matches("./").trim_start_matches("../");
-    let base_name = module_name.rsplit('/').next().unwrap_or(module_name);
-
-    let span = tracing::debug_span!("eval_use", stage = "eval", module = "use", url = %url, key = %base_name);
+    let span = tracing::debug_span!("eval_use", stage = "eval", module = "use", url = %url);
     let _enter = span.enter();
 
-    // Try to find the file in VFS.
-    // First try with the base name as-is (may include extension).
-    // Then try common extensions: .scss, .css, _prefix.scss
-    let content = env
-        .get_vfs_file(base_name)
-        .or_else(|| env.get_vfs_file(&format!("{}.scss", base_name)))
-        .or_else(|| env.get_vfs_file(&format!("{}.css", base_name)))
-        .or_else(|| env.get_vfs_file(&format!("_{}.scss", base_name)))
-        .map(|s| s.to_string());
-
-    // Determine if the resolved file is a .css file
-    let resolved_name = if env.get_vfs_file(base_name).is_some() {
-        base_name.to_string()
-    } else if env.get_vfs_file(&format!("{}.css", base_name)).is_some() {
-        format!("{}.css", base_name)
-    } else if env.get_vfs_file(&format!("{}.scss", base_name)).is_some() {
-        format!("{}.scss", base_name)
-    } else if env.get_vfs_file(&format!("_{}.scss", base_name)).is_some() {
-        format!("_{}.scss", base_name)
-    } else {
-        base_name.to_string()
+    // Resolve relative to base_dir on the filesystem
+    let base_dir = match env.get_base_dir() {
+        Some(d) => d.clone(),
+        None => {
+            tracing::debug!(stage = "eval", module = "use", url = %url, "no base_dir, skipping");
+            return Ok(());
+        }
     };
-    let is_css = resolved_name.ends_with(".css");
 
-    if let Some(content) = content {
+    // Strip leading ./ or ../
+    let rel = url.trim_start_matches("./").trim_start_matches("../");
+    let candidates = [
+        base_dir.join(rel),
+        base_dir.join(format!("{}.scss", rel)),
+        base_dir.join(format!("{}.css", rel)),
+        base_dir.join(format!("_{}.scss", rel)),
+    ];
+
+    let file_path = candidates.iter().find(|p| p.is_file());
+
+    if let Some(path) = file_path {
+        let is_css = path.extension().and_then(|e| e.to_str()) == Some("css");
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            SassError::parse(
+                format!("Failed to read {}: {}", path.display(), e),
+                crate::error::SourcePos { file: String::new(), line: 0, column: 0 },
+            )
+        })?;
+
         if is_css {
-            // Plain CSS files are output as-is, not evaluated through the Sass pipeline
             output.push(CssRule::Raw(content));
-            tracing::debug!(stage = "eval", module = "use", url = %url, "vfs CSS module loaded as raw");
+            tracing::debug!(stage = "eval", module = "use", url = %url, "CSS module loaded as raw");
         } else {
-            // SCSS files: tokenize, parse, and evaluate
             let tokens = crate::lexer::tokenize(&content)?;
             let ast = crate::parser::parse(tokens)?;
+            let sub_dir = path.parent().map(|p| p.to_path_buf());
+            let prev_dir = env.base_dir.take();
+            if let Some(d) = sub_dir {
+                env.base_dir = Some(d);
+            }
             let sub_rules = eval_stmts(&ast, env, &[], &mut Vec::new())?;
+            env.base_dir = prev_dir;
             output.extend(sub_rules);
-            tracing::debug!(stage = "eval", module = "use", url = %url, "vfs SCSS module loaded");
+            tracing::debug!(stage = "eval", module = "use", url = %url, "SCSS module loaded");
         }
     } else {
-        tracing::debug!(stage = "eval", module = "use", url = %url, "external module skipped (not in VFS)");
+        tracing::debug!(stage = "eval", module = "use", url = %url, "file not found, skipping");
     }
 
     Ok(())

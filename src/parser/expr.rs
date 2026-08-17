@@ -16,9 +16,9 @@ impl<'a> ExprParser<'a> {
     }
 
     /// Parse an expression with full operator precedence.
-    /// Precedence: list > or > and > equality > comparison > additive > multiplicative > unary > primary
+    /// Precedence: comma-list > space-list > or > and > equality > comparison > additive > multiplicative > unary > primary
     pub fn parse_expr(&mut self) -> Result<Expr, SassError> {
-        let expr = self.parse_or()?;
+        let expr = self.parse_space_list()?;
         // Check for comma-separated list at top level
         if matches!(self.parser.peek(), Token::Comma) {
             let mut items = vec![expr];
@@ -27,7 +27,7 @@ impl<'a> ExprParser<'a> {
                 if matches!(self.parser.peek(), Token::RParen | Token::RBrace | Token::Eof | Token::Semicolon) {
                     break;
                 }
-                items.push(self.parse_or()?);
+                items.push(self.parse_space_list()?);
             }
             return Ok(Expr::ListExpr {
                 items,
@@ -350,12 +350,12 @@ impl<'a> ExprParser<'a> {
     /// Check if the next token could start a space-separated list item.
     fn is_space_separated(&self) -> bool {
         !matches!(self.parser.peek(),
-            Token::Comma | Token::RParen | Token::RBrace | Token::Eof |
+            Token::Comma | Token::RParen | Token::RBrace | Token::LBrace | Token::RBracket | Token::Eof |
             Token::Semicolon | Token::Plus | Token::Minus | Token::Star |
             Token::Slash | Token::Percent | Token::Eq | Token::NotEq |
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq |
             Token::Colon
-        ) && !matches!(self.parser.peek(), Token::Ident(s) if s == "and" || s == "or")
+        ) && !matches!(self.parser.peek(), Token::Ident(s) if matches!(s.as_str(), "and" | "or" | "through" | "to" | "from" | "!default" | "!global"))
     }
 
     /// Parse content inside parentheses — could be expr, map, or list

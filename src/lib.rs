@@ -26,19 +26,14 @@
 //! let css = compile(scss).unwrap();
 //! ```
 //!
-//! ## Virtual File System
+//! ## File-based compilation
 //!
-//! For `@use "module"` resolution without filesystem access:
+//! For `@use "module"` resolution from the filesystem:
 //!
 //! ```rust,no_run
-//! use sasspile::compile_with_files;
-//! use std::collections::HashMap;
+//! use sasspile::compile_file;
 //!
-//! let mut vfs = HashMap::new();
-//! vfs.insert("_colors".to_string(), "$brand: #ff6600;".to_string());
-//!
-//! let scss = r#"@use "colors"; .header { color: colors.$brand; }"#;
-//! let css = compile_with_files(scss, &vfs).unwrap();
+//! let css = compile_file("src/main.scss").unwrap();
 //! ```
 //!
 //! ## Pipeline
@@ -74,6 +69,7 @@ pub use lexer::tokenize;
 pub use ast::{Stmt, Expr};
 pub use parser::parse;
 pub use eval::evaluate;
+pub use eval::evaluate_with_dir;
 pub use serialize::{serialize, serialize_with_style, OutputStyle};
 
 /// Compile a SCSS source string to CSS.
@@ -94,21 +90,27 @@ pub fn compile(source: &str) -> Result<String, SassError> {
     Ok(output)
 }
 
-/// Compile a SCSS source string with a virtual file system.
+/// Compile a SCSS file from the filesystem.
 ///
-/// The VFS maps module names (without extension) to file content.
-/// This enables `@use "plain"` to resolve to a virtual `plain.css` file.
-#[instrument(name = "compile_with_files", skip_all, fields(stage = "compile"))]
-pub fn compile_with_files(
-    source: &str,
-    vfs: &std::collections::HashMap<String, String>,
-) -> Result<String, SassError> {
-    let span = tracing::info_span!("compile_pipeline", stage = "compile");
+/// Sets `base_dir` so that `@use` / `@import` can resolve relative files.
+/// This is the preferred entry point for compiling real projects.
+#[instrument(name = "compile_file", skip_all, fields(stage = "compile"))]
+pub fn compile_file(path: impl AsRef<std::path::Path>) -> Result<String, SassError> {
+    let path = path.as_ref();
+    let span = tracing::info_span!("compile_pipeline", stage = "compile", file = %path.display());
     let _enter = span.enter();
 
-    let tokens = tokenize(source)?;
+    let source = std::fs::read_to_string(path).map_err(|e| {
+        SassError::parse(
+            format!("Failed to read {}: {}", path.display(), e),
+            crate::error::SourcePos { file: String::new(), line: 0, column: 0 },
+        )
+    })?;
+    let base_dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+
+    let tokens = tokenize(&source)?;
     let ast = parse(tokens)?;
-    let css_tree = eval::evaluate_with_vfs(ast, vfs)?;
+    let css_tree = eval::evaluate_with_dir(ast, base_dir)?;
     let output = serialize(&css_tree)?;
 
     tracing::info!(stage = "compile", output_len = output.len(), "compilation complete");
