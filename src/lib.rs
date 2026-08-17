@@ -1,7 +1,56 @@
-//! sasspile — A Rust-native Sass compiler.
+//! # sasspile — A Rust-native Sass/SCSS compiler
 //!
 //! Built from the official Sass specification and sass-spec test suite.
 //! Does not reference dart-sass or any other Sass implementation.
+//!
+//! ## Overview
+//!
+//! sasspile is a from-scratch Sass/SCSS compiler written in pure Rust. It implements
+//! the full compilation pipeline — lexer, parser, evaluator, and serializer — and
+//! supports the majority of Sass language features.
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use sasspile::compile;
+//!
+//! let scss = r#"
+//!     $primary: #336699;
+//!
+//!     .button {
+//!         color: $primary;
+//!         &:hover { color: lighten($primary, 10%); }
+//!     }
+//! "#;
+//!
+//! let css = compile(scss).unwrap();
+//! ```
+//!
+//! ## Virtual File System
+//!
+//! For `@use "module"` resolution without filesystem access:
+//!
+//! ```rust,no_run
+//! use sasspile::compile_with_files;
+//! use std::collections::HashMap;
+//!
+//! let mut vfs = HashMap::new();
+//! vfs.insert("_colors".to_string(), "$brand: #ff6600;".to_string());
+//!
+//! let scss = r#"@use "colors"; .header { color: colors.$brand; }"#;
+//! let css = compile_with_files(scss, &vfs).unwrap();
+//! ```
+//!
+//! ## Pipeline
+//!
+//! The compilation pipeline follows four stages:
+//!
+//! 1. **Lexer** — Tokenizes SCSS source into a `Token` stream
+//! 2. **Parser** — Builds an `AST` from tokens
+//! 3. **Evaluator** — Evaluates the `AST` into a `CssTree`
+//! 4. **Serializer** — Converts the `CssTree` into a CSS string
+//!
+//! Each stage is instrumented with `tracing` spans for observability.
 
 pub mod error;
 pub mod token;

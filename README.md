@@ -1,19 +1,29 @@
+<div align="center">
+
 # sasspile
 
+A Rust-native Sass/SCSS compiler built from the official Sass specification
+
 [![Crates.io](https://img.shields.io/crates/v/sasspile.svg)](https://crates.io/crates/sasspile)
+[![Documentation](https://docs.rs/sasspile/badge.svg)](https://docs.rs/sasspile)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust 1.97+](https://img.shields.io/badge/rust-1.97%2B-orange.svg)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#testing)
 
-A Rust-native Sass/SCSS compiler built from the official Sass specification — not a port of dart-sass or any other implementation.
+</div>
+
+---
+
+> **Built from spec, not from dart-sass.** Every feature is implemented by reading the
+> official Sass specification and sass-spec test suite — not by translating another
+> implementation. sasspile uses Rust's ownership model, leverages `tracing` for
+> diagnostics, and follows Rust idioms throughout.
 
 ## Overview
 
-sasspile is a from-scratch Sass compiler written in pure Rust, designed for integration into Rust toolchains where a native SCSS-to-CSS compilation step is needed. It implements the full SCSS compilation pipeline — lexer, parser, evaluator, and serializer — and supports the majority of Sass language features including variables, nesting, mixins, functions, `@extend`, `@use`, `@if/@for/@each`, and all built-in `sass:*` modules.
-
-### Key Differentiator
-
-> **Built from spec, not from dart-sass.** Every feature is implemented by reading the official Sass specification and sass-spec test suite, not by translating another implementation. This means sasspile uses Rust's ownership model instead of a garbage collector, leverages `tracing` for diagnostics instead of ad-hoc logging, and follows Rust idioms throughout.
+sasspile is a from-scratch Sass/SCSS compiler written in pure Rust, designed for
+integration into Rust toolchains where a native SCSS-to-CSS compilation step is needed.
+It implements the full compilation pipeline — lexer, parser, evaluator, and serializer —
+and supports the majority of Sass language features.
 
 ## Features
 
@@ -51,16 +61,17 @@ sasspile is a from-scratch Sass compiler written in pure Rust, designed for inte
 ## Architecture
 
 ```
-Source SCSS
-    │
-    ▼
-┌─────────┐    ┌──────────┐    ┌──────────┐    ┌────────────┐
-│  Lexer  │ →  │  Parser  │ →  │ Evaluator │ → │ Serializer  │
-└─────────┘    └──────────┘    └──────────┘    └────────────┘
-                  │                  │                  │
-                  ▼                  ▼                  ▼
-               AST              CSS Tree            CSS String
-                             (with Env, Builtins)
+                         ┌──────────────────────────────────────────────┐
+                         │              sasspile pipeline              │
+                         └──────────────────────────────────────────────┘
+
+  Source SCSS ──►  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  ──►  CSS Output
+                  │  Lexer  │─►│  Parser  │─►│ Evaluator │─►│ Serializer  │
+                  └─────────┘  └──────────┘  └──────────┘  └────────────┘
+                                    │               │               │
+                                    ▼               ▼               ▼
+                                  AST           CSS Tree         CSS String
+                                              (Env, Builtins)
 ```
 
 | Module | Responsibility |
@@ -79,16 +90,18 @@ Source SCSS
 
 All pipeline stages are instrumented with `tracing` spans:
 
-- `compile_pipeline{stage="compile"}` — top-level span
-- `tokenize{stage="lexer"}` — lexing phase
-- `parse{stage="parser"}` — parsing phase
-- `evaluate{stage="eval"}` — evaluation phase
-- `serialize{stage="serialize"}` — serialization phase
+| Span | Stage |
+|------|-------|
+| `compile_pipeline{stage="compile"}` | Top-level compilation span |
+| `tokenize{stage="lexer"}` | Lexing phase |
+| `parse{stage="parser"}` | Parsing phase |
+| `evaluate{stage="eval"}` | Evaluation phase |
+| `serialize{stage="serialize"}` | Serialization phase |
 
 Enable traces with `RUST_LOG`:
 
 ```bash
-RUST_LOG=sasspile=trace cargo run --example demo
+RUST_LOG=sasspile=trace cargo run
 ```
 
 ## Installation
@@ -97,7 +110,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sasspile = "0.1"
+sasspile = "0.9"
 ```
 
 ## Usage
@@ -120,7 +133,7 @@ fn main() {
     "#;
 
     let css = compile(scss).unwrap();
-    println!("{}", css);
+    // println!("{}", css);
 }
 ```
 
@@ -144,10 +157,7 @@ use sasspile::compile_with_files;
 use std::collections::HashMap;
 
 let mut vfs = HashMap::new();
-vfs.insert(
-    "_colors".to_string(),
-    "$brand: #ff6600;".to_string(),
-);
+vfs.insert("_colors".to_string(), "$brand: #ff6600;".to_string());
 
 let scss = r#"
     @use "colors";
@@ -160,22 +170,22 @@ let css = compile_with_files(scss, &vfs).unwrap();
 ### Output Style Control
 
 ```rust
-use sasspile::{compile, serialize_with_style, OutputStyle};
+use sasspile::{serialize_with_style, OutputStyle};
 
-// Get the CSS tree, then serialize with compressed style
-// (for advanced use cases requiring intermediate access)
+// Serialize with compressed output
+// let css = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap();
 ```
 
 ## Testing
 
 The test suite includes **265+ tests** covering:
 
-- Lexer tokenization (229 lines of tests)
-- Parser grammar (447 lines across `parser/expr.rs`, `parser/atrule.rs`)
-- Evaluation pipeline (372 lines, `eval/mod.rs`)
+- Lexer tokenization
+- Parser grammar (expressions, at-rules, selectors)
+- Evaluation pipeline (variables, mixins, functions, control flow)
 - Built-in functions — math, color, string, list, map, meta, selector
 - Selector parsing and `@extend` resolution
-- sass-spec integration via HRX (Hypothesized Reference eXtensions) format
+- sass-spec integration via HRX format
 - Real-world project compilation: Bootstrap, Element Plus
 
 ```bash
