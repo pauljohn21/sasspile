@@ -9,8 +9,6 @@ use std::time::Instant;
 
 fn element_plus_scss_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
         .join("element-plus")
         .join("packages")
         .join("theme-chalk")

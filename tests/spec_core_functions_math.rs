@@ -1,4 +1,6 @@
-//! Spec tests for `sass-spec/spec/operators/` domain.
+//! Spec tests for `sass-spec/spec/core_functions/math/` domain.
+//!
+//! Covers: sass:math module functions (abs, ceil, floor, round, max, min, etc.)
 
 #[path = "hrx_parser.rs"]
 mod hrx_parser;
@@ -15,8 +17,8 @@ fn spec_root() -> PathBuf {
 }
 
 #[test]
-fn test_operators_files() {
-    let dir = spec_root().join("operators");
+fn test_core_functions_math() {
+    let dir = spec_root().join("core_functions").join("math");
     if !dir.exists() {
         return;
     }
@@ -35,9 +37,9 @@ fn test_operators_files() {
     }
     tracing::info!(
         stage = "spec_test",
-        domain = "operators",
+        domain = "core_functions/math",
         passed = total_passed,
         failed = total_failed,
-        "operators spec tests"
+        "sass:math spec tests"
     );
 }

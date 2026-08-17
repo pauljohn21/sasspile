@@ -10,8 +10,6 @@ use std::path::PathBuf;
 
 fn spec_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
         .join("sass-spec")
         .join("spec")
 }

@@ -9,8 +9,6 @@ use std::time::Instant;
 
 fn bootstrap_scss_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
         .join("bootstrap")
         .join("scss")
         .join("bootstrap.scss")

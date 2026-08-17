@@ -1,4 +1,6 @@
-//! Spec tests for `sass-spec/spec/operators/` domain.
+//! Spec tests for `sass-spec/spec/expressions/` domain.
+//!
+//! Covers: if/else, boolean operations, function calls, syntax.
 
 #[path = "hrx_parser.rs"]
 mod hrx_parser;
@@ -15,8 +17,8 @@ fn spec_root() -> PathBuf {
 }
 
 #[test]
-fn test_operators_files() {
-    let dir = spec_root().join("operators");
+fn test_expressions_files() {
+    let dir = spec_root().join("expressions");
     if !dir.exists() {
         return;
     }
@@ -35,9 +37,9 @@ fn test_operators_files() {
     }
     tracing::info!(
         stage = "spec_test",
-        domain = "operators",
+        domain = "expressions",
         passed = total_passed,
         failed = total_failed,
-        "operators spec tests"
+        "expressions spec tests"
     );
 }

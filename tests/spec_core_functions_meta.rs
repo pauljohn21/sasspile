@@ -1,4 +1,6 @@
-//! Spec tests for `sass-spec/spec/operators/` domain.
+//! Spec tests for `sass-spec/spec/core_functions/meta/` domain.
+//!
+//! Covers: sass:meta module functions (type_of, inspect, call, etc.)
 
 #[path = "hrx_parser.rs"]
 mod hrx_parser;
@@ -15,8 +17,8 @@ fn spec_root() -> PathBuf {
 }
 
 #[test]
-fn test_operators_files() {
-    let dir = spec_root().join("operators");
+fn test_core_functions_meta() {
+    let dir = spec_root().join("core_functions").join("meta");
     if !dir.exists() {
         return;
     }
@@ -35,9 +37,9 @@ fn test_operators_files() {
     }
     tracing::info!(
         stage = "spec_test",
-        domain = "operators",
+        domain = "core_functions/meta",
         passed = total_passed,
         failed = total_failed,
-        "operators spec tests"
+        "sass:meta spec tests"
     );
 }

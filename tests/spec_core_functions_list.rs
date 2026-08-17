@@ -1,4 +1,6 @@
-//! Spec tests for `sass-spec/spec/operators/` domain.
+//! Spec tests for `sass-spec/spec/core_functions/list/` domain.
+//!
+//! Covers: sass:list module functions (append, index, length, nth, etc.)
 
 #[path = "hrx_parser.rs"]
 mod hrx_parser;
@@ -15,8 +17,8 @@ fn spec_root() -> PathBuf {
 }
 
 #[test]
-fn test_operators_files() {
-    let dir = spec_root().join("operators");
+fn test_core_functions_list() {
+    let dir = spec_root().join("core_functions").join("list");
     if !dir.exists() {
         return;
     }
@@ -35,9 +37,9 @@ fn test_operators_files() {
     }
     tracing::info!(
         stage = "spec_test",
-        domain = "operators",
+        domain = "core_functions/list",
         passed = total_passed,
         failed = total_failed,
-        "operators spec tests"
+        "sass:list spec tests"
     );
 }
