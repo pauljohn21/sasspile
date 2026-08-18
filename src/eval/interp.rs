@@ -64,19 +64,37 @@ fn eval_interpolation_expr(
     parent_sel: &[String],
 ) -> Result<String, SassError> {
     let trimmed = expr_str.trim();
-    // Simple variable reference: $name
+
+    // Check if this is a *pure* variable reference ($name with no operators).
+    // If the expression contains operators (+, -, *, /, %), or additional $ signs,
+    // we must fall through to the full expression parser.
     if trimmed.starts_with('$') {
-        let var_name = trimmed[1..].trim();
-        match env.get_var(var_name) {
-            Some(val) => return Ok(value_to_css(val)),
-            None => return Err(SassError::eval(
-                format!("Undefined variable: ${}", var_name),
-                crate::error::SourcePos::default(),
-            )),
+        let var_part = trimmed[1..].trim();
+        // A valid Sass variable name contains only alphanumeric, hyphen, and underscore.
+        // If we see anything else (operators, $, parens, etc.), fall through.
+        let is_pure_var = var_part
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_');
+        if is_pure_var {
+            match env.get_var(var_part) {
+                Some(val) => return Ok(value_to_css(val)),
+                None => {
+                    return Err(SassError::eval(
+                        format!("Undefined variable: ${}", var_part),
+                        crate::error::SourcePos::default(),
+                    ));
+                }
+            }
         }
+        // Not a pure variable — fall through to full expression parsing
     }
-    // Simple identifier
-    if trimmed.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+
+    // Simple identifier (no operators, no $)
+    if !trimmed.contains('$')
+        && trimmed
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         match trimmed {
             "true" => return Ok("true".to_string()),
             "false" => return Ok("false".to_string()),
@@ -89,7 +107,10 @@ fn eval_interpolation_expr(
             }
         }
     }
+
     // Fall back to tokenizing and parsing as a full expression
+    let span = tracing::debug_span!("eval_interp_expr", stage = "eval", module = "interp", expr = %trimmed);
+    let _enter = span.enter();
     let tokens = crate::lexer::tokenize(trimmed, "interpolation")?;
     let mut parser = crate::parser::Parser::new(tokens);
     let mut expr_parser = crate::parser::expr::ExprParser::new(&mut parser);

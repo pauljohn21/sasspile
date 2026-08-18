@@ -103,16 +103,32 @@ impl Parser {
                             Token::Number(v, u) => {
                                 selector.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
                             }
-                            Token::Plus => selector.push('+'),
-                            Token::Minus => selector.push('-'),
-                            Token::Star => selector.push('*'),
-                            Token::Slash => selector.push('/'),
-                            Token::Percent => selector.push('%'),
+                            Token::Plus => selector.push_str(" + "),
+                            Token::Minus => selector.push_str(" - "),
+                            Token::Star => selector.push_str(" * "),
+                            Token::Slash => selector.push_str(" / "),
+                            Token::Percent => selector.push_str(" % "),
                             Token::LParen => selector.push('('),
                             Token::RParen => selector.push(')'),
                             Token::Comma => selector.push_str(", "),
                             Token::Dot => selector.push('.'),
                             Token::Colon => selector.push(':'),
+                            Token::Ampersand => selector.push('&'),
+                            Token::String(s, quote) => {
+                                selector.push(*quote);
+                                selector.push_str(s);
+                                selector.push(*quote);
+                            }
+                            Token::Eq => selector.push('='),
+                            Token::NotEq => selector.push_str("!="),
+                            Token::Gt => selector.push('>'),
+                            Token::GtEq => selector.push_str(">="),
+                            Token::Lt => selector.push('<'),
+                            Token::LtEq => selector.push_str("<="),
+                            Token::SingleEq => selector.push('='),
+                            Token::Hash => selector.push('#'),
+                            Token::LBracket => selector.push('['),
+                            Token::RBracket => selector.push(']'),
                             _ => {}
                         }
                         self.advance();
@@ -180,6 +196,7 @@ impl Parser {
         }
 
         // Case 1: Interpolation as property name: #{...}: value
+        // But NOT #{...}::before (pseudo-element with double colon)
         if matches!(self.tokens.get(i), Some(ts) if matches!(ts.token, Token::InterpolationStart)) {
             i += 1;
             while let Some(ts) = self.tokens.get(i) {
@@ -190,7 +207,16 @@ impl Parser {
                 if matches!(ts.token, Token::RBrace) {
                     i += 1;
                     if let Some(next) = self.tokens.get(i) {
-                        return matches!(next.token, Token::Colon);
+                        if matches!(next.token, Token::Colon) {
+                            // Check for pseudo-element (::after, ::before, etc.)
+                            // Double colon means pseudo-element, not declaration
+                            if let Some(after) = self.tokens.get(i + 1) {
+                                if matches!(after.token, Token::Colon) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
                     }
                 }
             }
@@ -215,12 +241,31 @@ impl Parser {
                             }
                         }
                         Token::Ident(_) | Token::Minus => { i += 1; }
-                        Token::Colon => return true,
+                        Token::Colon => {
+                            // Check for pseudo-element (::after, ::before, etc.)
+                            // A single Colon means declaration, but double Colon (::) means pseudo-element selector
+                            let next_idx = i + 1;
+                            if let Some(next_ts) = self.tokens.get(next_idx) {
+                                if matches!(next_ts.token, Token::Colon) {
+                                    // Pseudo-element (::after) — not a declaration
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
                         _ => break,
                     }
                 }
                 if let Some(next) = self.tokens.get(i) {
-                    return matches!(next.token, Token::Colon);
+                    if matches!(next.token, Token::Colon) {
+                        // Check for pseudo-element (::) — not a declaration
+                        if let Some(after) = self.tokens.get(i + 1) {
+                            if matches!(after.token, Token::Colon) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
                 }
             }
         }
@@ -251,7 +296,7 @@ impl Parser {
                                         name.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
                                     }
                                     Token::Minus => name.push('-'),
-                                    Token::Plus => name.push('+'),
+                                    Token::Plus => name.push_str(" + "),
                                     Token::Dot => name.push('.'),
                                     _ => {}
                                 }
@@ -299,7 +344,7 @@ impl Parser {
                                         name.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
                                     }
                                     Token::Minus => name.push('-'),
-                                    Token::Plus => name.push('+'),
+                                    Token::Plus => name.push_str(" + "),
                                     Token::Dot => name.push('.'),
                                     _ => {}
                                 }
@@ -334,7 +379,7 @@ impl Parser {
                             name.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
                         }
                         Token::Minus => name.push('-'),
-                        Token::Plus => name.push('+'),
+                        Token::Plus => name.push_str(" + "),
                         Token::Dot => name.push('.'),
                         _ => {}
                     }

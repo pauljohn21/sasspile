@@ -17,6 +17,10 @@ A Rust-native Sass/SCSS compiler built from the official Sass specification
 > official Sass specification and sass-spec test suite — not by translating another
 > implementation. sasspile uses Rust's ownership model, leverages `tracing` for
 > diagnostics, and follows Rust idioms throughout.
+>
+> **CodeGraph-ready.** The project ships with a CodeGraph index (3,381 files,
+> 28,930 nodes, 112,860 edges) for instant code navigation, caller analysis, and
+> impact assessment via `codegraph` CLI.
 
 ## Overview
 
@@ -46,13 +50,13 @@ and supports the majority of Sass language features.
 
 | Module | Functions |
 |--------|-----------|
-| `sass:math` | `abs`, `ceil`, `floor`, `round`, `max`, `min`, `percentage`, `pow`, `sqrt`, `unit`, `unitless`, `$pi` |
-| `sass:color` | `rgb`, `rgba`, `hsl`, `hsla`, `red`, `green`, `blue`, `alpha`, `lighten`, `darken`, `mix`, `invert`, `complement` |
-| `sass:string` | `quote`, `unquote`, `to-upper-case`, `to-lower-case`, `str-length`, `str-slice`, `str-index` |
-| `sass:list` | `length`, `nth`, `append`, `join`, `index`, `separator`, `is-bracketed` |
-| `sass:map` | `get`, `keys`, `values`, `has-key`, `merge` |
-| `sass:meta` | `type-of`, `inspect`, `feature-exists` |
-| `sass:selector` | Selector inspection and manipulation |
+| `sass:math` | `abs`, `ceil`, `floor`, `round`, `max`, `min`, `clamp`, `div`, `percentage`, `pow`, `sqrt`, `log`, `exp`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `hypot`, `unit`, `unitless`, `comparable`, `random`, `$pi`, `$e` |
+| `sass:color` | `rgb`, `rgba`, `hsl`, `hsla`, `red`, `green`, `blue`, `alpha`, `hue`, `saturation`, `lightness`, `lighten`, `darken`, `saturate`, `desaturate`, `adjust-hue`, `mix`, `invert`, `complement`, `grayscale`, `ie-hex-str`, `adjust`, `scale`, `change`, `channel`, `to-space`, `to-gamut`, `is-legacy`, `is-in-gamut` |
+| `sass:string` | `quote`, `unquote`, `to-upper-case`, `to-lower-case`, `str-length`, `str-index`, `str-insert`, `str-slice`, `str-split`, `unique-id` |
+| `sass:list` | `length`, `nth`, `set-nth`, `append`, `join`, `zip`, `index`, `separator`, `is-bracketed`, `slash` |
+| `sass:map` | `get`, `set`, `merge`, `deep-merge`, `remove`, `deep-remove`, `keys`, `values`, `has-key` |
+| `sass:meta` | `type-of`, `if`, `inspect`, `function-exists`, `mixin-exists`, `variable-exists`, `global-variable-exists`, `get-function`, `get-mixin`, `call`, `content-exists`, `feature-exists`, `keywords`, `module-functions`, `module-mixins`, `module-variables`, `load-css`, `accepts-content`, `apply` |
+| `sass:selector` | `selector-append`, `selector-nest`, `selector-extend`, `selector-replace`, `selector-is-superselector` |
 
 ### Output Styles
 
@@ -180,7 +184,7 @@ let compressed = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap
 
 ## Testing
 
-The test suite includes **224 tests** across **35 test files** covering:
+The test suite includes **383 tests** across **40 test files** covering:
 
 - Lexer tokenization
 - Parser grammar (expressions, at-rules, selectors)
@@ -188,7 +192,7 @@ The test suite includes **224 tests** across **35 test files** covering:
 - Built-in functions — math, color, string, list, map, meta, selector
 - Selector parsing and `@extend` resolution
 - sass-spec integration via HRX format
-- Real-world project compilation: Bootstrap, Element Plus (with OpenTelemetry tracing)
+- Real-world project compilation: Bootstrap, Element Plus, Bulma, MDC-Web, Foundation (with OpenTelemetry tracing)
 
 ```bash
 # Run all tests
@@ -203,17 +207,48 @@ cargo test --test builtins_color
 # Run real-world project compilation tests (with OTel tracing)
 RUST_LOG=info cargo test --test bootstrap_otel -- --nocapture
 RUST_LOG=info cargo test --test element_plus_otel -- --nocapture
+RUST_LOG=info cargo test --test bulma_otel -- --nocapture
+RUST_LOG=info cargo test --test mdc_otel -- --nocapture
+RUST_LOG=info cargo test --test foundation_otel -- --nocapture
 ```
+
+### CodeGraph Integration
+
+The project uses [CodeGraph](https://github.com/nicholastimos/codegraph) for
+code analysis and navigation. The index is stored in `.codegraph/codegraph.db`.
+
+```bash
+# Update the code graph index after code changes
+codegraph sync
+
+# View index statistics
+codegraph status
+
+# Find callers of a function
+codegraph callers <function_name>
+
+# Analyze impact of changing a symbol
+codegraph impact <symbol_name>
+
+# Explore a node's details
+codegraph node <node_id>
+
+# General exploration
+codegraph explore <query>
+```
+
+Current index: 3,381 files · 28,930 nodes · 112,860 edges
 
 ## Project Statistics
 
 | Metric | Value |
 |--------|-------|
-| Source lines | ~8,500 |
-| Test lines | ~3,500 |
+| Source lines | ~8,600 |
+| Test lines | ~3,550 |
 | Source files | 35 |
-| Test files | 35 |
-| Total tests | 224 |
+| Test files | 40 |
+| Builtin functions | 147 registrations |
+| Total tests | 383 |
 | Rust edition | 2024 |
 | MSRV | 1.97 |
 | License | MIT |
@@ -228,3 +263,6 @@ MIT — See [LICENSE](LICENSE) file for details.
 - [sass-spec](https://github.com/sass/sass-spec) — The official test suite, used for conformance testing
 - [Bootstrap](https://github.com/twbs/bootstrap) — Used as a real-world integration test target
 - [Element Plus](https://github.com/element-plus/element-plus) — Used as a real-world integration test target
+- [Bulma](https://github.com/jgthms/bulma) — Used as a real-world integration test target
+- [Material Web](https://github.com/material-components/material-components-web) — Used as a real-world integration test target
+- [Foundation](https://github.com/foundation/foundation-sites) — Used as a real-world integration test target
