@@ -1,0 +1,196 @@
+{
+  "timestamp": "1787050421",
+  "compiler": "./target/release/sasspile",
+  "label": "sasspile",
+  "total_cases": 30,
+  "total_passed": 8,
+  "total_failed": 22,
+  "pass_rate": 0.26666666666666666,
+  "per_domain": [
+    {
+      "domain": "operators",
+      "total": 30,
+      "passed": 8,
+      "failed": 22,
+      "pass_rate": 0.26666666666666666
+    }
+  ],
+  "failures": [
+    {
+      "id": "operators/minus_syntax_comment_both",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: expected LBrace but got RBrace at /tmp/spec_check_1787050421/minus_syntax_comment_both/syntax/comment/both/input.scss:1:18\n",
+      "elapsed_ms": 5
+    },
+    {
+      "id": "operators/minus_syntax_comment_left",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: expected LBrace but got RBrace at /tmp/spec_check_1787050421/minus_syntax_comment_left/syntax/comment/left/input.scss:1:16\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/minus_syntax_comment_right",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 3
+    },
+    {
+      "id": "operators/minus_syntax_whitespace_both",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/minus_syntax_whitespace_left_newline",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/minus_syntax_whitespace_left_space",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/minus_syntax_whitespace_left_tab",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/minus_syntax_whitespace_neither",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/minus_syntax_whitespace_right",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: c-d;\n}\nGot:\na {\n  b: c - d;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/modulo_degenerate_modulus_infinity_negative_and_negative",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: undefined operation number % string at :0:0\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/modulo_degenerate_modulus_infinity_negative_and_positive",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: undefined operation number % string at :0:0\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/modulo_degenerate_modulus_infinity_positive_and_negative",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: undefined operation number % string at :0:0\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/modulo_degenerate_modulus_infinity_positive_and_positive",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: undefined operation number % string at :0:0\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/plus_syntax_comment_both",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: expected LBrace but got RBrace at /tmp/spec_check_1787050421/plus_syntax_comment_both/syntax/comment/both/input.scss:1:18\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/plus_syntax_comment_left",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: expected LBrace but got RBrace at /tmp/spec_check_1787050421/plus_syntax_comment_left/syntax/comment/left/input.scss:1:14\n",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_separator_calculation_preserved_both",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: calc(1px + 1%)/calc(2px + 2%);\n}\nGot:\na {\n  b: calc(1px + 1%) / calc(2px + 2%);\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_separator_calculation_preserved_left",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: calc(1px + 1%)/2;\n}\nGot:\na {\n  b: calc(1px + 1%) / 2;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_separator_calculation_preserved_right",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: 2/calc(1px + 1%);\n}\nGot:\na {\n  b: 2 / calc(1px + 1%);\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_separator_calculation_simplified_both",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: 1/2;\n}\nGot:\na {\n  b: calc(1) / calc(2);\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_separator_calculation_simplified_left",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: 1/2;\n}\nGot:\na {\n  b: calc(1) / 2;\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_separator_calculation_simplified_right",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_output",
+      "message": "Expected:\na {\n  b: 1/2;\n}\nGot:\na {\n  b: 1 / calc(2);\n}",
+      "elapsed_ms": 2
+    },
+    {
+      "id": "operators/slash_without_intermediate_whitespace",
+      "domain": "operators",
+      "passed": false,
+      "result_type": "fail_compile",
+      "message": "Compile error: Error: unexpected token in expression: Slash at /tmp/spec_check_1787050421/slash_without_intermediate_whitespace/without_intermediate/whitespace/input.scss:1:10\n",
+      "elapsed_ms": 2
+    }
+  ]
+}

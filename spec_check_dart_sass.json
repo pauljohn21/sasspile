@@ -1,0 +1,19 @@
+{
+  "timestamp": "1787050308",
+  "compiler": "/opt/homebrew/bin/sass",
+  "label": "dart_sass",
+  "total_cases": 30,
+  "total_passed": 30,
+  "total_failed": 0,
+  "pass_rate": 1.0,
+  "per_domain": [
+    {
+      "domain": "operators",
+      "total": 30,
+      "passed": 30,
+      "failed": 0,
+      "pass_rate": 1.0
+    }
+  ],
+  "failures": []
+}
