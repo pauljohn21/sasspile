@@ -88,3 +88,14 @@
 - [x] 9.4 `cargo test --test spec_baseline -- --nocapture --ignored` 首次全量基线
 - [x] 9.5 检查产出物：`otel-metrics-spec_*.jsonl`、`otel-trace-spec_*.jsonl`、`spec_baseline_*.json`
 - [x] 9.6 `rust-script scripts/spec_diff.rs --old spec_baseline_old.json --new spec_baseline_new.json` 验证 diff 工具
+
+## 10. 独立 spec 数据集 + 对照工具
+
+- [x] 10.1 创建 `scripts/gen_spec_dataset.rs`（rust-script 格式）— 从 sass-spec HRX 提取纯数据集 JSON
+- [x] 10.2 数据集格式：`id`/`domain`/`hrx_file`/`case_name`/`files[]`/`entry`/`expected_output`/`expected_error`/`options`/`is_multi_file`
+- [x] 10.3 生成全量数据集 `spec_dataset.json`（20504 cases, 16MB, 2177 HRX files）
+- [x] 10.4 创建 `scripts/spec_check.rs` — 独立对照工具，给定编译器命令 + 数据集，用 tracing span 记录证据链
+- [x] 10.5 对照工具使用 `catch_unwind` 兜住编译器 panic，产出 `spec_check_*.json` 报告
+- [x] 10.6 创建 `src/main.rs` — sasspile CLI 入口（compile_file）
+- [x] 10.7 用 sasspile CLI 全量对照验证（2346/20504 passed, 11.44%）
+- [x] 10.8 更新 README.md 添加 spec 数据集 + 对照工具章节

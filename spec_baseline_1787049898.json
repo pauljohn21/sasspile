@@ -1,0 +1,147 @@
+{
+  "timestamp": "1787049898",
+  "total_hrx": 2177,
+  "total_cases": 20504,
+  "total_passed": 2152,
+  "total_failed": 18352,
+  "total_skipped": 0,
+  "overall_pass_rate": 0.10495513070620367,
+  "domains": [
+    {
+      "domain": "css_plain",
+      "total": 218,
+      "passed": 0,
+      "failed": 218,
+      "skipped": 0,
+      "pass_rate": 0.0
+    },
+    {
+      "domain": "css",
+      "total": 830,
+      "passed": 71,
+      "failed": 759,
+      "skipped": 0,
+      "pass_rate": 0.0855421686746988
+    },
+    {
+      "domain": "directives",
+      "total": 775,
+      "passed": 128,
+      "failed": 647,
+      "skipped": 0,
+      "pass_rate": 0.16516129032258065
+    },
+    {
+      "domain": "expressions",
+      "total": 212,
+      "passed": 0,
+      "failed": 212,
+      "skipped": 0,
+      "pass_rate": 0.0
+    },
+    {
+      "domain": "operators",
+      "total": 30,
+      "passed": 7,
+      "failed": 23,
+      "skipped": 0,
+      "pass_rate": 0.23333333333333334
+    },
+    {
+      "domain": "parser",
+      "total": 4,
+      "passed": 1,
+      "failed": 3,
+      "skipped": 0,
+      "pass_rate": 0.25
+    },
+    {
+      "domain": "values",
+      "total": 1196,
+      "passed": 225,
+      "failed": 971,
+      "skipped": 0,
+      "pass_rate": 0.18812709030100336
+    },
+    {
+      "domain": "variables",
+      "total": 14,
+      "passed": 11,
+      "failed": 3,
+      "skipped": 0,
+      "pass_rate": 0.7857142857142857
+    },
+    {
+      "domain": "callable",
+      "total": 71,
+      "passed": 43,
+      "failed": 28,
+      "skipped": 0,
+      "pass_rate": 0.6056338028169014
+    },
+    {
+      "domain": "core_functions_color",
+      "total": 6123,
+      "passed": 88,
+      "failed": 6035,
+      "skipped": 0,
+      "pass_rate": 0.014372039849746856
+    },
+    {
+      "domain": "core_functions_list",
+      "total": 233,
+      "passed": 9,
+      "failed": 224,
+      "skipped": 0,
+      "pass_rate": 0.03862660944206009
+    },
+    {
+      "domain": "core_functions_map",
+      "total": 127,
+      "passed": 64,
+      "failed": 63,
+      "skipped": 0,
+      "pass_rate": 0.5039370078740157
+    },
+    {
+      "domain": "core_functions_math",
+      "total": 486,
+      "passed": 176,
+      "failed": 310,
+      "skipped": 0,
+      "pass_rate": 0.36213991769547327
+    },
+    {
+      "domain": "core_functions_meta",
+      "total": 489,
+      "passed": 83,
+      "failed": 406,
+      "skipped": 0,
+      "pass_rate": 0.16973415132924335
+    },
+    {
+      "domain": "core_functions_string",
+      "total": 155,
+      "passed": 59,
+      "failed": 96,
+      "skipped": 0,
+      "pass_rate": 0.38064516129032255
+    },
+    {
+      "domain": "core_functions_selector",
+      "total": 899,
+      "passed": 320,
+      "failed": 579,
+      "skipped": 0,
+      "pass_rate": 0.3559510567296997
+    },
+    {
+      "domain": "core_functions_misc",
+      "total": 8642,
+      "passed": 867,
+      "failed": 7775,
+      "skipped": 0,
+      "pass_rate": 0.10032399907428836
+    }
+  ]
+}

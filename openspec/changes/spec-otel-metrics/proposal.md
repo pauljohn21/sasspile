@@ -16,6 +16,9 @@ sass-spec 测试框架当前有三个致命问题：
 - 实现 HRX VFS（内存文件系统），解锁多文件测试
 - 新建 `spec_baseline.rs`：RecordOnly 模式跑完全部 1306 个 HRX，产出 baseline JSON
 - 新建 `spec_diff.rs`（rust-script）：对比两次 baseline，输出新增通过/回归/跳过变化
+- 新建独立 spec 数据集（`spec_dataset.json`）：从 sass-spec HRX 提取纯数据，20504 条，不依赖任何编译器实现
+- 新建独立对照工具（`scripts/spec_check.rs`）：给定任意编译器命令 + 数据集，用 tracing span 记录证据链，catch_unwind 兜 panic
+- 新建 sasspile CLI 入口（`src/main.rs`）：支持命令行调用 `compile_file`
 
 ## Non-goals
 
@@ -40,10 +43,14 @@ sass-spec 测试框架当前有三个致命问题：
 
 ## Impact
 
-- **`Cargo.toml`** — `opentelemetry-stdout` features 加 `"metrics"`
+- **`Cargo.toml`** — `opentelemetry-stdout` features 加 `"metrics"`，新增 `serde`/`serde_json` 依赖
 - **`tests/tracing_init.rs`** — 新增 `init_metrics()` / `shutdown_metrics()`，创建 `SdkMeterProvider`
-- **新增 `tests/spec_otel_runner.rs`** — 基于 `spec_runner.rs` 改造，加 Metrics + Trace + error! 不 panic 模式
+- **新增 `tests/spec_otel_runner.rs`** — 基于 `spec_runner.rs` 改造，加 Metrics + Trace + error! 不 panic 模式 + catch_unwind
 - **新增 `tests/hrx_vfs.rs`** — HRX VFS 解析 + `VfsResolver` 实现
-- **新增 `tests/spec_baseline.rs`** — 全量 HRX 基线测试，`#[ignore]` 默认不跑
+- **新增 `tests/spec_baseline.rs`** — 全量 HRX 基线测试，`#[ignore]` 默认不跑，catch_unwind 兜域级 panic
 - **新增 `scripts/spec_diff.rs`** — rust-script，baseline diff 工具
+- **新增 `scripts/gen_spec_dataset.rs`** — rust-script，从 sass-spec HRX 提取纯数据集 JSON
+- **新增 `scripts/spec_check.rs`** — rust-script，独立对照工具，tracing span + catch_unwind
+- **新增 `src/main.rs`** — sasspile CLI 入口
+- **新增 `src/lib.rs`** — `compile_with_resolver()` + `parse_expression()` 公共 API
 - **改造 17 个 `spec_*.rs`** — 统一改用 `spec_otel_runner`，AssertAll 模式

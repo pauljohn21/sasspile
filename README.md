@@ -185,6 +185,84 @@ let compressed = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap
 // compressed == "a{color:red}"
 ```
 
+## Spec Conformance Infrastructure
+
+sasspile includes a **compiler-independent** spec dataset and conformance
+tooling, built on `tracing` + OpenTelemetry Metrics.
+
+### Spec Dataset (`spec_dataset.json`)
+
+A pure data file extracted from the official `sass-spec` HRX test suite.
+**No dependency on any Sass compiler** — any Rust Sass implementation can use
+it as a conformance reference.
+
+- **20,504 test cases** across **17 domains**
+- **16 MB** JSON, self-contained
+- Each case includes: `id`, `domain`, `files` (input + output + error + multi-file),
+  `entry`, `expected_output`, `expected_error`, `is_multi_file`
+
+```bash
+# Regenerate the dataset from sass-spec HRX files
+rust-script scripts/gen_spec_dataset.rs --spec-root sass-spec/spec --output spec_dataset.json
+```
+
+### Conformance Checker (`scripts/spec_check.rs`)
+
+Runs any compiler against the dataset. Uses `tracing` spans for evidence chains
+and produces a JSON report with per-domain pass rates.
+
+```bash
+# Run sasspile against the full dataset
+rust-script scripts/spec_check.rs \
+  --dataset spec_dataset.json \
+  --compiler ./target/release/sasspile \
+  --label sasspile_full
+
+# Run a single domain
+rust-script scripts/spec_check.rs \
+  --dataset spec_dataset.json \
+  --compiler ./target/release/sasspile \
+  --label sasspile_operators \
+  --domain operators
+```
+
+Output:
+```
+=== Spec Check Report ===
+Compiler: ./target/release/sasspile
+Total: 20504 | Passed: 2346 | Failed: 18158
+Pass rate: 0.1144
+
+Per-domain:
+  operators: 8/30 (0.267)
+  variables: 11/14 (0.786)
+  callable: 43/71 (0.606)
+  ...
+```
+
+### Baseline Diff Tool (`scripts/spec_diff.rs`)
+
+Compares two baseline/check JSONs to track progress across versions:
+
+```bash
+rust-script scripts/spec_diff.rs --old spec_check_old.json --new spec_check_sasspile_full.json
+```
+
+### Embedded OTel Metrics Test Framework
+
+For in-process testing (no subprocess overhead), `tests/spec_otel_runner.rs`
+provides `SpecOtelRunner` with:
+- **Counter** `spec_tests_total` by domain + result (pass/fail/panic)
+- **Histogram** `spec_test_duration_ms` by domain
+- **ObservableGauge** `spec_pass_rate` by domain
+- `catch_unwind` to survive compiler panics
+- `tracing::error!` on failure (no mid-test panic)
+
+```bash
+# Run all 17 domains with OTel metrics + trace
+cargo test --test spec_baseline -- --nocapture --ignored
+```
+
 ## Testing
 
 The test suite includes **383 tests** across **40 test files** covering:
@@ -194,7 +272,7 @@ The test suite includes **383 tests** across **40 test files** covering:
 - Evaluation pipeline (variables, mixins, functions, control flow)
 - Built-in functions — math, color, string, list, map, meta, selector
 - Selector parsing and `@extend` resolution
-- sass-spec integration via HRX format
+- sass-spec integration via HRX format (20,504 spec cases)
 - Real-world project compilation: Bootstrap, Element Plus, Bulma, MDC-Web, Foundation (with OpenTelemetry tracing)
 
 ```bash
@@ -213,6 +291,9 @@ RUST_LOG=info cargo test --test element_plus_otel -- --nocapture
 RUST_LOG=info cargo test --test bulma_otel -- --nocapture
 RUST_LOG=info cargo test --test mdc_otel -- --nocapture
 RUST_LOG=info cargo test --test foundation_otel -- --nocapture
+
+# Run full sass-spec baseline (OTel metrics + trace, ~15s)
+cargo test --test spec_baseline -- --nocapture --ignored
 ```
 
 ### CodeGraph Integration
@@ -252,6 +333,8 @@ Current index: synced via `codegraph sync`
 | Test files | 40 |
 | Builtin functions | 147 registrations |
 | Total tests | 383 |
+| Spec cases | 20,504 |
+| Spec pass rate | 11.44% |
 | Rust edition | 2024 |
 | MSRV | 1.97 |
 | License | MIT |
