@@ -13,3 +13,6 @@
 [submodule "mdc-web"]
 	path = mdc-web
 	url = git@github.com:material-components/material-components-web.git
+[submodule "foundation"]
+	path = foundation
+	url = git@github.com:foundation/foundation-sites.git
