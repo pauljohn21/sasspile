@@ -19,3 +19,4 @@ otel-trace-*.jsonl
 otel-trace-*.txt
 trace-*.jsonl
 flame-*.svg
+spec_*.json
