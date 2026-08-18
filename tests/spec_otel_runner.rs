@@ -202,7 +202,7 @@ impl SpecOtelRunner {
 
         for case in &cases {
             // Check if this is a multi-file test
-            let dir = case.base_path.as_deref().unwrap_or("");
+            let dir = case.base_path.clone().unwrap_or_default();
             let has_extra_files = files.iter().any(|(path, _)| {
                 if path.ends_with("input.scss")
                     || path.ends_with("output.css")
@@ -219,25 +219,56 @@ impl SpecOtelRunner {
                 file_dir == dir
             });
 
-            let input = case.input.as_deref().unwrap_or("");
+            let input = case.input.clone().unwrap_or_default();
+            let output = case.output.clone();
+            let error = case.error.clone();
+            let case_name = case.name.clone();
+            let files_clone = files.clone();
+            let domain = self.domain.clone();
 
-            if has_extra_files {
-                // Multi-file test: use VFS
-                self.run_multi_file_test(
-                    &case.name,
-                    &files,
-                    dir,
-                    input,
-                    case.output.as_deref(),
-                    case.error.as_deref(),
+            // Wrap each test in catch_unwind to prevent compiler panics
+            let test_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if has_extra_files {
+                    self.run_multi_file_test(
+                        &case_name,
+                        &files_clone,
+                        &dir,
+                        &input,
+                        output.as_deref(),
+                        error.as_deref(),
+                    );
+                } else {
+                    self.run_spec_test(
+                        &case_name,
+                        &input,
+                        output.as_deref(),
+                        error.as_deref(),
+                    );
+                }
+            }));
+
+            if let Err(panic_val) = test_result {
+                self.stats.stats.total += 1;
+                self.stats.stats.failed += 1;
+                self.stats.failures.push((
+                    case_name.clone(),
+                    "COMPILER PANIC".to_string(),
+                ));
+                tracing::error!(
+                    stage = "spec_test",
+                    domain = %domain,
+                    test_name = %case_name,
+                    panic = %panic_val.downcast_ref::<String>()
+                        .map(|s| s.as_str())
+                        .unwrap_or("(non-string panic)"),
+                    "COMPILER PANIC"
                 );
-            } else {
-                // Single-file test
-                self.run_spec_test(
-                    &case.name,
-                    input,
-                    case.output.as_deref(),
-                    case.error.as_deref(),
+                self.counter.add(
+                    1,
+                    &[
+                        KeyValue::new("domain", domain.clone()),
+                        KeyValue::new("result", "panic"),
+                    ],
                 );
             }
         }

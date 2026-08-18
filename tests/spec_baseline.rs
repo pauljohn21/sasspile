@@ -114,16 +114,40 @@ fn test_baseline_all() {
             "starting domain"
         );
 
-        let mut runner = spec_otel_runner::SpecOtelRunner::new(domain_label);
-        let hrx_files = hrx_parser::find_hrx_files(&dir);
-        total_hrx += hrx_files.len();
+        // Use catch_unwind to prevent compiler panics from aborting the baseline
+        let domain_stats = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut runner = spec_otel_runner::SpecOtelRunner::new(domain_label);
+            let hrx_files = hrx_parser::find_hrx_files(&dir);
+            total_hrx += hrx_files.len();
 
-        for hrx_path in &hrx_files {
-            runner.run_hrx_tests(hrx_path);
+            for hrx_path in &hrx_files {
+                runner.run_hrx_tests(hrx_path);
+            }
+
+            runner.finalize()
+        }));
+
+        match domain_stats {
+            Ok(stats) => {
+                all_stats.push((domain_label.to_string(), stats));
+            }
+            Err(panic_val) => {
+                tracing::error!(
+                    stage = "spec_test",
+                    domain = %domain_label,
+                    panic = %panic_val.downcast_ref::<String>()
+                        .map(|s| s.as_str())
+                        .unwrap_or("(non-string panic)"),
+                    "domain panicked, recording as failed"
+                );
+                all_stats.push((domain_label.to_string(), spec_otel_runner::DomainStats {
+                    total: 0,
+                    passed: 0,
+                    failed: 0,
+                    skipped: 0,
+                }));
+            }
         }
-
-        let stats = runner.finalize();
-        all_stats.push((domain_label.to_string(), stats));
     }
 
     let elapsed = start.elapsed();

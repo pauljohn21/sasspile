@@ -85,6 +85,6 @@
 - [x] 9.1 `cargo test --test spec_plain -- --nocapture` 验证 OTel trace + metrics 输出
 - [x] 9.2 `cargo test --test spec_css -- --nocapture` 验证多文件测试不再 SKIPPED
 - [x] 9.3 `cargo test` 全量回归确认无 panic（失败用例用 error! 不 panic）
-- [ ] 9.4 `cargo test --test spec_baseline -- --nocapture --ignored` 首次全量基线
+- [x] 9.4 `cargo test --test spec_baseline -- --nocapture --ignored` 首次全量基线
 - [x] 9.5 检查产出物：`otel-metrics-spec_*.jsonl`、`otel-trace-spec_*.jsonl`、`spec_baseline_*.json`
 - [x] 9.6 `rust-script scripts/spec_diff.rs --old spec_baseline_old.json --new spec_baseline_new.json` 验证 diff 工具
