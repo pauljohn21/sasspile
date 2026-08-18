@@ -104,7 +104,7 @@ pub fn run_spec_test(name: &str, input: &str, expected: Option<&str>, expected_e
 /// - Trims leading/trailing whitespace
 /// - Normalizes line endings
 /// - Collapses trailing whitespace per line
-fn normalize_css(css: &str) -> String {
+pub fn normalize_css(css: &str) -> String {
     let mut result = String::new();
     for line in css.lines() {
         let trimmed = line.trim_end();

@@ -1,45 +1,19 @@
-//! Spec tests for `sass-spec/spec/core_functions/meta/` domain.
-//!
-//! Covers: sass:meta module functions (type_of, inspect, call, etc.)
-
-#[path = "hrx_parser.rs"]
-mod hrx_parser;
-
-#[path = "spec_runner.rs"]
-mod spec_runner;
-
+//! Spec tests for `sass-spec/spec/core_functions/meta/` domain. Uses OTel Metrics + Trace.
+#[path = "hrx_parser.rs"] mod hrx_parser;
+#[path = "hrx_vfs.rs"] mod hrx_vfs;
+#[path = "spec_runner.rs"] mod spec_runner;
+#[path = "spec_otel_runner.rs"] mod spec_otel_runner;
+mod tracing_init;
 use std::path::PathBuf;
-
-fn spec_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("sass-spec")
-        .join("spec")
-}
-
-#[test]
-fn test_core_functions_meta() {
-    let dir = spec_root().join("core_functions").join("meta");
-    if !dir.exists() {
-        return;
-    }
+fn spec_root() -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sass-spec").join("spec") }
+#[test] fn test_core_functions_meta_otel() {
+    let label = "spec_core_functions_meta"; tracing_init::init_otel(label); tracing_init::init_metrics(label);
+    let dir = spec_root().join("core_functions/meta");
+    if !dir.exists() { tracing::warn!(stage="spec_test", domain="core_functions_meta", "dir not found, skipping"); tracing_init::shutdown_metrics(); tracing_init::shutdown_otel(); return; }
+    let mut runner = spec_otel_runner::SpecOtelRunner::new("core_functions_meta");
     let hrx_files = hrx_parser::find_hrx_files(&dir);
-    let mut total_passed = 0;
-    let mut total_failed = 0;
-    for hrx_path in &hrx_files {
-        let results = spec_runner::run_hrx_tests(hrx_path);
-        for result in &results {
-            if result.passed {
-                total_passed += 1;
-            } else {
-                total_failed += 1;
-            }
-        }
-    }
-    tracing::info!(
-        stage = "spec_test",
-        domain = "core_functions/meta",
-        passed = total_passed,
-        failed = total_failed,
-        "sass:meta spec tests"
-    );
+    for hrx_path in &hrx_files { runner.run_hrx_tests(hrx_path); }
+    let stats = runner.finalize();
+    tracing_init::shutdown_metrics(); tracing_init::shutdown_otel();
+    runner.assert_results(label);
 }

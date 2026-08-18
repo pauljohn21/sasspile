@@ -118,3 +118,69 @@ pub fn shutdown_otel() {
         tracing::info!(stage = "tracing_init", "OTel SDK shut down, spans flushed");
     }
 }
+
+// ---------------------------------------------------------------------------
+// OpenTelemetry Metrics SDK mode — real OTel Meter
+// ---------------------------------------------------------------------------
+
+/// Separate Once for Metrics mode.
+static METRICS_INIT: Once = Once::new();
+
+/// Global storage for the MeterProvider so we can shut it down.
+static METER_PROVIDER: std::sync::OnceLock<opentelemetry_sdk::metrics::SdkMeterProvider> =
+    std::sync::OnceLock::new();
+
+/// Initialize OpenTelemetry Metrics SDK.
+///
+/// Sets up:
+/// - **SdkMeterProvider** with stdout MetricExporter → writes metrics to
+///   `otel-metrics-<label>.jsonl` (Counter/Gauge/Histogram format)
+/// - Registers provider globally so test code can obtain a `Meter` via
+///   `opentelemetry::global::meter_provider().meter("sasspile-spec")`
+///
+/// Usage:
+/// ```rust,ignore
+/// mod tracing_init;
+/// tracing_init::init_metrics("spec_plain");
+/// // ... run tests, record metrics ...
+/// tracing_init::shutdown_metrics();
+/// ```
+pub fn init_metrics(label: &str) {
+    METRICS_INIT.call_once(|| {
+        let span = tracing::info_span!("metrics_init", stage = "tracing", label = %label);
+        let _enter = span.enter();
+
+        let exporter = opentelemetry_stdout::MetricExporter::default();
+        let resource = opentelemetry_sdk::Resource::builder()
+            .with_service_name("sasspile-spec")
+            .build();
+        let meter_provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+            .with_periodic_exporter(exporter)
+            .with_resource(resource)
+            .build();
+
+        opentelemetry::global::set_meter_provider(meter_provider.clone());
+        METER_PROVIDER.set(meter_provider).ok();
+
+        tracing::info!(
+            stage = "tracing_init",
+            label = %label,
+            "OpenTelemetry Metrics SDK initialized (Counter/Gauge/Histogram)"
+        );
+    });
+}
+
+/// Get a Meter for recording metrics.
+pub fn meter() -> opentelemetry::metrics::Meter {
+    opentelemetry::global::meter_provider()
+        .meter("sasspile-spec")
+}
+
+/// Shutdown the OTel MeterProvider, flushing all pending metrics.
+pub fn shutdown_metrics() {
+    if let Some(provider) = METER_PROVIDER.get() {
+        let _ = provider.force_flush();
+        let _ = provider.shutdown();
+        tracing::info!(stage = "tracing_init", "OTel Metrics SDK shut down, metrics flushed");
+    }
+}

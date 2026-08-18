@@ -121,3 +121,37 @@ pub fn compile_file(path: impl AsRef<std::path::Path>) -> Result<String, SassErr
     tracing::info!(stage = "compile", output_len = output.len(), "compilation complete");
     Ok(output)
 }
+
+/// Compile SCSS with a custom module resolver.
+///
+/// This entry point allows tests to inject a VFS-backed resolver
+/// for multi-file HRX spec tests.
+#[instrument(name = "compile", skip_all, fields(stage = "compile"))]
+pub fn compile_with_resolver(
+    source: &str,
+    resolver: &mut dyn ModuleResolver,
+) -> Result<String, SassError> {
+    let span = tracing::info_span!("compile_pipeline", stage = "compile");
+    let _enter = span.enter();
+
+    let tokens = tokenize(source, "<string>")?;
+    let ast = parse(tokens)?;
+    let css_tree = evaluate(ast, resolver)?;
+    let output = serialize(&css_tree)?;
+
+    tracing::info!(stage = "compile", output_len = output.len(), "compilation complete");
+    Ok(output)
+}
+
+/// Parse a SCSS expression string into an `Expr` AST node.
+///
+/// This is a public entry point for interpolation expression parsing,
+/// used by test VFS resolvers that need to parse expressions.
+#[instrument(name = "parse_expression", skip_all, fields(stage = "parse"))]
+pub fn parse_expression(source: &str) -> Result<Expr, SassError> {
+    let tokens = tokenize(source, "interpolation")?;
+    let mut parser = parser::Parser::new(tokens);
+    let mut expr_parser = parser::expr::ExprParser::new(&mut parser);
+    let expr = expr_parser.parse_expr()?;
+    Ok(expr)
+}

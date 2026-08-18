@@ -1,13 +1,20 @@
 //! Spec tests for `sass-spec/spec/css/plain/` domain.
 //!
-//! These tests parse HRX files from the plain CSS spec domain,
-//! compile the input SCSS, and compare to expected output.
+//! Uses OTel Metrics + Trace for quantified pass-rate tracking.
 
 #[path = "hrx_parser.rs"]
 mod hrx_parser;
 
+#[path = "hrx_vfs.rs"]
+mod hrx_vfs;
+
 #[path = "spec_runner.rs"]
 mod spec_runner;
+
+#[path = "spec_otel_runner.rs"]
+mod spec_otel_runner;
+
+mod tracing_init;
 
 use std::path::PathBuf;
 
@@ -18,86 +25,30 @@ fn spec_root() -> PathBuf {
 }
 
 #[test]
-fn test_plain_boolean_operations() {
-    let hrx_path = spec_root().join("css/plain/boolean_operations.hrx");
-    if !hrx_path.exists() {
-        return; // Skip if sass-spec not available
-    }
-    let results = spec_runner::run_hrx_tests(&hrx_path);
-    for result in &results {
-        assert!(
-            result.passed,
-            "Test '{}' failed: {}",
-            result.name,
-            result.message.as_deref().unwrap_or("(no message)")
-        );
-    }
-}
+fn test_plain_otel() {
+    let label = "spec_plain";
+    tracing_init::init_otel(label);
+    tracing_init::init_metrics(label);
 
-#[test]
-fn test_plain_slash() {
-    let hrx_path = spec_root().join("css/plain/slash.hrx");
-    if !hrx_path.exists() {
+    let dir = spec_root().join("css/plain");
+    if !dir.exists() {
+        tracing::warn!(stage = "spec_test", domain = "css_plain", "css/plain directory not found, skipping");
+        tracing_init::shutdown_metrics();
+        tracing_init::shutdown_otel();
         return;
     }
-    let results = spec_runner::run_hrx_tests(&hrx_path);
-    for result in &results {
-        assert!(
-            result.passed,
-            "Test '{}' failed: {}",
-            result.name,
-            result.message.as_deref().unwrap_or("(no message)")
-        );
-    }
-}
 
-#[test]
-fn test_plain_null() {
-    let hrx_path = spec_root().join("css/plain/null.hrx");
-    if !hrx_path.exists() {
-        return;
-    }
-    let results = spec_runner::run_hrx_tests(&hrx_path);
-    for result in &results {
-        assert!(
-            result.passed,
-            "Test '{}' failed: {}",
-            result.name,
-            result.message.as_deref().unwrap_or("(no message)")
-        );
-    }
-}
+    let hrx_files = hrx_parser::find_hrx_files(&dir);
+    let mut runner = spec_otel_runner::SpecOtelRunner::new("css_plain");
 
-#[test]
-fn test_plain_calculation() {
-    let hrx_path = spec_root().join("css/plain/calculation.hrx");
-    if !hrx_path.exists() {
-        return;
+    for hrx_path in &hrx_files {
+        runner.run_hrx_tests(hrx_path);
     }
-    let results = spec_runner::run_hrx_tests(&hrx_path);
-    for result in &results {
-        assert!(
-            result.passed,
-            "Test '{}' failed: {}",
-            result.name,
-            result.message.as_deref().unwrap_or("(no message)")
-        );
-    }
-}
 
-#[test]
-fn test_plain_if() {
-    let hrx_path = spec_root().join("css/plain/if.hrx");
-    if !hrx_path.exists() {
-        return;
-    }
-    let results = spec_runner::run_hrx_tests(&hrx_path);
-    for result in &results {
-        assert!(
-            result.passed,
-            "Test '{}' failed: {}",
-            result.name,
-            result.message.as_deref().unwrap_or("(no message)")
-        );
-    }
+    let stats = runner.finalize();
+
+    tracing_init::shutdown_metrics();
+    tracing_init::shutdown_otel();
+
+    runner.assert_results(label);
 }
