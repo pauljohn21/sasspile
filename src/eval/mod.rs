@@ -259,10 +259,21 @@ pub(crate) fn eval_stmt(
             let span = tracing::trace_span!("eval_content", stage = "eval", module = "content");
             let _enter = span.enter();
 
-            if let Some(content_stmts) = env.get_content() {
-                let content_stmts = content_stmts.to_vec();
-                let rules = eval_stmts(&content_stmts, env, parent_sel, extends)?;
+            // Take the content block out of env, execute it, then restore.
+            // This prevents infinite recursion when a content block contains
+            // @content itself (e.g. media-breakpoint-between passes
+            // { @content } to media-breakpoint-up).  Without this, the inner
+            // @content would keep finding the same content block and re-execute
+            // it indefinitely.
+            //
+            // We take (not borrow) so that during execution env.content is None.
+            // After execution we restore it so @content can be called multiple
+            // times (e.g. inside @each loops).
+            if let Some(content_stmts) = env.content.take() {
+                let cloned = content_stmts.clone();
+                let rules = eval_stmts(&cloned, env, parent_sel, extends)?;
                 output.extend(rules);
+                env.content = Some(content_stmts);
             }
         }
         Stmt::ExtendRule { selector, optional } => {
@@ -285,8 +296,8 @@ pub(crate) fn eval_stmt(
         Stmt::ForwardRule { .. } => {
             tracing::trace!(stage = "eval", module = "forward", "forward not yet fully implemented");
         }
-        Stmt::ImportRule(_) => {
-            tracing::trace!(stage = "eval", module = "import", "import not yet fully implemented");
+        Stmt::ImportRule(url) => {
+            atrule::eval_import_rule(url, env, parent_sel, output, extends)?;
         }
     }
     Ok(())
@@ -332,11 +343,29 @@ fn eval_use_rule(
 
     // Strip leading ./ or ../
     let rel = url.trim_start_matches("./").trim_start_matches("../");
+
+    // Build candidates — underscore prefix goes on the last path component
+    let underscored = {
+        let mut s = String::new();
+        let parts: Vec<&str> = rel.rsplitn(2, '/').collect();
+        if parts.len() == 2 {
+            s.push_str(parts[1]);
+            s.push('/');
+            s.push('_');
+            s.push_str(parts[0]);
+        } else {
+            s.push('_');
+            s.push_str(parts[0]);
+        }
+        s
+    };
+
     let candidates = [
         base_dir.join(rel),
         base_dir.join(format!("{}.scss", rel)),
         base_dir.join(format!("{}.css", rel)),
-        base_dir.join(format!("_{}.scss", rel)),
+        base_dir.join(format!("{}.scss", underscored)),
+        base_dir.join(format!("{}.css", underscored)),
     ];
 
     let file_path = candidates.iter().find(|p| p.is_file());
@@ -354,8 +383,20 @@ fn eval_use_rule(
             output.push(CssRule::Raw(content));
             tracing::debug!(stage = "eval", module = "use", url = %url, "CSS module loaded as raw");
         } else {
-            let tokens = crate::lexer::tokenize(&content)?;
-            let ast = crate::parser::parse(tokens)?;
+            tracing::debug!(stage = "eval", module = "use", url = %url, path = %path.display(), "parsing SCSS module");
+            let file_name = path.display().to_string();
+            let tokens = crate::lexer::tokenize(&content, &file_name).map_err(|e| {
+                SassError::parse(
+                    format!("{}: {}", path.display(), e),
+                    crate::error::SourcePos { file: path.display().to_string(), line: 0, column: 0 },
+                )
+            })?;
+            let ast = crate::parser::parse(tokens).map_err(|e| {
+                SassError::parse(
+                    format!("{}: {}", path.display(), e),
+                    crate::error::SourcePos { file: path.display().to_string(), line: 0, column: 0 },
+                )
+            })?;
             let sub_dir = path.parent().map(|p| p.to_path_buf());
             let prev_dir = env.base_dir.take();
             if let Some(d) = sub_dir {
@@ -364,6 +405,34 @@ fn eval_use_rule(
             let sub_rules = eval_stmts(&ast, env, &[], &mut Vec::new())?;
             env.base_dir = prev_dir;
             output.extend(sub_rules);
+
+            // When a namespace is specified, collect the module's public
+            // members (variables, functions, mixins) into a ModuleEnv.
+            // Only non-private members (name doesn't start with '-') are exported.
+            if let Some(ns) = namespace {
+                let mut module = crate::env::ModuleEnv::new();
+                // Collect variables from env (non-private)
+                for (name, val) in env.export_vars() {
+                    if !name.starts_with('-') {
+                        module.variables.insert(name, val);
+                    }
+                }
+                // Collect functions from env (non-private)
+                for (name, func) in env.export_functions() {
+                    if !name.starts_with('-') {
+                        module.functions.insert(name, func);
+                    }
+                }
+                // Collect mixins from env (non-private)
+                for (name, mixin) in env.export_mixins() {
+                    if !name.starts_with('-') {
+                        module.mixins.insert(name, mixin);
+                    }
+                }
+                env.set_module(ns.to_string(), module);
+                tracing::debug!(stage = "eval", module = "use", url = %url, ns = %ns, "module registered with namespace");
+            }
+
             tracing::debug!(stage = "eval", module = "use", url = %url, "SCSS module loaded");
         }
     } else {

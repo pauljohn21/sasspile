@@ -54,12 +54,29 @@ fn map_merge(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     if vals.len() < 2 {
         return Err(SassError::eval("map-merge: expected 2 arguments", SourcePos::default()));
     }
-    let mut m1 = expect_map(&vals[0], "map-merge")?.clone();
-    let m2 = expect_map(&vals[1], "map-merge")?;
+    // In Sass, an empty list `()` is equivalent to an empty map.
+    // Treat empty lists as empty maps for map-merge.
+    let m1 = match &vals[0] {
+        Value::Map(m) => m.clone(),
+        Value::List(l) if l.items.is_empty() => crate::value::SassMap::new(),
+        _ => return Err(SassError::type_err(
+            format!("map-merge: expected map, got {}", vals[0].type_name()),
+            SourcePos::default(),
+        )),
+    };
+    let m2 = match &vals[1] {
+        Value::Map(m) => m.clone(),
+        Value::List(l) if l.items.is_empty() => crate::value::SassMap::new(),
+        _ => return Err(SassError::type_err(
+            format!("map-merge: expected map, got {}", vals[1].type_name()),
+            SourcePos::default(),
+        )),
+    };
+    let mut result = m1;
     for (k, v) in &m2.entries {
-        m1.insert(k.clone(), v.clone());
+        result.insert(k.clone(), v.clone());
     }
-    Ok(Value::Map(m1))
+    Ok(Value::Map(result))
 }
 
 fn map_deep_merge(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
@@ -67,9 +84,24 @@ fn map_deep_merge(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     if vals.len() < 2 {
         return Err(SassError::eval("map-deep-merge: expected 2 arguments", SourcePos::default()));
     }
-    let m1 = expect_map(&vals[0], "map-deep-merge")?.clone();
-    let m2 = expect_map(&vals[1], "map-deep-merge")?;
-    let result = deep_merge_maps(m1, m2);
+    // In Sass, an empty list `()` is equivalent to an empty map.
+    let m1 = match &vals[0] {
+        Value::Map(m) => m.clone(),
+        Value::List(l) if l.items.is_empty() => SassMap::new(),
+        _ => return Err(SassError::type_err(
+            format!("map-deep-merge: expected map, got {}", vals[0].type_name()),
+            SourcePos::default(),
+        )),
+    };
+    let m2 = match &vals[1] {
+        Value::Map(m) => m.clone(),
+        Value::List(l) if l.items.is_empty() => SassMap::new(),
+        _ => return Err(SassError::type_err(
+            format!("map-deep-merge: expected map, got {}", vals[1].type_name()),
+            SourcePos::default(),
+        )),
+    };
+    let result = deep_merge_maps(m1, &m2);
     Ok(Value::Map(result))
 }
 

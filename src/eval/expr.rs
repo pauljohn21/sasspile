@@ -1,10 +1,20 @@
 //! Expression evaluator — evaluates AST expressions to Values.
+//!
+//! CSS calculation functions (`calc`, `min`, `max`, `clamp`) are handled
+//! specially: their arguments are serialized to CSS strings *without*
+//! performing Sass arithmetic, so that e.g. `calc(#{$w} * 2)` produces
+//! `calc(var(--bs-border-width) * 2)` rather than trying to multiply a
+//! string by a number.
 
 use crate::ast::*;
 use crate::env::Env;
 use crate::error::{SassError, SourcePos};
 use crate::operators::{apply_binop, apply_unaryop};
 use crate::value::{SassString, Value};
+
+/// CSS calculation function names that should not have their arguments
+/// evaluated as Sass arithmetic.
+const CSS_CALC_FUNCS: &[&str] = &["calc", "min", "max", "clamp"];
 
 /// Evaluate an expression to a Value.
 pub fn eval_expr(expr: &Expr, env: &mut Env, parent_sel: &[String]) -> Result<Value, SassError> {
@@ -16,9 +26,30 @@ pub fn eval_expr(expr: &Expr, env: &mut Env, parent_sel: &[String]) -> Result<Va
             })
         }
         Expr::Operation { op, left, right } => {
-            let lv = eval_expr(left, env, parent_sel)?;
-            let rv = eval_expr(right, env, parent_sel)?;
-            apply_binop(op, &lv, &rv, &SourcePos::default())
+            // Short-circuit evaluation for And/Or
+            match op {
+                BinOp::And => {
+                    let lv = eval_expr(left, env, parent_sel)?;
+                    if lv.is_truthy() {
+                        eval_expr(right, env, parent_sel)
+                    } else {
+                        Ok(lv)
+                    }
+                }
+                BinOp::Or => {
+                    let lv = eval_expr(left, env, parent_sel)?;
+                    if lv.is_truthy() {
+                        Ok(lv)
+                    } else {
+                        eval_expr(right, env, parent_sel)
+                    }
+                }
+                _ => {
+                    let lv = eval_expr(left, env, parent_sel)?;
+                    let rv = eval_expr(right, env, parent_sel)?;
+                    apply_binop(op, &lv, &rv, &SourcePos::default())
+                }
+            }
         }
         Expr::UnaryOp { op, operand } => {
             let val = eval_expr(operand, env, parent_sel)?;
@@ -63,6 +94,11 @@ pub fn eval_expr(expr: &Expr, env: &mut Env, parent_sel: &[String]) -> Result<Va
                 None => Ok(Value::Null),
             }
         }
+        Expr::NamespacedVariable { namespace, name } => {
+            env.get_module_var(namespace, name).cloned().ok_or_else(|| {
+                SassError::eval(format!("Undefined variable: {}.${}", namespace, name), SourcePos::default())
+            })
+        }
     }
 }
 
@@ -76,6 +112,12 @@ fn eval_function_call(
     if let Some(ns) = namespace {
         if let Some(func) = env.get_module_function(ns, name).cloned() {
             return call_user_function(&func, args, env, parent_sel);
+        }
+        // Fallback: built-in module functions registered as "ns-func"
+        // (e.g. map.deep-merge → map-deep-merge, color.adjust → color-adjust)
+        let builtin_name = format!("{}-{}", ns, name);
+        if let Some(builtin) = env.get_builtin(&builtin_name).copied() {
+            return builtin(args, env);
         }
         return Err(SassError::eval(
             format!("Function not found: {}.{}", ns, name),
@@ -91,6 +133,17 @@ fn eval_function_call(
         return builtin(args, env);
     }
 
+    // CSS calculation functions — serialize args to CSS without arithmetic
+    if CSS_CALC_FUNCS.contains(&name) {
+        let css_args: Vec<String> = args
+            .iter()
+            .map(|a| expr_to_css_string(&a.value, env, parent_sel))
+            .collect();
+        return Ok(Value::String(SassString::unquoted(format!(
+            "{}({})", name, css_args.join(", ")
+        ))));
+    }
+
     // Unknown function — return as unquoted string
     let mut parts = Vec::new();
     for arg in args {
@@ -102,22 +155,176 @@ fn eval_function_call(
     ))))
 }
 
+/// Serialize an expression to a CSS string *without* performing Sass
+/// arithmetic.  This is used for `calc()`, `min()`, `max()`, `clamp()`
+/// arguments where operators like `*` and `+` should be preserved as
+/// CSS syntax rather than evaluated.
+///
+/// Variables and interpolation are still resolved to their values.
+fn expr_to_css_string(expr: &Expr, env: &mut Env, parent_sel: &[String]) -> String {
+    match expr {
+        Expr::Literal(v) => crate::eval::value_to_css(v),
+        Expr::Variable(name) => {
+            match env.get_var(name) {
+                Some(v) => crate::eval::value_to_css(v),
+                None => format!("${}", name),
+            }
+        }
+        Expr::Operation { op, left, right } => {
+            let op_str = match op {
+                BinOp::Add => " + ",
+                BinOp::Sub => " - ",
+                BinOp::Mul => " * ",
+                BinOp::Div => " / ",
+                BinOp::Mod => " % ",
+                BinOp::Eq => " == ",
+                BinOp::NotEq => " != ",
+                BinOp::Lt => " < ",
+                BinOp::LtEq => " <= ",
+                BinOp::Gt => " > ",
+                BinOp::GtEq => " >= ",
+                BinOp::And => " and ",
+                BinOp::Or => " or ",
+            };
+            format!(
+                "{}{}{}",
+                expr_to_css_string(left, env, parent_sel),
+                op_str,
+                expr_to_css_string(right, env, parent_sel)
+            )
+        }
+        Expr::UnaryOp { op, operand } => {
+            let prefix = match op {
+                UnaryOp::Neg => "-",
+                UnaryOp::Not => "not ",
+            };
+            format!("{}{}", prefix, expr_to_css_string(operand, env, parent_sel))
+        }
+        Expr::FunctionCall { name, args, namespace } => {
+            let inner: Vec<String> = args
+                .iter()
+                .map(|a| expr_to_css_string(&a.value, env, parent_sel))
+                .collect();
+            if let Some(ns) = namespace {
+                format!("{}.{}({})", ns, name, inner.join(", "))
+            } else {
+                format!("{}({})", name, inner.join(", "))
+            }
+        }
+        Expr::Paren(inner) => {
+            format!("({})", expr_to_css_string(inner, env, parent_sel))
+        }
+        Expr::ListExpr { items, separator, bracketed } => {
+            let sep = match separator {
+                ListSeparator::Comma => ", ",
+                ListSeparator::Slash => " / ",
+                _ => " ",
+            };
+            let parts: Vec<String> = items
+                .iter()
+                .map(|e| expr_to_css_string(e, env, parent_sel))
+                .collect();
+            if *bracketed {
+                format!("[{}]", parts.join(sep))
+            } else {
+                parts.join(sep)
+            }
+        }
+        Expr::Interpolation(parts) => {
+            let mut result = String::new();
+            for part in parts {
+                match part {
+                    InterpPart::Literal(s) => result.push_str(s),
+                    InterpPart::Expr(e) => {
+                        let val = eval_expr(e, env, parent_sel);
+                        match val {
+                            Ok(v) => result.push_str(&crate::eval::value_to_css(&v)),
+                            Err(_) => result.push_str(&expr_to_css_string(e, env, parent_sel)),
+                        }
+                    }
+                }
+            }
+            result
+        }
+        Expr::MapExpr(entries) => {
+            let parts: Vec<String> = entries
+                .iter()
+                .map(|(k, v)| format!(
+                    "{}: {}",
+                    expr_to_css_string(k, env, parent_sel),
+                    expr_to_css_string(v, env, parent_sel)
+                ))
+                .collect();
+            format!("({})", parts.join(", "))
+        }
+        Expr::ParentSelector => {
+            parent_sel.last().cloned().unwrap_or_default()
+        }
+        Expr::NamespacedVariable { namespace, name } => {
+            match env.get_module_var(namespace, name) {
+                Some(v) => crate::eval::value_to_css(v),
+                None => format!("{}.${}", namespace, name),
+            }
+        }
+    }
+}
+
 fn call_user_function(
     func: &crate::env::UserFunction,
     args: &[Arg],
     env: &mut Env,
     parent_sel: &[String],
 ) -> Result<Value, SassError> {
-    // Save current env state, create child
-    let mut func_env = Env::new_child(std::mem::replace(env, Env::new_global()));
-    bind_params(&func.params, args, &mut func_env, env, parent_sel)?;
+    // Pre-evaluate all arguments in the *caller's* environment before
+    // creating the function's child scope.  This is critical because
+    // `std::mem::replace(env, …)` would otherwise leave `env` pointing
+    // at a temporary empty environment while `bind_params` evaluates
+    // argument expressions (e.g. `$blue` in `tint-color($blue, 80%)`).
+    let mut evaluated: Vec<(String, Value)> = Vec::new();
+    for (i, param) in func.params.iter().enumerate() {
+        if param.rest {
+            let mut items = Vec::new();
+            for arg in args.iter().skip(i) {
+                items.push(eval_expr(&arg.value, env, parent_sel)?);
+            }
+            evaluated.push((
+                param.name.clone(),
+                Value::List(crate::value::SassList::new(items, ListSeparator::Comma, false)),
+            ));
+            break;
+        }
+
+        let val = args.iter().find(|a| a.name.as_deref() == Some(param.name.as_str()))
+            .or_else(|| args.get(i))
+            .map(|a| &a.value);
+
+        let value = if let Some(expr) = val {
+            eval_expr(expr, env, parent_sel)?
+        } else if let Some(default) = &param.default {
+            eval_expr(default, env, parent_sel)?
+        } else {
+            Value::Null
+        };
+        evaluated.push((param.name.clone(), value));
+    }
+
+    // Now create the child environment and bind the pre-evaluated values.
+    let parent = std::mem::replace(env, Env::new_global());
+    let mut func_env = Env::new_child(parent);
+    for (name, value) in evaluated {
+        func_env.set_var(name, value, false, false);
+    }
 
     let mut result = Value::Null;
+    let mut dummy_output: Vec<super::CssRule> = Vec::new();
+    let mut dummy_extends: Vec<super::ExtendEntry> = Vec::new();
     for stmt in &func.body {
         if let Stmt::ReturnStmt(expr) = stmt {
             result = eval_expr(expr, &mut func_env, parent_sel)?;
             break;
         }
+        // Execute non-return statements (variable declarations, @each, @if, etc.)
+        super::eval_stmt(stmt, &mut func_env, parent_sel, &mut dummy_output, &mut dummy_extends)?;
     }
 
     // Restore env

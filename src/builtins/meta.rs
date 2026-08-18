@@ -18,6 +18,7 @@ pub fn register(env: &mut Env) {
     let _enter = span.enter();
 
     env.register_builtin("type-of".into(), meta_type_of);
+    env.register_builtin("if".into(), meta_if);
     env.register_builtin("inspect".into(), meta_inspect);
     env.register_builtin("function-exists".into(), meta_function_exists);
     env.register_builtin("mixin-exists".into(), meta_mixin_exists);
@@ -165,18 +166,35 @@ fn meta_call(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     }
     match &vals[0] {
         Value::FunctionRef(name) => {
+            // Build new args from remaining values, expanding spread args.
+            // When an arg has `spread: true`, its evaluated value should be
+            // a List whose items become individual positional arguments.
+            let mut new_args: Vec<Arg> = Vec::new();
+            for (i, arg) in args.iter().enumerate().skip(1) {
+                if arg.spread {
+                    if let Some(Value::List(l)) = vals.get(i) {
+                        for item in &l.items {
+                            new_args.push(Arg {
+                                name: None,
+                                value: crate::ast::Expr::Literal(item.clone()),
+                                spread: false,
+                            });
+                        }
+                    }
+                } else if let Some(v) = vals.get(i) {
+                    new_args.push(Arg {
+                        name: None,
+                        value: crate::ast::Expr::Literal(v.clone()),
+                        spread: false,
+                    });
+                }
+            }
+
             let func = env.get_function(name).cloned();
             if let Some(f) = func {
-                // Build new args from remaining values
-                let new_args: Vec<Arg> = vals[1..].iter().enumerate().map(|(_i, v)| {
-                    Arg { name: None, value: crate::ast::Expr::Literal(v.clone()), spread: false }
-                }).collect();
                 return crate::eval::expr::bind_params_and_call(&f, &new_args, env, &[]);
             }
             if let Some(builtin) = env.get_builtin(name).copied() {
-                let new_args: Vec<Arg> = vals[1..].iter().map(|v| {
-                    Arg { name: None, value: crate::ast::Expr::Literal(v.clone()), spread: false }
-                }).collect();
                 return builtin(&new_args, env);
             }
             Err(SassError::eval(format!("call: function {} not found", name), SourcePos::default()))
@@ -289,5 +307,24 @@ fn inspect_value(val: &Value) -> String {
         Value::Calculation(c) => format!("{}(...)", c.name),
         Value::FunctionRef(name) => format!("get-function(\"{}\")", name),
         Value::MixinRef(name) => format!("get-mixin(\"{}\")", name),
+    }
+}
+
+/// `if($condition, $if-true, $if-false)` — conditional value.
+///
+/// Evaluates `$condition`; if truthy, returns `$if-true`, otherwise `$if-false`.
+/// Both branches are pre-evaluated by the caller (standard builtin semantics).
+fn meta_if(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
+    let vals = get_args(args, env)?;
+    if vals.len() < 3 {
+        return Err(SassError::eval(
+            "if() requires 3 arguments: $condition, $if-true, $if-false",
+            SourcePos::default(),
+        ));
+    }
+    if vals[0].is_truthy() {
+        Ok(vals[1].clone())
+    } else {
+        Ok(vals[2].clone())
     }
 }

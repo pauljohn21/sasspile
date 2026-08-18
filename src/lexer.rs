@@ -6,10 +6,13 @@ use tracing::instrument;
 
 /// Tokenize SCSS source text.
 ///
+/// `file` is the source file path used in error messages and trace spans.
+/// Pass `"<string>"` for inline source without a file.
+///
 /// This is a pure function — no state, no side effects.
-#[instrument(name = "tokenize", skip_all, fields(stage = "lexer"))]
-pub fn tokenize(source: &str) -> Result<Vec<TokenSpan>, SassError> {
-    let span = tracing::info_span!("tokenize", stage = "lexer", len = source.len());
+#[instrument(name = "tokenize", skip_all, fields(stage = "lexer", file = %file))]
+pub fn tokenize(source: &str, file: &str) -> Result<Vec<TokenSpan>, SassError> {
+    let span = tracing::info_span!("tokenize", stage = "lexer", file = %file, len = source.len());
     let _enter = span.enter();
 
     let mut tokens = Vec::new();
@@ -19,7 +22,7 @@ pub fn tokenize(source: &str) -> Result<Vec<TokenSpan>, SassError> {
 
     while let Some(&ch) = chars.peek() {
         let pos = SourcePos {
-            file: "input.scss".to_string(),
+            file: file.to_string(),
             line,
             column: col,
         };
@@ -132,8 +135,19 @@ pub fn tokenize(source: &str) -> Result<Vec<TokenSpan>, SassError> {
             ';' => { chars.next(); col += 1; Token::Semicolon }
             '&' => { chars.next(); col += 1; Token::Ampersand }
             '#' => { chars.next(); col += 1; Token::Hash }
-            '.' => { chars.next(); col += 1; Token::Dot }
+            '.' => {
+    // Check for spread operator ...
+    if chars.clone().nth(1) == Some('.') && chars.clone().nth(2) == Some('.') {
+        chars.next(); chars.next(); chars.next();
+        col += 3;
+        Token::Spread
+    } else {
+        chars.next(); col += 1; Token::Dot
+    }
+}
             '-' => { chars.next(); col += 1; Token::Minus }
+            '~' => { chars.next(); col += 1; Token::Ident("~".to_string()) }
+            '^' => { chars.next(); col += 1; Token::Ident("^".to_string()) }
             '<' => {
                 chars.next(); col += 1;
                 if chars.peek() == Some(&'=') { chars.next(); col += 1; Token::LtEq }
@@ -147,7 +161,7 @@ pub fn tokenize(source: &str) -> Result<Vec<TokenSpan>, SassError> {
             '=' => {
                 chars.next(); col += 1;
                 if chars.peek() == Some(&'=') { chars.next(); col += 1; Token::Eq }
-                else { return Err(SassError::lex("expected = after =", pos)); }
+                else { Token::SingleEq }
             }
             '!' => {
                 chars.next(); col += 1;
@@ -165,7 +179,7 @@ pub fn tokenize(source: &str) -> Result<Vec<TokenSpan>, SassError> {
 
     tokens.push(TokenSpan {
         token: Token::Eof,
-        pos: SourcePos { file: "input.scss".to_string(), line, column: col },
+        pos: SourcePos { file: file.to_string(), line, column: col },
     });
 
     tracing::debug!(stage = "lexer", token_count = tokens.len(), "tokenization complete");

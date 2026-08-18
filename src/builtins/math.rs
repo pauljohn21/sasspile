@@ -7,8 +7,7 @@
 use crate::ast::Arg;
 use crate::env::Env;
 use crate::error::{SassError, SourcePos};
-use crate::value::Number;
-use crate::value::Value;
+use crate::value::{Number, SassString, Value};
 use super::helpers::*;
 
 /// Register all math builtins into the environment.
@@ -61,25 +60,41 @@ fn get_arg_values(args: &[Arg], env: &mut Env) -> Result<Vec<Value>, SassError> 
 
 fn math_abs(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_arg_values(args, env)?;
-    let n = expect_number(get_positional(&vals, 0, "")?, "abs")?;
+    let v = get_positional(&vals, 0, "")?;
+    if !matches!(v, Value::Number(_)) {
+        return Ok(Value::String(SassString::unquoted(format!("abs({})", v))));
+    }
+    let n = expect_number(v, "abs")?;
     Ok(Value::Number(Number::new(n.value.abs(), n.unit.clone())))
 }
 
 fn math_ceil(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_arg_values(args, env)?;
-    let n = expect_number(get_positional(&vals, 0, "")?, "ceil")?;
+    let v = get_positional(&vals, 0, "")?;
+    if !matches!(v, Value::Number(_)) {
+        return Ok(Value::String(SassString::unquoted(format!("ceil({})", v))));
+    }
+    let n = expect_number(v, "ceil")?;
     Ok(Value::Number(Number::new(n.value.ceil(), n.unit.clone())))
 }
 
 fn math_floor(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_arg_values(args, env)?;
-    let n = expect_number(get_positional(&vals, 0, "")?, "floor")?;
+    let v = get_positional(&vals, 0, "")?;
+    if !matches!(v, Value::Number(_)) {
+        return Ok(Value::String(SassString::unquoted(format!("floor({})", v))));
+    }
+    let n = expect_number(v, "floor")?;
     Ok(Value::Number(Number::new(n.value.floor(), n.unit.clone())))
 }
 
 fn math_round(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_arg_values(args, env)?;
-    let n = expect_number(get_positional(&vals, 0, "")?, "round")?;
+    let v = get_positional(&vals, 0, "")?;
+    if !matches!(v, Value::Number(_)) {
+        return Ok(Value::String(SassString::unquoted(format!("round({})", v))));
+    }
+    let n = expect_number(v, "round")?;
     Ok(Value::Number(Number::new(n.value.round(), n.unit.clone())))
 }
 
@@ -93,10 +108,11 @@ fn math_min(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     for item in &items[1..] {
         let n = expect_number(item, "min")?;
         if !n.is_compatible_with(&result) {
-            return Err(SassError::eval(
-                format!("min: incompatible units {} and {}", result.unit_str(), n.unit_str()),
-                SourcePos::default(),
-            ));
+            // Incompatible units — fall back to CSS min() function
+            let parts: Vec<String> = items.iter().map(|v| v.to_string()).collect();
+            return Ok(Value::String(crate::value::SassString::unquoted(format!(
+                "min({})", parts.join(", ")
+            ))));
         }
         if n.value < result.value {
             result = n.clone();
@@ -115,10 +131,11 @@ fn math_max(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     for item in &items[1..] {
         let n = expect_number(item, "max")?;
         if !n.is_compatible_with(&result) {
-            return Err(SassError::eval(
-                format!("max: incompatible units {} and {}", result.unit_str(), n.unit_str()),
-                SourcePos::default(),
-            ));
+            // Incompatible units — fall back to CSS max() function
+            let parts: Vec<String> = items.iter().map(|v| v.to_string()).collect();
+            return Ok(Value::String(crate::value::SassString::unquoted(format!(
+                "max({})", parts.join(", ")
+            ))));
         }
         if n.value > result.value {
             result = n.clone();

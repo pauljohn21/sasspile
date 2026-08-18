@@ -28,6 +28,7 @@ pub enum Token {
     Slash,
     Percent,
     Eq,        // ==
+    SingleEq,  // = (for CSS attribute selectors like [data-bs-theme="..."])
     NotEq,     // !=
     Lt,        // <
     LtEq,      // <=
@@ -46,6 +47,8 @@ pub enum Token {
     Ampersand, // & parent selector
     Hash,      // # (for placeholder/interpolation prefix)
     Dot,       // . (for class selectors)
+    /// Spread/rest operator ... (for variadic args)
+    Spread,
     /// At-rule keywords
     AtRule(String),
     /// Block comment /* */ (preserved)

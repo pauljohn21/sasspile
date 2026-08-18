@@ -226,24 +226,81 @@ impl Env {
         }
     }
 
-    /// Get a variable from a module namespace.
+    /// Get a variable from a module namespace (searches scope chain).
     pub fn get_module_var(&self, ns: &str, name: &str) -> Option<&Value> {
-        self.modules.get(ns).and_then(|m| m.variables.get(name))
+        if let Some(m) = self.modules.get(ns) {
+            if let Some(v) = m.variables.get(name) {
+                return Some(v);
+            }
+        }
+        if let Some(ref p) = self.parent {
+            return p.get_module_var(ns, name);
+        }
+        None
     }
 
-    /// Get a function from a module namespace.
+    /// Get a function from a module namespace (searches scope chain).
     pub fn get_module_function(&self, ns: &str, name: &str) -> Option<&UserFunction> {
-        self.modules.get(ns).and_then(|m| m.functions.get(name))
+        if let Some(m) = self.modules.get(ns) {
+            if let Some(f) = m.functions.get(name) {
+                return Some(f);
+            }
+        }
+        if let Some(ref p) = self.parent {
+            return p.get_module_function(ns, name);
+        }
+        None
     }
 
-    /// Get a mixin from a module namespace.
+    /// Get a mixin from a module namespace (searches scope chain).
     pub fn get_module_mixin(&self, ns: &str, name: &str) -> Option<&Mixin> {
-        self.modules.get(ns).and_then(|m| m.mixins.get(name))
+        if let Some(m) = self.modules.get(ns) {
+            if let Some(mx) = m.mixins.get(name) {
+                return Some(mx);
+            }
+        }
+        if let Some(ref p) = self.parent {
+            return p.get_module_mixin(ns, name);
+        }
+        None
     }
 
-    /// Register a module with a namespace.
+    /// Register a module on the global scope (modules are global in Sass).
     pub fn set_module(&mut self, ns: String, module: ModuleEnv) {
-        self.modules.insert(ns, module);
+        if self.is_global {
+            self.modules.insert(ns, module);
+            return;
+        }
+        if let Some(ref mut p) = self.parent {
+            p.set_module(ns, module);
+        }
+    }
+
+    /// Get all registered module namespace names (for debugging).
+    pub fn modules_keys(&self) -> Vec<String> {
+        if self.is_global {
+            self.modules.keys().cloned().collect()
+        } else if let Some(ref p) = self.parent {
+            p.modules_keys()
+        } else {
+            self.modules.keys().cloned().collect()
+        }
+    }
+
+    /// Export all variables (for @use namespace collection).
+    /// Only returns variables from the current scope chain, not builtins.
+    pub fn export_vars(&self) -> Vec<(String, Value)> {
+        self.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    /// Export all user-defined functions (for @use namespace collection).
+    pub fn export_functions(&self) -> Vec<(String, UserFunction)> {
+        self.functions.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    /// Export all mixins (for @use namespace collection).
+    pub fn export_mixins(&self) -> Vec<(String, Mixin)> {
+        self.mixins.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     /// Check if a variable exists (including global scope).

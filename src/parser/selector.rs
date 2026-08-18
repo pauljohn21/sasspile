@@ -37,6 +37,26 @@ impl Parser {
                     selector.push(':');
                     self.advance();
                 }
+                Token::LParen => {
+                    selector.push('(');
+                    self.advance();
+                }
+                Token::RParen => {
+                    selector.push(')');
+                    self.advance();
+                }
+                Token::Star => {
+                    selector.push('*');
+                    self.advance();
+                }
+                Token::Percent => {
+                    selector.push('%');
+                    self.advance();
+                }
+                Token::Minus => {
+                    selector.push('-');
+                    self.advance();
+                }
                 Token::Comma => {
                     selector.push_str(", ");
                     self.advance();
@@ -55,6 +75,16 @@ impl Parser {
                 }
                 Token::RBracket => {
                     selector.push(']');
+                    self.advance();
+                }
+                Token::SingleEq => {
+                    selector.push('=');
+                    self.advance();
+                }
+                Token::String(s, quote) => {
+                    selector.push(*quote);
+                    selector.push_str(s);
+                    selector.push(*quote);
                     self.advance();
                 }
                 Token::InterpolationStart => {
@@ -92,6 +122,9 @@ impl Parser {
                         self.advance();
                     }
                 }
+                Token::LineComment(_) | Token::BlockComment(_) => {
+                    self.advance();
+                }
                 _ => break,
             }
         }
@@ -99,9 +132,52 @@ impl Parser {
         Ok(selector.trim().to_string())
     }
 
-    /// Check if current position starts a declaration (ident: or #{...}:)
+    /// Check if current position starts a declaration (ident: or #{...}: or --name:)
     pub fn is_declaration_start(&self) -> bool {
         let mut i = self.pos;
+
+        // Case 0: CSS custom property --name: or --#{...}: value
+        if matches!(self.tokens.get(i), Some(ts) if matches!(ts.token, Token::Minus)) {
+            let next_idx = i + 1;
+            if let Some(ts) = self.tokens.get(next_idx) {
+                if matches!(ts.token, Token::Minus | Token::InterpolationStart) {
+                    // Scan forward until we find a Colon (property separator)
+                    // or LBrace (nested rule) / Semicolon / RBrace
+                    i = next_idx + 1;
+                    if matches!(ts.token, Token::Minus) {
+                        // Skip past second minus
+                    } else {
+                        // InterpolationStart — skip to RBrace
+                        while let Some(t) = self.tokens.get(i) {
+                            if matches!(t.token, Token::RBrace | Token::Eof) { break; }
+                            i += 1;
+                        }
+                        if let Some(t) = self.tokens.get(i) {
+                            if matches!(t.token, Token::RBrace) { i += 1; }
+                        }
+                    }
+                    // Now scan for Colon
+                    while let Some(t) = self.tokens.get(i) {
+                        match &t.token {
+                            Token::Colon => return true,
+                            Token::LBrace | Token::Semicolon | Token::RBrace | Token::Eof => return false,
+                            Token::InterpolationStart => {
+                                i += 1;
+                                while let Some(t2) = self.tokens.get(i) {
+                                    if matches!(t2.token, Token::RBrace | Token::Eof) { break; }
+                                    i += 1;
+                                }
+                                if let Some(t2) = self.tokens.get(i) {
+                                    if matches!(t2.token, Token::RBrace) { i += 1; }
+                                }
+                            }
+                            _ => { i += 1; }
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
 
         // Case 1: Interpolation as property name: #{...}: value
         if matches!(self.tokens.get(i), Some(ts) if matches!(ts.token, Token::InterpolationStart)) {
@@ -121,22 +197,26 @@ impl Parser {
             return false;
         }
 
-        // Case 2: Ident followed by Colon (possibly with interpolation)
+        // Case 2: Ident followed by Colon (possibly with interpolation or additional idents)
         if let Some(ts) = self.tokens.get(i) {
             if matches!(ts.token, Token::Ident(_)) {
                 i += 1;
+                // Scan forward through idents and interpolations until we find Colon or something else
                 while let Some(ts) = self.tokens.get(i) {
-                    if matches!(ts.token, Token::InterpolationStart) {
-                        i += 1;
-                        while let Some(t) = self.tokens.get(i) {
-                            if matches!(t.token, Token::RBrace | Token::Eof) { break; }
+                    match &ts.token {
+                        Token::InterpolationStart => {
                             i += 1;
+                            while let Some(t) = self.tokens.get(i) {
+                                if matches!(t.token, Token::RBrace | Token::Eof) { break; }
+                                i += 1;
+                            }
+                            if let Some(t) = self.tokens.get(i) {
+                                if matches!(t.token, Token::RBrace) { i += 1; }
+                            }
                         }
-                        if let Some(t) = self.tokens.get(i) {
-                            if matches!(t.token, Token::RBrace) { i += 1; }
-                        }
-                    } else {
-                        break;
+                        Token::Ident(_) | Token::Minus => { i += 1; }
+                        Token::Colon => return true,
+                        _ => break,
                     }
                 }
                 if let Some(next) = self.tokens.get(i) {
@@ -151,7 +231,94 @@ impl Parser {
     pub fn parse_declaration(&mut self) -> Result<Stmt, SassError> {
         let pos = self.current_pos();
         let property = match self.advance() {
-            Token::Ident(s) => s.clone(),
+            Token::Ident(s) => {
+                let mut name = s.clone();
+                // Property name may contain interpolations (e.g. --#{$prefix}-color)
+                // or additional ident parts after interpolation
+                loop {
+                    match self.peek().clone() {
+                        Token::InterpolationStart => {
+                            self.advance();
+                            name.push_str("#{");
+                            while !matches!(self.peek(), Token::RBrace | Token::Eof) {
+                                match self.peek().clone() {
+                                    Token::Variable(v) => {
+                                        name.push('$');
+                                        name.push_str(&v);
+                                    }
+                                    Token::Ident(s) => name.push_str(&s),
+                                    Token::Number(v, u) => {
+                                        name.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
+                                    }
+                                    Token::Minus => name.push('-'),
+                                    Token::Plus => name.push('+'),
+                                    Token::Dot => name.push('.'),
+                                    _ => {}
+                                }
+                                self.advance();
+                            }
+                            if matches!(self.peek(), Token::RBrace) {
+                                name.push('}');
+                                self.advance();
+                            }
+                        }
+                        Token::Ident(s) => {
+                            name.push_str(&s);
+                            self.advance();
+                        }
+                        _ => break,
+                    }
+                }
+                name
+            }
+            Token::Minus => {
+                // CSS custom property: --name or --#{...}
+                let mut name = String::from("-");
+                if matches!(self.peek(), Token::Minus) {
+                    self.advance();
+                    name.push('-');
+                }
+                // Read remaining property name (idents, interpolations, etc.)
+                loop {
+                    match self.peek().clone() {
+                        Token::Ident(s) => {
+                            name.push_str(&s);
+                            self.advance();
+                        }
+                        Token::InterpolationStart => {
+                            self.advance();
+                            name.push_str("#{");
+                            while !matches!(self.peek(), Token::RBrace | Token::Eof) {
+                                match self.peek().clone() {
+                                    Token::Variable(v) => {
+                                        name.push('$');
+                                        name.push_str(&v);
+                                    }
+                                    Token::Ident(s) => name.push_str(&s),
+                                    Token::Number(v, u) => {
+                                        name.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
+                                    }
+                                    Token::Minus => name.push('-'),
+                                    Token::Plus => name.push('+'),
+                                    Token::Dot => name.push('.'),
+                                    _ => {}
+                                }
+                                self.advance();
+                            }
+                            if matches!(self.peek(), Token::RBrace) {
+                                name.push('}');
+                                self.advance();
+                            }
+                        }
+                        Token::Number(v, u) => {
+                            name.push_str(&format!("{}{}", v, u.as_deref().unwrap_or("")));
+                            self.advance();
+                        }
+                        _ => break,
+                    }
+                }
+                name
+            }
             Token::InterpolationStart => {
                 let mut name = String::from("#{");
                 while !matches!(self.peek(), Token::RBrace | Token::Eof) {

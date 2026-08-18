@@ -130,8 +130,8 @@ fn string_slice(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let chars: Vec<char> = s.value.chars().collect();
     let len = chars.len() as i64;
     let start_idx = normalize_index(start.value as i64, len);
-    let end_idx = normalize_index(end, len).min(len as usize);
-    let result: String = if start_idx > end_idx {
+    let end_idx = normalize_index(end, len).min(len.saturating_sub(1).max(0) as usize);
+    let result: String = if start_idx > end_idx || chars.is_empty() {
         String::new()
     } else {
         // Sass str-slice end is inclusive, so add 1 for Rust's exclusive range

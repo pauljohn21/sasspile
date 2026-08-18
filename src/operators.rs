@@ -75,6 +75,25 @@ fn add(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError>
 fn sub(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError> {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.sub(b)?)),
+        // String - number → CSS string (e.g. "calc(100% - 10px)" parts)
+        (Value::String(a), Value::Number(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} - {}", a.value, b),
+                quoted: a.quoted,
+            }))
+        }
+        (Value::Number(a), Value::String(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} - {}", a, b.value),
+                quoted: b.quoted,
+            }))
+        }
+        (Value::String(a), Value::String(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} - {}", a.value, b.value),
+                quoted: a.quoted || b.quoted,
+            }))
+        }
         _ => Err(SassError::type_err(
             format!("undefined operation {} - {}", left.type_name(), right.type_name()),
             pos.clone(),
@@ -85,6 +104,19 @@ fn sub(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError>
 fn mul(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError> {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.mul(b))),
+        // String * number → CSS string
+        (Value::String(a), Value::Number(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} * {}", a.value, b),
+                quoted: a.quoted,
+            }))
+        }
+        (Value::Number(a), Value::String(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} * {}", a, b.value),
+                quoted: b.quoted,
+            }))
+        }
         _ => Err(SassError::type_err(
             format!("undefined operation {} * {}", left.type_name(), right.type_name()),
             pos.clone(),
@@ -99,6 +131,25 @@ fn div(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError>
                 return Err(SassError::eval("division by zero", pos.clone()));
             }
             Ok(Value::Number(a.div(b)))
+        }
+        // String / number → CSS string (e.g. "var(--x) / 2")
+        (Value::String(a), Value::Number(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} / {}", a.value, b),
+                quoted: a.quoted,
+            }))
+        }
+        (Value::Number(a), Value::String(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} / {}", a, b.value),
+                quoted: b.quoted,
+            }))
+        }
+        (Value::String(a), Value::String(b)) => {
+            Ok(Value::String(SassString {
+                value: format!("{} / {}", a.value, b.value),
+                quoted: a.quoted || b.quoted,
+            }))
         }
         _ => Err(SassError::type_err(
             format!("undefined operation {} / {}", left.type_name(), right.type_name()),
@@ -117,47 +168,36 @@ fn modulo(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassErr
     }
 }
 
-fn lt(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError> {
+fn lt(left: &Value, right: &Value, _pos: &SourcePos) -> Result<Value, SassError> {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a.cmp(b) == std::cmp::Ordering::Less)),
-        _ => Err(SassError::type_err(
-            format!("undefined operation {} < {}", left.type_name(), right.type_name()),
-            pos.clone(),
-        )),
+        // Non-number comparison in boolean context → false (prevents @while infinite loop)
+        _ => Ok(Value::Bool(false)),
     }
 }
 
-fn lte(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError> {
+fn lte(left: &Value, right: &Value, _pos: &SourcePos) -> Result<Value, SassError> {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => {
             Ok(Value::Bool(a.cmp(b) != std::cmp::Ordering::Greater))
         }
-        _ => Err(SassError::type_err(
-            format!("undefined operation {} <= {}", left.type_name(), right.type_name()),
-            pos.clone(),
-        )),
+        _ => Ok(Value::Bool(false)),
     }
 }
 
-fn gt(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError> {
+fn gt(left: &Value, right: &Value, _pos: &SourcePos) -> Result<Value, SassError> {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a.cmp(b) == std::cmp::Ordering::Greater)),
-        _ => Err(SassError::type_err(
-            format!("undefined operation {} > {}", left.type_name(), right.type_name()),
-            pos.clone(),
-        )),
+        _ => Ok(Value::Bool(false)),
     }
 }
 
-fn gte(left: &Value, right: &Value, pos: &SourcePos) -> Result<Value, SassError> {
+fn gte(left: &Value, right: &Value, _pos: &SourcePos) -> Result<Value, SassError> {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => {
             Ok(Value::Bool(a.cmp(b) != std::cmp::Ordering::Less))
         }
-        _ => Err(SassError::type_err(
-            format!("undefined operation {} >= {}", left.type_name(), right.type_name()),
-            pos.clone(),
-        )),
+        _ => Ok(Value::Bool(false)),
     }
 }
 

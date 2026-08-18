@@ -193,9 +193,41 @@ pub fn eval_include(
         )),
     };
 
+    // Pre-evaluate all arguments in the *caller's* environment before
+    // creating the mixin's child scope.  Same fix as call_user_function.
+    let mut evaluated: Vec<(String, Value)> = Vec::new();
+    for (i, param) in mixin.params.iter().enumerate() {
+        if param.rest {
+            let mut items = Vec::new();
+            for arg in args.iter().skip(i) {
+                items.push(expr::eval_expr(&arg.value, env, parent_sel)?);
+            }
+            evaluated.push((
+                param.name.clone(),
+                Value::List(crate::value::SassList::new(items, crate::ast::ListSeparator::Comma, false)),
+            ));
+            break;
+        }
+
+        let val = args.iter().find(|a| a.name.as_deref() == Some(param.name.as_str()))
+            .or_else(|| args.get(i))
+            .map(|a| &a.value);
+
+        let value = if let Some(e) = val {
+            expr::eval_expr(e, env, parent_sel)?
+        } else if let Some(default) = &param.default {
+            expr::eval_expr(default, env, parent_sel)?
+        } else {
+            Value::Null
+        };
+        evaluated.push((param.name.clone(), value));
+    }
+
     // Create child env for mixin body
     let mut mixin_env = Env::new_child(std::mem::replace(env, Env::new_global()));
-    expr::bind_params(&mixin.params, args, &mut mixin_env, env, parent_sel)?;
+    for (name, value) in evaluated {
+        mixin_env.set_var(name, value, false, false);
+    }
 
     // Store content block in env so @content can access it
     if let Some(content_stmts) = content {
@@ -208,5 +240,135 @@ pub fn eval_include(
 
     // Restore env
     *env = *mixin_env.parent.take().unwrap();
+    Ok(())
+}
+
+/// Evaluate `@import "url"` — loads a file and injects its content
+/// (CSS rules, variables, mixins, functions) into the current scope.
+///
+/// Unlike `@use`, `@import` does not create a namespace. All variables,
+/// mixins, and functions from the imported file become available in
+/// the current scope. CSS output is inserted at the import location.
+///
+/// File resolution follows the Sass spec:
+/// 1. `url` as-is (if it's a plain CSS import starting with http://, https://, //)
+/// 2. `base_dir/url` (exact path)
+/// 3. `base_dir/url.scss`
+/// 4. `base_dir/url.css`
+/// 5. `base_dir/_url.scss`
+pub fn eval_import_rule(
+    url: &str,
+    env: &mut Env,
+    parent_sel: &[String],
+    output: &mut Vec<super::CssRule>,
+    extends: &mut Vec<super::ExtendEntry>,
+) -> Result<(), SassError> {
+    let span = tracing::info_span!(
+        "eval_import",
+        stage = "eval",
+        module = "import",
+        url = %url
+    );
+    let _enter = span.enter();
+
+    // Plain CSS imports (http://, https://, //) — emit as raw @import
+    if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("//") {
+        output.push(super::CssRule::AtRule {
+            name: "import".to_string(),
+            value: format!("\"{}\"", url),
+            body: Vec::new(),
+        });
+        tracing::debug!(stage = "eval", module = "import", url = %url, "plain CSS import emitted");
+        return Ok(());
+    }
+
+    // Resolve relative to base_dir on the filesystem
+    let base_dir = match env.get_base_dir() {
+        Some(d) => d.clone(),
+        None => {
+            tracing::warn!(stage = "eval", module = "import", url = %url, "no base_dir, cannot resolve import");
+            return Ok(());
+        }
+    };
+
+    // Strip leading ./ or ../
+    let rel = url.trim_start_matches("./").trim_start_matches("../");
+
+    // Build candidates — underscore prefix goes on the last path component
+    // e.g. "mixins/banner" → "mixins/_banner.scss", not "_mixins/banner.scss"
+    let underscored = {
+        let mut s = String::new();
+        let parts: Vec<&str> = rel.rsplitn(2, '/').collect();
+        if parts.len() == 2 {
+            s.push_str(parts[1]);
+            s.push('/');
+            s.push('_');
+            s.push_str(parts[0]);
+        } else {
+            s.push('_');
+            s.push_str(parts[0]);
+        }
+        s
+    };
+
+    let candidates = [
+        base_dir.join(rel),
+        base_dir.join(format!("{}.scss", rel)),
+        base_dir.join(format!("{}.css", rel)),
+        base_dir.join(format!("{}.scss", underscored)),
+        base_dir.join(format!("{}.css", underscored)),
+    ];
+
+    let file_path = candidates.iter().find(|p| p.is_file());
+
+    if let Some(path) = file_path {
+        let is_css = path.extension().and_then(|e| e.to_str()) == Some("css");
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            SassError::parse(
+                format!("Failed to read {}: {}", path.display(), e),
+                crate::error::SourcePos { file: String::new(), line: 0, column: 0 },
+            )
+        })?;
+
+        if is_css {
+            // Plain CSS file — emit as raw @import
+            output.push(super::CssRule::Raw(format!("@import \"{}\";", url)));
+            tracing::debug!(stage = "eval", module = "import", url = %url, "CSS file import emitted as raw");
+        } else {
+            tracing::debug!(stage = "eval", module = "import", url = %url, path = %path.display(), "resolving SCSS import");
+
+            let file_name = path.display().to_string();
+            let tokens = crate::lexer::tokenize(&content, &file_name).map_err(|e| {
+                SassError::parse(
+                    format!("{}: {}", path.display(), e),
+                    crate::error::SourcePos { file: file_name.clone(), line: 0, column: 0 },
+                )
+            })?;
+            let ast = crate::parser::parse(tokens).map_err(|e| {
+                SassError::parse(
+                    format!("{}: {}", path.display(), e),
+                    crate::error::SourcePos { file: path.display().to_string(), line: 0, column: 0 },
+                )
+            })?;
+
+            // Save and update base_dir for nested imports
+            let sub_dir = path.parent().map(|p| p.to_path_buf());
+            let prev_dir = env.base_dir.take();
+            if let Some(d) = sub_dir {
+                env.base_dir = Some(d);
+            }
+
+            // @import injects content into the current scope
+            // (variables, mixins, functions, and CSS rules)
+            let sub_rules = eval_stmts(&ast, env, parent_sel, extends)?;
+            env.base_dir = prev_dir;
+
+            output.extend(sub_rules);
+            tracing::info!(stage = "eval", module = "import", url = %url, rule_count = output.len(), "SCSS import resolved");
+        }
+    } else {
+        tracing::warn!(stage = "eval", module = "import", url = %url, "file not found, skipping");
+    }
+
     Ok(())
 }

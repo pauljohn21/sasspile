@@ -12,7 +12,7 @@ use crate::error::{SassError, SourcePos};
 use crate::token::{Token, TokenSpan};
 use tracing::instrument;
 
-mod expr;
+pub(crate) mod expr;
 mod atrule;
 mod helpers;
 mod selector;
@@ -29,6 +29,11 @@ pub fn parse(tokens: Vec<TokenSpan>) -> Result<Vec<Stmt>, SassError> {
     let mut stmts = Vec::new();
 
     while !parser.is_at_end() {
+        // Skip line comments at top level
+        if matches!(parser.peek(), Token::LineComment(_)) {
+            parser.advance();
+            continue;
+        }
         let stmt = parser.parse_stmt()?;
         stmts.push(stmt);
     }
@@ -44,7 +49,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    fn new(tokens: Vec<TokenSpan>) -> Self {
+    pub(crate) fn new(tokens: Vec<TokenSpan>) -> Self {
         Self { tokens, pos: 0 }
     }
 
@@ -83,13 +88,25 @@ impl Parser {
         }
     }
 
+    /// Check if the current position starts a CSS custom property (`--name: value`).
+    /// This is the case when we see `--` (two consecutive Minus tokens).
+    pub(crate) fn is_css_custom_property(&self) -> bool {
+        if matches!(self.peek(), Token::Minus) {
+            let next_idx = self.pos + 1;
+            if let Some(ts) = self.tokens.get(next_idx) {
+                return matches!(ts.token, Token::Minus | Token::InterpolationStart);
+            }
+        }
+        false
+    }
+
     /// Parse a single top-level statement.
     pub fn parse_stmt(&mut self) -> Result<Stmt, SassError> {
         match self.peek() {
             Token::Variable(_) => self.parse_variable_decl(),
             Token::Dot | Token::Ident(_) | Token::Ampersand | Token::Hash => self.parse_style_rule(),
             Token::Number(..) | Token::String(..) | Token::LParen => self.parse_style_rule(),
-            Token::LBracket => self.parse_style_rule(),
+            Token::LBracket | Token::Colon | Token::Star | Token::Gt | Token::Percent | Token::Plus => self.parse_style_rule(),
             Token::AtRule(_) => self.parse_at_rule(),
             Token::BlockComment(_) => {
                 let pos = self.current_pos();
@@ -101,6 +118,9 @@ impl Parser {
             }
             Token::LineComment(_) => {
                 self.advance();
+                if self.is_at_end() {
+                    return Ok(Stmt::Comment(String::new()));
+                }
                 self.parse_stmt()
             }
             Token::InterpolationStart => self.parse_style_rule(),
@@ -162,6 +182,8 @@ impl Parser {
 
     /// Parse a block body (list of statements until `}`)
     pub fn parse_block_body(&mut self) -> Result<Vec<Stmt>, SassError> {
+        let span = tracing::trace_span!("parse_block_body", stage = "parser");
+        let _enter = span.enter();
         let mut stmts = Vec::new();
 
         while !self.is_at_end() && !matches!(self.peek(), Token::RBrace) {
@@ -175,6 +197,15 @@ impl Parser {
                 }
                 Token::Variable(_) => self.parse_variable_decl(),
                 Token::AtRule(_) => self.parse_at_rule(),
+                Token::Colon | Token::LBracket | Token::Ampersand | Token::Number(..) | Token::String(..) | Token::Star | Token::Gt | Token::Percent | Token::Plus => self.parse_style_rule(),
+                Token::Minus => {
+                    // Check if this is a CSS custom property (--#{$var}: value)
+                    if self.is_css_custom_property() {
+                        self.parse_declaration()
+                    } else {
+                        self.parse_style_rule()
+                    }
+                }
                 Token::BlockComment(_) => {
                     let pos = self.current_pos();
                     if let Token::BlockComment(text) = self.advance() {

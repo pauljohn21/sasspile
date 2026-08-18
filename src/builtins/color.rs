@@ -65,42 +65,84 @@ fn get_args(args: &[Arg], env: &mut Env) -> Result<Vec<Value>, SassError> {
 
 fn color_red(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "red({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "red")?;
     Ok(num(c.red().round()))
 }
 
 fn color_green(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "green({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "green")?;
     Ok(num(c.green().round()))
 }
 
 fn color_blue(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "blue({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "blue")?;
     Ok(num(c.blue().round()))
 }
 
 fn color_alpha(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "alpha({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "alpha")?;
     Ok(num(c.alpha()))
 }
 
 fn color_hue(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "hue({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "hue")?;
     Ok(num_unit(c.hue(), "deg"))
 }
 
 fn color_saturation(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "saturation({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "saturation")?;
     Ok(num_unit(c.saturation(), "%"))
 }
 
 fn color_lightness(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "lightness({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color(&vals[0], "lightness")?;
     Ok(num_unit(c.lightness(), "%"))
 }
@@ -109,6 +151,13 @@ fn color_channel(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
     if vals.len() < 2 {
         return Err(SassError::eval("channel: expected 2 arguments", SourcePos::default()));
+    }
+    // Non-color argument → return CSS function string
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "channel({})", parts.join(", ")
+        ))));
     }
     let c = expect_color(&vals[0], "channel")?;
     let ch = expect_string(&vals[1], "channel")?;
@@ -203,6 +252,14 @@ fn color_mix(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     if vals.len() < 2 {
         return Err(SassError::eval("mix: expected at least 2 arguments", SourcePos::default()));
     }
+    // When mix receives non-color arguments (e.g. null from unresolved vars),
+    // return the CSS function call as an unquoted string to avoid errors.
+    if vals.iter().take(2).any(|v| matches!(v, Value::Null) | !matches!(v, Value::Color(_))) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "mix({})", parts.join(", ")
+        ))));
+    }
     let c1 = expect_color_or_name(&vals[0], "mix")?;
     let c2 = expect_color_or_name(&vals[1], "mix")?;
     let weight = if vals.len() >= 3 { expect_number(&vals[2], "mix")?.value / 100.0 } else { 0.5 };
@@ -224,6 +281,14 @@ fn color_complement(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 
 fn color_invert(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    // When invert receives a non-color argument (e.g. `invert(1)` for CSS
+    // filters), return the CSS function call as an unquoted string.
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "invert({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color_or_name(&vals[0], "invert")?.clone();
     let rgb = c.to_rgb();
     Ok(Value::Color(Color::rgb(255.0 - rgb.red(), 255.0 - rgb.green(), 255.0 - rgb.blue(), rgb.alpha())))
@@ -231,6 +296,14 @@ fn color_invert(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 
 fn color_grayscale(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
     let vals = get_args(args, env)?;
+    // When grayscale receives a non-color argument (e.g. `grayscale(100)`
+    // for CSS filters), return the CSS function call as an unquoted string.
+    if !matches!(vals[0], Value::Color(_)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "grayscale({})", parts.join(", ")
+        ))));
+    }
     let c = expect_color_or_name(&vals[0], "grayscale")?.clone();
     Ok(Value::Color(Color::hsl(c.hue(), 0.0, c.lightness(), c.alpha())))
 }
@@ -288,9 +361,36 @@ fn color_to_gamut(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 // Legacy global functions
 
 fn legacy_rgb(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
-    let vals = get_args(args, env)?;
+    let mut vals = get_args(args, env)?;
     if vals.is_empty() {
         return Err(SassError::eval("rgb: expected arguments", SourcePos::default()));
+    }
+    // If a single list argument is passed (e.g. rgb($list...) or rgb(0 0 0)),
+    // expand it into individual values.
+    if vals.len() == 1 {
+        if let Value::List(l) = &vals[0] {
+            if l.items.len() >= 3 {
+                vals = l.items.clone();
+            }
+        }
+    }
+    // Support `rgb($color, $alpha)` form — Sass spec allows passing a color
+    // as the first argument to extract r/g/b and override the alpha channel.
+    if vals.len() == 2 {
+        if let Ok(c) = expect_color_or_name(&vals[0], "rgb") {
+            let a = expect_number(&vals[1], "rgb")?.value;
+            let rgb = c.to_rgb();
+            return Ok(Value::Color(Color::rgb(rgb.red(), rgb.green(), rgb.blue(), a)));
+        }
+    }
+    // If the first arg is an unquoted string (e.g. `var(--xxx-rgb)`) that is
+    // not a color name, fall back to CSS function-call form so the output
+    // preserves `rgba(var(--xxx-rgb), 0.05)` verbatim.
+    if vals.iter().any(|v| matches!(v, Value::String(s) if !s.quoted)) {
+        let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+        return Ok(Value::String(crate::value::SassString::unquoted(format!(
+            "rgba({})", parts.join(", ")
+        ))));
     }
     if vals.len() == 1 {
         if let Value::String(s) = &vals[0] {

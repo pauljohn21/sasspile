@@ -151,6 +151,11 @@ pub enum Expr {
     Paren(Box<Expr>),
     /// Parent selector &
     ParentSelector,
+/// Namespace-qualified variable reference: ns.$name
+NamespacedVariable {
+namespace: String,
+name: String,
+},
 }
 
 /// Binary operators.

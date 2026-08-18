@@ -1,6 +1,5 @@
 //! Interpolation evaluation — handles `#{...}` in selectors, properties, etc.
 
-use crate::ast::Stmt;
 use crate::env::Env;
 use crate::error::SassError;
 use super::css::value_to_css;
@@ -91,14 +90,10 @@ fn eval_interpolation_expr(
         }
     }
     // Fall back to tokenizing and parsing as a full expression
-    let tokens = crate::lexer::tokenize(trimmed)?;
-    let expr = crate::parser::parse(tokens)?;
-    if let Some(Stmt::Declaration { value, .. }) = expr.first() {
-        let val = expr::eval_expr(value, env, parent_sel)?;
-        return Ok(value_to_css(&val));
-    }
-    if expr.len() == 1 {
-        return Ok(trimmed.to_string());
-    }
-    Ok(trimmed.to_string())
+    let tokens = crate::lexer::tokenize(trimmed, "interpolation")?;
+    let mut parser = crate::parser::Parser::new(tokens);
+    let mut expr_parser = crate::parser::expr::ExprParser::new(&mut parser);
+    let expr = expr_parser.parse_expr()?;
+    let val = expr::eval_expr(&expr, env, parent_sel)?;
+    Ok(value_to_css(&val))
 }

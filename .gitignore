@@ -15,3 +15,7 @@ Thumbs.db
 # Tracing logs
 *.log
 tracing-*.json
+otel-trace-*.jsonl
+otel-trace-*.txt
+trace-*.jsonl
+flame-*.svg

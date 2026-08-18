@@ -81,7 +81,7 @@ pub fn compile(source: &str) -> Result<String, SassError> {
     let span = tracing::info_span!("compile_pipeline", stage = "compile");
     let _enter = span.enter();
 
-    let tokens = tokenize(source)?;
+    let tokens = tokenize(source, "<string>")?;
     let ast = parse(tokens)?;
     let css_tree = evaluate(ast)?;
     let output = serialize(&css_tree)?;
@@ -108,7 +108,8 @@ pub fn compile_file(path: impl AsRef<std::path::Path>) -> Result<String, SassErr
     })?;
     let base_dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
 
-    let tokens = tokenize(&source)?;
+    let file_name = path.display().to_string();
+    let tokens = tokenize(&source, &file_name)?;
     let ast = parse(tokens)?;
     let css_tree = eval::evaluate_with_dir(ast, base_dir)?;
     let output = serialize(&css_tree)?;
