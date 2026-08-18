@@ -2,19 +2,23 @@
 //!
 //! Usage:
 //! ```sh
-//! rust-script scripts/spec_diff.rs --old spec_baseline_old.json --new spec_baseline_new.json
+//! RUST_LOG=info rust-script scripts/spec_diff.rs --old spec_baseline_old.json --new spec_baseline_new.json
 //! ```
 //! ```cargo
 //! [dependencies]
 //! serde = { version = "1", features = ["derive"] }
 //! serde_json = "1"
+//! tracing = "0.1"
+//! tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 //! ```
 
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, serde::Deserialize)]
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
 struct BaselineDomain {
     domain: String,
     total: u64,
@@ -24,9 +28,11 @@ struct BaselineDomain {
     pass_rate: f64,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct BaselineReport {
+    #[allow(dead_code)]
     timestamp: String,
+    #[allow(dead_code)]
     total_hrx: usize,
     total_cases: u64,
     total_passed: u64,
@@ -37,6 +43,16 @@ struct BaselineReport {
 }
 
 fn main() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .init();
+
+    let span = tracing::info_span!("spec_diff", stage = "spec_diff");
+    let _enter = span.enter();
+
     let args: Vec<String> = env::args().collect();
     let mut old_path = String::new();
     let mut new_path = String::new();
@@ -62,64 +78,46 @@ fn main() {
     }
 
     if old_path.is_empty() || new_path.is_empty() {
-        eprintln!("Usage: spec_diff.rs --old <old.json> --new <new.json>");
+        tracing::error!("Usage: spec_diff.rs --old <old.json> --new <new.json>");
         std::process::exit(1);
     }
 
     let old_json = fs::read_to_string(&old_path).unwrap_or_else(|e| {
-        eprintln!("Failed to read {}: {}", old_path, e);
+        tracing::error!(path = %old_path, error = %e, "failed to read old baseline");
         std::process::exit(1);
     });
     let new_json = fs::read_to_string(&new_path).unwrap_or_else(|e| {
-        eprintln!("Failed to read {}: {}", new_path, e);
+        tracing::error!(path = %new_path, error = %e, "failed to read new baseline");
         std::process::exit(1);
     });
 
     let old: BaselineReport = serde_json::from_str(&old_json).unwrap_or_else(|e| {
-        eprintln!("Failed to parse old JSON: {}", e);
+        tracing::error!(error = %e, "failed to parse old JSON");
         std::process::exit(1);
     });
     let new: BaselineReport = serde_json::from_str(&new_json).unwrap_or_else(|e| {
-        eprintln!("Failed to parse new JSON: {}", e);
+        tracing::error!(error = %e, "failed to parse new JSON");
         std::process::exit(1);
     });
 
-    println!("# Spec Baseline Diff Report\n");
-    println!("| Metric | Old | New | Delta |");
-    println!("|--------|-----|-----|-------|");
-    println!(
-        "| Total cases | {} | {} | {} |",
-        old.total_cases,
-        new.total_cases,
-        diff_str(old.total_cases as i64, new.total_cases as i64)
-    );
-    println!(
-        "| Passed | {} | {} | {} |",
-        old.total_passed,
-        new.total_passed,
-        diff_str(old.total_passed as i64, new.total_passed as i64)
-    );
-    println!(
-        "| Failed | {} | {} | {} |",
-        old.total_failed,
-        new.total_failed,
-        diff_str(old.total_failed as i64, new.total_failed as i64)
-    );
-    println!(
-        "| Skipped | {} | {} | {} |",
-        old.total_skipped,
-        new.total_skipped,
-        diff_str(old.total_skipped as i64, new.total_skipped as i64)
-    );
-    println!(
-        "| Pass rate | {:.4} | {:.4} | {:.4} |",
-        old.overall_pass_rate, new.overall_pass_rate, new.overall_pass_rate - old.overall_pass_rate
+    // Overall metrics
+    tracing::info!(
+        stage = "spec_diff",
+        old_cases = old.total_cases,
+        new_cases = new.total_cases,
+        old_passed = old.total_passed,
+        new_passed = new.total_passed,
+        old_failed = old.total_failed,
+        new_failed = new.total_failed,
+        old_skipped = old.total_skipped,
+        new_skipped = new.total_skipped,
+        old_pass_rate = format!("{:.4}", old.overall_pass_rate),
+        new_pass_rate = format!("{:.4}", new.overall_pass_rate),
+        delta_pass_rate = format!("{:+.4}", new.overall_pass_rate - old.overall_pass_rate),
+        "overall comparison"
     );
 
-    println!("\n## Per-Domain Breakdown\n");
-    println!("| Domain | Old Pass | New Pass | Old Fail | New Fail | Delta |");
-    println!("|--------|----------|----------|----------|----------|-------|");
-
+    // Per-domain breakdown
     for new_domain in &new.domains {
         let old_domain = old.domains.iter().find(|d| d.domain == new_domain.domain);
         let (old_pass, old_fail) = match old_domain {
@@ -127,19 +125,21 @@ fn main() {
             None => (0, 0),
         };
         let delta = new_domain.passed as i64 - old_pass as i64;
-        let delta_label = if delta > 0 {
-            format!("+{}", delta)
-        } else {
-            format!("{}", delta)
-        };
-        println!(
-            "| {} | {} | {} | {} | {} | {} |",
-            new_domain.domain, old_pass, new_domain.passed, old_fail, new_domain.failed, delta_label
+
+        tracing::info!(
+            stage = "spec_diff",
+            domain = %new_domain.domain,
+            old_pass = old_pass,
+            new_pass = new_domain.passed,
+            old_fail = old_fail,
+            new_fail = new_domain.failed,
+            delta = delta,
+            "domain comparison"
         );
     }
 
-    // Summary
-    let new_passed: Vec<&BaselineDomain> = new
+    // Detect improvements and regressions
+    let improvements: Vec<&BaselineDomain> = new
         .domains
         .iter()
         .filter(|nd| {
@@ -151,7 +151,7 @@ fn main() {
         })
         .collect();
 
-    let regressed: Vec<&BaselineDomain> = new
+    let regressions: Vec<&BaselineDomain> = new
         .domains
         .iter()
         .filter(|nd| {
@@ -163,38 +163,45 @@ fn main() {
         })
         .collect();
 
-    println!("\n## Summary\n");
-    if !new_passed.is_empty() {
-        println!("### New passes:");
-        for d in &new_passed {
+    if !improvements.is_empty() {
+        tracing::info!(stage = "spec_diff", count = improvements.len(), "improvements detected");
+        for d in &improvements {
             let old_p = old
                 .domains
                 .iter()
                 .find(|od| od.domain == d.domain)
                 .map(|od| od.passed)
                 .unwrap_or(0);
-            println!("- {} ({} → {})", d.domain, old_p, d.passed);
+            tracing::info!(
+                stage = "spec_diff",
+                domain = %d.domain,
+                old_passed = old_p,
+                new_passed = d.passed,
+                "improved"
+            );
         }
     }
-    if !regressed.is_empty() {
-        println!("\n### Regressions:");
-        for d in &regressed {
-            let old_p = old
-                .domains
-                .iter()
-                .find(|od| od.domain == d.domain)
-                .map(|od| od.passed)
-                .unwrap_or(0);
-            println!("- {} ({} → {})", d.domain, old_p, d.passed);
-        }
-    }
-}
 
-fn diff_str(old: i64, new: i64) -> String {
-    let d = new - old;
-    if d > 0 {
-        format!("+{}", d)
-    } else {
-        format!("{}", d)
+    if !regressions.is_empty() {
+        tracing::warn!(stage = "spec_diff", count = regressions.len(), "regressions detected");
+        for d in &regressions {
+            let old_p = old
+                .domains
+                .iter()
+                .find(|od| od.domain == d.domain)
+                .map(|od| od.passed)
+                .unwrap_or(0);
+            tracing::warn!(
+                stage = "spec_diff",
+                domain = %d.domain,
+                old_passed = old_p,
+                new_passed = d.passed,
+                "regressed"
+            );
+        }
+    }
+
+    if improvements.is_empty() && regressions.is_empty() {
+        tracing::info!(stage = "spec_diff", "no changes detected");
     }
 }

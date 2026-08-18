@@ -409,16 +409,28 @@ fn main() {
         "spec check complete"
     );
 
-    // Print summary
-    eprintln!("\n=== Spec Check Report ===");
-    eprintln!("Compiler: {}", compiler);
-    eprintln!("Total: {} | Passed: {} | Failed: {}", report.total_cases, report.total_passed, report.total_failed);
-    eprintln!("Pass rate: {:.4}", report.pass_rate);
-    eprintln!("\nPer-domain:");
+    // Log summary via tracing (no eprintln!)
+    tracing::info!(
+        stage = "spec_check",
+        compiler = %compiler,
+        total_cases = report.total_cases,
+        total_passed = report.total_passed,
+        total_failed = report.total_failed,
+        pass_rate = format!("{:.4}", report.pass_rate),
+        report_path = %report_path,
+        "=== Spec Check Summary ==="
+    );
+
     for d in &report.per_domain {
-        eprintln!("  {}: {}/{} ({:.3})", d.domain, d.passed, d.total, d.pass_rate);
+        tracing::info!(
+            stage = "spec_check",
+            domain = %d.domain,
+            passed = d.passed,
+            total = d.total,
+            pass_rate = format!("{:.3}", d.pass_rate),
+            "domain result"
+        );
     }
-    eprintln!("\nReport: {}", report_path);
 
     // Cleanup
     let _ = fs::remove_dir_all(&tmp_dir);

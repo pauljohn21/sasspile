@@ -424,22 +424,43 @@ impl SpecOtelRunner {
     }
 
     /// Assert all tests passed. Call after shutdown_otel/metrics.
+    ///
+    /// Uses `tracing::error!` to log all failure details before asserting,
+    /// so OTel trace files contain the full failure context.
     pub fn assert_results(&self, label: &str) {
         if self.stats.stats.failed > 0 {
-            panic!(
+            // Log all failures via tracing for OTel trace evidence
+            for (name, msg) in &self.stats.failures {
+                tracing::error!(
+                    stage = "spec_test",
+                    domain = %self.domain,
+                    test_name = %name,
+                    msg = %msg,
+                    "FAIL"
+                );
+            }
+
+            tracing::error!(
+                stage = "spec_test",
+                domain = %self.domain,
+                failed = self.stats.stats.failed,
+                total = self.stats.stats.total,
+                label = %label,
+                trace_file = format!("otel-trace-{}.jsonl", label),
+                metrics_file = format!("otel-metrics-{}.jsonl", label),
+                "domain has failures"
+            );
+
+            // Use assert! for test framework integration (no panic! with format!)
+            assert!(
+                self.stats.stats.failed == 0,
                 "{} / {} tests failed in domain '{}'. \
-                 See otel-trace-{}.jsonl and otel-metrics-{}.jsonl for details. \
-                 First failure: {}",
+                 See otel-trace-{}.jsonl and otel-metrics-{}.jsonl for details.",
                 self.stats.stats.failed,
                 self.stats.stats.total,
                 self.domain,
                 label,
-                label,
-                self.stats
-                    .failures
-                    .first()
-                    .map(|(n, m)| format!("{}: {}", n, m))
-                    .unwrap_or_default()
+                label
             );
         }
     }

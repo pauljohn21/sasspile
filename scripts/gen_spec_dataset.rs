@@ -5,12 +5,14 @@
 //!
 //! Usage:
 //! ```sh
-//! rust-script scripts/gen_spec_dataset.rs --spec-root sass-spec/spec --output spec_dataset.json
+//! RUST_LOG=info rust-script scripts/gen_spec_dataset.rs --spec-root sass-spec/spec --output spec_dataset.json
 //! ```
 //! ```cargo
 //! [dependencies]
 //! serde = { version = "1", features = ["derive"] }
 //! serde_json = "1"
+//! tracing = "0.1"
+//! tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 //! ```
 
 use std::collections::BTreeMap;
@@ -136,6 +138,16 @@ fn extract_cases(hrx_path: &Path, domain: &str) -> Vec<SpecTestCase> {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 fn main() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .init();
+
+    let span = tracing::info_span!("gen_dataset", stage = "gen_dataset");
+    let _enter = span.enter();
+
     let args: Vec<String> = std::env::args().collect();
     let mut spec_root = String::from("sass-spec/spec");
     let mut output_path = String::from("spec_dataset.json");
@@ -151,9 +163,12 @@ fn main() {
     }
 
     let spec_root = PathBuf::from(&spec_root);
-    if !spec_root.exists() { eprintln!("Error: spec root not found: {}", spec_root.display()); std::process::exit(1); }
+    if !spec_root.exists() {
+        tracing::error!(path = %spec_root.display(), "spec root not found");
+        std::process::exit(1);
+    }
 
-    eprintln!("Scanning {} for HRX files...", spec_root.display());
+    tracing::info!(path = %spec_root.display(), "scanning for HRX files");
 
     let domains: &[(&str, &str)] = &[
         ("css/plain", "css_plain"), ("css", "css"), ("directives", "directives"),
@@ -175,7 +190,10 @@ fn main() {
 
     for (path, name) in domains {
         let dir = spec_root.join(path);
-        if !dir.exists() { eprintln!("  SKIP {} (not found)", name); continue; }
+        if !dir.exists() {
+            tracing::warn!(domain = %name, path = %path, "skipping (not found)");
+            continue;
+        }
         let hrx_files = find_hrx_files(&dir);
         total_hrx += hrx_files.len();
         let mut domain_cases = 0;
@@ -184,7 +202,12 @@ fn main() {
             domain_cases += cases.len();
             all_cases.extend(cases);
         }
-        eprintln!("  {}: {} HRX, {} cases", name, hrx_files.len(), domain_cases);
+        tracing::info!(
+            domain = %name,
+            hrx_count = hrx_files.len(),
+            case_count = domain_cases,
+            "domain scanned"
+        );
         domain_stats.push(SpecDomain { name: name.to_string(), total_cases: domain_cases, total_hrx: hrx_files.len() });
     }
 
@@ -197,7 +220,15 @@ fn main() {
     };
 
     let json = serde_json::to_string_pretty(&dataset).unwrap_or_default();
-    fs::write(&output_path, &json).unwrap_or_else(|e| { eprintln!("Write error: {}", e); std::process::exit(1); });
+    fs::write(&output_path, &json).unwrap_or_else(|e| {
+        tracing::error!(error = %e, path = %output_path, "failed to write dataset");
+        std::process::exit(1);
+    });
 
-    eprintln!("\nDataset written: {} ({} cases, {} HRX files)", output_path, dataset.total_cases, dataset.total_hrx);
+    tracing::info!(
+        output = %output_path,
+        total_cases = dataset.total_cases,
+        total_hrx = dataset.total_hrx,
+        "dataset written"
+    );
 }
