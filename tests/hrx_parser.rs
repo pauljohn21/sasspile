@@ -3,6 +3,10 @@
 //! HRX format uses `<===> filename` as file separators
 //! and `===` (70 equals) as sub-directory separators.
 
+// This module is shared across multiple test targets via `#[path = "hrx_parser.rs"]`.
+// When compiled as a standalone test target, some public items appear unused.
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 
 /// A single test case extracted from an HRX file.
@@ -20,15 +24,6 @@ pub struct HrxTestCase {
     pub options: Option<String>,
     /// Base path for multi-file tests
     pub base_path: Option<String>,
-}
-
-/// A parsed HRX file containing one or more test cases.
-#[derive(Debug, Clone)]
-pub struct HrxFile {
-    /// Full path to the .hrx file
-    pub path: PathBuf,
-    /// All files in the HRX archive (path -> content)
-    pub files: Vec<(String, String)>,
 }
 
 /// Parse an HRX file from its raw text content.

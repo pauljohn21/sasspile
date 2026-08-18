@@ -28,7 +28,6 @@ tracing = "0.1"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry", "json"] }
-tracing-flame = "0.2"
 opentelemetry = "0.32"
 opentelemetry_sdk = "0.32"
 opentelemetry-stdout = { version = "0.32", features = ["trace"] }

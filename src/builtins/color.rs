@@ -100,7 +100,17 @@ fn color_blue(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 }
 
 fn color_alpha(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
+    let span = tracing::debug_span!(
+        "color_alpha",
+        stage = "eval",
+        module = "color",
+        arg0_type = tracing::field::Empty,
+    );
+    let _enter = span.enter();
+
     let vals = get_args(args, env)?;
+    tracing::Span::current().record("arg0_type", vals[0].type_name());
+    tracing::trace!(stage = "eval", module = "color", arg0 = %vals[0], "alpha called");
     if !matches!(vals[0], Value::Color(_)) {
         let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
         return Ok(Value::String(crate::value::SassString::unquoted(format!(
@@ -248,13 +258,40 @@ fn color_change(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 }
 
 fn color_mix(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
+    let span = tracing::debug_span!(
+        "color_mix",
+        stage = "eval",
+        module = "color",
+        arg_count = args.len(),
+        arg0_type = tracing::field::Empty,
+        arg1_type = tracing::field::Empty,
+        arg2_type = tracing::field::Empty,
+    );
+    let _enter = span.enter();
+
     let vals = get_args(args, env)?;
+    if vals.len() >= 1 { tracing::Span::current().record("arg0_type", vals[0].type_name()); }
+    if vals.len() >= 2 { tracing::Span::current().record("arg1_type", vals[1].type_name()); }
+    if vals.len() >= 3 { tracing::Span::current().record("arg2_type", vals[2].type_name()); }
+    tracing::trace!(
+        stage = "eval", module = "color",
+        arg0 = if vals.len() > 0 { format!("{}", vals[0]) } else { "none".to_string() },
+        arg1 = if vals.len() > 1 { format!("{}", vals[1]) } else { "none".to_string() },
+        arg2 = if vals.len() > 2 { format!("{}", vals[2]) } else { "none".to_string() },
+        "mix called with values",
+    );
     if vals.len() < 2 {
         return Err(SassError::eval("mix: expected at least 2 arguments", SourcePos::default()));
     }
-    // When mix receives non-color arguments (e.g. null from unresolved vars),
-    // return the CSS function call as an unquoted string to avoid errors.
-    if vals.iter().take(2).any(|v| matches!(v, Value::Null) | !matches!(v, Value::Color(_))) {
+    // When mix receives non-color arguments that cannot be converted to
+    // colors (e.g. null, quoted strings, CSS variables), return the CSS
+    // function call as an unquoted string to avoid errors.
+    // Unquoted color names like `white`, `black` are handled by
+    // expect_color_or_name below.
+    let can_be_color = |v: &Value| -> bool {
+        matches!(v, Value::Color(_)) || matches!(v, Value::String(s) if !s.quoted && super::helpers::is_color_name(&s.value))
+    };
+    if vals.iter().take(2).any(|v| matches!(v, Value::Null) || !can_be_color(v)) {
         let parts: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
         return Ok(Value::String(crate::value::SassString::unquoted(format!(
             "mix({})", parts.join(", ")

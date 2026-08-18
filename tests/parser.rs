@@ -5,7 +5,7 @@ use sasspile::parse;
 use sasspile::ast::Stmt;
 
 fn parse_src(src: &str) -> Vec<Stmt> {
-    let tokens = tokenize(src).expect("tokenize should succeed");
+    let tokens = tokenize(src, "test_parser").expect("tokenize should succeed");
     parse(tokens).expect("parse should succeed")
 }
 

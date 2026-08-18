@@ -37,10 +37,30 @@ fn list_length(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 }
 
 fn list_nth(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
+    let span = tracing::info_span!(
+        "list_nth",
+        stage = "eval",
+        module = "list",
+        arg_count = args.len(),
+        arg0_type = tracing::field::Empty,
+        arg1_type = tracing::field::Empty,
+        result = tracing::field::Empty,
+    );
+    let _enter = span.enter();
+
     let vals = get_args(args, env)?;
     if vals.len() < 2 {
         return Err(SassError::eval("nth: expected 2 arguments", SourcePos::default()));
     }
+    tracing::Span::current().record("arg0_type", vals[0].type_name());
+    tracing::Span::current().record("arg1_type", vals[1].type_name());
+    tracing::trace!(
+        stage = "eval",
+        module = "list",
+        arg0 = %vals[0],
+        arg1 = %vals[1],
+        "nth called with values",
+    );
     let list = expect_list(&vals[0]);
     let idx = expect_number(&vals[1], "nth")?;
     let index = idx.value as i64;
@@ -56,7 +76,8 @@ fn list_nth(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
             SourcePos::default(),
         ));
     }
-    Ok(list.items[real_idx as usize].clone())
+    let result = list.items[real_idx as usize].clone();
+    Ok(result)
 }
 
 fn list_set_nth(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {

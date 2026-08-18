@@ -27,22 +27,13 @@ fn bootstrap_scss_path() -> PathBuf {
         .join("bootstrap.scss")
 }
 
-#[test]
-fn test_bootstrap_otel_trace() {
-    init_tracing();
-    let path = bootstrap_scss_path();
-    if !path.exists() {
-        tracing::warn!(
-            stage = "real_project",
-            project = "bootstrap",
-            "SCSS file not found, skipping"
-        );
-        return;
-    }
-
-    // Run in a thread with a large stack to handle deeply nested SCSS
+/// Spawn a thread with 64 MB stack to compile Bootstrap SCSS.
+fn compile_bootstrap_in_thread(
+    path: &PathBuf,
+) -> Result<String, sasspile::SassError> {
+    let path = path.clone();
     let handle = std::thread::Builder::new()
-        .stack_size(64 * 1024 * 1024) // 64 MB stack
+        .stack_size(64 * 1024 * 1024)
         .spawn(move || {
             let start = Instant::now();
             let span = tracing::info_span!(
@@ -80,12 +71,33 @@ fn test_bootstrap_otel_trace() {
         })
         .expect("failed to spawn thread");
 
-    match handle.join() {
-        Ok(Ok(css)) => assert!(
+    handle.join().unwrap_or_else(|_| {
+        Err(sasspile::SassError::eval(
+            "Bootstrap compilation thread panicked",
+            sasspile::error::SourcePos::default(),
+        ))
+    })
+}
+
+#[test]
+fn test_bootstrap_otel_trace() {
+    init_tracing();
+    let path = bootstrap_scss_path();
+    if !path.exists() {
+        tracing::warn!(
+            stage = "real_project",
+            project = "bootstrap",
+            "SCSS file not found, skipping"
+        );
+        return;
+    }
+
+    match compile_bootstrap_in_thread(&path) {
+        Ok(css) => assert!(
             !css.is_empty(),
             "Bootstrap output CSS should not be empty"
         ),
-        Ok(Err(e)) => {
+        Err(e) => {
             tracing::error!(
                 stage = "real_project",
                 project = "bootstrap",
@@ -94,11 +106,56 @@ fn test_bootstrap_otel_trace() {
             );
             // Don't panic — we want the trace file to be fully written
         }
-        Err(_) => tracing::error!(
+    }
+
+    tracing_init::shutdown_otel();
+}
+
+#[test]
+fn test_bootstrap_output_valid() {
+    init_tracing();
+    let path = bootstrap_scss_path();
+    if !path.exists() {
+        tracing::warn!(
             stage = "real_project",
             project = "bootstrap",
-            "Bootstrap compilation thread panicked"
-        ),
+            "SCSS file not found, skipping"
+        );
+        return;
+    }
+
+    let span = tracing::info_span!(
+        "bootstrap_validate",
+        stage = "real_project",
+        project = "bootstrap",
+    );
+    let _enter = span.enter();
+
+    match compile_file(&path) {
+        Ok(css) => {
+            let open_braces = css.matches('{').count();
+            let close_braces = css.matches('}').count();
+            assert_eq!(
+                open_braces, close_braces,
+                "Braces should be balanced: {} open, {} close",
+                open_braces, close_braces
+            );
+            tracing::info!(
+                stage = "real_project",
+                project = "bootstrap",
+                open_braces,
+                close_braces,
+                "CSS validation passed"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                stage = "real_project",
+                project = "bootstrap",
+                error = %e,
+                "Bootstrap compilation failed, skipping CSS validation"
+            );
+        }
     }
 
     tracing_init::shutdown_otel();

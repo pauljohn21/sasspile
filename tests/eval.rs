@@ -1,9 +1,7 @@
 //! Evaluator tests — tests end-to-end SCSS compilation.
 
-use sasspile::compile;
-
 fn compile_src(src: &str) -> String {
-    compile(src).expect("compilation should succeed")
+    sasspile::compile(src).expect("compilation should succeed")
 }
 
 #[test]
@@ -200,11 +198,11 @@ fn test_compile_variable_global() {
 
 #[test]
 fn test_compile_compressed() {
-    use sasspile::{compile, serialize_with_style, OutputStyle};
+    use sasspile::{serialize_with_style, OutputStyle};
     // Use the internal API for compressed mode
     let scss = "a { color: red; }";
     let source = scss;
-    let tokens = sasspile::tokenize(source).unwrap();
+    let tokens = sasspile::tokenize(source, "test_compressed").unwrap();
     let ast = sasspile::parse(tokens).unwrap();
     let css_tree = sasspile::evaluate(ast).unwrap();
     let compressed = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap();
@@ -214,7 +212,7 @@ fn test_compile_compressed() {
 #[test]
 fn test_compile_error_stmt() {
     let scss = "@error \"test error\";";
-    let result = compile(scss);
+    let result = sasspile::compile(scss);
     assert!(result.is_err(), "should error: {:?}", result);
 }
 

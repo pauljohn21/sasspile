@@ -33,13 +33,14 @@ and supports the majority of Sass language features.
 - **Nesting** — Full selector nesting with `&` parent selector
 - **Mixins** — `@mixin` / `@include` with parameters and `@content`
 - **Functions** — `@function` / `@return` with user-defined functions
-- **Control Flow** — `@if` / `@else if` / `@else`, `@for ... through/to`, `@each ... in`
+- **Control Flow** — `@if` / `@else if` / `@else`, `@for ... through/to`, `@each ... in`, `@while`
 - **`@extend`** — Selector inheritance with placeholder selectors (`%placeholder`)
-- **`@use`** — Module system with namespace resolution and virtual file system support
+- **`@use`** — Module system with namespace resolution and filesystem-based `@use`/`@import` via `compile_file`
 - **`@import`** — Legacy import support
+- **`@supports`** — Feature query support
+- **`@at-root`** — Root-level selector escaping
 - **Interpolation** — `#{...}` in selectors, values, and property names
 - **`@error`, `@warn`, `@debug`** — Diagnostic at-rules
-- **`@at-root`** — Root-level selector escaping
 
 ### Built-in Modules
 
@@ -148,37 +149,38 @@ Output:
 }
 ```
 
-### With Virtual File System
+### File-based Compilation
 
-For `@use "module"` resolution without filesystem access:
+For `@use "module"` / `@import "file"` resolution from the filesystem:
 
 ```rust
-use sasspile::compile_with_files;
-use std::collections::HashMap;
+use sasspile::compile_file;
 
-let mut vfs = HashMap::new();
-vfs.insert("_colors".to_string(), "$brand: #ff6600;".to_string());
-
-let scss = r#"
-    @use "colors";
-    .header { color: colors.$brand; }
-"#;
-
-let css = compile_with_files(scss, &vfs).unwrap();
+fn main() {
+    let css = compile_file("src/main.scss").unwrap();
+    // println!("{}", css);
+}
 ```
+
+`compile_file` sets `base_dir` to the parent directory of the input file, enabling
+`@use` and `@import` directives to resolve relative paths on the filesystem.
 
 ### Output Style Control
 
 ```rust
-use sasspile::{serialize_with_style, OutputStyle};
+use sasspile::{tokenize, parse, evaluate, serialize_with_style, OutputStyle};
 
-// Serialize with compressed output
-// let css = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap();
+let scss = "a { color: red; }";
+let tokens = tokenize(scss, "<string>").unwrap();
+let ast = parse(tokens).unwrap();
+let css_tree = evaluate(ast).unwrap();
+let compressed = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap();
+// compressed == "a{color:red}"
 ```
 
 ## Testing
 
-The test suite includes **265+ tests** covering:
+The test suite includes **224 tests** across **35 test files** covering:
 
 - Lexer tokenization
 - Parser grammar (expressions, at-rules, selectors)
@@ -186,7 +188,7 @@ The test suite includes **265+ tests** covering:
 - Built-in functions — math, color, string, list, map, meta, selector
 - Selector parsing and `@extend` resolution
 - sass-spec integration via HRX format
-- Real-world project compilation: Bootstrap, Element Plus
+- Real-world project compilation: Bootstrap, Element Plus (with OpenTelemetry tracing)
 
 ```bash
 # Run all tests
@@ -197,16 +199,21 @@ RUST_LOG=trace cargo test
 
 # Run specific module tests
 cargo test --test builtins_color
+
+# Run real-world project compilation tests (with OTel tracing)
+RUST_LOG=info cargo test --test bootstrap_otel -- --nocapture
+RUST_LOG=info cargo test --test element_plus_otel -- --nocapture
 ```
 
 ## Project Statistics
 
 | Metric | Value |
 |--------|-------|
-| Source lines | ~7,300 |
-| Test lines | ~2,600 |
-| Source files | 25 |
-| Test files | 18 |
+| Source lines | ~8,500 |
+| Test lines | ~3,500 |
+| Source files | 35 |
+| Test files | 35 |
+| Total tests | 224 |
 | Rust edition | 2024 |
 | MSRV | 1.97 |
 | License | MIT |

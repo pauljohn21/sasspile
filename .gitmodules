@@ -7,3 +7,9 @@
 [submodule "element-plus"]
 	path = element-plus
 	url = git@github.com:element-plus/element-plus.git
+[submodule "bulma"]
+	path = bulma
+	url = git@github.com:jgthms/bulma.git
+[submodule "mdc-web"]
+	path = mdc-web
+	url = git@github.com:material-components/material-components-web.git

@@ -29,22 +29,13 @@ fn element_plus_scss_path() -> PathBuf {
         .join("index.scss")
 }
 
-#[test]
-fn test_element_plus_otel_trace() {
-    init_tracing();
-    let path = element_plus_scss_path();
-    if !path.exists() {
-        tracing::warn!(
-            stage = "real_project",
-            project = "element_plus",
-            "SCSS file not found, skipping"
-        );
-        return;
-    }
-
-    // Run in a thread with a large stack to handle deeply nested SCSS
+/// Spawn a thread with 64 MB stack to compile Element Plus SCSS.
+fn compile_element_plus_in_thread(
+    path: &PathBuf,
+) -> Result<String, sasspile::SassError> {
+    let path = path.clone();
     let handle = std::thread::Builder::new()
-        .stack_size(64 * 1024 * 1024) // 64 MB stack
+        .stack_size(64 * 1024 * 1024)
         .spawn(move || {
             let start = Instant::now();
             let span = tracing::info_span!(
@@ -82,12 +73,33 @@ fn test_element_plus_otel_trace() {
         })
         .expect("failed to spawn thread");
 
-    match handle.join() {
-        Ok(Ok(css)) => assert!(
+    handle.join().unwrap_or_else(|_| {
+        Err(sasspile::SassError::eval(
+            "Element Plus compilation thread panicked",
+            sasspile::error::SourcePos::default(),
+        ))
+    })
+}
+
+#[test]
+fn test_element_plus_otel_trace() {
+    init_tracing();
+    let path = element_plus_scss_path();
+    if !path.exists() {
+        tracing::warn!(
+            stage = "real_project",
+            project = "element_plus",
+            "SCSS file not found, skipping"
+        );
+        return;
+    }
+
+    match compile_element_plus_in_thread(&path) {
+        Ok(css) => assert!(
             !css.is_empty(),
             "Element Plus output CSS should not be empty"
         ),
-        Ok(Err(e)) => {
+        Err(e) => {
             tracing::error!(
                 stage = "real_project",
                 project = "element_plus",
@@ -96,11 +108,56 @@ fn test_element_plus_otel_trace() {
             );
             // Don't panic — we want the trace file to be fully written
         }
-        Err(_) => tracing::error!(
+    }
+
+    tracing_init::shutdown_otel();
+}
+
+#[test]
+fn test_element_plus_output_valid() {
+    init_tracing();
+    let path = element_plus_scss_path();
+    if !path.exists() {
+        tracing::warn!(
             stage = "real_project",
             project = "element_plus",
-            "Element Plus compilation thread panicked"
-        ),
+            "SCSS file not found, skipping"
+        );
+        return;
+    }
+
+    let span = tracing::info_span!(
+        "element_plus_validate",
+        stage = "real_project",
+        project = "element_plus",
+    );
+    let _enter = span.enter();
+
+    match compile_file(&path) {
+        Ok(css) => {
+            let open_braces = css.matches('{').count();
+            let close_braces = css.matches('}').count();
+            assert_eq!(
+                open_braces, close_braces,
+                "Braces should be balanced: {} open, {} close",
+                open_braces, close_braces
+            );
+            tracing::info!(
+                stage = "real_project",
+                project = "element_plus",
+                open_braces,
+                close_braces,
+                "CSS validation passed"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                stage = "real_project",
+                project = "element_plus",
+                error = %e,
+                "Element Plus compilation failed, skipping CSS validation"
+            );
+        }
     }
 
     tracing_init::shutdown_otel();

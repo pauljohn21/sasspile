@@ -102,6 +102,29 @@ pub fn eval_expr(expr: &Expr, env: &mut Env, parent_sel: &[String]) -> Result<Va
     }
 }
 
+/// Lazily evaluate `if($condition, $if-true, $if-false)`.
+/// Only the condition is evaluated first; then only the matching
+/// branch is evaluated. This mirrors Dart Sass `if()` semantics and
+/// avoids errors from the unused branch (e.g. `unit($value)` when
+/// `$value` is not a number).
+fn eval_if_lazy(args: &[Arg], env: &mut Env, parent_sel: &[String]) -> Result<Value, SassError> {
+    let span = tracing::debug_span!("eval_if_lazy", stage = "eval", module = "if");
+    let _enter = span.enter();
+
+    if args.len() < 3 {
+        return Err(SassError::eval(
+            "if() requires 3 arguments: $condition, $if-true, $if-false",
+            SourcePos::default(),
+        ));
+    }
+    let cond = eval_expr(&args[0].value, env, parent_sel)?;
+    if cond.is_truthy() {
+        eval_expr(&args[1].value, env, parent_sel)
+    } else {
+        eval_expr(&args[2].value, env, parent_sel)
+    }
+}
+
 fn eval_function_call(
     name: &str,
     args: &[Arg],
@@ -127,6 +150,14 @@ fn eval_function_call(
 
     if let Some(func) = env.get_function(name).cloned() {
         return call_user_function(&func, args, env, parent_sel);
+    }
+
+    // Special-case `if()` for lazy evaluation: only evaluate the
+    // branch that matches the condition, avoiding side-effects or
+    // errors from the unused branch (e.g. unit($value) when $value
+    // is not a number).
+    if name == "if" && namespace.is_none() && env.get_builtin("if").is_some() {
+        return eval_if_lazy(args, env, parent_sel);
     }
 
     if let Some(builtin) = env.get_builtin(name).copied() {

@@ -3,6 +3,10 @@
 //! This module provides utilities to run sass-spec tests against the compiler.
 //! Multi-file tests (requiring VFS) are skipped — only single-file tests run.
 
+// This module is shared across multiple test targets via `#[path = "spec_runner.rs"]`.
+// When compiled as a standalone test target, some public items appear unused.
+#![allow(dead_code)]
+
 #[path = "hrx_parser.rs"]
 mod hrx_parser;
 

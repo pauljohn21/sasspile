@@ -130,6 +130,11 @@ pub fn expect_color_or_name<'a>(val: &'a Value, name: &str) -> Result<crate::val
     }
 }
 
+/// Check if a string is a known CSS color name.
+pub fn is_color_name(name: &str) -> bool {
+    color_from_name(name).is_some()
+}
+
 /// Convert a CSS color name to a Color value.
 fn color_from_name(name: &str) -> Option<crate::value::Color> {
     use crate::value::Color;

@@ -4,7 +4,7 @@ use sasspile::tokenize;
 use sasspile::token::Token;
 
 fn tok(input: &str) -> Vec<Token> {
-    let spans = tokenize(input).expect("tokenize should succeed");
+    let spans = tokenize(input, "test_input").expect("tokenize should succeed");
     spans.into_iter().map(|ts| ts.token).collect()
 }
 
@@ -214,7 +214,7 @@ fn test_tokenize_complex_scss() {
 
 #[test]
 fn test_tokenize_position_tracking() {
-    let spans = tokenize("a\n  color: red;\n").expect("should succeed");
+    let spans = tokenize("a\n  color: red;\n", "test_pos").expect("should succeed");
     let first = &spans[0];
     assert_eq!(first.pos.line, 1);
     assert_eq!(first.pos.column, 1);

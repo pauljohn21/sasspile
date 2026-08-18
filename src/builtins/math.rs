@@ -31,9 +31,13 @@ pub fn register(env: &mut Env) {
     env.register_builtin("math-clamp".into(), math_clamp);
     env.register_builtin("math-div".into(), math_div);
     env.register_builtin("math-percentage".into(), math_percentage);
+    env.register_builtin("percentage".into(), math_percentage);
     env.register_builtin("math-unit".into(), math_unit);
+    env.register_builtin("unit".into(), math_unit);
     env.register_builtin("math-unitless".into(), math_unitless);
+    env.register_builtin("unitless".into(), math_unitless);
     env.register_builtin("math-comparable".into(), math_comparable);
+    env.register_builtin("comparable".into(), math_comparable);
     env.register_builtin("math-random".into(), math_random);
     env.register_builtin("math-pow".into(), math_pow);
     env.register_builtin("math-sqrt".into(), math_sqrt);
@@ -187,7 +191,19 @@ fn math_percentage(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 }
 
 fn math_unit(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
+    let span = tracing::debug_span!(
+        "math_unit",
+        stage = "eval",
+        module = "math",
+        arg0_type = tracing::field::Empty,
+    );
+    let _enter = span.enter();
+
     let vals = get_arg_values(args, env)?;
+    if !vals.is_empty() {
+        tracing::Span::current().record("arg0_type", vals[0].type_name());
+        tracing::trace!(stage = "eval", module = "math", arg0 = %vals[0], "unit called");
+    }
     let n = expect_number(get_positional(&vals, 0, "")?, "unit")?;
     Ok(quoted_str(n.unit_str()))
 }
