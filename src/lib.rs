@@ -54,6 +54,7 @@ pub mod ast;
 pub mod parser;
 pub mod env;
 pub mod eval;
+pub mod resolver;
 pub mod serialize;
 pub mod selector;
 pub mod value;
@@ -70,6 +71,7 @@ pub use ast::{Stmt, Expr};
 pub use parser::parse;
 pub use eval::evaluate;
 pub use eval::evaluate_with_dir;
+pub use resolver::{ModuleResolver, FileResolver, ResolvedModule};
 pub use serialize::{serialize, serialize_with_style, OutputStyle};
 
 /// Compile a SCSS source string to CSS.
@@ -83,7 +85,8 @@ pub fn compile(source: &str) -> Result<String, SassError> {
 
     let tokens = tokenize(source, "<string>")?;
     let ast = parse(tokens)?;
-    let css_tree = evaluate(ast)?;
+    let mut resolver = FileResolver::new();
+    let css_tree = evaluate(ast, &mut resolver)?;
     let output = serialize(&css_tree)?;
 
     tracing::info!(stage = "compile", output_len = output.len(), "compilation complete");
@@ -111,7 +114,8 @@ pub fn compile_file(path: impl AsRef<std::path::Path>) -> Result<String, SassErr
     let file_name = path.display().to_string();
     let tokens = tokenize(&source, &file_name)?;
     let ast = parse(tokens)?;
-    let css_tree = eval::evaluate_with_dir(ast, base_dir)?;
+    let mut resolver = FileResolver::new();
+    let css_tree = eval::evaluate_with_dir(ast, base_dir, &mut resolver)?;
     let output = serialize(&css_tree)?;
 
     tracing::info!(stage = "compile", output_len = output.len(), "compilation complete");

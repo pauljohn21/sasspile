@@ -2,6 +2,7 @@
 
 use crate::env::Env;
 use crate::error::SassError;
+use crate::resolver::ModuleResolver;
 use super::css::value_to_css;
 use super::expr;
 
@@ -23,6 +24,7 @@ pub fn eval_interpolation_in_str(
     s: &str,
     env: &mut Env,
     parent_sel: &[String],
+    resolver: &mut dyn ModuleResolver,
 ) -> Result<String, SassError> {
     if !s.contains("#{") {
         return Ok(s.to_string());
@@ -48,7 +50,7 @@ pub fn eval_interpolation_in_str(
                     expr_str.push(ch);
                 }
             }
-            let val = eval_interpolation_expr(&expr_str, env, parent_sel)?;
+            let val = eval_interpolation_expr(&expr_str, env, parent_sel, resolver)?;
             result.push_str(&val);
         } else {
             result.push(c);
@@ -62,6 +64,7 @@ fn eval_interpolation_expr(
     expr_str: &str,
     env: &mut Env,
     parent_sel: &[String],
+    resolver: &mut dyn ModuleResolver,
 ) -> Result<String, SassError> {
     let trimmed = expr_str.trim();
 
@@ -108,13 +111,10 @@ fn eval_interpolation_expr(
         }
     }
 
-    // Fall back to tokenizing and parsing as a full expression
+    // Fall back to resolver-based expression parsing
     let span = tracing::debug_span!("eval_interp_expr", stage = "eval", module = "interp", expr = %trimmed);
     let _enter = span.enter();
-    let tokens = crate::lexer::tokenize(trimmed, "interpolation")?;
-    let mut parser = crate::parser::Parser::new(tokens);
-    let mut expr_parser = crate::parser::expr::ExprParser::new(&mut parser);
-    let expr = expr_parser.parse_expr()?;
-    let val = expr::eval_expr(&expr, env, parent_sel)?;
+    let expr = resolver.parse_expr(trimmed)?;
+    let val = expr::eval_expr(&expr, env, parent_sel, resolver)?;
     Ok(value_to_css(&val))
 }

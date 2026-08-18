@@ -82,6 +82,29 @@ impl Env {
         }
     }
 
+    /// Create a child scope, execute `f` in it, then restore the parent scope.
+    ///
+    /// This replaces the error-prone `std::mem::replace` + `take().unwrap()`
+    /// pattern.  Even if `f` panics, `self` remains in a valid (empty global)
+    /// state, which is acceptable since panic propagation typically means the
+    /// process is terminating.
+    pub fn with_child_scope<R>(&mut self, f: impl FnOnce(&mut Env) -> R) -> R {
+        let span = tracing::debug_span!(
+            "env_child_scope",
+            stage = "eval",
+            scope_depth = tracing::field::Empty,
+            caller = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+
+        let parent = std::mem::replace(self, Env::new_global());
+        let mut child = Env::new_child(parent);
+        let result = f(&mut child);
+        // Restore parent from child
+        *self = *child.parent.take().unwrap();
+        result
+    }
+
     /// Look up a variable in the scope chain (local → parent → global).
     pub fn get_var(&self, name: &str) -> Option<&Value> {
         if let Some(v) = self.variables.get(name) {

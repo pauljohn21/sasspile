@@ -18,9 +18,8 @@ A Rust-native Sass/SCSS compiler built from the official Sass specification
 > implementation. sasspile uses Rust's ownership model, leverages `tracing` for
 > diagnostics, and follows Rust idioms throughout.
 >
-> **CodeGraph-ready.** The project ships with a CodeGraph index (3,381 files,
-> 28,930 nodes, 112,860 edges) for instant code navigation, caller analysis, and
-> impact assessment via `codegraph` CLI.
+> **CodeGraph-ready.** The project ships with a CodeGraph index for instant code
+> navigation, caller analysis, and impact assessment via `codegraph` CLI.
 
 ## Overview
 
@@ -39,7 +38,8 @@ and supports the majority of Sass language features.
 - **Functions** — `@function` / `@return` with user-defined functions
 - **Control Flow** — `@if` / `@else if` / `@else`, `@for ... through/to`, `@each ... in`, `@while`
 - **`@extend`** — Selector inheritance with placeholder selectors (`%placeholder`)
-- **`@use`** — Module system with namespace resolution and filesystem-based `@use`/`@import` via `compile_file`
+- **`@use`** — Module system with namespace resolution, `as *` glob imports, `with ($var: value)` configuration injection, and `ModuleResolver` trait for decoupled file loading
+- **`@forward`** — Basic forward rule support for module re-exports
 - **`@import`** — Legacy import support
 - **`@supports`** — Feature query support
 - **`@at-root`** — Root-level selector escaping
@@ -93,7 +93,8 @@ and supports the majority of Sass language features.
 
 ### Observability
 
-All pipeline stages are instrumented with `tracing` spans:
+All pipeline stages are instrumented with `tracing` spans, bridged to
+OpenTelemetry SDK for real OTel trace export:
 
 | Span | Stage |
 |------|-------|
@@ -102,6 +103,8 @@ All pipeline stages are instrumented with `tracing` spans:
 | `parse{stage="parser"}` | Parsing phase |
 | `evaluate{stage="eval"}` | Evaluation phase |
 | `serialize{stage="serialize"}` | Serialization phase |
+| `project_compile{stage="real_project"}` | Real-world project compilation (OTel tests) |
+| `project_validate{stage="real_project"}` | CSS output validation (OTel tests) |
 
 Enable traces with `RUST_LOG`:
 
@@ -237,13 +240,13 @@ codegraph node <node_id>
 codegraph explore <query>
 ```
 
-Current index: 3,381 files · 28,930 nodes · 112,860 edges
+Current index: synced via `codegraph sync`
 
 ## Project Statistics
 
 | Metric | Value |
 |--------|-------|
-| Source lines | ~8,600 |
+| Source lines | ~8,631 |
 | Test lines | ~3,550 |
 | Source files | 35 |
 | Test files | 40 |

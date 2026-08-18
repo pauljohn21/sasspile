@@ -204,7 +204,7 @@ fn test_compile_compressed() {
     let source = scss;
     let tokens = sasspile::tokenize(source, "test_compressed").unwrap();
     let ast = sasspile::parse(tokens).unwrap();
-    let css_tree = sasspile::evaluate(ast).unwrap();
+    let css_tree = sasspile::evaluate(ast, &mut sasspile::FileResolver::new()).unwrap();
     let compressed = serialize_with_style(&css_tree, OutputStyle::Compressed).unwrap();
     assert!(compressed.contains("a{color:red}"), "compressed output: {}", compressed);
 }

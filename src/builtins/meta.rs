@@ -192,7 +192,8 @@ fn meta_call(args: &[Arg], env: &mut Env) -> Result<Value, SassError> {
 
             let func = env.get_function(name).cloned();
             if let Some(f) = func {
-                return crate::eval::expr::bind_params_and_call(&f, &new_args, env, &[]);
+                let mut resolver = crate::resolver::FileResolver::new();
+                return crate::eval::func::bind_params_and_call(&f, &new_args, env, &[], &mut resolver);
             }
             if let Some(builtin) = env.get_builtin(name).copied() {
                 return builtin(&new_args, env);

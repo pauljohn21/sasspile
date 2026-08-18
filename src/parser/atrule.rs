@@ -330,7 +330,7 @@ branches.push((cond, body));
                 self.expect(Token::Colon)?;
                 let val = {
                     let mut ep = ExprParser::new(self);
-                    ep.parse_expr()?
+                    ep.parse_space_list()?
                 };
                 config.push((var, val));
                 if matches!(self.peek(), Token::Comma) { self.advance(); }

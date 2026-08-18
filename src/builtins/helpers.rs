@@ -4,6 +4,7 @@ use crate::ast::Arg;
 use crate::env::Env;
 use crate::error::{SassError, SourcePos};
 use crate::eval::expr::eval_expr;
+use crate::resolver::FileResolver;
 use crate::value::{SassString, Value};
 use crate::value::Number;
 
@@ -12,8 +13,9 @@ pub fn eval_args(args: &[Arg], env: &mut Env, parent_sel: &[String]) -> Result<V
     let span = tracing::trace_span!("eval_args", stage = "builtin", arg_count = args.len());
     let _enter = span.enter();
     let mut vals = Vec::with_capacity(args.len());
+    let mut resolver = FileResolver::new();
     for arg in args {
-        vals.push(eval_expr(&arg.value, env, parent_sel)?);
+        vals.push(eval_expr(&arg.value, env, parent_sel, &mut resolver)?);
     }
     Ok(vals)
 }

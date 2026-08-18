@@ -1,6 +1,6 @@
 # Sass 功能 ↔ sass-spec 对照表
 
-> 生成时间：2026-08-18（最后更新）
+> 生成时间：2026-08-18（最后更新：2026-08-18 提交 0ead9fe）
 > 项目版本：v0.9.3
 > 数据来源：sass 官方手册（sass-lang.com/documentation）+ sass-spec HRX 文件
 > 用途：每个 Sass 语言功能对应的 sass-spec 测试文件索引
