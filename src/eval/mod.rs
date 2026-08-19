@@ -25,6 +25,8 @@ pub(crate) struct ModuleExports {
 pub struct Env {
     /// 变量绑定（扁平，用作用域前缀模拟）。
     vars: HashMap<String, Value>,
+    /// !global 变量写入——规则体内 !global 赋值需要传播到外层。
+    global_writes: HashMap<String, Value>,
     /// mixin 定义。
     mixins: HashMap<String, MixinDef>,
     /// 用户函数定义。

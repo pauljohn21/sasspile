@@ -131,10 +131,42 @@ impl Evaluator {
             });
         }
 
-        // 添加 @at-root 节点
-        result.extend(root_nodes);
-        Ok((result, new_env))
+    // 添加 @at-root 节点
+    result.extend(root_nodes);
+    // 规则体创建局部作用域——局部变量绑定不传播到外层（sass-spec 作用域规则）。
+    // 但以下变更需要传播到外层：
+    // - 命名空间变量赋值（midstream.$var 写入模块变量，非局部）
+    // - !global 变量赋值（写入全局作用域）
+    // - mixin/function 定义（Sass 语义允许规则体内定义的 mixin 可见）
+    // - @extend 关系（规则体内的 @extend 需要应用到全局）
+    // - 命名空间模块（规则体内的 @use 需要可见）
+    // - 内建模块注册
+    let mut return_env = env.clone();
+    // 传播命名空间变量赋值（名字含 . 的）
+    for (name, val) in &new_env.vars {
+        if name.contains('.') {
+            return_env = return_env.bind(name.clone(), val.clone());
+        }
     }
+    // 传播 !global 变量赋值
+    for (name, val) in &new_env.global_writes {
+        return_env = return_env.bind(name.clone(), val.clone());
+    }
+    for (name, def) in &new_env.mixins {
+        if !env.mixins.contains_key(name) {
+            return_env = return_env.define_mixin(name.clone(), def.clone());
+        }
+    }
+    for (name, def) in &new_env.functions {
+        if !env.functions.contains_key(name) {
+            return_env = return_env.define_function(name.clone(), def.clone());
+        }
+    }
+    return_env.extends = new_env.extends.clone();
+    return_env.namespaces = new_env.namespaces.clone();
+    return_env.builtin_modules = new_env.builtin_modules.clone();
+    Ok((result, return_env))
+}
 
     /// 组合选择器——处理 & 替换和逗号分隔选择器。
     pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {

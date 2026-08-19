@@ -135,6 +135,12 @@ impl Evaluator {
         // 恢复调用者的 base_path 和 depth，使父作用域后续 @import 使用正确的基准目录
         final_env.base_path = caller_env.base_path.clone();
         final_env.depth = caller_env.depth;
+        // @import 内联的变量应传播到外层——把 partial 中新增的变量写入 global_writes
+        for (name, val) in &final_env.vars {
+            if !caller_env.vars.contains_key(name) {
+                final_env.global_writes.insert(name.clone(), val.clone());
+            }
+        }
         // plain CSS 输出用 AtRoot 包裹
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(css)]

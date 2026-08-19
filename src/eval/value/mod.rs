@@ -28,7 +28,15 @@ impl Evaluator {
             return Ok((vec![], env.clone()));
         }
         let val = Self::eval_value(value, env)?;
-        Ok((vec![], env.bind(name.to_string(), val)))
+        let new_env = env.bind(name.to_string(), val.clone());
+        // !global 变量同时写入 global_writes，供 eval_rule 传播到外层
+        if flags.global {
+            let mut env = new_env;
+            env.global_writes.insert(name.to_string(), val);
+            Ok((vec![], env))
+        } else {
+            Ok((vec![], new_env))
+        }
     }
 
     /// 部分条件求值结果。
