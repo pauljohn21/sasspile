@@ -527,6 +527,15 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
                 )),
             }
         }
+        "is-missing" => {
+            // sasspile 目前不支持 none/missing 通道，所以总是返回 false。
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let channel_arg = args.get(1).or_else(|| kw_args.get("$channel"));
+            match (color_arg, channel_arg) {
+                (Some(Value::Color(_)), Some(Value::String(_, _))) => Ok(Some(Value::Bool(false))),
+                _ => Err(SassError::Eval("is-missing requires $color and $channel arguments".into())),
+            }
+        }
         "is-in-gamut" => {
             // sasspile 存储的 sRGB 颜色始终在色域内（u8 范围 + alpha 0-1）
             let color_arg = args.first().or_else(|| kw_args.get("$color"));

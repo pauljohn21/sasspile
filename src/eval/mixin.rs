@@ -36,13 +36,19 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
 // 绑定参数
 let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
-// 合并 mixin 定义时捕获的命名空间
-let mut mixin_env = mixin_env;
-for (ns, exports) in &mixin.captured_namespaces {
-    if !mixin_env.namespaces.contains_key(ns) {
-        mixin_env.namespaces.insert(ns.clone(), exports.clone());
-    }
-}
+        // 合并 mixin 定义时捕获的命名空间
+        let mut mixin_env = mixin_env;
+        for (ns, exports) in &mixin.captured_namespaces {
+            if !mixin_env.namespaces.contains_key(ns) {
+                mixin_env.namespaces.insert(ns.clone(), exports.clone());
+            }
+            // 将命名空间模块中的函数注入到 mixin 环境，使 mixin 体可直接调用
+            for (fname, fdef) in &exports.functions {
+                if !mixin_env.functions.contains_key(fname) {
+                    mixin_env = mixin_env.define_function(fname.clone(), fdef.clone());
+                }
+            }
+        }
 // 注入 @content 块
         let mixin_env = if let Some(content_nodes) = content {
             mixin_env.set_content(content_nodes.clone(), env.clone())
@@ -120,6 +126,12 @@ for (ns, exports) in &mixin.captured_namespaces {
         // 用户函数
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env);
+        }
+        // 在命名空间模块中查找同名函数（支持 mixin 体内调用同模块的私有函数）
+        for (_, exports) in &env.namespaces {
+            if let Some(func) = exports.functions.get(name) {
+                return Self::call_user_function(func, pos_args, kw_args, env);
+            }
         }
         // 模块限定函数 (math.abs, map.get, etc.)
         if name.contains('.') {

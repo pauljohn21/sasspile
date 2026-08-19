@@ -415,10 +415,34 @@ impl<'src> Iterator for Lexer<'src> {
                     Token::Dot
                 }
             }
-            // 减号
+            // 减号——可能是负数、标识符开头（如 -real-channel）或减号运算符
             '-' => {
-                self.next_char();
-                Token::Minus
+                // 如果下一个字符是标识符字符（非数字），则扫描为以 - 开头的标识符
+                let next = self.peek2();
+                if next.is_some_and(|c| c.is_alphabetic() || c == '-' || c == '_' || !c.is_ascii()) {
+                    self.next_char(); // 消费 -
+                    let start = self.pos;
+                    while let Some(c) = self.peek() {
+                        if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
+                            self.next_char();
+                        } else {
+                            break;
+                        }
+                    }
+                    let text = format!("-{}", &self.source[start..self.pos]);
+                    match text.as_str() {
+                        "true" => Token::True,
+                        "false" => Token::False,
+                        "null" => Token::Null,
+                        "and" => Token::And,
+                        "or" => Token::Or,
+                        "not" => Token::Not,
+                        _ => Token::Ident(text),
+                    }
+                } else {
+                    self.next_char();
+                    Token::Minus
+                }
             }
             // 斜杠——可能是注释或除法
             '/' => {

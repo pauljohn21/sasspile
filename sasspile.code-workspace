@@ -4,13 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../element-plus-dev"
-		},
-		{
-			"path": "../sass-spec-main"
-		},
-		{
-			"path": "../bootstrap-5.3.8"
+			"path": "../scss-rust"
 		}
 	],
 	"settings": {}

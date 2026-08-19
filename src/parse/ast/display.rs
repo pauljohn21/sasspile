@@ -10,6 +10,19 @@ fn format_num(n: f64) -> String {
     }
 }
 
+/// 清理颜色分量的浮点噪声——将极小值归零。
+/// 当 |v| < 1e-6 时视为 0，避免矩阵系数精度不足导致的残留。
+fn clean_num(v: f64) -> f64 {
+    if v.abs() < 1e-6 { 0.0 } else { v }
+}
+
+/// 清理百分比分量——接近 0 或 100 时归整。
+fn clean_pct(v: f64) -> f64 {
+    if (v - 0.0).abs() < 1e-6 { 0.0 }
+    else if (v - 100.0).abs() < 1e-4 { 100.0 }
+    else { v }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -78,35 +91,43 @@ impl std::fmt::Display for Value {
                         }
                     }
                     ColorFormat::Lab(l, a, b) => {
+                        let l_clean = clean_pct(*l);
+                        let a_clean = clean_num(*a);
+                        let b_clean = clean_num(*b);
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "lab({}% {} {})", format_num(*l), format_num(*a), format_num(*b))
+                            write!(f, "lab({}% {} {})", format_num(l_clean), format_num(a_clean), format_num(b_clean))
                         } else {
-                            write!(f, "lab({}% {} {} / {})", format_num(*l), format_num(*a), format_num(*b), format_alpha(c.a))
+                            write!(f, "lab({}% {} {} / {})", format_num(l_clean), format_num(a_clean), format_num(b_clean), format_alpha(c.a))
                         }
                     }
                     ColorFormat::Lch(l, ch, h) => {
-                        let h_str = if *ch == 0.0 { "none".to_string() } else { format!("{}deg", format_hue(*h)) };
+                        let l_clean = clean_pct(*l);
+                        let ch_clean = clean_num(*ch);
+                        let h_str = if ch_clean == 0.0 { "none".to_string() } else { format!("{}deg", format_hue(*h)) };
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "lch({}% {} {})", format_num(*l), format_num(*ch), h_str)
+                            write!(f, "lch({}% {} {})", format_num(l_clean), format_num(ch_clean), h_str)
                         } else {
-                            write!(f, "lch({}% {} {} / {})", format_num(*l), format_num(*ch), h_str, format_alpha(c.a))
+                            write!(f, "lch({}% {} {} / {})", format_num(l_clean), format_num(ch_clean), h_str, format_alpha(c.a))
                         }
                     }
                     ColorFormat::Oklab(l, a, b) => {
-                        let l_pct = *l * 100.0;
+                        let l_pct = clean_pct(*l * 100.0);
+                        let a_clean = clean_num(*a);
+                        let b_clean = clean_num(*b);
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "oklab({}% {} {})", format_num(l_pct), format_num(*a), format_num(*b))
+                            write!(f, "oklab({}% {} {})", format_num(l_pct), format_num(a_clean), format_num(b_clean))
                         } else {
-                            write!(f, "oklab({}% {} {} / {})", format_num(l_pct), format_num(*a), format_num(*b), format_alpha(c.a))
+                            write!(f, "oklab({}% {} {} / {})", format_num(l_pct), format_num(a_clean), format_num(b_clean), format_alpha(c.a))
                         }
                     }
                     ColorFormat::Oklch(l, ch, h) => {
-                        let l_pct = *l * 100.0;
-                        let h_str = if *ch == 0.0 { "none".to_string() } else { format!("{}deg", format_hue(*h)) };
+                        let l_pct = clean_pct(*l * 100.0);
+                        let ch_clean = clean_num(*ch);
+                        let h_str = if ch_clean == 0.0 { "none".to_string() } else { format!("{}deg", format_hue(*h)) };
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "oklch({}% {} {})", format_num(l_pct), format_num(*ch), h_str)
+                            write!(f, "oklch({}% {} {})", format_num(l_pct), format_num(ch_clean), h_str)
                         } else {
-                            write!(f, "oklch({}% {} {} / {})", format_num(l_pct), format_num(*ch), h_str, format_alpha(c.a))
+                            write!(f, "oklch({}% {} {} / {})", format_num(l_pct), format_num(ch_clean), h_str, format_alpha(c.a))
                         }
                     }
                     ColorFormat::DisplayP3(r, g, b) => {

@@ -14,10 +14,10 @@ use std::rc::Rc;
 /// 模块导出——加载的文件模块的成员。
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ModuleExports {
-    vars: HashMap<String, Value>,
-    mixins: HashMap<String, MixinDef>,
-    functions: HashMap<String, FunctionDef>,
-    css: Vec<CssNode>,
+    pub(crate) vars: HashMap<String, Value>,
+    pub(crate) mixins: HashMap<String, MixinDef>,
+    pub(crate) functions: HashMap<String, FunctionDef>,
+    pub(crate) css: Vec<CssNode>,
     /// 模块加载过程中发现的已加载路径（用于缓存传播）。
     loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     /// 模块中收集的 @extend 关系——需要传播到顶层 CSS。
@@ -42,7 +42,7 @@ pub struct Env {
     /// 已加载的内建模块名集合。
     builtin_modules: Vec<String>,
     /// 命名空间模块（文件加载的模块）。
-    namespaces: HashMap<String, Rc<ModuleExports>>,
+    pub(crate) namespaces: HashMap<String, Rc<ModuleExports>>,
     /// 当前文件路径（用于解析相对 @use/@import）。
     base_path: Option<PathBuf>,
     /// 递归深度计数器。
@@ -71,10 +71,10 @@ pub(crate) struct MixinDef {
 /// 函数定义存储。
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionDef {
-    params: Vec<Param>,
-    body: Vec<Node>,
+    pub(crate) params: Vec<Param>,
+    pub(crate) body: Vec<Node>,
     /// 函数定义时捕获的命名空间（使函数体可访问定义模块的 @use 命名空间）。
-    captured_namespaces: HashMap<String, Rc<ModuleExports>>,
+    pub(crate) captured_namespaces: HashMap<String, Rc<ModuleExports>>,
 }
 
 impl Env {

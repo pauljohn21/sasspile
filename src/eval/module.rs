@@ -273,6 +273,7 @@ impl Evaluator {
             "color.saturation" => "saturation",
             "color.lightness" => "lightness",
             "color.is-powerless" => "is-powerless",
+            "color.is-missing" => "is-missing",
             "color.is-in-gamut" => "is-in-gamut",
             "color.is-legacy" => "is-legacy",
             "color.to-space" => "to-space",

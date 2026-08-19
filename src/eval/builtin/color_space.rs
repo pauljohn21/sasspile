@@ -122,6 +122,10 @@ pub fn same(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<V
 
 /// 从颜色中提取通道值，带正确单位。
 fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Value> {
+    // alpha 通道对所有颜色空间通用
+    if channel == "alpha" {
+        return Ok(Value::Number(c.a, None));
+    }
     let effective_space = space.unwrap_or_else(|| {
         match c.format {
             ColorFormat::Hsl(_, _, _) => "hsl",
@@ -439,12 +443,10 @@ fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (h, w, bk) = match c.format {
                 ColorFormat::Hwb(h, w, bk) => (h, w, bk),
                 _ => {
+                    let (r_f, g_f, b_f) = format_to_srgb_f64(&c.format, c.r, c.g, c.b);
                     let (h, _s, _l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                    let r = c.r as f64 / 255.0;
-                    let g = c.g as f64 / 255.0;
-                    let b = c.b as f64 / 255.0;
-                    let w = r.min(g).min(b);
-                    let bk = 1.0 - r.max(g).max(b);
+                    let w = r_f.min(g_f).min(b_f);
+                    let bk = 1.0 - r_f.max(g_f).max(b_f);
                     (h, w, bk)
                 }
             };
@@ -499,9 +501,11 @@ fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
 fn format_to_srgb_f64(fmt: &ColorFormat, r_u8: u8, g_u8: u8, b_u8: u8) -> (f64, f64, f64) {
     use super::color_conv;
     match fmt {
-        ColorFormat::Auto | ColorFormat::Rgb | ColorFormat::RgbPercent(_, _, _) | ColorFormat::Hsl(_, _, _) | ColorFormat::Hwb(_, _, _) => {
+        ColorFormat::Auto | ColorFormat::Rgb | ColorFormat::RgbPercent(_, _, _) => {
             (r_u8 as f64 / 255.0, g_u8 as f64 / 255.0, b_u8 as f64 / 255.0)
         }
+        ColorFormat::Hsl(h, s, l) => hsl_to_srgb_f64(*h, *s, *l),
+        ColorFormat::Hwb(h, w, bk) => hwb_to_srgb_f64(*h, *w, *bk),
         ColorFormat::Lab(l, a, b) => color_conv::lab_to_srgb(*l, *a, *b),
         ColorFormat::Lch(l, c, h) => color_conv::lch_to_srgb(*l, *c, *h),
         ColorFormat::Oklab(l, a, b) => color_conv::oklab_to_srgb(*l, *a, *b),
@@ -558,6 +562,42 @@ fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
         delta / (1.0 - (2.0 * l - 1.0).abs())
     };
     (h, s, l)
+}
+
+/// HSL → sRGB (0-1) f64 精度转换，不经过 u8 量化。
+///
+/// 使用 CSS Color 4 规范的 HSL→RGB 算法。
+fn hsl_to_srgb_f64(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
+    let h = h.rem_euclid(360.0);
+    if s == 0.0 {
+        return (l, l, l);
+    }
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r1, g1, b1) = if h < 60.0 {
+        (c, x, 0.0)
+    } else if h < 120.0 {
+        (x, c, 0.0)
+    } else if h < 180.0 {
+        (0.0, c, x)
+    } else if h < 240.0 {
+        (0.0, x, c)
+    } else if h < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+    (r1 + m, g1 + m, b1 + m)
+}
+
+/// HWB → sRGB (0-1) f64 精度转换，不经过 u8 量化。
+///
+/// 基于 CSS Color 4 规范的 HWB→RGB 算法。
+fn hwb_to_srgb_f64(h: f64, w: f64, bk: f64) -> (f64, f64, f64) {
+    let (r, g, b) = hsl_to_srgb_f64(h, 1.0, 0.5);
+    let factor = 1.0 - w - bk;
+    (r * factor + w, g * factor + w, b * factor + w)
 }
 
 /// 生成颜色的显示名称（用于错误消息）。
