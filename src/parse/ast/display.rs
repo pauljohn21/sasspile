@@ -77,6 +77,94 @@ impl std::fmt::Display for Value {
                             write!(f, "rgba({}%, {}%, {}%, {})", format_pct_val(rp), format_pct_val(gp), format_pct_val(bp), format_alpha(c.a))
                         }
                     }
+                    ColorFormat::Lab(l, a, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "lab({}% {} {})", format_num(*l), format_num(*a), format_num(*b))
+                        } else {
+                            write!(f, "lab({}% {} {} / {})", format_num(*l), format_num(*a), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::Lch(l, ch, h) => {
+                        let h_str = if *ch == 0.0 { "none".to_string() } else { format!("{}deg", format_hue(*h)) };
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "lch({}% {} {})", format_num(*l), format_num(*ch), h_str)
+                        } else {
+                            write!(f, "lch({}% {} {} / {})", format_num(*l), format_num(*ch), h_str, format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::Oklab(l, a, b) => {
+                        let l_pct = *l * 100.0;
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "oklab({}% {} {})", format_num(l_pct), format_num(*a), format_num(*b))
+                        } else {
+                            write!(f, "oklab({}% {} {} / {})", format_num(l_pct), format_num(*a), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::Oklch(l, ch, h) => {
+                        let l_pct = *l * 100.0;
+                        let h_str = if *ch == 0.0 { "none".to_string() } else { format!("{}deg", format_hue(*h)) };
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "oklch({}% {} {})", format_num(l_pct), format_num(*ch), h_str)
+                        } else {
+                            write!(f, "oklch({}% {} {} / {})", format_num(l_pct), format_num(*ch), h_str, format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::DisplayP3(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(display-p3 {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(display-p3 {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::Srgb(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(srgb {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(srgb {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::SrgbLinear(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(srgb-linear {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(srgb-linear {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::A98Rgb(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(a98-rgb {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(a98-rgb {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::ProphotoRgb(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(prophoto-rgb {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(prophoto-rgb {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::Rec2020(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(rec2020 {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(rec2020 {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::XyzD65(x, y, z) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(xyz {} {} {})", format_num(*x), format_num(*y), format_num(*z))
+                        } else {
+                            write!(f, "color(xyz {} {} {} / {})", format_num(*x), format_num(*y), format_num(*z), format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::XyzD50(x, y, z) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(xyz-d50 {} {} {})", format_num(*x), format_num(*y), format_num(*z))
+                        } else {
+                            write!(f, "color(xyz-d50 {} {} {} / {})", format_num(*x), format_num(*y), format_num(*z), format_alpha(c.a))
+                        }
+                    }
                     ColorFormat::Auto => {
                         if (c.a - 1.0).abs() < f64::EPSILON {
                             // 检查是否为命名颜色，优先输出名称（如 red 而非 #ff0000）

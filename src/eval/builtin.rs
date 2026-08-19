@@ -4,6 +4,7 @@
 //! 各函数组已拆分到子模块：color/list/map/string/selector。
 
 pub mod color;
+pub mod color_conv;
 pub mod color_space;
 pub mod list;
 pub mod map;
@@ -67,6 +68,10 @@ color::call(&name, pos_args, kw_args)?
             "hsl" | "hsla" => {
                 color::call(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
+            }
+            // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
+            "lab" | "lch" | "oklab" | "oklch" | "color" => {
+                color_space::parse_color_fn(&name, pos_args, kw_args)
             }
 
             // ── map ──

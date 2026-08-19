@@ -86,6 +86,18 @@ pub fn space(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<
             let space_name = match c.format {
                 ColorFormat::Hsl(_, _, _) => "hsl",
                 ColorFormat::Hwb(_, _, _) => "hwb",
+                ColorFormat::Lab(_, _, _) => "lab",
+                ColorFormat::Lch(_, _, _) => "lch",
+                ColorFormat::Oklab(_, _, _) => "oklab",
+                ColorFormat::Oklch(_, _, _) => "oklch",
+                ColorFormat::DisplayP3(_, _, _) => "display-p3",
+                ColorFormat::Srgb(_, _, _) => "srgb",
+                ColorFormat::SrgbLinear(_, _, _) => "srgb-linear",
+                ColorFormat::A98Rgb(_, _, _) => "a98-rgb",
+                ColorFormat::ProphotoRgb(_, _, _) => "prophoto-rgb",
+                ColorFormat::Rec2020(_, _, _) => "rec2020",
+                ColorFormat::XyzD65(_, _, _) => "xyz",
+                ColorFormat::XyzD50(_, _, _) => "xyz-d50",
                 _ => "rgb",
             };
             Ok(Some(Value::String(space_name.to_string(), false)))
@@ -114,6 +126,18 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
         match c.format {
             ColorFormat::Hsl(_, _, _) => "hsl",
             ColorFormat::Hwb(_, _, _) => "hwb",
+            ColorFormat::Lab(_, _, _) => "lab",
+            ColorFormat::Lch(_, _, _) => "lch",
+            ColorFormat::Oklab(_, _, _) => "oklab",
+            ColorFormat::Oklch(_, _, _) => "oklch",
+            ColorFormat::DisplayP3(_, _, _) => "display-p3",
+            ColorFormat::Srgb(_, _, _) => "srgb",
+            ColorFormat::SrgbLinear(_, _, _) => "srgb-linear",
+            ColorFormat::A98Rgb(_, _, _) => "a98-rgb",
+            ColorFormat::ProphotoRgb(_, _, _) => "prophoto-rgb",
+            ColorFormat::Rec2020(_, _, _) => "rec2020",
+            ColorFormat::XyzD65(_, _, _) => "xyz",
+            ColorFormat::XyzD50(_, _, _) => "xyz-d50",
             _ => "rgb",
         }
     });
@@ -158,9 +182,190 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
                 ))),
             }
         }
+        "lab" => {
+            let (l, a, b) = match c.format {
+                ColorFormat::Lab(l, a, b) => (l, a, b),
+                _ => {
+                    use super::color_conv;
+                    let r = c.r as f64 / 255.0;
+                    let g = c.g as f64 / 255.0;
+                    let bl = c.b as f64 / 255.0;
+                    color_conv::srgb_to_lab(r, g, bl)
+                }
+            };
+            match channel {
+                "lightness" => Ok(Value::Number(l, Some("%".into()))),
+                "a" => Ok(Value::Number(a, None)),
+                "b" => Ok(Value::Number(b, None)),
+                _ => Err(SassError::Eval(format!(
+                    "$channel: Color {} has no channel named {}.",
+                    color_name(c), channel
+                ))),
+            }
+        }
+        "lch" => {
+            let (l, ch, h) = match c.format {
+                ColorFormat::Lch(l, ch, h) => (l, ch, h),
+                _ => {
+                    use super::color_conv;
+                    let r = c.r as f64 / 255.0;
+                    let g = c.g as f64 / 255.0;
+                    let bl = c.b as f64 / 255.0;
+                    color_conv::srgb_to_lch(r, g, bl)
+                }
+            };
+            match channel {
+                "lightness" => Ok(Value::Number(l, Some("%".into()))),
+                "chroma" => Ok(Value::Number(ch, None)),
+                "hue" => Ok(Value::Number(h, Some("deg".into()))),
+                _ => Err(SassError::Eval(format!(
+                    "$channel: Color {} has no channel named {}.",
+                    color_name(c), channel
+                ))),
+            }
+        }
+        "oklab" => {
+            let (l, a, b) = match c.format {
+                ColorFormat::Oklab(l, a, b) => (l, a, b),
+                _ => {
+                    use super::color_conv;
+                    let r = c.r as f64 / 255.0;
+                    let g = c.g as f64 / 255.0;
+                    let bl = c.b as f64 / 255.0;
+                    color_conv::srgb_to_oklab(r, g, bl)
+                }
+            };
+            match channel {
+                "lightness" => Ok(Value::Number(l * 100.0, Some("%".into()))),
+                "a" => Ok(Value::Number(a, None)),
+                "b" => Ok(Value::Number(b, None)),
+                _ => Err(SassError::Eval(format!(
+                    "$channel: Color {} has no channel named {}.",
+                    color_name(c), channel
+                ))),
+            }
+        }
+        "oklch" => {
+            let (l, ch, h) = match c.format {
+                ColorFormat::Oklch(l, ch, h) => (l, ch, h),
+                _ => {
+                    use super::color_conv;
+                    let r = c.r as f64 / 255.0;
+                    let g = c.g as f64 / 255.0;
+                    let bl = c.b as f64 / 255.0;
+                    color_conv::srgb_to_oklch(r, g, bl)
+                }
+            };
+            match channel {
+                "lightness" => Ok(Value::Number(l * 100.0, Some("%".into()))),
+                "chroma" => Ok(Value::Number(ch, None)),
+                "hue" => Ok(Value::Number(h, Some("deg".into()))),
+                _ => Err(SassError::Eval(format!(
+                    "$channel: Color {} has no channel named {}.",
+                    color_name(c), channel
+                ))),
+            }
+        }
+        "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "srgb-linear" => {
+            // 这些空间用 red/green/blue 通道名，值为 0-1
+            let (r, g, b) = get_normalized_rgb(c, effective_space);
+            match channel {
+                "red" => Ok(Value::Number(r, None)),
+                "green" => Ok(Value::Number(g, None)),
+                "blue" => Ok(Value::Number(b, None)),
+                _ => Err(SassError::Eval(format!(
+                    "$channel: Color {} has no channel named {}.",
+                    color_name(c), channel
+                ))),
+            }
+        }
+        "xyz" | "xyz-d65" | "xyz-d50" => {
+            let (x, y, z) = get_xyz(c, effective_space);
+            match channel {
+                "x" => Ok(Value::Number(x, None)),
+                "y" => Ok(Value::Number(y, None)),
+                "z" => Ok(Value::Number(z, None)),
+                _ => Err(SassError::Eval(format!(
+                    "$channel: Color {} has no channel named {}.",
+                    color_name(c), channel
+                ))),
+            }
+        }
         _ => Err(SassError::Eval(format!(
             "$space: Unknown color space: {effective_space}."
         ))),
+    }
+}
+
+/// 获取归一化 RGB (0-1) 值。
+fn get_normalized_rgb(c: &Color, space: &str) -> (f64, f64, f64) {
+    use super::color_conv;
+    let r = c.r as f64 / 255.0;
+    let g = c.g as f64 / 255.0;
+    let b = c.b as f64 / 255.0;
+    match space {
+        "display-p3" => {
+            if let ColorFormat::DisplayP3(r, g, b) = c.format {
+                (r, g, b)
+            } else {
+                color_conv::srgb_to_display_p3(r, g, b)
+            }
+        }
+        "srgb-linear" => {
+            if let ColorFormat::SrgbLinear(r, g, b) = c.format {
+                (r, g, b)
+            } else {
+                color_conv::srgb_to_linear_srgb(r, g, b)
+            }
+        }
+        "a98-rgb" => {
+            if let ColorFormat::A98Rgb(r, g, b) = c.format {
+                (r, g, b)
+            } else {
+                color_conv::srgb_to_a98_rgb(r, g, b)
+            }
+        }
+        "prophoto-rgb" => {
+            if let ColorFormat::ProphotoRgb(r, g, b) = c.format {
+                (r, g, b)
+            } else {
+                color_conv::srgb_to_prophoto(r, g, b)
+            }
+        }
+        "rec2020" => {
+            if let ColorFormat::Rec2020(r, g, b) = c.format {
+                (r, g, b)
+            } else {
+                color_conv::srgb_to_rec2020(r, g, b)
+            }
+        }
+        _ => (r, g, b),
+    }
+}
+
+/// 获取 XYZ 值。
+fn get_xyz(c: &Color, space: &str) -> (f64, f64, f64) {
+    use super::color_conv;
+    let r = c.r as f64 / 255.0;
+    let g = c.g as f64 / 255.0;
+    let b = c.b as f64 / 255.0;
+    match space {
+        "xyz" | "xyz-d65" => {
+            if let ColorFormat::XyzD65(x, y, z) = c.format {
+                (x, y, z)
+            } else {
+                color_conv::srgb_to_xyz_d65(r, g, b)
+            }
+        }
+        "xyz-d50" => {
+            if let ColorFormat::XyzD50(x, y, z) = c.format {
+                (x, y, z)
+            } else {
+                let (x65, y65, z65) = color_conv::srgb_to_xyz_d65(r, g, b);
+                color_conv::xyz_d65_to_xyz_d50(x65, y65, z65)
+            }
+        }
+        _ => color_conv::srgb_to_xyz_d65(r, g, b),
     }
 }
 
@@ -177,11 +382,50 @@ fn get_rgb_channel(c: &Color, channel: &str) -> Result<Value> {
     }
 }
 
-/// 转换颜色到目标空间，用 `color` crate 做底层计算。
+/// 判断 ColorFormat 是否与目标空间名称匹配。
+fn is_same_space(fmt: &ColorFormat, target: &str) -> bool {
+    matches!(
+        (fmt, target),
+        (ColorFormat::Lab(_, _, _), "lab")
+            | (ColorFormat::Lch(_, _, _), "lch")
+            | (ColorFormat::Oklab(_, _, _), "oklab")
+            | (ColorFormat::Oklch(_, _, _), "oklch")
+            | (ColorFormat::DisplayP3(_, _, _), "display-p3")
+            | (ColorFormat::Srgb(_, _, _), "srgb")
+            | (ColorFormat::SrgbLinear(_, _, _), "srgb-linear")
+            | (ColorFormat::A98Rgb(_, _, _), "a98-rgb")
+            | (ColorFormat::ProphotoRgb(_, _, _), "prophoto-rgb")
+            | (ColorFormat::Rec2020(_, _, _), "rec2020")
+            | (ColorFormat::XyzD65(_, _, _), "xyz")
+            | (ColorFormat::XyzD65(_, _, _), "xyz-d65")
+            | (ColorFormat::XyzD50(_, _, _), "xyz-d50")
+            | (ColorFormat::Hsl(_, _, _), "hsl")
+            | (ColorFormat::Hwb(_, _, _), "hwb")
+    )
+}
+
+/// 转换颜色到目标空间，用 f64 精度算法。
 fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
+    use super::color_conv;
+
+    // 同空间转换——直接返回原始值，避免精度损失
+    if is_same_space(&c.format, target_space) {
+        return Ok(Value::Color(c.clone()));
+    }
+
+    // 获取源 sRGB (0-1) 值
+    let (r, g, b) = format_to_srgb_f64(&c.format, c.r, c.g, c.b);
+
     match target_space {
-        "rgb" | "srgb" => {
+        "rgb" => {
             Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, c.a, ColorFormat::Auto)))
+        }
+        "srgb" => {
+            Ok(make_color(ColorFormat::Srgb(r, g, b), c.a))
+        }
+        "srgb-linear" => {
+            let (rl, gl, bl) = color_conv::srgb_to_linear_srgb(r, g, b);
+            Ok(make_color(ColorFormat::SrgbLinear(rl, gl, bl), c.a))
         }
         "hsl" => {
             let (h, s, l) = match c.format {
@@ -206,9 +450,73 @@ fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             };
             Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, c.a, ColorFormat::Hwb(h, w, bk))))
         }
-        // 高级空间用 color crate 转换，但 sasspile 暂不支持这些空间的序列化
-        // 先报错，后续实现 lab()/oklch() 等函数后可支持
+        "lab" => {
+            let (l, a, b_lab) = color_conv::srgb_to_lab(r, g, b);
+            Ok(make_color(ColorFormat::Lab(l, a, b_lab), c.a))
+        }
+        "lch" => {
+            let (l, c_lch, h) = color_conv::srgb_to_lch(r, g, b);
+            Ok(make_color(ColorFormat::Lch(l, c_lch, h), c.a))
+        }
+        "oklab" => {
+            let (l, a, b_ok) = color_conv::srgb_to_oklab(r, g, b);
+            Ok(make_color(ColorFormat::Oklab(l, a, b_ok), c.a))
+        }
+        "oklch" => {
+            let (l, c_ok, h) = color_conv::srgb_to_oklch(r, g, b);
+            Ok(make_color(ColorFormat::Oklch(l, c_ok, h), c.a))
+        }
+        "display-p3" => {
+            let (rp, gp, bp) = color_conv::srgb_to_display_p3(r, g, b);
+            Ok(make_color(ColorFormat::DisplayP3(rp, gp, bp), c.a))
+        }
+        "a98-rgb" => {
+            let (rp, gp, bp) = color_conv::srgb_to_a98_rgb(r, g, b);
+            Ok(make_color(ColorFormat::A98Rgb(rp, gp, bp), c.a))
+        }
+        "prophoto-rgb" => {
+            let (rp, gp, bp) = color_conv::srgb_to_prophoto(r, g, b);
+            Ok(make_color(ColorFormat::ProphotoRgb(rp, gp, bp), c.a))
+        }
+        "rec2020" => {
+            let (rp, gp, bp) = color_conv::srgb_to_rec2020(r, g, b);
+            Ok(make_color(ColorFormat::Rec2020(rp, gp, bp), c.a))
+        }
+        "xyz" | "xyz-d65" => {
+            let (x, y, z) = color_conv::srgb_to_xyz_d65(r, g, b);
+            Ok(make_color(ColorFormat::XyzD65(x, y, z), c.a))
+        }
+        "xyz-d50" => {
+            let (x_d65, y_d65, z_d65) = color_conv::srgb_to_xyz_d65(r, g, b);
+            let (x, y, z) = color_conv::xyz_d65_to_xyz_d50(x_d65, y_d65, z_d65);
+            Ok(make_color(ColorFormat::XyzD50(x, y, z), c.a))
+        }
         _ => Err(SassError::Eval(format!("Unknown color space: {target_space}"))),
+    }
+}
+
+/// 从 ColorFormat 获取 sRGB (0-1) f64 值。
+fn format_to_srgb_f64(fmt: &ColorFormat, r_u8: u8, g_u8: u8, b_u8: u8) -> (f64, f64, f64) {
+    use super::color_conv;
+    match fmt {
+        ColorFormat::Auto | ColorFormat::Rgb | ColorFormat::RgbPercent(_, _, _) | ColorFormat::Hsl(_, _, _) | ColorFormat::Hwb(_, _, _) => {
+            (r_u8 as f64 / 255.0, g_u8 as f64 / 255.0, b_u8 as f64 / 255.0)
+        }
+        ColorFormat::Lab(l, a, b) => color_conv::lab_to_srgb(*l, *a, *b),
+        ColorFormat::Lch(l, c, h) => color_conv::lch_to_srgb(*l, *c, *h),
+        ColorFormat::Oklab(l, a, b) => color_conv::oklab_to_srgb(*l, *a, *b),
+        ColorFormat::Oklch(l, c, h) => color_conv::oklch_to_srgb(*l, *c, *h),
+        ColorFormat::DisplayP3(r, g, b) => color_conv::display_p3_to_srgb(*r, *g, *b),
+        ColorFormat::Srgb(r, g, b) => (*r, *g, *b),
+        ColorFormat::SrgbLinear(r, g, b) => color_conv::linear_srgb_to_srgb(*r, *g, *b),
+        ColorFormat::A98Rgb(r, g, b) => color_conv::a98_rgb_to_srgb(*r, *g, *b),
+        ColorFormat::ProphotoRgb(r, g, b) => color_conv::prophoto_to_srgb(*r, *g, *b),
+        ColorFormat::Rec2020(r, g, b) => color_conv::rec2020_to_srgb(*r, *g, *b),
+        ColorFormat::XyzD65(x, y, z) => color_conv::xyz_d65_to_srgb(*x, *y, *z),
+        ColorFormat::XyzD50(x, y, z) => {
+            let (x_d65, y_d65, z_d65) = color_conv::xyz_d50_to_xyz_d65(*x, *y, *z);
+            color_conv::xyz_d65_to_srgb(x_d65, y_d65, z_d65)
+        }
     }
 }
 
@@ -255,4 +563,185 @@ fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
 /// 生成颜色的显示名称（用于错误消息）。
 fn color_name(c: &Color) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+}
+
+/// 解析 CSS Color 4 颜色函数：lab/lch/oklab/oklch/color()。
+/// 返回 Value::Color，sRGB 近似值用 color crate 计算。
+pub fn parse_color_fn(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Value> {
+    // 展开空格分隔的参数
+    let flat = flatten_space_list(args);
+    match name {
+        "lab" => parse_lab(&flat),
+        "lch" => parse_lch(&flat),
+        "oklab" => parse_oklab(&flat),
+        "oklch" => parse_oklch(&flat),
+        "color" => parse_color_space(&flat),
+        _ => Err(SassError::UndefinedFunction(name.into())),
+    }
+}
+
+/// 展开空格分隔的 List 参数。
+fn flatten_space_list(args: &[Value]) -> Vec<Value> {
+    if args.len() == 1
+        && let Value::List(items, crate::parse::ast::Separator::Space, false) = &args[0] {
+            return items.clone();
+        }
+    args.to_vec()
+}
+
+/// 从 Value 提取 f64 数值（支持百分比→0-1 转换）。
+fn extract_num(v: &Value, scale_pct: bool) -> Result<f64> {
+    match v {
+        Value::Number(n, Some(u)) if u == "%" && scale_pct => Ok(*n / 100.0),
+        Value::Number(n, _) => Ok(*n),
+        _ => Err(SassError::Eval(format!("$value: {} is not a number.", v))),
+    }
+}
+
+/// 从百分比 Value 提取原始值（50% → 50.0，不除以100）。
+/// 用于 lab/lch 的 L 分量，spec 中 lab(50% ...) 的 50% 就是 50.0。
+fn extract_pct_value(v: &Value) -> Result<f64> {
+    match v {
+        Value::Number(n, Some(u)) if u == "%" => Ok(*n),
+        Value::Number(n, _) => Ok(*n),
+        _ => Err(SassError::Eval(format!("$value: {} is not a number.", v))),
+    }
+}
+
+/// 从 Value 提取 hue 值（支持 deg 单位）。
+fn extract_hue(v: &Value) -> Result<f64> {
+    match v {
+        Value::Number(n, Some(u)) if u == "deg" => Ok(*n),
+        Value::Number(n, _) => Ok(*n),
+        _ => Err(SassError::Eval(format!("$value: {} is not a number.", v))),
+    }
+}
+
+/// 从 f64 分量创建 Color（含 sRGB 近似值）。
+fn make_color(format: ColorFormat, alpha: f64) -> Value {
+    let (r, g, b) = format_to_srgb(&format);
+    Value::Color(Color {
+        r: (r * 255.0).round().clamp(0.0, 255.0) as u8,
+        g: (g * 255.0).round().clamp(0.0, 255.0) as u8,
+        b: (b * 255.0).round().clamp(0.0, 255.0) as u8,
+        a: alpha,
+        format,
+    })
+}
+
+/// 从 ColorFormat 计算 sRGB 近似值 (0-1)。
+fn format_to_srgb(fmt: &ColorFormat) -> (f64, f64, f64) {
+    // 对于 Auto/Rgb/RgbPercent/Hsl/Hwb 等 sRGB 格式，r/g/b 是 0（因为这里没有 Color 的 r_u8）。
+    // 但这个函数只在 make_color 中使用，此时新格式的 sRGB 值应该从格式本身计算。
+    // 对于 sRGB 系列格式（Auto/Rgb 等），在 make_color 调用方已经有 r_u8/g_u8/b_u8。
+    // 所以这里只处理非 sRGB 格式。
+    match fmt {
+        ColorFormat::Lab(_, _, _) | ColorFormat::Lch(_, _, _)
+        | ColorFormat::Oklab(_, _, _) | ColorFormat::Oklch(_, _, _)
+        | ColorFormat::DisplayP3(_, _, _) | ColorFormat::Srgb(_, _, _)
+        | ColorFormat::SrgbLinear(_, _, _) | ColorFormat::A98Rgb(_, _, _)
+        | ColorFormat::ProphotoRgb(_, _, _) | ColorFormat::Rec2020(_, _, _)
+        | ColorFormat::XyzD65(_, _, _) | ColorFormat::XyzD50(_, _, _) => {
+            // 从格式计算 sRGB——使用一个 dummy u8 值，实际计算依赖格式中的分量
+            format_to_srgb_f64(fmt, 0, 0, 0)
+        }
+        // sRGB 系列——返回 0，由 make_color 调用方处理
+        _ => (0.0, 0.0, 0.0),
+    }
+}
+
+/// lab(L% a b [/ alpha])
+fn parse_lab(args: &[Value]) -> Result<Value> {
+    let (nums, alpha) = split_alpha(args);
+    if nums.len() < 3 {
+        return Err(SassError::Eval(format!("lab() requires 3 arguments, got {}", nums.len())));
+    }
+    let l = extract_pct_value(&nums[0])?;  // L% → 0-100
+    let a = extract_num(&nums[1], false)?;
+    let b = extract_num(&nums[2], false)?;
+    Ok(make_color(ColorFormat::Lab(l, a, b), alpha))
+}
+
+/// lch(L% C Hdeg [/ alpha])
+fn parse_lch(args: &[Value]) -> Result<Value> {
+    let (nums, alpha) = split_alpha(args);
+    if nums.len() < 3 {
+        return Err(SassError::Eval(format!("lch() requires 3 arguments, got {}", nums.len())));
+    }
+    let l = extract_pct_value(&nums[0])?;
+    let c = extract_num(&nums[1], false)?;
+    let h = extract_hue(&nums[2])?;
+    Ok(make_color(ColorFormat::Lch(l, c, h), alpha))
+}
+
+/// oklab(L% a b [/ alpha])
+fn parse_oklab(args: &[Value]) -> Result<Value> {
+    let (nums, alpha) = split_alpha(args);
+    if nums.len() < 3 {
+        return Err(SassError::Eval(format!("oklab() requires 3 arguments, got {}", nums.len())));
+    }
+    let l = extract_num(&nums[0], true)?;  // L% → 0-1
+    let a = extract_num(&nums[1], false)?;
+    let b = extract_num(&nums[2], false)?;
+    Ok(make_color(ColorFormat::Oklab(l, a, b), alpha))
+}
+
+/// oklch(L% C Hdeg [/ alpha])
+fn parse_oklch(args: &[Value]) -> Result<Value> {
+    let (nums, alpha) = split_alpha(args);
+    if nums.len() < 3 {
+        return Err(SassError::Eval(format!("oklch() requires 3 arguments, got {}", nums.len())));
+    }
+    let l = extract_num(&nums[0], true)?;
+    let c = extract_num(&nums[1], false)?;
+    let h = extract_hue(&nums[2])?;
+    Ok(make_color(ColorFormat::Oklch(l, c, h), alpha))
+}
+
+/// color(space r g b [/ alpha])
+fn parse_color_space(args: &[Value]) -> Result<Value> {
+    let (nums, alpha) = split_alpha(args);
+    if nums.len() < 4 {
+        return Err(SassError::Eval(format!("color() requires 4 arguments (space + 3 channels), got {}", nums.len())));
+    }
+    let space = match &nums[0] {
+        Value::String(s, _) => s.clone(),
+        _ => return Err(SassError::Eval("color() first argument must be a color space name".into())),
+    };
+    let r = extract_num(&nums[1], false)?;
+    let g = extract_num(&nums[2], false)?;
+    let b = extract_num(&nums[3], false)?;
+    let fmt = match space.as_str() {
+        "display-p3" => ColorFormat::DisplayP3(r, g, b),
+        "srgb" => ColorFormat::Srgb(r, g, b),
+        "srgb-linear" => ColorFormat::SrgbLinear(r, g, b),
+        "a98-rgb" => ColorFormat::A98Rgb(r, g, b),
+        "prophoto-rgb" => ColorFormat::ProphotoRgb(r, g, b),
+        "rec2020" => ColorFormat::Rec2020(r, g, b),
+        "xyz" => ColorFormat::XyzD65(r, g, b),
+        "xyz-d50" => ColorFormat::XyzD50(r, g, b),
+        _ => return Err(SassError::Eval(format!("Unknown color space: {space}"))),
+    };
+    Ok(make_color(fmt, alpha))
+}
+
+/// 分离 alpha 分量：参数末尾可能有 / alpha。
+/// 返回 (颜色分量, alpha值)。
+fn split_alpha(args: &[Value]) -> (Vec<Value>, f64) {
+    // 只检查 / 分隔符的情况
+    if args.len() >= 2 {
+        if let Value::List(items, crate::parse::ast::Separator::Slash, false) = &args[args.len() - 1] {
+            if items.len() == 2 {
+                let mut nums = args[..args.len() - 1].to_vec();
+                nums.push(items[0].clone());
+                let alpha = match &items[1] {
+                    Value::Number(n, Some(u)) if u == "%" => *n / 100.0,
+                    Value::Number(n, _) => *n,
+                    _ => 1.0,
+                };
+                return (nums, alpha);
+            }
+        }
+    }
+    (args.to_vec(), 1.0)
 }

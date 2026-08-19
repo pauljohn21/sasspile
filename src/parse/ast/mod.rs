@@ -315,6 +315,30 @@ pub enum ColorFormat {
     Hsl(f64, f64, f64),
     /// hwb(h w% b% / a)——存储原始 HWB 值 (h: 0-360, w/b: 0-1)。
     Hwb(f64, f64, f64),
+    /// lab(L% a b)——CSS Color 4 Lab 空间 (L: 0-100, a/b: 任意)。
+    Lab(f64, f64, f64),
+    /// lch(L% C Hdeg)——CSS Color 4 LCH 空间 (L: 0-100, C: 任意, H: 0-360)。
+    Lch(f64, f64, f64),
+    /// oklab(L% a b)——CSS Color 4 OKLab 空间 (L: 0-1→0-100%, a/b: 任意)。
+    Oklab(f64, f64, f64),
+    /// oklch(L% C Hdeg)——CSS Color 4 OKLCH 空间 (L: 0-1→0-100%, C: 任意, H: 0-360)。
+    Oklch(f64, f64, f64),
+    /// color(display-p3 r g b)——Display P3 空间 (r/g/b: 0-1)。
+    DisplayP3(f64, f64, f64),
+    /// color(srgb r g b)——sRGB 空间 (r/g/b: 0-1)。
+    Srgb(f64, f64, f64),
+    /// color(srgb-linear r g b)——线性 sRGB 空间 (r/g/b: 0-1)。
+    SrgbLinear(f64, f64, f64),
+    /// color(a98-rgb r g b)——A98 RGB 空间 (r/g/b: 0-1)。
+    A98Rgb(f64, f64, f64),
+    /// color(prophoto-rgb r g b)——ProPhoto RGB 空间 (r/g/b: 0-1)。
+    ProphotoRgb(f64, f64, f64),
+    /// color(rec2020 r g b)——Rec2020 空间 (r/g/b: 0-1)。
+    Rec2020(f64, f64, f64),
+    /// color(xyz r g b)——XYZ D65 空间 (r/g/b: 任意)。
+    XyzD65(f64, f64, f64),
+    /// color(xyz-d50 r g b)——XYZ D50 空间 (r/g/b: 任意)。
+    XyzD50(f64, f64, f64),
 }
 
 /// 颜色。
