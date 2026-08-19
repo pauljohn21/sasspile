@@ -6,10 +6,60 @@
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
+use im::HashMap;
+
+/// 返回每个 string 函数的参数名列表（按位置顺序）。
+/// 用于将命名参数（kw_args）按参数名映射到位置参数。
+fn string_param_names(name: &str) -> &'static [&'static str] {
+    match name {
+        "str-length" => &["string"],
+        "to-upper-case" => &["string"],
+        "to-lower-case" => &["string"],
+        "unquote" => &["string"],
+        "quote" => &["string"],
+        "str-slice" => &["string", "start-at", "end-at"],
+        "str-index" => &["string", "substring"],
+        "str-insert" => &["string", "insert", "index"],
+        "str-split" => &["string", "separator", "limit"],
+        "unique-id" => &[],
+        _ => &[],
+    }
+}
+
+/// 将位置参数和命名参数合并为统一的位置参数列表。
+/// 按 `param_names` 顺序填充：先取 pos_args 对应位置，不足的从 kw_args 按参数名查找。
+pub(crate) fn merge_args(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    param_names: &[&str],
+) -> Vec<Value> {
+    let mut result = Vec::with_capacity(param_names.len());
+    for (i, pname) in param_names.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+        // 如果两个地方都没有，就不添加——让函数自身处理缺少参数的情况
+    }
+    // 如果 pos_args 比 param_names 多（如 rest 参数），追加剩余
+    if pos_args.len() > param_names.len() {
+        result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
+}
 
 impl Evaluator {
     /// String 函数分派。返回 Ok(Some(value)) 表示已处理，Ok(None) 表示不匹配。
-    pub(crate) fn call_string_builtin(name: &str, args: &[Value]) -> Result<Option<Value>> {
+    pub(crate) fn call_string_builtin(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+    ) -> Result<Option<Value>> {
+        let params = string_param_names(name);
+        let args = merge_args(pos_args, kw_args, params);
         let result = match name {
             "str-length" => {
                 if args.len() != 1 {
@@ -84,7 +134,7 @@ impl Evaluator {
                     _ => return Err(SassError::Eval("quote 需要 1 个字符串参数".into())),
                 }
             }
-            "str-slice" => Self::str_slice(args)?,
+            "str-slice" => Self::str_slice(&args)?,
             "str-index" => {
                 if args.len() != 2 {
                     return Err(SassError::Eval("str-index 需要 2 个参数".into()));
@@ -104,8 +154,8 @@ impl Evaluator {
                     None => Value::Null,
                 }
             }
-            "str-insert" => Self::str_insert(args)?,
-            "str-split" => Self::str_split(args)?,
+            "str-insert" => Self::str_insert(&args)?,
+            "str-split" => Self::str_split(&args)?,
             "unique-id" => {
                 if !args.is_empty() {
                     return Err(SassError::Eval(format!(

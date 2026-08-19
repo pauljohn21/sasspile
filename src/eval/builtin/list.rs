@@ -4,8 +4,51 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
+use im::HashMap;
 
-pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
+/// 返回每个 list 函数的参数名列表（按位置顺序）。
+fn list_param_names(name: &str) -> &'static [&'static str] {
+    match name {
+        "length" | "list-length" => &["list"],
+        "nth" => &["list", "n"],
+        "append" => &["list", "val", "separator"],
+        "join" => &["list1", "list2", "separator", "bracketed"],
+        "index" => &["list", "value"],
+        "list-separator" | "separator" => &["list"],
+        "set-nth" => &["list", "n", "value"],
+        "is-bracketed" => &["list"],
+        "list-slash" => &[],
+        "zip" => &[],
+        _ => &[],
+    }
+}
+
+/// 合并位置参数和命名参数（复用 string 模块的 merge_args 逻辑）。
+fn merge_list_args(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    name: &str,
+) -> Vec<Value> {
+    let param_names = list_param_names(name);
+    let mut result = Vec::with_capacity(param_names.len());
+    for (i, pname) in param_names.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
+    if pos_args.len() > param_names.len() {
+        result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
+}
+
+pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
+    let args = merge_list_args(pos_args, kw_args, name);
+    let args = args.as_slice();
     match name {
         "length" | "list-length" => match args {
             [Value::List(es, _, _)] => Ok(Some(Value::Number(es.len() as f64, None))),

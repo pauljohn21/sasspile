@@ -288,7 +288,7 @@ color::call(&name, pos_args, kw_args)?
             // ── string ──
             "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
             | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id" => {
-                Self::call_string_builtin(&name, pos_args)?
+                Self::call_string_builtin(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
@@ -376,7 +376,7 @@ color::call(&name, pos_args, kw_args)?
             // ── list 子模块分派 ──
             "length" | "list-length" | "nth" | "append" | "join" | "index" | "list-separator"
             | "separator" | "set-nth" | "is-bracketed" | "list-slash" | "zip" => {
-                list::call(&name, pos_args)?
+                list::call(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
 
