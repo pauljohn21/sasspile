@@ -526,13 +526,11 @@ impl Evaluator {
                     amount = *amount,
                     "darken input"
                 );
-                let factor = 1.0 - (*amount / 100.0);
-                let result = Value::Color(Color::rgba(
-                    (c.r as f64 * factor) as u8,
-                    (c.g as f64 * factor) as u8,
-                    (c.b as f64 * factor) as u8,
-                    c.a,
-                ));
+                // Sass darken = HSL lightness 减少
+                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                let new_l = (l - *amount / 100.0).max(0.0);
+                let new_c = Evaluator::hsl_to_rgb(h, s, new_l);
+                let result = Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, s, new_l)));
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "darken",
@@ -555,13 +553,11 @@ impl Evaluator {
                     amount = *amount,
                     "lighten input"
                 );
-                let factor = *amount / 100.0;
-                let result = Value::Color(Color::rgba(
-                    (c.r as f64 + (255.0 - c.r as f64) * factor) as u8,
-                    (c.g as f64 + (255.0 - c.g as f64) * factor) as u8,
-                    (c.b as f64 + (255.0 - c.b as f64) * factor) as u8,
-                    c.a,
-                ));
+                // Sass lighten = HSL lightness 增加
+                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                let new_l = (l + *amount / 100.0).min(1.0);
+                let new_c = Evaluator::hsl_to_rgb(h, s, new_l);
+                let result = Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, s, new_l)));
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "lighten",

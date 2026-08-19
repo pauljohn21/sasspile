@@ -21,14 +21,15 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
 
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
-"invert" => {
+        "invert" => {
 let color_arg = args.first().or_else(|| kw_args.get("$color"));
 match color_arg {
-Some(Value::Color(c)) => Ok(Some(Value::Color(Color::rgb(
-255 - c.r,
-255 - c.g,
-255 - c.b,
-)))),
+Some(Value::Color(c)) => {
+                    let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    let new_h = (h + 180.0).rem_euclid(360.0);
+                    let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
+                    Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(new_h, s, l)))))
+                },
 // CSS 滤镜函数透传：invert(number) 非颜色参数
 _ if !args.is_empty() => {
 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
@@ -41,9 +42,10 @@ _ => Err(SassError::Eval("invert 需要 1 个参数".into())),
 let color_arg = args.first().or_else(|| kw_args.get("$color"));
 match color_arg {
 Some(Value::Color(c)) => {
-let avg = ((c.r as u16 + c.g as u16 + c.b as u16) / 3) as u8;
-            Ok(Some(Value::Color(Color::rgba(avg, avg, avg, c.a))))
-        }
+                    let (h, _s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    let new_c = Evaluator::hsl_to_rgb(h, 0.0, l);
+                    Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, 0.0, l)))))
+                }
 _ if !args.is_empty() => {
 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
 Ok(Some(Value::String(format!("grayscale({arg_str})"), false)))
@@ -112,12 +114,14 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 let new_c = Evaluator::hsl_to_rgb(h, s, l);
                 r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
             }
+            // HSL/HWB 转换后用百分比输出，纯 RGB 调整保持原格式
+            let fmt = if has_hsl || has_hwb { ColorFormat::RgbPercent(h, s, l) } else { ColorFormat::Auto };
             Ok(Some(Value::Color(Color::rgba_fmt(
                 r.round().clamp(0.0, 255.0) as u8,
                 g.round().clamp(0.0, 255.0) as u8,
                 b.round().clamp(0.0, 255.0) as u8,
                 a.clamp(0.0, 1.0),
-                c.format.clone(),
+                fmt,
             ))))
         }
         "change-color" => {
@@ -165,12 +169,14 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 let new_c = Evaluator::hsl_to_rgb(h, s, l);
                 r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
             }
+            // HSL/HWB 转换后用百分比输出，纯 RGB 调整保持原格式
+            let fmt = if has_hsl || has_hwb { ColorFormat::RgbPercent(h, s, l) } else { ColorFormat::Auto };
             Ok(Some(Value::Color(Color::rgba_fmt(
                 r.round().clamp(0.0, 255.0) as u8,
                 g.round().clamp(0.0, 255.0) as u8,
                 b.round().clamp(0.0, 255.0) as u8,
                 a.clamp(0.0, 1.0),
-                c.format.clone(),
+                fmt,
             ))))
         }
         "scale-color" => {
@@ -220,11 +226,13 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 let new_c = Evaluator::hsl_to_rgb(h, s, l);
                 r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
             }
-            Ok(Some(Value::Color(Color::rgba(
+            let fmt = if has_hsl { ColorFormat::RgbPercent(h, s, l) } else { ColorFormat::Auto };
+            Ok(Some(Value::Color(Color::rgba_fmt(
                 r.round().clamp(0.0, 255.0) as u8,
                 g.round().clamp(0.0, 255.0) as u8,
                 b.round().clamp(0.0, 255.0) as u8,
                 a.clamp(0.0, 1.0),
+                fmt,
             ))))
         }
         "hwb" => {
@@ -295,11 +303,12 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
         "complement" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
-                Some(Value::Color(c)) => Ok(Some(Value::Color(Color::rgb(
-                    255 - c.r,
-                    255 - c.g,
-                    255 - c.b,
-                )))),
+                Some(Value::Color(c)) => {
+                    let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                    let new_h = (h + 180.0).rem_euclid(360.0);
+                    let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
+                    Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(new_h, s, l)))))
+                }
                 _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
             }
         }
@@ -358,7 +367,8 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 (Some(Value::Color(c)), Some(Value::Number(deg, _))) => {
                     let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     let new_h = (h + *deg).rem_euclid(360.0);
-                    Ok(Some(Value::Color(Evaluator::hsl_to_rgb(new_h, s, l))))
+                    let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
+                    Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(new_h, s, l)))))
                 }
                 _ => Err(SassError::Eval(
                     "adjust-hue 需要 (color, degrees) 参数".into(),
@@ -371,11 +381,9 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
-                        h,
-                        (s + *amount / 100.0).min(1.0),
-                        l,
-                    ))))
+                    let new_s = (s + *amount / 100.0).min(1.0);
+                    let new_c = Evaluator::hsl_to_rgb(h, new_s, l);
+                    Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, new_s, l)))))
                 }
                 // CSS 滤镜函数透传：saturate(number)
                 (Some(Value::Number(n, _)), None) => Ok(Some(Value::String(format!("saturate({n})"), false))),
@@ -388,11 +396,9 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-                    Ok(Some(Value::Color(Evaluator::hsl_to_rgb(
-                        h,
-                        (s - *amount / 100.0).max(0.0),
-                        l,
-                    ))))
+                    let new_s = (s - *amount / 100.0).max(0.0);
+                    let new_c = Evaluator::hsl_to_rgb(h, new_s, l);
+                    Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, new_s, l)))))
                 }
                 _ => Err(SassError::Eval(
                     "desaturate 需要 (color, amount) 参数".into(),

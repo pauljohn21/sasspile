@@ -157,7 +157,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
 #[test]
 fn test_import_use_forward() {
     sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     for subdir in &["directives/import", "directives/use", "directives/forward"] {
         let (pass, fail, skip, cases) = run_spec_dir(&spec_root, subdir);
         let evaluated = cases - skip;
@@ -177,7 +177,7 @@ fn test_import_use_forward() {
 #[test]
 fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
 
     // 所有 spec 一级目录（manifest 自动跳过不支持的功能）
     let dirs = [

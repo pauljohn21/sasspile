@@ -17,6 +17,9 @@ exclude = [
     "tests/sass-spec/**",
     "tests/element-plus/**",
     "tests/bootstrap/**",
+    "sass-spec/**",
+    "bootstrap/**",
+    "element-plus/**",
     "book/",
     "rust/",
     "examples/",
@@ -34,6 +37,9 @@ thiserror = "2"
 im = "15"  # 不可变 HashMap —— 支持函数式状态传递
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
+
+# 颜色处理 —— HSL/RGB/Lab/OKLab 等色彩空间转换
+color = { version = "0.3", default-features = false, features = ["std"] }
 
 [features]
 default = ["tracing"]

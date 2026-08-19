@@ -293,6 +293,9 @@ pub enum ColorFormat {
     Auto,
     /// rgb(r, g, b) / rgba(r, g, b, a)——不转 hex 或命名。
     Rgb,
+    /// rgb(r%, g%, b%) / rgba(r%, g%, b%, a)——百分比输出。
+    /// 存储 HSL 值用于精确百分比计算 (h: 0-360, s/l: 0-1)。
+    RgbPercent(f64, f64, f64),
     /// hsl(h, s%, l%) / hsla(h, s%, l%, a)——存储原始 HSL 值 (h: 0-360, s/l: 0-1)。
     Hsl(f64, f64, f64),
     /// hwb(h w% b% / a)——存储原始 HWB 值 (h: 0-360, w/b: 0-1)。
@@ -391,6 +394,41 @@ fn format_pct(v: f64) -> String {
     } else {
         format!("{pct}")
     }
+}
+
+/// 格式化百分比值（0.0-100.0 → 0%-100%），用于 rgb(%) 输出。
+/// Sass spec 保留最多 10 位小数（如 83.3333333333%）。
+pub(crate) fn format_pct_val(v: f64) -> String {
+    let v = (v * 1e10).round() / 1e10;
+    if v.fract() == 0.0 {
+        format!("{}", v as i64)
+    } else {
+        format!("{v}")
+    }
+}
+
+/// HSL → RGB 百分比转换（用于百分比输出）。
+/// 返回 (r%, g%, b%)，范围 0.0-100.0。
+/// 与 Evaluator::hsl_to_rgb 相同算法，但返回百分比而非 u8。
+pub(crate) fn hsl_to_rgb_percent(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
+    let h = h.rem_euclid(360.0);
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r1, g1, b1) = if h < 60.0 {
+        (c, x, 0.0)
+    } else if h < 120.0 {
+        (x, c, 0.0)
+    } else if h < 180.0 {
+        (0.0, c, x)
+    } else if h < 240.0 {
+        (0.0, x, c)
+    } else if h < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+    ((r1 + m) * 100.0, (g1 + m) * 100.0, (b1 + m) * 100.0)
 }
 
 /// 格式化 alpha 值。

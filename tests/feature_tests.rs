@@ -94,7 +94,7 @@ fn test_forward_as_prefix_mixin() {
 
 #[test]
 fn test_compile_load_path() {
-    let spec_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let utils_path = spec_root.join("core_functions/list/_utils.scss");
     if !utils_path.exists() {
         return;

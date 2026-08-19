@@ -33,9 +33,9 @@
 | **eval/mixin.rs** | 192 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 77 | apply_extends |
 | **eval/module.rs** | 281 | resolve_file（含 load_paths） + load_module + call_module_function（含 is-powerless/is-in-gamut/is-legacy/to-space/to-gamut 映射） |
-| **eval/color.rs** | 604 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
+| **eval/color.rs** | 622 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
 | **eval/builtin.rs** | 487 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin + is_css_function |
-| **eval/builtin/color.rs** | 569 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
+| **eval/builtin/color.rs** | 554 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
 | **eval/builtin/list.rs** | 259 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
 | **eval/builtin/map.rs** | 301 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
 | **eval/builtin/string.rs** | 281 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id |
@@ -67,6 +67,7 @@
 | `call_string_builtin` / `str_slice` / `str_insert` / `str_split` | `eval/builtin/string.rs` |
 | `hsl_to_rgb` / `hwb_to_rgb` / `rgb_to_hsl` / `simple_random` | `eval/color.rs` |
 | `builtin_rgba` / `builtin_darken` / `builtin_lighten` / `builtin_mix` | `eval/color.rs` |
+| `hsl_to_rgb_percent` / `format_pct_val` / `format_hue` / `format_pct` / `format_alpha` | `parse/ast.rs` |
 | `escape_quoted_string` / `escape_css_ident` / `escape_css_chars` | `parse/ast.rs` |
 | `is_channel_powerless` | `eval/builtin/color.rs` |
 
@@ -104,6 +105,7 @@
 | `Node` (AST 节点枚举) | `parse/ast.rs` |
 | `Value` (值枚举) | `parse/ast.rs` |
 | `Color` | `parse/ast.rs` |
+| `ColorFormat` (Auto/Rgb/RgbPercent/Hsl/Hwb) | `parse/ast.rs` |
 | `BinOp` / `BinOpKind` | `parse/ast.rs` |
 | `Separator` | `parse/ast.rs` |
 | `Ast` | `parse/ast.rs` |
@@ -130,7 +132,9 @@
 | @mixin/@include | `eval/mixin.rs` → `eval_include` / `bind_params` |
 | @return 控制流 | `eval/mixin.rs` → `call_user_function` (捕获 CssNode::Return) |
 | 控制流 (@if/@for/@each/@while) | `eval/control_flow.rs` |
-| 颜色转换 | `eval/color.rs` → `hsl_to_rgb` / `rgb_to_hsl` / `hwb_to_rgb` |
+| 颜色转换 | `eval/color.rs` → `hsl_to_rgb` / `rgb_to_hsl` / `hwb_to_rgb` + `parse/ast.rs` → `hsl_to_rgb_percent` |
+| 颜色序列化 | `parse/ast/display.rs` → `Display for Value`（ColorFormat 分派） |
+| 颜色格式追踪 | `parse/ast/mod.rs` → `ColorFormat` 枚举（Auto/Rgb/RgbPercent/Hsl/Hwb） |
 | 内建函数注册 | `eval/builtin.rs` → `call_builtin` match 分派 |
 | CSS 序列化 | `css/mod.rs` → Serializer |
 | Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 |

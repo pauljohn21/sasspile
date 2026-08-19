@@ -66,7 +66,7 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
 #[test]
 fn color_error_patterns() {
     let dir =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec/core_functions/color");
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/core_functions/color");
     let mut files = Vec::new();
     collect_hrx(&dir, &mut files);
 

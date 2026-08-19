@@ -94,7 +94,7 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> Option<String> {
 #[test]
 fn css_fail_details() {
     sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let css_dir = spec_root.join("css");
 
     let (files, _) = collect_hrx_files(&css_dir, &spec_root);

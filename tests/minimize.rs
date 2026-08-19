@@ -231,7 +231,7 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
 #[test]
 fn minimize_color_error() {
     sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let dir = spec_root.join("core_functions/color");
     let mut files = Vec::new();
     collect_hrx(&dir, &mut files);
@@ -256,7 +256,7 @@ fn minimize_color_error() {
 #[test]
 fn minimize_extend_error() {
     sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let dir = spec_root.join("directives/extend");
     let mut files = Vec::new();
     collect_hrx(&dir, &mut files);

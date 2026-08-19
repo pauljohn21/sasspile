@@ -40,17 +40,19 @@ impl std::fmt::Display for Value {
             Value::Color(c) => {
                 match &c.format {
                     ColorFormat::Hsl(h, s, l) => {
+                        let hue_str = format_hue(*h);
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "hsl({}, {}%, {}%)", format_hue(*h), format_pct(*s), format_pct(*l))
+                            write!(f, "hsl({}, {}%, {}%)", hue_str, format_pct(*s), format_pct(*l))
                         } else {
-                            write!(f, "hsla({}, {}%, {}%, {})", format_hue(*h), format_pct(*s), format_pct(*l), format_alpha(c.a))
+                            write!(f, "hsla({}, {}%, {}%, {})", hue_str, format_pct(*s), format_pct(*l), format_alpha(c.a))
                         }
                     }
                     ColorFormat::Hwb(h, w, b) => {
+                        let hue_str = format_hue(*h);
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "hwb({} {}% {}%)", format_hue(*h), format_pct(*w), format_pct(*b))
+                            write!(f, "hwb({} {}% {}%)", hue_str, format_pct(*w), format_pct(*b))
                         } else {
-                            write!(f, "hwb({} {}% {}% / {})", format_hue(*h), format_pct(*w), format_pct(*b), format_alpha(c.a))
+                            write!(f, "hwb({} {}% {}% / {})", hue_str, format_pct(*w), format_pct(*b), format_alpha(c.a))
                         }
                     }
                     ColorFormat::Rgb => {
@@ -58,6 +60,19 @@ impl std::fmt::Display for Value {
                             write!(f, "rgb({}, {}, {})", c.r, c.g, c.b)
                         } else {
                             write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
+                        }
+                    }
+                    ColorFormat::RgbPercent(h, s, l) => {
+                        // 从 HSL 值精确计算 RGB 百分比
+                        let (rp, gp, bp) = hsl_to_rgb_percent(*h, *s, *l);
+                        // 检查是否匹配命名颜色，优先输出名称
+                        if (c.a - 1.0).abs() < f64::EPSILON
+                            && let Some(name) = crate::eval::Evaluator::reverse_lookup_named_color(c) {
+                            write!(f, "{name}")
+                        } else if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "rgb({}%, {}%, {}%)", format_pct_val(rp), format_pct_val(gp), format_pct_val(bp))
+                        } else {
+                            write!(f, "rgba({}%, {}%, {}%, {})", format_pct_val(rp), format_pct_val(gp), format_pct_val(bp), format_alpha(c.a))
                         }
                     }
                     ColorFormat::Auto => {

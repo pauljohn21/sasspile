@@ -309,6 +309,31 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 - `hsl_to_rgb(h, s, l) → Color`
 - `hwb_to_rgb(h, w, b, a) → Color`
 
+**颜色序列化辅助函数**（`src/parse/ast.rs`）：
+- `hsl_to_rgb_percent(h, s, l) → (r%, g%, b%)` — 从 HSL 精确计算 RGB 百分比（避免 u8 精度丢失）
+- `format_pct_val(v) → String` — 格式化百分比值（0-100，10 位小数截断）
+- `format_hue(h) → String` — 格式化 hue 值（整数无小数点）
+- `format_pct(v) → String` — 格式化百分比值（0-1 → 0%-100%）
+- `format_alpha(a) → String` — 格式化 alpha 值
+
+**ColorFormat 枚举**（`src/parse/ast.rs`）：
+
+| 格式 | 用途 | 序列化示例 |
+|------|------|------------|
+| `Auto` | hex / 命名颜色 / rgba | `#ff0000`, `red`, `rgba(0,0,0,0.5)` |
+| `Rgb` | rgb(r,g,b) 固定格式 | `rgb(255, 0, 0)` |
+| `RgbPercent(h,s,l)` | HSL 操作结果的百分比输出 | `rgb(72%, 0%, 0%)` |
+| `Hsl(h,s,l)` | hsl() 创建的颜色保留格式 | `hsl(120, 50%, 50%)` |
+| `Hwb(h,w,b)` | hwb() 创建的颜色保留格式 | `hwb(0 30% 40%)` |
+
+**颜色算法说明**：
+- `darken`/`lighten`：通过 HSL lightness 增减实现（非 RGB 倍数）
+- `saturate`/`desaturate`：通过 HSL saturation 增减实现
+- `adjust-hue`/`complement`/`invert`：通过 HSL hue 旋转实现（非 RGB 反色）
+- `grayscale`：通过 HSL saturation=0 实现（非 RGB 平均值）
+- 所有 HSL 操作结果用 `RgbPercent` 格式输出（匹配 sass-spec）
+- 依赖 `color` crate v0.3 提供色彩空间转换参考
+
 **添加新 Color 函数**：在 `src/eval/builtin/color.rs` 的 `call()` 中添加 match 分支，返回 `Ok(Some(Value::...))`。
 
 ---
@@ -542,7 +567,7 @@ result.map_err(|e| {
 | `Node` | `parse/ast.rs` | AST 节点 |
 | `Value` | `parse/ast.rs` | 求值结果 |
 | `Color` | `parse/ast.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
-| `ColorFormat` | `parse/ast.rs` | 颜色格式追踪（Hex/Hsl/Hwb/...） |
+| `ColorFormat` | `parse/ast.rs` | 颜色格式追踪（Auto/Rgb/RgbPercent/Hsl/Hwb） |
 | `CssNode` | `css/node.rs` | CSS 输出节点 |
 | `Env` | `eval/mod.rs` | 求值环境（变量/函数/mixin 作用域） |
 | `Arg` | `parse/ast.rs` | 函数调用参数 |
@@ -587,14 +612,18 @@ result.map_err(|e| {
 
 ```bash
 # 核心测试
-cargo test --test compile_test    # 28 个
+cargo test --test compile_test    # 41 个
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 
 # 兼容性测试
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
-cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 25 秒）
+cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 秒）
+
+# sass-spec 全量统计（约 35 秒）
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
+# 基线：2571/4848 = 53%（core_functions 1686/2985 = 56%）
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

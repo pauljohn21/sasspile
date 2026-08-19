@@ -141,7 +141,7 @@ fn run_dir(dir: &Path, max_tests: usize) -> (usize, usize, usize) {
 #[test]
 fn test_operators() {
     sasspile::init_tracing();
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec/operators");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/operators");
     let (p, f, t) = run_dir(&dir, 50);
     tracing::info!("operators: {p}/{t} 通过, {f} 失败");
     assert!(t > 0, "无测试用例");
@@ -150,7 +150,7 @@ fn test_operators() {
 #[test]
 fn test_css_basic() {
     sasspile::init_tracing();
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec/css");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/css");
     let (p, f, t) = run_dir(&dir, 50);
     tracing::info!("css: {p}/{t} 通过, {f} 失败");
     assert!(t > 0, "无测试用例");
@@ -159,7 +159,7 @@ fn test_css_basic() {
 #[test]
 fn test_directives_if() {
     sasspile::init_tracing();
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec/directives/if");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/directives/if");
     let (p, f, t) = run_dir(&dir, 50);
     tracing::info!("@if: {p}/{t} 通过, {f} 失败");
     assert!(t > 0, "无测试用例");
@@ -169,7 +169,7 @@ fn test_directives_if() {
 #[test]
 fn test_css_diagnostic() {
     sasspile::init_tracing();
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec/css");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/css");
     let mut shown = 0;
     diag_dir(&dir, &mut shown);
 }
@@ -226,7 +226,7 @@ fn diag_dir(dir: &Path, shown: &mut usize) {
 #[test]
 #[ignore]
 fn test_sass_spec_summary() {
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let (passed, failed, total) = run_dir(&spec_root, 50);
     let compliance = if total > 0 {
         (passed as f64 / total as f64) * 100.0

@@ -30,14 +30,36 @@ cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 cargo test --test bs_spec -- --nocapture    # 15 个
 cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
+
+# sass-spec 全量统计（约 35 秒）
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
 ```
 
 **通过标准**：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
+**sass-spec 基线**：2571/4848 = 53%（core_functions 1686/2985 = 56%）
 
 ## Git 规范
 
 - 推送用 SSH：`git push github main`
 - Commit 格式：`feat: 描述 — 总计 N/M`
+
+## 颜色系统架构
+
+sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影响序列化输出：
+
+| 格式 | 用途 | 示例 |
+|------|------|------|
+| `Auto` | hex / 命名颜色 / rgba（默认） | `#ff0000`, `red`, `rgba(0,0,0,0.5)` |
+| `Rgb` | rgb(r,g,b) / rgba(r,g,b,a)（不转 hex） | `rgb(255, 0, 0)` |
+| `RgbPercent(h,s,l)` | rgb(r%,g%,b%) 百分比输出（HSL 操作结果） | `rgb(72%, 0%, 0%)` |
+| `Hsl(h,s,l)` | hsl(h,s%,l%) / hsla(...)（保留原始 HSL） | `hsl(120, 50%, 50%)` |
+| `Hwb(h,w,b)` | hwb(h w% b%) / hwb(h w% b% / a) | `hwb(0 30% 40%)` |
+
+**关键规则**：
+- `hsl()`/`hsla()` 创建的颜色保留 HSL 格式输出
+- `darken`/`lighten`/`saturate`/`adjust-hue`/`complement`/`invert`/`grayscale` 等操作函数用 `RgbPercent` 输出
+- `adjust-color`/`change-color`/`scale-color` 修改 HSL/HWB 参数时用 `RgbPercent`，纯 RGB 参数时用 `Auto`
+- 依赖 `color` crate v0.3 提供色彩空间转换参考
 
 ## 参考文档（需要时查阅）
 

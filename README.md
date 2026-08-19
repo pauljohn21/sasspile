@@ -7,7 +7,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.5.0** — 综合优化：模块拆分 + 基准测试 + 架构文档 — 252/252 tests。
+> **v0.5.0** — 颜色系统重大改进：color crate + RgbPercent 格式 + HSL 算法修正 — 2571/4848 (53%) sass-spec。
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
@@ -15,8 +15,8 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
-- **零依赖**: 纯 Rust 实现，无外部 C 库
-- **sass-spec 兼容**: 2566/4848 (53%) 通过
+- **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
+- **sass-spec 兼容**: 2571/4848 (53%) 通过，core_functions 1686/2985 (56%)
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
 - **Element Plus**: 121/121 (100%) 全量通过 ✅
 - **tracing 调试**: 内建 span + event 追踪链路
@@ -101,6 +101,8 @@ println!("{}", css);
 构造：`rgb`/`rgba`/`hsl`/`hsla`/`hwb`
 
 操作：`adjust-color`/`change-color`/`scale-color`/`mix`/`darken`/`lighten`/`adjust-hue`/`saturate`/`desaturate`/`grayscale`/`complement`/`invert`/`opacify`/`fade-in`/`transparentize`/`fade-out`
+
+> **颜色序列化**：HSL 操作结果用 `rgb(r%, g%, b%)` 百分比格式输出（匹配 sass-spec），依赖 `color` crate v0.3 提供色彩空间转换参考。
 
 通道：`red`/`green`/`blue`/`alpha`/`opacity`/`hue`/`saturation`/`lightness`/`whiteness`/`blackness`/`color-channel`
 

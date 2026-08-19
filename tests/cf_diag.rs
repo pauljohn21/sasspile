@@ -148,7 +148,7 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
 
 fn diag(subdir: &str, max_show: usize) {
     sasspile::init_tracing();
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let dir = spec_root.join(subdir);
     let mut files = Vec::new();
     collect_hrx(&dir, &mut files);
@@ -344,7 +344,7 @@ fn diag_values_colors() {
 
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
-    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sass-spec-main/spec");
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let dir = spec_root.join(subdir);
     let mut files = Vec::new();
     collect_hrx(&dir, &mut files);
