@@ -346,6 +346,13 @@ impl Evaluator {
                         }
                         Ok(Value::String(format!("{name}({})", parts.join(", ")), false))
                     }
+                    Err(SassError::Eval(_))
+                        if !name.contains('.')
+                            && matches!(name.as_str(), "min" | "max" | "clamp") => {
+                        // min/max/clamp 参数非数字时，作为 CSS 原生函数透传
+                        let arg_str = pos_args.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ");
+                        Ok(Value::Calc(format!("{name}({arg_str})")))
+                    }
                     Err(e) => Err(e),
                 }
             }

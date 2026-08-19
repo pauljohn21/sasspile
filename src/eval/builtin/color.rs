@@ -512,6 +512,16 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let powerless = is_channel_powerless(c, ch);
                     Ok(Some(Value::Bool(powerless)))
                 }
+                // 处理 oklch()/oklab()/lch()/lab() 字符串形式
+                (Some(Value::String(s, _)), Some(Value::String(ch, _))) => {
+                    let powerless = is_channel_powerless_str(s, ch);
+                    match powerless {
+                        Some(b) => Ok(Some(Value::Bool(b))),
+                        None => Err(SassError::Eval(
+                            "is-powerless 需要 $color 和 $channel 参数".into(),
+                        )),
+                    }
+                }
                 _ => Err(SassError::Eval(
                     "is-powerless 需要 $color 和 $channel 参数".into(),
                 )),
@@ -555,5 +565,59 @@ fn is_channel_powerless(c: &Color, channel: &str) -> bool {
         "blackness" => false,
         "a" | "b" => false,
         _ => false,
+    }
+}
+
+/// 从字符串形式的 Level 4 颜色（如 `oklch(50% 0.1 0deg)`）判断通道是否 powerless。
+///
+/// 返回 `Some(bool)` 表示成功判断，`None` 表示无法识别。
+fn is_channel_powerless_str(color_str: &str, channel: &str) -> Option<bool> {
+    let s = color_str.trim();
+    let eps = 0.0001;
+
+    // 提取函数名和参数
+    let paren_start = s.find('(')?;
+    let func_name = s[..paren_start].trim();
+    let paren_end = s.rfind(')')?;
+    let inner = &s[paren_start + 1..paren_end];
+
+    // 解析空格分隔的参数
+    let parts: Vec<&str> = inner.split_whitespace().collect();
+
+    match func_name {
+        "oklch" | "lch" => {
+            // lch(L C H) / oklch(L C H)
+            // hue powerless 当 chroma ≈ 0
+            // chroma/lightness 永不 powerless
+            match channel {
+                "hue" => {
+                    // chroma 是第二个参数
+                    let chroma_str = parts.get(1)?;
+                    let chroma = parse_percent_or_number(chroma_str)?;
+                    Some(chroma.abs() < eps)
+                }
+                "chroma" | "lightness" => Some(false),
+                _ => Some(false),
+            }
+        }
+        "oklab" | "lab" => {
+            // lab(L A B) / oklab(L A B)
+            // a/b 永不 powerless
+            match channel {
+                "a" | "b" | "lightness" => Some(false),
+                _ => Some(false),
+            }
+        }
+        _ => None,
+    }
+}
+
+/// 解析 `50%` 或 `0.1` 形式的数值。
+fn parse_percent_or_number(s: &str) -> Option<f64> {
+    let s = s.trim();
+    if s.ends_with('%') {
+        s[..s.len() - 1].parse::<f64>().ok().map(|v| v / 100.0)
+    } else {
+        s.parse::<f64>().ok()
     }
 }

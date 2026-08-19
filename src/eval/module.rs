@@ -264,6 +264,8 @@ impl Evaluator {
             "meta.function-exists" => "function-exists",
             "meta.global-variable-exists" => "global-variable-exists",
             "meta.variable-exists" => "variable-exists",
+            "meta.calc-args" => "calc-args",
+            "meta.calc-name" => "calc-name",
             // sass:selector
             "selector.append" => "selector-append",
             "selector.nest" => "selector-nest",

@@ -71,15 +71,7 @@ color::call(&name, pos_args, kw_args)?
             // ── map ──
             "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge" | "map-remove"
             | "map-set" | "map-deep-merge" | "map-deep-remove" => {
-                // 支持 $map 关键字参数（如 map.get($map: $m, $key: k)）
-                let mut combined_args = Vec::new();
-                if pos_args.is_empty() {
-                    if let Some(m) = kw_args.get("$map") {
-                        combined_args.push(m.clone());
-                    }
-                } else {
-                    combined_args.extend_from_slice(pos_args);
-                }
+                let combined_args = merge_map_args(pos_args, kw_args, &name);
                 Self::call_map_builtin(&name, &combined_args, env)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
@@ -161,6 +153,38 @@ color::call(&name, pos_args, kw_args)?
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
             },
+            "calc-args" => {
+                let calc_arg = pos_args.first().or_else(|| kw_args.get("$calc"));
+                match calc_arg {
+                    Some(Value::Calc(s)) => {
+                        let args = parse_calc_args(s);
+                        Ok(Value::List(args, Separator::Comma, false))
+                    }
+                    Some(v) => Err(SassError::Eval(format!(
+                        "$calc: {} is not a calculation.",
+                        v
+                    ))),
+                    None => Err(SassError::Eval(
+                        "Missing argument $calc.".into(),
+                    )),
+                }
+            }
+            "calc-name" => {
+                let calc_arg = pos_args.first().or_else(|| kw_args.get("$calc"));
+                match calc_arg {
+                    Some(Value::Calc(s)) => {
+                        let name = parse_calc_name(s);
+                        Ok(Value::String(name, true))
+                    }
+                    Some(v) => Err(SassError::Eval(format!(
+                        "$calc: {} is not a calculation.",
+                        v
+                    ))),
+                    None => Err(SassError::Eval(
+                        "Missing argument $calc.".into(),
+                    )),
+                }
+            }
 
             // ── CSS 原生函数——原样保留 ──
             "calc" | "env" | "var" => {
@@ -230,7 +254,7 @@ color::call(&name, pos_args, kw_args)?
             // ── meta ──
             | "type-of" | "inspect" | "if" | "feature-exists" | "content-exists" | "mixin-exists" | "function-exists"
             | "global-variable-exists" | "variable-exists" | "get-function" | "call"
-            | "keywords"
+            | "keywords" | "calc-args" | "calc-name"
             // ── list ──
             | "length" | "list-length" | "nth" | "append" | "join" | "index"
             | "list-separator" | "separator" | "set-nth" | "is-bracketed"
@@ -281,4 +305,148 @@ color::call(&name, pos_args, kw_args)?
             | "spring" | "scroll" | "view"
         )
     }
+}
+
+/// 从 `Value::Calc` 字符串中提取函数名。
+///
+/// `calc(var(--c))` → `"calc"`
+/// `clamp(1%, 2px, 3px)` → `"clamp"`
+/// `min(var(--c))` → `"min"`
+fn parse_calc_name(s: &str) -> String {
+    let s = s.trim();
+    if let Some(end) = s.find('(') {
+        s[..end].trim().to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+/// 从 `Value::Calc` 字符串中提取参数列表。
+///
+/// `calc(var(--c))` → `[var(--c)]`
+/// `clamp(1%, 2px, 3px)` → `[1%, 2px, 3px]`
+///
+/// 顶层逗号分隔参数，括号内的逗号不计入。
+fn parse_calc_args(s: &str) -> Vec<Value> {
+    let s = s.trim();
+    let inner = if let Some(start) = s.find('(') {
+        let end = s.rfind(')').unwrap_or(s.len());
+        &s[start + 1..end]
+    } else {
+        s
+    };
+
+    let mut args = Vec::new();
+    let mut depth = 0i32;
+    let mut current = String::new();
+    for ch in inner.chars() {
+        match ch {
+            '(' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' => {
+                depth -= 1;
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    args.push(parse_calc_arg_value(trimmed));
+                }
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        args.push(parse_calc_arg_value(trimmed));
+    }
+    args
+}
+
+/// 将单个 calc 参数字符串解析为 `Value`。
+///
+/// `var(--c)` → `Value::String("var(--c)", false)`（未加引号字符串）
+/// `1%` → `Value::Number(1.0, Some("%"))`
+/// `2px` → `Value::Number(2.0, Some("px"))`
+/// `calc(...)` → `Value::Calc("calc(...)")`
+fn parse_calc_arg_value(s: &str) -> Value {
+    let s = s.trim();
+    // 嵌套 calc/min/max/clamp → Value::Calc
+    if s.starts_with("calc(")
+        || s.starts_with("min(")
+        || s.starts_with("max(")
+        || s.starts_with("clamp(")
+        || s.starts_with("var(")
+        || s.starts_with("env(")
+    {
+        return Value::Calc(s.to_string());
+    }
+    // 尝试解析为数字+单位
+    if let Some(val) = parse_number_with_unit(s) {
+        return val;
+    }
+    // 默认为未加引号字符串
+    Value::String(s.to_string(), false)
+}
+
+/// 解析 `1%`、`2px`、`3` 等数字字符串为 `Value::Number`。
+fn parse_number_with_unit(s: &str) -> Option<Value> {
+    let s = s.trim();
+    let mut split = s.len();
+    for (i, ch) in s.char_indices() {
+        if !ch.is_ascii_digit() && ch != '.' && ch != '-' && ch != '+' && ch != 'e' && ch != 'E' {
+            split = i;
+            break;
+        }
+    }
+    let num_str = &s[..split];
+    let unit = s[split..].trim();
+    num_str.parse::<f64>().ok().map(|n| {
+        Value::Number(n, if unit.is_empty() { None } else { Some(unit.to_string()) })
+    })
+}
+
+/// 返回每个 map 函数的固定参数名列表（按位置顺序）。
+/// 可变参数（多 key）返回前缀部分，超出部分从 pos_args 追加。
+fn map_param_names(name: &str) -> &'static [&'static str] {
+    match name {
+        "map-get" => &["map", "key"],
+        "map-keys" => &["map"],
+        "map-values" => &["map"],
+        "map-has-key" => &["map", "key"],
+        "map-merge" => &["map1", "map2"],
+        "map-remove" => &["map", "key"],
+        "map-set" => &["map", "key", "value"],
+        "map-deep-merge" => &["map1", "map2"],
+        "map-deep-remove" => &["map", "key"],
+        _ => &[],
+    }
+}
+
+/// 将位置参数和命名参数合并为统一的位置参数列表。
+/// 按 `param_names` 顺序填充：先取 pos_args 对应位置，不足的从 kw_args 按参数名查找。
+/// 可变参数函数（如 map-get 的多 key）支持从 pos_args 追加。
+fn merge_map_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
+    let param_names = map_param_names(name);
+    if param_names.is_empty() {
+        return pos_args.to_vec();
+    }
+    let mut result = Vec::with_capacity(param_names.len().max(pos_args.len()));
+    for (i, pname) in param_names.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
+    // 追加多余的 pos_args（如 map-get(map, k1, k2, k3) 的多 key）
+    if pos_args.len() > param_names.len() {
+        result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
 }
