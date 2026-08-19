@@ -1,5 +1,15 @@
 use super::*;
 
+/// 格式化浮点数——截断到 10 位小数（与 Dart Sass 一致）。
+fn format_num(n: f64) -> String {
+    let n = (n * 1e10).round() / 1e10;
+    if n.fract() == 0.0 {
+        format!("{}", n as i64)
+    } else {
+        format!("{n}")
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -10,11 +20,7 @@ impl std::fmt::Display for Value {
                 if n.is_nan() {
                     return write!(f, "calc(NaN)");
                 }
-                if n.fract() == 0.0 {
-                    write!(f, "{}", *n as i64)
-                } else {
-                    write!(f, "{n}")
-                }
+                write!(f, "{}", format_num(*n))
             }
             Value::Number(n, Some(unit)) => {
                 if n.is_infinite() {
@@ -23,11 +29,7 @@ impl std::fmt::Display for Value {
                 if n.is_nan() {
                     return write!(f, "calc(NaN * 1{unit})");
                 }
-                if n.fract() == 0.0 {
-                    write!(f, "{}{unit}", *n as i64)
-                } else {
-                    write!(f, "{n}{unit}")
-                }
+                write!(f, "{}{unit}", format_num(*n))
             }
             Value::String(s, true) => {
                 let (quote, escaped) = Self::escape_quoted_string(s);

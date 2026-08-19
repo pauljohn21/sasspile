@@ -4,6 +4,7 @@
 //! 各函数组已拆分到子模块：color/list/map/string/selector。
 
 pub mod color;
+pub mod color_space;
 pub mod list;
 pub mod map;
 pub mod selector;
@@ -58,7 +59,7 @@ impl Evaluator {
 | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
 | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness"
 | "whiteness" | "blackness" | "is-powerless" | "is-in-gamut" | "is-legacy"
-| "channel" | "to-space" | "to-gamut" => {
+| "channel" | "to-space" | "to-gamut" | "space" | "same" => {
 color::call(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
@@ -253,7 +254,7 @@ color::call(&name, pos_args, kw_args)?
 | "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
 | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
 | "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
-| "is-powerless" | "is-in-gamut" | "is-legacy" | "channel" | "to-space" | "to-gamut"
+| "is-powerless" | "is-in-gamut" | "is-legacy" | "channel" | "to-space" | "to-gamut" | "space" | "same"
             // ── map ──
             | "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge"
             | "map-remove" | "map-set" | "map-deep-merge" | "map-deep-remove"

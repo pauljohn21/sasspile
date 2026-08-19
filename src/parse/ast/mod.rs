@@ -390,8 +390,9 @@ pub struct Ast {
     pub nodes: Vec<Node>,
 }
 
-/// 格式化 hue 值——整数不带小数点，否则保留原始精度。
+/// 格式化 hue 值——截断到 10 位小数（与 Dart Sass 一致）。
 fn format_hue(h: f64) -> String {
+    let h = (h * 1e10).round() / 1e10;
     if h.fract() == 0.0 {
         format!("{}", h as i64)
     } else {
