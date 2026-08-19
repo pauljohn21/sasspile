@@ -97,8 +97,8 @@ pub enum Node {
     Include { name: String, args: Vec<Arg>, content: Option<Vec<Node>> },
     Content, Return(Value),
     AtRule { name: String, params: String, body: Vec<Node> },
-    Use { url: String, namespace: Option<String>, star: bool, config: Vec<(String, Value)> },
-    Forward { ... }, Extend { selector: String },
+    Use { url: String, namespace: Option<String>, star: bool, config: Vec<ConfigVar> },
+    Forward { url, show, hide, config: Vec<ConfigVar> }, Import { url, modifier: String }, Extend { selector: String },
     Comment(String, bool),
 }
 
@@ -134,7 +134,7 @@ src/eval/
 ├── mixin.rs            # @mixin/@include
 ├── extend.rs           # @extend 后处理
 ├── at_params.rs        # @media/@supports 参数插值和表达式求值
-├── module.rs           # @use/@forward + call_module_function
+├── module.rs           # @use/@forward + call_module_function + load_module（缓存 + extends 传播）
 ├── builtin.rs          # call_builtin 分派入口 + meta 函数
 ├── builtin/
 │   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并 + 参数验证
@@ -641,7 +641,8 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 �
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：3478/11775 = 29%（全量统计，只跳过 libsass/non_conformant 弃用目录）
+# 基线：3596/11775 = 30%（全量统计，只跳过 libsass/non_conformant 弃用目录）
+# @directives 子目录：487/767 = 63%
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

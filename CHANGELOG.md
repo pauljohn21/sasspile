@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.9.6] — 2026-08-19
+
+### Added
+
+- 命名空间变量赋值（`ns.$var: value`）：`is_namespace_var` / `parse_namespace_var` 解析 + `eval_variable` 更新 `ModuleExports.vars` + `call_module_function` 注入模块 vars 到函数环境
+- `ConfigVar` 结构保留 `is_default` 标志：`@forward with()` 的 `!default` 语义正确处理
+- `@import` 修饰符解析（media query 等）和文件未找到报错
+- 多值 `@import`（`@import "a", "b"`）拼接为多行 CSS `@import` 输出
+- 模块缓存 `loaded_modules`（HashSet）防止重复加载和无限递归
+- 跨模块 `@extend` 传播：`ModuleExports` 新增 `extends` 字段，`load_module` 收集子模块 extends 关系
+- `parse_node` Semicolon 分支在 EOF 时不递归，避免 `Parse error: expected {, found EOF`
+
+### Changed
+
+- sass-spec 全量统计：3596/11775 = 30%（+118），@directives 子目录 487/767 = 63%（+43）
+- 命名空间从 URL basename 计算去掉所有扩展名（`other.foo.bar` → `other`）
+- 序列化器 `@import` 之间不加空行
+- `parse_config` 使用 `parse_expr(0)` 避免错误消费逗号，返回 `Vec<ConfigVar>`
+- `Node::Import` 新增 `modifier: String` 字段
+
+### Fixed
+
+- `parse_node` Semicolon 分支在 EOF 时无限递归导致 Parse error
+- `parse_config` 使用 `parse_value` 错误消费 `with()` 中逗号分隔的变量
+- 命名空间变量赋值在 `call_module_function` 中找不到变量的 bug
+- `@forward with()` 中 `!default` 标志未正确传播的 bug
+- CSS `@import` 带修饰符或多值时解析错误的 bug
+- 命名空间从多扩展名 URL basename 计算错误的 bug
+
 ## [0.9.5] — 2026-08-19
 
 ### Added

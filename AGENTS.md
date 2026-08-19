@@ -36,7 +36,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：3478/11775 = 29%（全量统计，只跳过 libsass/non_conformant 弃用目录）
+**sass-spec 基线**：3596/11775 = 30%（全量统计，只跳过 libsass/non_conformant 弃用目录）
+**@directives 子目录**：487/767 = 63%（at_root 88%, extend 47%, for 97%, forward 64%, function 50%, if 90%, import 67%, mixin 93%, use 50%）
 
 ## Git 规范
 
