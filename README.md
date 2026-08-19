@@ -7,7 +7,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.5.0** — 颜色系统重大改进：color crate + RgbPercent 格式 + HSL 算法修正 — 2571/4848 (53%) sass-spec。
+> **v0.9.5** — string/list 命名参数支持 + inspect 嵌套列表/Map 格式修正 — 2666/4848 (55%) sass-spec。
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
