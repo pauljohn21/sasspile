@@ -1,47 +1,65 @@
 //! core_functions/color 诊断——显示错误模式统计。
 //!
+//! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 //! 使用 tracing 进行问题追踪，不使用 println!。
 
+use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
+use hrx_auditor::vfs::Vfs;
 use std::collections::HashMap;
 use std::path::Path;
 
+/// HRX 解析——按 `===` 分组，提取所有 (name, input, expected) 三元组。
 fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
-    let mut files: Vec<(String, String)> = Vec::new();
-    let mut path = String::new();
-    let mut content_buf = String::new();
-    for line in content.lines() {
-        if line.starts_with("<===>") {
-            if !path.is_empty() {
-                files.push((path.clone(), content_buf));
+    let archive = match hrx_parse(content) {
+        Ok(a) => a,
+        Err(_) => return Vec::new(),
+    };
+
+    let groups: Vec<Vec<HrxEntry>> = {
+        let mut groups: Vec<Vec<HrxEntry>> = Vec::new();
+        let mut current: Vec<HrxEntry> = Vec::new();
+        for entry in archive.entries {
+            if entry.path.is_empty() {
+                if !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(entry);
             }
-            path = line.trim_start_matches("<===>").trim().to_string();
-            content_buf = String::new();
-        } else {
-            content_buf.push_str(line);
-            content_buf.push('\n');
         }
-    }
-    if !path.is_empty() {
-        files.push((path, content_buf));
-    }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
+    };
+
     let mut cases = Vec::new();
-    for (p, input) in &files {
-        if p.ends_with("input.scss") {
-            let base = p.strip_suffix("input.scss").unwrap_or(p).to_string();
-            let out_path = format!("{base}output.css");
-            let err_path = format!("{base}error");
+    for group_entries in &groups {
+        let group_archive = HrxArchive {
+            entries: group_entries.clone(),
+        };
+        let vfs = Vfs::from_archive(&group_archive);
+        let dirs = vfs.walk();
+
+        for (dir_path, files) in &dirs {
+            let input_file = files.iter().find(|(f, _)| f == "input.scss");
+            if input_file.is_none() {
+                continue;
+            }
+            let (_, input_content) = input_file.unwrap();
             let output = files
                 .iter()
-                .find(|(pp, _)| pp == &out_path)
+                .find(|(f, _)| f == "output.css")
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
-            let has_error = files.iter().any(|(pp, _)| pp == &err_path);
+            let has_error = files.iter().any(|(f, _)| f == "error");
             if !has_error && !output.is_empty() {
-                cases.push((
-                    base.trim_end_matches('/').to_string(),
-                    input.clone(),
-                    output,
-                ));
+                let name = if dir_path == "." {
+                    String::new()
+                } else {
+                    dir_path.clone()
+                };
+                cases.push((name, input_content.clone(), output));
             }
         }
     }
@@ -105,7 +123,6 @@ fn color_error_patterns() {
                         } else if err_str.contains("语法错误") {
                             "syntax".to_string()
                         } else if err_str.contains("求值错误") {
-                            // 提取具体求值错误消息
                             let msg = err_str.split("求值错误: ").nth(1).unwrap_or("?");
                             format!("eval/{msg}")
                         } else {

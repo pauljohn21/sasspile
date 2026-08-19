@@ -1,11 +1,13 @@
 //! sass-spec 全量统计——使用 manifest 跳过不支持的目录。
 //!
 //! manifest 在 `tests/spec_manifest.rs` 中定义 `SKIP_DIRS` 跳过列表。
-//! 支持新功能后，从 `SKIP_DIRS` 移除对应条目即可。
+//! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 
 mod spec_manifest;
 
-use spec_manifest::collect_hrx_files;
+use hrx_auditor::parser::{parse_hrx, HrxArchive, HrxEntry};
+use hrx_auditor::vfs::Vfs;
+use spec_manifest::SKIP_DIRS;
 use std::path::{Path, PathBuf};
 use tracing::info;
 
@@ -17,51 +19,85 @@ struct HrxCase {
     expect_error: bool,
 }
 
-/// 解析 HRX——提取所有文件和测试用例。
-fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    let mut files: Vec<(String, String)> = Vec::new();
-    let mut current_path = String::new();
-    let mut current_content = String::new();
+/// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
+///
+/// 不同组之间完全隔离——即使有同名文件也不会冲突。
+fn parse_hrx_to_cases(content: &str) -> Vec<HrxCase> {
+    let archive = match parse_hrx(content) {
+        Ok(a) => a,
+        Err(_) => return Vec::new(),
+    };
 
-    for line in content.lines() {
-        if line.starts_with("<===>") {
-            if !current_path.is_empty() {
-                files.push((current_path.clone(), current_content));
+    // 按 `===` 分隔符（空路径条目）将 entries 分成独立组
+    let groups: Vec<Vec<HrxEntry>> = {
+        let mut groups: Vec<Vec<HrxEntry>> = Vec::new();
+        let mut current: Vec<HrxEntry> = Vec::new();
+        for entry in archive.entries {
+            if entry.path.is_empty() {
+                // `===` 分隔符——结束当前组，开始新组
+                if !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(entry);
             }
-            current_path = line.trim_start_matches("<===>").trim().to_string();
-            current_content = String::new();
-        } else {
-            current_content.push_str(line);
-            current_content.push('\n');
         }
-    }
-    if !current_path.is_empty() {
-        files.push((current_path, current_content));
-    }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
+    };
 
     let mut cases = Vec::new();
-    for (path, _input) in &files {
-        if path.ends_with("input.scss") {
-            let base = path.strip_suffix("input.scss").unwrap_or(path).to_string();
-            let output_path = format!("{base}output.css");
-            let error_path = format!("{base}error");
+    for group_entries in &groups {
+        // 为每组构建独立的 VFS
+        let group_archive = HrxArchive {
+            entries: group_entries.clone(),
+        };
+        let vfs = Vfs::from_archive(&group_archive);
+        let dirs = vfs.walk();
 
+        // 展平当前组的所有 .scss/.css 文件
+        let all_files: Vec<(String, String)> = dirs
+            .iter()
+            .flat_map(|(dir_path, files)| {
+                files.iter().map(move |(f, c)| {
+                    if dir_path == "." {
+                        (f.clone(), c.clone())
+                    } else {
+                        (format!("{dir_path}/{f}"), c.clone())
+                    }
+                })
+            })
+            .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css"))
+            .collect();
+
+        for (dir_path, files) in &dirs {
+            // 找 input.scss
+            let input_file = files.iter().find(|(f, _)| f == "input.scss");
+            if input_file.is_none() {
+                continue;
+            }
+
+            let (input_name, _) = input_file.unwrap();
+
+            let input_path = if dir_path == "." {
+                input_name.clone()
+            } else {
+                format!("{dir_path}/{input_name}")
+            };
+
+            // 查找当前目录下的 output.css 和 error
             let expected_output = files
                 .iter()
-                .find(|(p, _)| p == &output_path)
+                .find(|(f, _)| f == "output.css")
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
-            let expect_error = files.iter().any(|(p, _)| p == &error_path);
-
-            let case_files: Vec<(String, String)> = files
-                .iter()
-                .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css"))
-                .map(|(p, c)| (p.clone(), c.clone()))
-                .collect();
+            let expect_error = files.iter().any(|(f, _)| f == "error");
 
             cases.push(HrxCase {
-                files: case_files,
-                input_path: path.clone(),
+                files: all_files.clone(),
+                input_path,
                 expected_output,
                 expect_error,
             });
@@ -111,6 +147,48 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     }
 }
 
+/// 递归收集目录下所有 .hrx 文件（跳过超大文件）。
+fn collect_hrx_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_recursive(dir, &mut files);
+    files
+}
+
+fn collect_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_recursive(&path, files);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
+                && let Ok(meta) = std::fs::metadata(&path)
+                    && meta.len() < 100_000 {
+                        files.push(path);
+                    }
+        }
+    }
+}
+
+/// 使用 manifest 跳过列表收集 HRX 文件。
+fn collect_hrx_files_with_manifest(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) {
+    let all = collect_hrx_files(dir);
+    let mut kept = Vec::new();
+    let mut skipped = 0;
+    for path in all {
+        let rel = path
+            .strip_prefix(spec_root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .to_string();
+        if SKIP_DIRS.iter().any(|skip| rel.starts_with(skip) || rel == *skip) {
+            skipped += 1;
+            continue;
+        }
+        kept.push(path);
+    }
+    (kept, skipped)
+}
+
 /// 按 spec 一级目录运行并统计。
 fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize) {
     let dir = spec_root.join(dir_name);
@@ -118,13 +196,12 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
         return (0, 0, 0, 0);
     }
 
-    // 使用 manifest 的 collect_hrx_files（自动跳过 SKIP_DIRS）
-    let (files, skipped) = collect_hrx_files(&dir, spec_root);
+    let (files, skipped) = collect_hrx_files_with_manifest(&dir, spec_root);
 
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            for case in &parse_hrx(&content) {
+            for case in &parse_hrx_to_cases(&content) {
                 cases += 1;
                 if case.expected_output.is_empty() && !case.expect_error {
                     skip += 1;
@@ -206,11 +283,10 @@ fn test_directives_subdirs() {
     // top-level hrx files
     for hrx in &["debug", "each", "error", "return", "warn", "while"] {
         let dir = spec_root.join(format!("directives/{hrx}.hrx"));
-        // treat as single-file dir
         if dir.exists() {
             if let Ok(content) = std::fs::read_to_string(&dir) {
                 let (mut hp, mut hf, mut hs, mut hc) = (0, 0, 0, 0);
-                for case in &parse_hrx(&content) {
+                for case in &parse_hrx_to_cases(&content) {
                     hc += 1;
                     if case.expected_output.is_empty() && !case.expect_error {
                         hs += 1;
@@ -251,7 +327,6 @@ fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
 
-    // 所有 spec 一级目录（manifest 自动跳过不支持的功能）
     let dirs = [
         "variables",
         "values",

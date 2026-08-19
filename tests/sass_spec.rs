@@ -1,7 +1,10 @@
 //! sass-spec 合规测试框架 v2——正确解析 HRX 格式。
 //!
+//! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 //! 内存优化：逐文件处理，限制测试数量。
 
+use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
+use hrx_auditor::vfs::Vfs;
 use std::path::Path;
 
 /// HRX 测试用例。
@@ -13,45 +16,60 @@ struct HrxCase {
     expect_error: bool,
 }
 
-/// 解析 HRX 文件内容，提取测试用例。
+/// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
 fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    let mut files: Vec<(String, String)> = Vec::new();
-    let mut current_path = String::new();
-    let mut current_content = String::new();
+    let archive = match hrx_parse(content) {
+        Ok(a) => a,
+        Err(_) => return Vec::new(),
+    };
 
-    for line in content.lines() {
-        if line.starts_with("<===>") {
-            if !current_path.is_empty() {
-                files.push((current_path.clone(), current_content));
+    let groups: Vec<Vec<HrxEntry>> = {
+        let mut groups: Vec<Vec<HrxEntry>> = Vec::new();
+        let mut current: Vec<HrxEntry> = Vec::new();
+        for entry in archive.entries {
+            if entry.path.is_empty() {
+                if !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(entry);
             }
-            current_path = line.trim_start_matches("<===>").trim().to_string();
-            current_content = String::new();
-        } else {
-            current_content.push_str(line);
-            current_content.push('\n');
         }
-    }
-    if !current_path.is_empty() {
-        files.push((current_path, current_content));
-    }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
+    };
 
     let mut cases = Vec::new();
-    for (path, input) in &files {
-        if path.ends_with("input.scss") {
-            let base = path.strip_suffix("input.scss").unwrap_or(path).to_string();
-            let output_path = format!("{base}output.css");
-            let error_path = format!("{base}error");
+    for group_entries in &groups {
+        let group_archive = HrxArchive {
+            entries: group_entries.clone(),
+        };
+        let vfs = Vfs::from_archive(&group_archive);
+        let dirs = vfs.walk();
 
+        for (dir_path, files) in &dirs {
+            let input_file = files.iter().find(|(f, _)| f == "input.scss");
+            if input_file.is_none() {
+                continue;
+            }
+            let (input_name, input_content) = input_file.unwrap();
             let expected_output = files
                 .iter()
-                .find(|(p, _)| p == &output_path)
+                .find(|(f, _)| f == "output.css")
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
-            let expect_error = files.iter().any(|(p, _)| p == &error_path);
+            let expect_error = files.iter().any(|(f, _)| f == "error");
+            let name = if dir_path == "." {
+                input_name.clone()
+            } else {
+                dir_path.clone()
+            };
 
             cases.push(HrxCase {
-                name: base.trim_end_matches('/').to_string(),
-                input: input.clone(),
+                name,
+                input: input_content.clone(),
                 expected_output,
                 expect_error,
             });
@@ -62,7 +80,6 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
 
 /// 运行单个测试用例——限制输入大小防止内存爆炸。
 fn run_case(case: &HrxCase) -> Result<(), String> {
-    // 限制输入大小——超大输入可能是恶意或错误测试
     if case.input.len() > 10000 {
         return Err(format!("输入过大跳过 [{}]", case.name));
     }
@@ -112,11 +129,10 @@ fn run_dir(dir: &Path, max_tests: usize) -> (usize, usize, usize) {
                 failed += f;
                 total += t;
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
-                // 限制单文件大小
                 if let Ok(meta) = std::fs::metadata(&path)
                     && meta.len() > 100_000 {
                         continue;
-                    } // 跳过超大 HRX
+                    }
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     let cases = parse_hrx(&content);
                     for case in &cases {

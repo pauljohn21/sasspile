@@ -2,73 +2,93 @@
 //! 集成 CSS diff 模块，逐行显示差异。
 //! 支持跨文件 @use——写入临时目录后用 compile_file_with_load_paths 编译。
 //!
-//! 使用 tracing 进行问题追踪，不使用 println!。
+//! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 
 mod common;
 use common::diff_css;
 
+use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
+use hrx_auditor::vfs::Vfs;
 use std::path::{Path, PathBuf};
 
 /// HRX 测试用例——包含所有文件和期望输出。
 struct HrxCase {
-    /// 所有文件（路径 → 内容），用于写入临时目录。
     files: Vec<(String, String)>,
-    /// input.scss 的路径。
     input_path: String,
-    /// 期望输出 CSS。
     expected_output: String,
-    /// 是否期望错误。
     expect_error: bool,
 }
 
-/// 解析 HRX——提取所有文件和测试用例。
+/// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
 fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    let mut files: Vec<(String, String)> = Vec::new();
-    let mut current_path = String::new();
-    let mut current_content = String::new();
+    let archive = match hrx_parse(content) {
+        Ok(a) => a,
+        Err(_) => return Vec::new(),
+    };
 
-    for line in content.lines() {
-        if line.starts_with("<===>") {
-            if !current_path.is_empty() {
-                files.push((current_path.clone(), current_content));
+    let groups: Vec<Vec<HrxEntry>> = {
+        let mut groups: Vec<Vec<HrxEntry>> = Vec::new();
+        let mut current: Vec<HrxEntry> = Vec::new();
+        for entry in archive.entries {
+            if entry.path.is_empty() {
+                if !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(entry);
             }
-            current_path = line.trim_start_matches("<===>").trim().to_string();
-            current_content = String::new();
-        } else {
-            current_content.push_str(line);
-            current_content.push('\n');
         }
-    }
-    if !current_path.is_empty() {
-        files.push((current_path, current_content));
-    }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        groups
+    };
 
     let mut cases = Vec::new();
-    for (path, _input) in &files {
-        if path.ends_with("input.scss") {
-            let base = path.strip_suffix("input.scss").unwrap_or(path).to_string();
-            let output_path = format!("{base}output.css");
-            let error_path = format!("{base}error");
+    for group_entries in &groups {
+        let group_archive = HrxArchive {
+            entries: group_entries.clone(),
+        };
+        let vfs = Vfs::from_archive(&group_archive);
+        let dirs = vfs.walk();
 
+        let all_files: Vec<(String, String)> = dirs
+            .iter()
+            .flat_map(|(dir_path, files)| {
+                files.iter().map(move |(f, c)| {
+                    if dir_path == "." {
+                        (f.clone(), c.clone())
+                    } else {
+                        (format!("{dir_path}/{f}"), c.clone())
+                    }
+                })
+            })
+            .filter(|(p, _)| {
+                (p.ends_with(".scss") || p.ends_with(".css")) && !p.contains("/sass/")
+            })
+            .collect();
+
+        for (dir_path, files) in &dirs {
+            let input_file = files.iter().find(|(f, _)| f == "input.scss");
+            if input_file.is_none() {
+                continue;
+            }
+            let (input_name, _) = input_file.unwrap();
+            let input_path = if dir_path == "." {
+                input_name.clone()
+            } else {
+                format!("{dir_path}/{input_name}")
+            };
             let expected_output = files
                 .iter()
-                .find(|(p, _)| p == &output_path)
+                .find(|(f, _)| f == "output.css")
                 .map(|(_, c)| c.clone())
                 .unwrap_or_default();
-            let expect_error = files.iter().any(|(p, _)| p == &error_path);
-
-            // 收集所有 .scss/.css 文件（排除 sass: 内置模块引用）
-            let case_files: Vec<(String, String)> = files
-                .iter()
-                .filter(|(p, _)| {
-                    (p.ends_with(".scss") || p.ends_with(".css")) && !p.contains("/sass/")
-                })
-                .map(|(p, c)| (p.clone(), c.clone()))
-                .collect();
+            let expect_error = files.iter().any(|(f, _)| f == "error");
 
             cases.push(HrxCase {
-                files: case_files,
-                input_path: path.clone(),
+                files: all_files.clone(),
+                input_path,
                 expected_output,
                 expect_error,
             });
@@ -93,19 +113,14 @@ fn collect_hrx(dir: &Path, files: &mut Vec<PathBuf>) {
 }
 
 /// 编译单个测试用例——写入临时目录后用 compile_file_with_load_paths 编译。
-/// hrx_dir 是 HRX 文件所在目录，hrx_stem 是 HRX 文件名（不含扩展名）。
-/// 将 HRX 内容写入 tmp_dir/<hrx_stem>/，同时复制 hrx_dir 下的 .scss 文件到 tmp_dir/，
-/// 使 @use '../test-hue' 能正确解析到 tmp_dir/_test-hue.scss。
 fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str) -> Result<String, String> {
     let tmp_dir = std::env::temp_dir().join(format!("cf-diag-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
 
-    // 将 HRX 中的文件写入 tmp_dir/<hrx_stem>/
     let case_subdir = tmp_dir.join(hrx_stem);
     std::fs::create_dir_all(&case_subdir).ok();
     for (path, content) in &case.files {
-        // 如果 path 本身就包含 hrx_stem/ 前缀，直接用 tmp_dir；否则用 case_subdir
         let target = if path.starts_with(&format!("{hrx_stem}/")) {
             tmp_dir.join(path)
         } else {
@@ -117,7 +132,6 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
         std::fs::write(&target, content).ok();
     }
 
-    // 复制 hrx_dir 下的所有 .scss/.css 文件到 tmp_dir/（支持 @use '../xxx' 解析）
     if let Ok(entries) = std::fs::read_dir(hrx_dir) {
         for entry in entries.flatten() {
             let p = entry.path();
@@ -130,7 +144,6 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
         }
     }
 
-    // input_path 在 HRX 中可能只是 "input.scss"，需要映射到 case_subdir
     let input_file = if case.input_path.starts_with(&format!("{hrx_stem}/")) {
         tmp_dir.join(&case.input_path)
     } else {
@@ -181,7 +194,6 @@ fn diag(subdir: &str, max_show: usize) {
                 match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
                     Ok(actual) => {
                         if case.expect_error {
-                            // 期望错误但实际成功了
                             shown += 1;
                             *err_types.entry("expected_error_but_ok".to_string()).or_default() += 1;
                             tracing::warn!(test = %format!("{stem}/{name}"), "FAIL: expected_error_but_ok");
@@ -238,119 +250,73 @@ fn diag(subdir: &str, max_show: usize) {
 }
 
 #[test]
-fn diag_list() {
-    diag("core_functions/list", 15);
-}
+fn diag_list() { diag("core_functions/list", 15); }
 
 #[test]
-fn diag_selector() {
-    diag("core_functions/selector", 15);
-}
+fn diag_selector() { diag("core_functions/selector", 15); }
 
 #[test]
-fn diag_color() {
-    diag("core_functions/color", 15);
-}
+fn diag_color() { diag("core_functions/color", 15); }
 
 #[test]
-fn diag_math() {
-    diag("core_functions/math", 15);
-}
+fn diag_math() { diag("core_functions/math", 15); }
 
 #[test]
-fn diag_expressions() {
-    diag("expressions", 15);
-}
+fn diag_expressions() { diag("expressions", 15); }
 
 #[test]
-fn diag_meta() {
-    diag("core_functions/meta", 15);
-}
+fn diag_meta() { diag("core_functions/meta", 15); }
 
 #[test]
-fn diag_import() {
-    diag("directives/import", 50);
-}
+fn diag_import() { diag("directives/import", 50); }
 
 #[test]
-fn diag_use() {
-    diag("directives/use", 50);
-}
+fn diag_use() { diag("directives/use", 50); }
 
 #[test]
-fn diag_css() {
-    diag("css", 20);
-}
+fn diag_css() { diag("css", 20); }
 
 #[test]
-fn diag_non_conformant() {
-    diag("non_conformant", 20);
-}
+fn diag_non_conformant() { diag("non_conformant", 20); }
 
 #[test]
-fn diag_function() {
-    diag("directives/function", 15);
-}
+fn diag_function() { diag("directives/function", 15); }
 
 #[test]
-fn diag_extend() {
-    diag("directives/extend", 50);
-}
+fn diag_extend() { diag("directives/extend", 50); }
 
 #[test]
-fn diag_forward() {
-    diag("directives/forward", 50);
-}
+fn diag_forward() { diag("directives/forward", 50); }
 
 #[test]
-fn diag_numbers() {
-    diag("values/numbers", 20);
-}
+fn diag_numbers() { diag("values/numbers", 20); }
 
 #[test]
-fn diag_libsass_closed() {
-    diag("libsass-closed-issues", 20);
-}
+fn diag_libsass_closed() { diag("libsass-closed-issues", 20); }
 
 #[test]
-fn diag_string() {
-    diag("core_functions/string", 20);
-}
+fn diag_string() { diag("core_functions/string", 20); }
 
 #[test]
-fn diag_map() {
-    diag("core_functions/map", 15);
-}
+fn diag_map() { diag("core_functions/map", 15); }
 
 #[test]
-fn diag_for() {
-    diag("directives/for", 15);
-}
+fn diag_for() { diag("directives/for", 15); }
 
 #[test]
-fn diag_each() {
-    diag("directives/each", 15);
-}
+fn diag_each() { diag("directives/each", 15); }
 
 #[test]
-fn diag_while() {
-    diag("directives/while", 15);
-}
+fn diag_while() { diag("directives/while", 15); }
 
 #[test]
-fn diag_media() {
-    diag("directives/media", 15);
-}
+fn diag_media() { diag("directives/media", 15); }
 
 #[test]
-fn diag_values_maps() {
-    diag("values/maps", 10);
-}
+fn diag_values_maps() { diag("values/maps", 10); }
 
 #[test]
-fn diag_values_colors() {
-    diag("values/colors", 10);
-}
+fn diag_values_colors() { diag("values/colors", 10); }
 
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
@@ -395,11 +361,7 @@ fn stats_subdir(subdir: &str) {
 }
 
 #[test]
-fn stats_list() {
-    stats_subdir("core_functions/list");
-}
+fn stats_list() { stats_subdir("core_functions/list"); }
 
 #[test]
-fn stats_math() {
-    stats_subdir("core_functions/math");
-}
+fn stats_math() { stats_subdir("core_functions/math"); }

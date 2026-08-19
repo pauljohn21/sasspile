@@ -24,7 +24,7 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
 ## 验证清单（修复后必跑）
 
 ```bash
-cargo test --test compile_test    # 41 个
+cargo test --test compile_test    # 43 个
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
@@ -35,9 +35,23 @@ cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
 ```
 
-**通过标准**：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：3596/11775 = 30%（全量统计，只跳过 libsass/non_conformant 弃用目录）
-**@directives 子目录**：487/767 = 63%（at_root 88%, extend 47%, for 97%, forward 64%, function 50%, if 90%, import 67%, mixin 93%, use 50%）
+**通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
+**sass-spec 基线**：3355/11512 = 29%（VFS + `===` 分组隔离，更准确）
+**@directives 子目录**：327/605 = 54%（at_root 50%, extend 41%, for 94%, forward 59%, function 34%, if 33%, import 67%, mixin 100%, use 44%）
+
+## HRX 解析架构（hrx-auditor 集成）
+
+sasspile 通过 dev-dependency 引用 `hrx-auditor` crate（路径 `../scss-rust`），直接使用其 VFS + parser：
+
+```toml
+[dev-dependencies]
+hrx-auditor = { path = "../scss-rust" }
+```
+
+- `hrx_auditor::parser::parse_hrx(content)` → `HrxArchive`
+- `hrx_auditor::vfs::Vfs::from_archive(&archive)` → `Vfs`（虚拟目录树）
+- 测试代码按 `===` 分隔符将 entries 分成独立组，每组构建自己的 VFS，正确隔离不同测试组的文件
+- 已迁移全部 8 个测试文件：`sass_spec_full.rs`、`cf_diag.rs`、`css_diag.rs`、`expr_diag.rs`、`sass_spec.rs`、`diag_detail.rs`、`minimize.rs`、`cf_color.rs`
 
 ## Git 规范
 

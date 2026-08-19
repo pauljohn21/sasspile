@@ -7,7 +7,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.6** — 命名空间变量赋值 + @forward with() !default + @import 修饰符/多值 — 3596/11775 (30%) sass-spec.
+> **v0.9.6** — hrx-auditor 集成 + VFS `===` 分组隔离 — 3355/11512 (29%) sass-spec.
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
@@ -16,7 +16,7 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
-- **sass-spec 兼容**: 3596/11775 (30%) 全量通过（含所有功能性子目录），@directives 子目录 487/767 (63%)，manifest 精简只跳过 libsass/non_conformant 弃用目录
+- **sass-spec 兼容**: 3355/11512 (29%) 全量通过（VFS + `===` 分组隔离，更准确），@directives 子目录 327/605 (54%)，manifest 精简只跳过 libsass/non_conformant 弃用目录
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
 - **Element Plus**: 121/121 (100%) 全量通过 ✅
 - **tracing 调试**: 内建 span + event 追踪链路

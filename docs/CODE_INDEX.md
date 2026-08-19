@@ -159,5 +159,6 @@
 | Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 + `eval/rule.rs` (eval_rule) |
 | Tracing events | `eval/color.rs` (sasspile::color) + `eval/extend.rs` (sasspile::extend) + `eval/value/mod.rs` (sasspile::binop) |
 | CSS diff 工具 | `tests/common/mod.rs` |
+| HRX 解析（VFS + `===` 分组） | `hrx_auditor` crate（`../scss-rust`）→ `tests/sass_spec_full.rs` + `tests/cf_diag.rs` 调用 |
 | 最小化工具 | `tests/minimize.rs` |
 | AST → SCSS 序列化 | `parse/ast_impl.rs` → `Node::to_scss()` |

@@ -630,7 +630,7 @@ result.map_err(|e| {
 
 ```bash
 # 核心测试
-cargo test --test compile_test    # 41 个
+cargo test --test compile_test    # 43 个
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
@@ -641,8 +641,8 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 �
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：3596/11775 = 30%（全量统计，只跳过 libsass/non_conformant 弃用目录）
-# @directives 子目录：487/767 = 63%
+# 基线：3355/11512 = 29%（VFS + === 分组隔离，更准确）
+# @directives 子目录：327/605 = 54%
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture
