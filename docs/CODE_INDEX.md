@@ -16,7 +16,7 @@
 | 文件 | 行数 | 职责 |
 |------|------|------|
 | **lib.rs** | 334 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing |
-| **main.rs** | 36 | CLI 入口 |
+| **main.rs** | 32 | CLI 入口 |
 | **error.rs** | 95 | SassError 定义（全英文错误消息） |
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
 | **lex/mod.rs** | 499 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
@@ -28,16 +28,16 @@
 | **parse/at_rules.rs** | 463 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error） |
 | **parse/expr/mod.rs** | 177 | Pratt 表达式解析入口 + parse_number/parse_hash_color |
 | **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
-| **eval/mod.rs** | 484 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node |
-| **eval/rule.rs** | 165 | eval_rule + combine_selectors |
-| **eval/value/mod.rs** | 436 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible |
+| **eval/mod.rs** | 486 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes 字段 |
+| **eval/rule.rs** | 197 | eval_rule + combine_selectors（规则体变量作用域隔离，传播命名空间/!global/@import 变量） |
+| **eval/value/mod.rs** | 444 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible |
 | **eval/value/ops.rs** | 209 | 值运算实现（add/sub/mul/div/modulo/compare 细节） |
 | **eval/value/display.rs** | 244 | inspect_value + 值显示格式化 |
 | **eval/control_flow.rs** | 149 | eval_if/eval_for/eval_each/eval_while |
 | **eval/mixin.rs** | 272 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
-| **eval/extend.rs** | 77 | apply_extends |
+| **eval/extend.rs** | 76 | apply_extends |
 | **eval/at_params.rs** | 240 | @media/@supports 参数插值和表达式求值 |
-| **eval/module.rs** | 282 | resolve_file（含 load_paths） + load_module + call_module_function（含 is-powerless/is-in-gamut/is-legacy/to-space/to-gamut/comparable 映射） |
+| **eval/module.rs** | 288 | resolve_file（含 load_paths） + load_module + load_import（@import 变量写入 global_writes） + call_module_function（含 is-powerless/is-in-gamut/is-legacy/to-space/to-gamut/comparable 映射） |
 | **eval/color.rs** | 617 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
 | **eval/builtin.rs** | 461 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin + is_css_function + meta 函数（inspect/calc-args/calc-name 等） |
 | **eval/builtin/math.rs** | 395 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + merge_math_args 命名参数合并 + 参数验证（Missing argument / Only N arguments / $number: X is not a number） |
@@ -135,7 +135,7 @@
 | 概念 | 相关文件 |
 |------|----------|
 | SCSS 编译入口 | `lib.rs` → `compile_expanded()` / `compile_file_with_load_paths()` |
-| 变量作用域 | `eval/mod.rs` → `Env` (vars/mixins/functions/namespaces/load_paths) |
+| 变量作用域 | `eval/mod.rs` → `Env` (vars/mixins/functions/namespaces/load_paths/global_writes) + `eval/rule.rs` → 规则体变量隔离 |
 | @use 模块系统 | `eval/module.rs` → `load_module` / `call_module_function` |
 | @extend 继承 | `eval/extend.rs` → `apply_extends` |
 | @mixin/@include | `eval/mixin.rs` → `eval_include` / `bind_params` |
@@ -150,7 +150,7 @@
 | 数学函数分派 | `eval/builtin/math.rs` → `call()` + `merge_math_args()` 命名参数合并 |
 | 错误消息格式 | `error.rs` → 全英文错误消息（无前缀）；math/string 函数内联验证 |
 | CSS 序列化 | `css/mod.rs` → Serializer |
-| Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 |
+| Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 + `eval/rule.rs` (eval_rule) |
 | Tracing events | `eval/color.rs` (sasspile::color) + `eval/extend.rs` (sasspile::extend) + `eval/value/mod.rs` (sasspile::binop) |
 | CSS diff 工具 | `tests/common/mod.rs` |
 | 最小化工具 | `tests/minimize.rs` |

@@ -31,12 +31,12 @@ cargo test --test common_test     # 5 个
 cargo test --test bs_spec -- --nocapture    # 15 个
 cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
 
-# sass-spec 全量统计（约 35 秒）
+# sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
 ```
 
 **通过标准**：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：2672/4848 = 55%（core_functions 1768/2985 = 59%）
+**sass-spec 基线**：3478/11775 = 29%（全量统计，只跳过 libsass/non_conformant 弃用目录）
 
 ## Git 规范
 

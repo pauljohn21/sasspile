@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.5] — 2026-08-19
+
+### Added
+
+- 规则体变量作用域修复：`eval_rule` 不再传播规则体内的局部变量到外层
+- `!global` 变量处理：`eval_variable` 当 `flags.global` 为 true 时同时写入 `vars` 和 `global_writes`
+- `Env` 新增 `global_writes` 字段，用于传播 `!global` 变量和 `@import` 内联变量
+- `@import` 变量传播：`load_import` 中将导入的变量写入 `global_writes`
+- 命名空间变量传播：规则体中名字含 `.` 的变量（命名空间变量）传播到外层
+- Manifest 精简：`SKIP_DIRS` 只跳过 libsass 系列 + `non_conformant` 弃用目录，不再跳过功能性子目录
+
+### Changed
+
+- sass-spec 全量统计：3478/11775 = 29%（之前跳过大量功能性子目录时为 2672/4848 = 55%）
+- sass-spec 全量运行时间约 70 秒（之前约 35 秒，因测试用例数量增加）
+- 规则体变量作用域符合 sass-spec 规范：局部变量不泄漏到外层
+
+### Fixed
+
+- 规则体内局部变量泄漏到外层作用域的 bug
+- `!global` 变量在规则体内不传播到全局作用域的 bug
+- `@import` 导入的变量不传播到外层作用域的 bug
+
 ## [0.4.0] — 2026-08-13
 
 ### Added

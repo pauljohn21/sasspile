@@ -24,31 +24,40 @@ src/
 │   ├── mod.rs        # Lexer 实现
 │   └── token.rs      # Token 定义
 ├── parse/            # 语法分析器
-│   ├── ast/          # AST 定义
-│   │   ├── mod.rs    # 核心类型定义
-│   │   └── display.rs # Display trait 实现
-│   ├── expr/         # 表达式解析
-│   │   ├── mod.rs    # Pratt 解析器核心
-│   │   └── prefix.rs # 前缀解析
-│   ├── at_rules.rs   # @规则解析
-│   └── nodes.rs      # AST 节点解析
+│   ├── ast/           # AST 定义
+│   │   ├── mod.rs     # 核心类型定义（Node/Value/Color/ColorFormat/BinOp/Param/Arg）
+│   │   └── display.rs # Display for Value（ColorFormat 分派序列化）
+│   ├── ast_impl.rs    # Node::to_scss()
+│   ├── expr/          # 表达式解析
+│   │   ├── mod.rs     # Pratt 解析器入口
+│   │   └── prefix.rs  # 前缀解析
+│   ├── at_rules.rs    # @规则解析
+│   └── nodes.rs       # AST 节点解析
 ├── eval/             # 求值器
-│   ├── value/        # 值类型
-│   │   ├── mod.rs    # 求值逻辑
-│   │   ├── ops.rs    # 算术/比较运算
-│   │   └── display.rs # 值格式化
-│   ├── builtin/      # 内建函数
-│   │   ├── color.rs  # 颜色函数
-│   │   ├── map.rs    # Map 函数
-│   │   ├── list.rs   # List 函数
-│   │   └── string.rs # String 函数
-│   ├── module.rs     # 模块系统
-│   ├── mixin.rs      # Mixin 处理
-│   └── rule.rs       # 规则求值
+│   ├── value/         # 值运算
+│   │   ├── mod.rs     # eval_value + eval_binop + units_compatible
+│   │   ├── ops.rs     # 算术/比较运算实现
+│   │   └── display.rs # inspect_value + 值格式化
+│   ├── builtin/       # 内建函数
+│   │   ├── math.rs    # 数学函数 + 命名参数合并
+│   │   ├── color.rs   # 颜色函数
+│   │   ├── map.rs     # Map 函数
+│   │   ├── list.rs    # List 函数
+│   │   ├── string.rs  # String 函数
+│   │   └── selector.rs # Selector 函数
+│   ├── rule.rs        # 规则求值（变量作用域隔离）
+│   ├── control_flow.rs # @if/@for/@each/@while
+│   ├── mixin.rs       # Mixin/Function 处理
+│   ├── extend.rs      # @extend 后处理
+│   ├── at_params.rs   # @media/@supports 参数插值
+│   ├── module.rs      # 模块系统（@use/@forward/@import）
+│   ├── builtin.rs     # call_builtin 分派入口 + meta 函数
+│   └── color.rs       # 颜色辅助函数
 ├── css/              # CSS 序列化
 │   ├── mod.rs        # Serializer 核心
 │   ├── node.rs       # CssNode 定义
 │   └── selector.rs   # 选择器处理
+├── stage/            # 管线阶段类型
 ├── lib.rs            # 库入口
 └── main.rs           # CLI 入口
 ```
@@ -111,6 +120,10 @@ cargo test --test bs_spec         # 15 个 (Bootstrap 验证)
 
 # sass-spec 完整验证
 cargo test --test ep_full         # 121 个 (Element Plus 验证)
+
+# sass-spec 全量统计（约 70 秒）
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
+# 基线：3478/11775 = 29%（全量统计，只跳过 libsass/non_conformant 弃用目录）
 
 # 基准测试
 cargo bench
