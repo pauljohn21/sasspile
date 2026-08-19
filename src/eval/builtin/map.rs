@@ -119,7 +119,7 @@ impl Evaluator {
         let result = match name {
             "map-get" => {
                 if args.len() < 2 {
-                    return Err(SassError::Eval("map-get 需要 (map, key) 参数".into()));
+                    return Err(SassError::Eval("map-get requires (map, key) arguments".into()));
                 }
                 let mut current = args[0].clone();
                 for key in &args[1..] {
@@ -133,7 +133,7 @@ impl Evaluator {
             }
             "map-keys" => {
                 if args.len() != 1 {
-                    return Err(SassError::Eval("map-keys 需要 1 个 map 参数".into()));
+                    return Err(SassError::Eval("map-keys requires 1 map argument".into()));
                 }
                 let pairs = Self::value_to_map(&args[0])?;
                 Value::List(
@@ -144,7 +144,7 @@ impl Evaluator {
             }
             "map-values" => {
                 if args.len() != 1 {
-                    return Err(SassError::Eval("map-values 需要 1 个 map 参数".into()));
+                    return Err(SassError::Eval("map-values requires 1 map argument".into()));
                 }
                 let pairs = Self::value_to_map(&args[0])?;
                 Value::List(
@@ -155,7 +155,7 @@ impl Evaluator {
             }
             "map-has-key" => {
                 if args.len() < 2 {
-                    return Err(SassError::Eval("map-has-key 需要 (map, key) 参数".into()));
+                    return Err(SassError::Eval("map-has-key requires (map, key) arguments".into()));
                 }
                 let mut current = args[0].clone();
                 let mut found = true;
@@ -179,7 +179,7 @@ impl Evaluator {
             }
             "map-merge" => {
                 if args.len() < 2 {
-                    return Err(SassError::Eval("map-merge 需要至少 2 个参数".into()));
+                    return Err(SassError::Eval("map-merge requires at least 2 arguments".into()));
                 }
                 let map1 = Self::value_to_map(&args[0])?;
                 if args.len() > 2 {
@@ -201,7 +201,7 @@ impl Evaluator {
             }
             "map-remove" => {
                 if args.is_empty() {
-                    return Err(SassError::Eval("map-remove 需要至少 1 个参数".into()));
+                    return Err(SassError::Eval("map-remove requires at least 1 argument".into()));
                 }
                 let pairs = Self::value_to_map(&args[0])?;
                 if args.len() == 1 {
@@ -217,7 +217,7 @@ impl Evaluator {
             }
             "map-set" => {
                 if args.len() < 3 {
-                    return Err(SassError::Eval("map-set 需要至少 3 个参数".into()));
+                    return Err(SassError::Eval("map-set requires at least 3 arguments".into()));
                 }
                 let map = Self::value_to_map(&args[0])?;
                 let keys = &args[1..args.len() - 1];
@@ -228,7 +228,7 @@ impl Evaluator {
             "map-deep-merge" => {
                 // map.deep-merge($map1, $map2) — 递归合并：当两个值都是 map 时递归合并
                 if args.len() != 2 {
-                    return Err(SassError::Eval("map-deep-merge 需要 2 个参数".into()));
+                    return Err(SassError::Eval("map-deep-merge requires 2 arguments".into()));
                 }
                 let map1 = Self::value_to_map(&args[0])?;
                 let map2 = Self::value_to_map(&args[1])?;
@@ -296,7 +296,7 @@ impl Evaluator {
                 Ok(Value::Map(result))
             }
             [other, ..] => Ok(other.clone()),
-            _ => Err(SassError::Eval("map-deep-remove 需要至少 1 个参数".into())),
+            _ => Err(SassError::Eval("map-deep-remove requires at least 1 argument".into())),
         }
     }
 }

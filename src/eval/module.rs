@@ -70,7 +70,7 @@ impl Evaluator {
             return Ok(ModuleExports::default());
         }
         let source = std::fs::read_to_string(path)
-            .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+            .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
         // `.css` 文件——以 plain CSS 模式解析，保留嵌套不展开选择器
         let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
@@ -117,7 +117,7 @@ impl Evaluator {
             return Ok((vec![], caller_env.clone()));
         }
         let source = std::fs::read_to_string(path)
-            .map_err(|e| SassError::Module(format!("无法读取 {}: {e}", path.display())))?;
+            .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
         // `.css` 文件——以 plain CSS 模式解析
         let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");

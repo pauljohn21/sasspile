@@ -51,7 +51,7 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             new_items.extend(items);
             Ok(Value::List(new_items, sep, false))
         }
-        _ => Err(SassError::Eval("不支持的 + 运算".into())),
+        _ => Err(SassError::Eval("Unsupported + operation".into())),
     }
 }
 
@@ -83,7 +83,7 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             format!("#{:02x}{:02x}{:02x}-{b}", c.r, c.g, c.b),
             qb,
         )),
-        _ => Err(SassError::Eval("不支持的 - 运算".into())),
+        _ => Err(SassError::Eval("Unsupported - operation".into())),
     }
 }
 
@@ -93,7 +93,7 @@ pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
             let unit = if u1.is_some() { u1.clone() } else { u2.clone() };
             Ok(Value::Number(a * b, unit))
         }
-        _ => Err(SassError::Eval(format!("无法 {l} * {r}"))),
+        _ => Err(SassError::Eval(format!("Cannot multiply {l} * {r}"))),
     }
 }
 
@@ -149,7 +149,7 @@ pub(crate) fn compare(op: &BinOpKind, l: &Value, r: &Value) -> Result<Value> {
             };
             Ok(Value::Bool(result))
         }
-        _ => Err(SassError::Eval(format!("无法比较 {l} 和 {r}"))),
+        _ => Err(SassError::Eval(format!("Cannot compare {l} and {r}"))),
     }
 }
 

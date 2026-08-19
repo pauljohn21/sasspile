@@ -34,7 +34,7 @@ impl Evaluator {
                     ));
                 }
                 if pos_args.is_empty() {
-                    return Err(SassError::Eval("sass() 需要至少 1 个参数".into()));
+                    return Err(SassError::Eval("sass() requires at least 1 argument".into()));
                 }
                 Ok(pos_args[0].clone())
             }
@@ -42,7 +42,7 @@ impl Evaluator {
             "abs" | "ceil" | "floor" | "round" | "min" | "max" | "percentage"
             | "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
             | "atan2" | "asin" | "acos" | "atan" | "hypot" | "random" | "clamp"
-            | "unit" | "is-unitless" | "unitless" | "compatible" | "comparable" => {
+            | "unit" | "is-unitless" | "compatible" | "comparable" => {
                 math::call(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
@@ -94,17 +94,26 @@ color::call(&name, pos_args, kw_args)?
                 [Value::Null] => Ok(Value::String("null".into(), false)),
                 _ => Ok(Value::String("unknown".into(), false)),
             },
-            "inspect" => match pos_args {
-                [v] => Ok(Value::String(crate::eval::value::inspect_value(v), false)),
-                _ => Err(SassError::Eval("inspect 需要 1 个参数".into())),
-            },
+            "inspect" => {
+                if pos_args.is_empty() {
+                    return Err(SassError::Eval("Missing argument $value.".into()));
+                }
+                if pos_args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} {} passed.",
+                        pos_args.len(),
+                        if pos_args.len() == 1 { "was" } else { "were" }
+                    )));
+                }
+                Ok(Value::String(crate::eval::value::inspect_value(&pos_args[0]), false))
+            }
             "if" => match pos_args {
                 [cond, t, f] => Ok(if Self::is_truthy(cond) {
                     t.clone()
                 } else {
                     f.clone()
                 }),
-                _ => Err(SassError::Eval("if 需要 3 个参数".into())),
+                _ => Err(SassError::Eval("if requires 3 arguments".into())),
             },
             "content-exists" => {
                 // 检查当前环境是否有 @content 内容块
@@ -140,21 +149,21 @@ color::call(&name, pos_args, kw_args)?
             },
             "get-function" => match pos_args {
                 [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
-                _ => Err(SassError::Eval("get-function 需要 1 个参数".into())),
+                _ => Err(SassError::Eval("get-function requires 1 argument".into())),
             },
             "call" => match pos_args {
                 [Value::String(fname, _), rest @ ..] => {
                     let empty_kw = HashMap::new();
                     Self::call_function(fname, rest, &empty_kw, env)
                 }
-                _ => Err(SassError::Eval("call 需要至少 1 个参数".into())),
+                _ => Err(SassError::Eval("call requires at least 1 argument".into())),
             },
             "keywords" => match pos_args {
                 [_] => Ok(Value::Map(vec![])),
-                _ => Err(SassError::Eval("keywords 需要 1 个参数".into())),
+                _ => Err(SassError::Eval("keywords requires 1 argument".into())),
             },
             "calc-args" => {
-                let calc_arg = pos_args.first().or_else(|| kw_args.get("$calc"));
+                let calc_arg = pos_args.first().or_else(|| kw_args.get("calc")).or_else(|| kw_args.get("$calc"));
                 match calc_arg {
                     Some(Value::Calc(s)) => {
                         let args = parse_calc_args(s);
@@ -170,7 +179,7 @@ color::call(&name, pos_args, kw_args)?
                 }
             }
             "calc-name" => {
-                let calc_arg = pos_args.first().or_else(|| kw_args.get("$calc"));
+                let calc_arg = pos_args.first().or_else(|| kw_args.get("calc")).or_else(|| kw_args.get("$calc"));
                 match calc_arg {
                     Some(Value::Calc(s)) => {
                         let name = parse_calc_name(s);
@@ -235,7 +244,7 @@ color::call(&name, pos_args, kw_args)?
             // ── math ──
             "abs" | "ceil" | "floor" | "round" | "min" | "max" | "percentage"
 | "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
-| "atan2" | "asin" | "acos" | "atan" | "hypot" | "random" | "clamp" | "unit" | "is-unitless" | "unitless"
+| "atan2" | "asin" | "acos" | "atan" | "hypot" | "random" | "clamp" | "unit" | "is-unitless"
             | "compatible" | "comparable"
             // ── color ──
             | "rgba" | "rgb" | "darken" | "lighten" | "mix"

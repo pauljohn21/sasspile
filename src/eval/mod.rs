@@ -236,7 +236,7 @@ impl Evaluator {
     fn eval_nodes(nodes: &[Node], env: &Env) -> Result<(Vec<CssNode>, Env)> {
         if env.depth > MAX_DEPTH {
             warn!(depth = env.depth, "recursion limit exceeded");
-            return Err(SassError::Eval("递归深度超过限制（可能是无限循环）".into()));
+            return Err(SassError::Eval("Recursion depth limit exceeded (possible infinite loop)".into()));
         }
         nodes.iter().try_fold((Vec::new(), env.clone()), |(mut css, env), node| {
             let node_span = crate::__tracing::debug_span!("eval_node_item", node = ?std::mem::discriminant(node));

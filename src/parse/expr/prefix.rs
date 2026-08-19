@@ -416,7 +416,7 @@ pub(crate) fn parse_number(s: &str) -> Result<Value> {
     match num_part.parse::<f64>() {
         Ok(n) => Ok(Value::Number(n, unit)),
         Err(_) => Err(SassError::Parse {
-            expected: "数字".into(),
+            expected: "number".into(),
             found: s.to_string(),
         }),
     }

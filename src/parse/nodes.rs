@@ -531,7 +531,7 @@ impl<'tok> Parser<'tok> {
                 Ok(s)
             }
             _ => Err(SassError::Parse {
-                expected: "标识符".into(),
+                expected: "identifier".into(),
                 found: "other".into(),
             }),
         }
@@ -551,7 +551,7 @@ impl<'tok> Parser<'tok> {
                 Ok(s)
             }
             _ => Err(SassError::Parse {
-                expected: "字符串".into(),
+                expected: "string".into(),
                 found: "other".into(),
             }),
         }

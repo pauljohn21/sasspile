@@ -62,19 +62,35 @@ impl Evaluator {
         let args = merge_args(pos_args, kw_args, params);
         let result = match name {
             "str-length" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("str-length 需要 1 个字符串参数".into()));
+                if args.is_empty() {
+                    return Err(SassError::Eval("Missing argument $string.".into()));
+                }
+                if args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} {} passed.",
+                        args.len(),
+                        if args.len() == 1 { "was" } else { "were" }
+                    )));
                 }
                 match &args[0] {
                     Value::String(s, _) => {
                         Value::Number(s.chars().count() as f64, None)
                     }
-                    _ => return Err(SassError::Eval("str-length 需要 1 个字符串参数".into())),
+                    other => return Err(SassError::Eval(format!(
+                        "$string: {} is not a string.", other
+                    ))),
                 }
             }
             "to-upper-case" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("to-upper-case 需要 1 个字符串参数".into()));
+                if args.is_empty() {
+                    return Err(SassError::Eval("Missing argument $string.".into()));
+                }
+                if args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} {} passed.",
+                        args.len(),
+                        if args.len() == 1 { "was" } else { "were" }
+                    )));
                 }
                 match &args[0] {
                     Value::String(s, q) => {
@@ -91,12 +107,21 @@ impl Evaluator {
                             .collect();
                         Value::String(uppered, *q)
                     }
-                    _ => return Err(SassError::Eval("to-upper-case 需要 1 个字符串参数".into())),
+                    other => return Err(SassError::Eval(format!(
+                        "$string: {} is not a string.", other
+                    ))),
                 }
             }
             "to-lower-case" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("to-lower-case 需要 1 个字符串参数".into()));
+                if args.is_empty() {
+                    return Err(SassError::Eval("Missing argument $string.".into()));
+                }
+                if args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} {} passed.",
+                        args.len(),
+                        if args.len() == 1 { "was" } else { "were" }
+                    )));
                 }
                 match &args[0] {
                     Value::String(s, q) => {
@@ -113,31 +138,51 @@ impl Evaluator {
                             .collect();
                         Value::String(lowered, *q)
                     }
-                    _ => return Err(SassError::Eval("to-lower-case 需要 1 个字符串参数".into())),
+                    other => return Err(SassError::Eval(format!(
+                        "$string: {} is not a string.", other
+                    ))),
                 }
             }
             "unquote" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("unquote 需要 1 个字符串参数".into()));
+                if args.is_empty() {
+                    return Err(SassError::Eval("Missing argument $string.".into()));
+                }
+                if args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} {} passed.",
+                        args.len(),
+                        if args.len() == 1 { "was" } else { "were" }
+                    )));
                 }
                 match &args[0] {
                     Value::String(s, _) => Value::String(s.clone(), false),
-                    _ => return Err(SassError::Eval("unquote 需要 1 个字符串参数".into())),
+                    other => return Err(SassError::Eval(format!(
+                        "$string: {} is not a string.", other
+                    ))),
                 }
             }
             "quote" => {
-                if args.len() != 1 {
-                    return Err(SassError::Eval("quote 需要 1 个字符串参数".into()));
+                if args.is_empty() {
+                    return Err(SassError::Eval("Missing argument $string.".into()));
+                }
+                if args.len() > 1 {
+                    return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {} {} passed.",
+                        args.len(),
+                        if args.len() == 1 { "was" } else { "were" }
+                    )));
                 }
                 match &args[0] {
                     Value::String(s, _) => Value::String(s.clone(), true),
-                    _ => return Err(SassError::Eval("quote 需要 1 个字符串参数".into())),
+                    other => return Err(SassError::Eval(format!(
+                        "$string: {} is not a string.", other
+                    ))),
                 }
             }
             "str-slice" => Self::str_slice(&args)?,
             "str-index" => {
                 if args.len() != 2 {
-                    return Err(SassError::Eval("str-index 需要 2 个参数".into()));
+                    return Err(SassError::Eval("str-index requires 2 arguments".into()));
                 }
                 let s = match &args[0] {
                     Value::String(s, _) => s.clone(),
@@ -177,7 +222,7 @@ impl Evaluator {
     /// str-slice($string, $start-at, $end-at: -1)
     fn str_slice(args: &[Value]) -> Result<Value> {
         if args.len() < 2 || args.len() > 3 {
-            return Err(SassError::Eval("str-slice 需要 2-3 个参数".into()));
+            return Err(SassError::Eval("str-slice requires 2-3 arguments".into()));
         }
         let (s, q) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
@@ -234,7 +279,7 @@ impl Evaluator {
     /// str-insert($string, $insert, $index)
     fn str_insert(args: &[Value]) -> Result<Value> {
         if args.len() != 3 {
-            return Err(SassError::Eval("str-insert 需要 3 个参数".into()));
+            return Err(SassError::Eval("str-insert requires 3 arguments".into()));
         }
         let (s, q) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),

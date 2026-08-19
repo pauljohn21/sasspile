@@ -512,7 +512,7 @@ impl Evaluator {
                     .join(", ");
                 Ok(Value::String(format!("rgba({arg_str})"), false))
             }
-            _ => Err(SassError::Eval("rgba 需要 3-4 个数字参数".into())),
+            _ => Err(SassError::Eval("rgba requires 3-4 number arguments".into())),
         }
     }
 
@@ -539,7 +539,7 @@ impl Evaluator {
                 );
                 Ok(result)
             }
-            _ => Err(SassError::Eval("darken 需要 (color, amount) 参数".into())),
+            _ => Err(SassError::Eval("darken requires (color, amount) arguments".into())),
         }
     }
 
@@ -566,7 +566,7 @@ impl Evaluator {
                 );
                 Ok(result)
             }
-            _ => Err(SassError::Eval("lighten 需要 (color, amount) 参数".into())),
+            _ => Err(SassError::Eval("lighten requires (color, amount) arguments".into())),
         }
     }
 
@@ -610,7 +610,7 @@ impl Evaluator {
                     args_debug = ?args.iter().map(|a| format!("{a}")).collect::<Vec<_>>(),
                     "mix argument mismatch"
                 );
-                Err(SassError::Eval("mix 需要 2-3 个参数".into()))
+                Err(SassError::Eval("mix requires 2-3 arguments".into()))
             }
         }
     }

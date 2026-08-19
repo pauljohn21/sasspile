@@ -41,7 +41,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                     .collect();
                 Ok(Some(Value::List(parts, Separator::Comma, false)))
             }
-            _ => Err(SassError::Eval("selector-parse 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("selector-parse requires 1 argument".into())),
         },
         "selector-simple-selectors" => match args {
             [Value::String(s, _)] => {
@@ -63,7 +63,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 Ok(Some(Value::List(result, Separator::Comma, false)))
             }
             _ => Err(SassError::Eval(
-                "selector-simple-selectors 需要 1 个参数".into(),
+                "selector-simple-selectors requires 1 argument".into(),
             )),
         },
         "selector-unify" => match args {
@@ -91,7 +91,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 };
                 Ok(Some(Value::String(result, false)))
             }
-            _ => Err(SassError::Eval("selector-extend 需要 3 个参数".into())),
+            _ => Err(SassError::Eval("selector-extend requires 3 arguments".into())),
         },
         "selector-replace" => match args {
             [
@@ -103,7 +103,7 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
                 let result = selector.replace(original.as_str(), replacement.as_str());
                 Ok(Some(Value::String(result, false)))
             }
-            _ => Err(SassError::Eval("selector-replace 需要 3 个参数".into())),
+            _ => Err(SassError::Eval("selector-replace requires 3 arguments".into())),
         },
         _ => Ok(None),
     }

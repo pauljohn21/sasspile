@@ -363,7 +363,7 @@ impl Evaluator {
                 match op {
                     UnaryOp::Neg => match val {
                         Value::Number(n, u) => Ok(Value::Number(-n, u)),
-                        _ => Err(SassError::Eval(format!("无法对 {val} 取负"))),
+                        _ => Err(SassError::Eval(format!("Cannot negate {val}"))),
                     },
                     UnaryOp::Not => match val {
                         Value::Bool(b) => Ok(Value::Bool(!b)),

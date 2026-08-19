@@ -35,7 +35,7 @@ _ if !args.is_empty() => {
 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
 Ok(Some(Value::String(format!("invert({arg_str})"), false)))
 },
-_ => Err(SassError::Eval("invert 需要 1 个参数".into())),
+_ => Err(SassError::Eval("invert requires 1 argument".into())),
 }
 },
 "grayscale" => {
@@ -50,7 +50,7 @@ _ if !args.is_empty() => {
 let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
 Ok(Some(Value::String(format!("grayscale({arg_str})"), false)))
 },
-_ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
+_ => Err(SassError::Eval("grayscale requires 1 argument".into())),
 }
 },
         "color-channel" => match args {
@@ -59,7 +59,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 "green" => Ok(Some(Value::Number(c.g as f64, None))),
                 "blue" => Ok(Some(Value::Number(c.b as f64, None))),
                 "alpha" => Ok(Some(Value::Number(c.a, None))),
-                _ => Err(SassError::Eval(format!("未知颜色通道: {ch}"))),
+                _ => Err(SassError::Eval(format!("Unknown color channel: {ch}"))),
             },
             _ => Err(SassError::Eval(
                 "color-channel 需要 (color, channel) 参数".into(),
@@ -69,7 +69,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             let c = match color_arg {
                 Some(Value::Color(c)) => c.clone(),
-                _ => return Err(SassError::Eval("adjust-color 需要 1 个颜色参数".into())),
+                _ => return Err(SassError::Eval("adjust-color requires 1 color argument".into())),
             };
             let mut r = c.r as f64;
             let mut g = c.g as f64;
@@ -86,16 +86,16 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             };
 
             if let Some(v) = kw_args.get("red") {
-                if let Value::Number(n, _) = v { r += *n; } else { return Err(SassError::Eval("red 需要数字".into())); }
+                if let Value::Number(n, _) = v { r += *n; } else { return Err(SassError::Eval("red requires a number".into())); }
             }
             if let Some(v) = kw_args.get("green") {
-                if let Value::Number(n, _) = v { g += *n; } else { return Err(SassError::Eval("green 需要数字".into())); }
+                if let Value::Number(n, _) = v { g += *n; } else { return Err(SassError::Eval("green requires a number".into())); }
             }
             if let Some(v) = kw_args.get("blue") {
-                if let Value::Number(n, _) = v { b += *n; } else { return Err(SassError::Eval("blue 需要数字".into())); }
+                if let Value::Number(n, _) = v { b += *n; } else { return Err(SassError::Eval("blue requires a number".into())); }
             }
             if let Some(v) = kw_args.get("alpha") {
-                if let Value::Number(n, _) = v { a += *n; } else { return Err(SassError::Eval("alpha 需要数字".into())); }
+                if let Value::Number(n, _) = v { a += *n; } else { return Err(SassError::Eval("alpha requires a number".into())); }
             }
             if let Some(v) = kw_args.get("hue")
                 && let Value::Number(n, _) = v { h = (h + *n).rem_euclid(360.0); has_hsl = true; has_hwb = true; }
@@ -128,7 +128,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             let c = match color_arg {
                 Some(Value::Color(c)) => c.clone(),
-                _ => return Err(SassError::Eval("change-color 需要 1 个颜色参数".into())),
+                _ => return Err(SassError::Eval("change-color requires 1 color argument".into())),
             };
             let mut r = c.r as f64;
             let mut g = c.g as f64;
@@ -183,7 +183,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             let c = match color_arg {
                 Some(Value::Color(c)) => c.clone(),
-                _ => return Err(SassError::Eval("scale-color 需要 1 个颜色参数".into())),
+                _ => return Err(SassError::Eval("scale-color requires 1 color argument".into())),
             };
             let mut r = c.r as f64;
             let mut g = c.g as f64;
@@ -277,7 +277,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" ");
                     Ok(Some(Value::String(format!("hwb({arg_str})"), false)))
                 }
-                _ => Err(SassError::Eval("hwb 需要 3-4 个参数".into())),
+                _ => Err(SassError::Eval("hwb requires 3-4 arguments".into())),
             }
         }
         "whiteness" => {
@@ -287,7 +287,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let w = c.r.min(c.g).min(c.b) as f64 / 255.0 * 100.0;
                     Ok(Some(Value::Number(w, Some("%".to_string()))))
                 }
-                _ => Err(SassError::Eval("whiteness 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("whiteness requires 1 color argument".into())),
             }
         }
         "blackness" => {
@@ -297,7 +297,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let b = (1.0 - c.r.max(c.g).max(c.b) as f64 / 255.0) * 100.0;
                     Ok(Some(Value::Number(b, Some("%".to_string()))))
                 }
-                _ => Err(SassError::Eval("blackness 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("blackness requires 1 color argument".into())),
             }
         }
         "complement" => {
@@ -309,7 +309,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
                     Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(new_h, s, l)))))
                 }
-                _ => Err(SassError::Eval("complement 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("complement requires 1 color argument".into())),
             }
         }
         "hsl" => {
@@ -337,7 +337,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
                 Ok(Some(Value::String(format!("hsl({arg_str})"), false)))
             }
-            _ => Err(SassError::Eval("hsl 需要 3-4 个参数".into())),
+            _ => Err(SassError::Eval("hsl requires 3-4 arguments".into())),
             }
         },
         "hsla" => {
@@ -357,7 +357,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
                 Ok(Some(Value::String(format!("hsla({arg_str})"), false)))
             }
-            _ => Err(SassError::Eval("hsla 需要 4 个参数".into())),
+            _ => Err(SassError::Eval("hsla requires 4 arguments".into())),
             }
         },
         "adjust-hue" => {
@@ -387,7 +387,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                 }
                 // CSS 滤镜函数透传：saturate(number)
                 (Some(Value::Number(n, _)), None) => Ok(Some(Value::String(format!("saturate({n})"), false))),
-                _ => Err(SassError::Eval("saturate 需要 (color, amount) 参数".into())),
+                _ => Err(SassError::Eval("saturate requires (color, amount) arguments".into())),
             }
         }
         "desaturate" => {
@@ -401,7 +401,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     Ok(Some(Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, new_s, l)))))
                 }
                 _ => Err(SassError::Eval(
-                    "desaturate 需要 (color, amount) 参数".into(),
+                    "desaturate requires (color, amount) arguments".into(),
                 )),
             }
         }
@@ -416,7 +416,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     (c.a - *amount).max(0.0),
                 )))),
                 _ => Err(SassError::Eval(
-                    "transparentize 需要 (color, amount) 参数".into(),
+                    "transparentize requires (color, amount) arguments".into(),
                 )),
             }
         }
@@ -430,7 +430,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     c.b,
                     (c.a + *amount).min(1.0),
                 )))),
-                _ => Err(SassError::Eval("opacify 需要 (color, amount) 参数".into())),
+                _ => Err(SassError::Eval("opacify requires (color, amount) arguments".into())),
             }
         }
         "alpha" | "opacity" => {
@@ -447,7 +447,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                         let arg_str = args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
                         Ok(Some(Value::String(format!("{name}({arg_str})"), false)))
                     } else {
-                        Err(SassError::Eval("alpha 需要 1 个颜色参数".into()))
+                        Err(SassError::Eval("alpha requires 1 color argument".into()))
                     }
                 }
             }
@@ -456,21 +456,21 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.r as f64, None))),
-                _ => Err(SassError::Eval("red 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("red requires 1 color argument".into())),
             }
         }
         "green" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.g as f64, None))),
-                _ => Err(SassError::Eval("green 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("green requires 1 color argument".into())),
             }
         }
         "blue" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.b as f64, None))),
-                _ => Err(SassError::Eval("blue 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("blue requires 1 color argument".into())),
             }
         }
         "hue" => {
@@ -480,7 +480,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let (h, _, _) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     Ok(Some(Value::Number(h, Some("deg".into()))))
                 }
-                _ => Err(SassError::Eval("hue 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("hue requires 1 color argument".into())),
             }
         }
         "saturation" => {
@@ -490,7 +490,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let (_, s, _) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     Ok(Some(Value::Number(s * 100.0, Some("%".into()))))
                 }
-                _ => Err(SassError::Eval("saturation 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("saturation requires 1 color argument".into())),
             }
         }
         "lightness" => {
@@ -500,7 +500,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     let (_, _, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
                     Ok(Some(Value::Number(l * 100.0, Some("%".into()))))
                 }
-                _ => Err(SassError::Eval("lightness 需要 1 个颜色参数".into())),
+                _ => Err(SassError::Eval("lightness requires 1 color argument".into())),
             }
         }
         // ── sass:color 模块函数（Level 4 颜色空间支持）──
@@ -518,12 +518,12 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
                     match powerless {
                         Some(b) => Ok(Some(Value::Bool(b))),
                         None => Err(SassError::Eval(
-                            "is-powerless 需要 $color 和 $channel 参数".into(),
+                            "is-powerless requires $color and $channel arguments".into(),
                         )),
                     }
                 }
                 _ => Err(SassError::Eval(
-                    "is-powerless 需要 $color 和 $channel 参数".into(),
+                    "is-powerless requires $color and $channel arguments".into(),
                 )),
             }
         }
@@ -532,7 +532,7 @@ _ => Err(SassError::Eval("grayscale 需要 1 个参数".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(_c)) => Ok(Some(Value::Bool(true))),
-                _ => Err(SassError::Eval("is-in-gamut 需要 $color 参数".into())),
+                _ => Err(SassError::Eval("is-in-gamut requires $color argument".into())),
             }
         }
         "is-legacy" => {

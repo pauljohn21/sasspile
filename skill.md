@@ -71,10 +71,14 @@ RUST_LOG="sasspile::lex=trace" cargo test --test lex_test -- --nocapture
 ```
 src/parse/
 ├── mod.rs          # Parser 入口
-├── ast.rs          # Node 枚举 + Value 枚举定义
+├── ast/
+│   ├── mod.rs      # Node 枚举 + Value 枚举定义 + ColorFormat + 颜色辅助函数
+│   └── display.rs  # Display for Value（ColorFormat 分派序列化）
 ├── ast_impl.rs     # AST 实现（to_scss 等）
 ├── at_rules.rs     # @use/@mixin/@include/@if/@for 解析
-├── expr.rs         # 表达式解析
+├── expr/
+│   ├── mod.rs      # 表达式解析入口
+│   └── prefix.rs   # Pratt 前缀解析 + parse_number/parse_hash_color
 └── nodes.rs        # 节点解析辅助
 ```
 
@@ -121,19 +125,23 @@ RUST_LOG="sasspile::parse=debug" cargo test --test parse_test -- --nocapture
 ```
 src/eval/
 ├── mod.rs              # Evaluator + eval_nodes
-├── value.rs            # Value 求值（eval_value）
+├── value/
+│   ├── mod.rs          # eval_value + eval_binop + units_compatible + eval_interp_str
+│   ├── ops.rs          # 值运算实现（add/sub/mul/div/modulo/compare 细节）
+│   └── display.rs      # inspect_value + 值显示格式化
 ├── rule.rs             # Rule 求值
 ├── control_flow.rs     # @if/@for/@each/@while
 ├── mixin.rs            # @mixin/@include
 ├── extend.rs           # @extend 后处理
+├── at_params.rs        # @media/@supports 参数插值和表达式求值
 ├── module.rs           # @use/@forward + call_module_function
-├── builtin.rs          # call_builtin 分派入口
+├── builtin.rs          # call_builtin 分派入口 + meta 函数
 ├── builtin/
-│   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并
+│   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并 + 参数验证
 │   ├── color.rs        # 颜色函数（invert/hsl/hwb/adjust-color/...）
 │   ├── list.rs         # 列表函数（length/nth/append/join/...）
 │   ├── map.rs          # 映射函数（map-get/map-merge/...）
-│   ├── string.rs       # 字符串函数（str-length/str-slice/...）
+│   ├── string.rs       # 字符串函数（str-length/str-slice/...）+ 参数验证
 │   └── selector.rs     # 选择器函数（selector-nest/selector-parse/...）
 └── color.rs            # 颜色辅助（rgb_to_hsl/hwb_to_rgb/hsl_to_rgb）
 ```
@@ -180,8 +188,9 @@ RUST_LOG="sasspile::eval::builtin::color=trace" cargo test --test compile_test -
 
 ```
 src/css/
-├── mod.rs      # Serializer::serialize + serialize_nodes
-└── node.rs     # CssNode 枚举
+├── mod.rs          # Serializer::serialize + serialize_nodes
+├── node.rs         # CssNode 枚举
+└── selector.rs     # sanitize_selector + normalize_attr_selectors + has_bogus_combinators
 ```
 
 **CssNode 类型**：
@@ -525,11 +534,15 @@ RUST_LOG="minimize=info" cargo test --test minimize minimize_color_error -- --no
 
 | 错误信息 | 根因 | 修复方向 |
 |----------|------|---------|
-| `未定义函数: xxx` | 函数未注册或映射缺失 | 检查 `call_module_function` 映射表 |
-| `未定义变量: $xxx` | 变量作用域问题 | 检查 `env.lookup` 和 `@use` 命名空间 |
-| `需要 N 个参数` | 参数数量不匹配 | 检查 `builtin.rs` 对应函数 |
-| `语法错误: 期望 X` | 解析器不支持该语法 | 检查 `parse_value` / `parse_args` |
-| `模块加载: 无法读取` | 文件路径解析失败 | 检查 `resolve_file` |
+| `Undefined function: xxx` | 函数未注册或映射缺失 | 检查 `call_module_function` 映射表 |
+| `Undefined variable: $xxx` | 变量作用域问题 | 检查 `env.lookup` 和 `@use` 命名空间 |
+| `Missing argument $xxx` | 参数数量不匹配 | 检查 `builtin.rs` / `builtin/math.rs` / `builtin/string.rs` 对应函数 |
+| `Only N arguments allowed` | 参数过多 | 检查 math/string 函数参数验证 |
+| `$number: X is not a number` | math 函数收到非数字参数 | 检查 `merge_math_args` 合并后的值类型 |
+| `$string: X is not a string` | string 函数收到非字符串参数 | 检查 `call_string_builtin` 参数验证 |
+| `$base: Expected Xpx to have no units` | math.pow 带单位参数 | 检查 `pow` 单位验证逻辑 |
+| `Parse error: expected X` | 解析器不支持该语法 | 检查 `parse_value` / `parse_args` |
+| `Cannot load module: ...` | 文件路径解析失败 | 检查 `resolve_file` |
 | `content_diff` | 输出内容差异 | 用 `RUST_LOG="cssdiff=debug"` 看逐行 diff |
 | `missing_output` | 实际输出缺少行 | 检查 CSS 序列化 |
 
@@ -628,7 +641,7 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 �
 
 # sass-spec 全量统计（约 35 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：2678/4848 = 55%（core_functions 1757/2985 = 59%）
+# 基线：2672/4848 = 55%（core_functions 1768/2985 = 59%）
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture
@@ -645,3 +658,28 @@ RUST_LOG=info cargo test --test sass_spec_full test_sass_spec_full_stats -- --no
 - **禁止猜测根因** — 用 span 链路定位，而非猜测
 - **禁止批量修改** — 每次只改一个变量，用 tracing 验证
 - **禁止跳过验证** — 修复后必须确认错误消失且无回归
+
+## 9. 错误消息规范
+
+所有错误消息必须使用英文，以匹配 sass-spec 的期望输出：
+
+### 9.1 错误消息格式
+
+| 函数类别 | 格式示例 |
+|----------|----------|
+| Math 参数缺失 | `Missing argument $number` |
+| Math 参数过多 | `Only 1 argument is allowed but 2 were passed` |
+| Math 类型错误 | `$number: X is not a number` |
+| Math 单位错误 | `$base: Expected Xpx to have no units` |
+| String 参数缺失 | `Missing argument $string` |
+| String 类型错误 | `$string: X is not a string` |
+| 未定义函数 | `Undefined function: xxx` |
+| 未定义变量 | `Undefined variable: $xxx` |
+
+### 9.2 SassError 定义
+
+`src/error.rs` 中的 `SassError` 枚举使用 `thiserror` 派生，所有变体的 `Display` 实现输出纯英文消息（无中文前缀）。
+
+### 9.3 内联参数验证
+
+Math 和 String 函数在各自模块（`builtin/math.rs`、`builtin/string.rs`）中直接内联参数验证，返回格式化的英文错误消息。

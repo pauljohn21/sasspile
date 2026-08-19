@@ -36,7 +36,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：41/41 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：2678/4848 = 55%（core_functions 1757/2985 = 59%）
+**sass-spec 基线**：2672/4848 = 55%（core_functions 1768/2985 = 59%）
 
 ## Git 规范
 

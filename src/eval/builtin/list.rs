@@ -54,7 +54,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             [Value::List(es, _, _)] => Ok(Some(Value::Number(es.len() as f64, None))),
             [Value::Map(pairs)] => Ok(Some(Value::Number(pairs.len() as f64, None))),
             [_] => Ok(Some(Value::Number(1.0, None))),
-            _ => Err(SassError::Eval("length 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("length requires 1 argument".into())),
         },
         "nth" => match args {
             [Value::List(es, _, _), Value::Number(n, _)] => {
@@ -65,10 +65,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 } else if idx < 0 {
                     (len + idx) as usize
                 } else {
-                    return Err(SassError::Eval("nth 索引 0 無効（1 から開始）".into()));
+                    return Err(SassError::Eval("nth index 0 is invalid (starts from 1)".into()));
                 };
                 Ok(Some(es.get(actual).cloned().ok_or_else(|| {
-                    SassError::Eval(format!("nth 索引 {idx} 超出範囲"))
+                    SassError::Eval(format!("nth index {idx} out of range"))
                 })?))
             }
             [Value::Map(pairs), Value::Number(n, _)] => {
@@ -79,7 +79,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 } else if idx < 0 {
                     (len + idx) as usize
                 } else {
-                    return Err(SassError::Eval("nth 索引 0 无効".into()));
+                    return Err(SassError::Eval("nth index 0 is invalid".into()));
                 };
                 Ok(Some(
                     pairs
@@ -87,12 +87,12 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                         .map(|(k, v)| {
                             Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
                         })
-                        .ok_or_else(|| SassError::Eval(format!("nth 索引 {idx} 超出范围")))?,
+                        .ok_or_else(|| SassError::Eval(format!("nth index {idx} out of range")))?,
                 ))
             }
             [other, Value::Number(1.0, _)] => Ok(Some(other.clone())),
             [other, Value::Number(-1.0, _)] => Ok(Some(other.clone())),
-            _ => Err(SassError::Eval("nth 需要 (list, n) 参数".into())),
+            _ => Err(SassError::Eval("nth requires (list, n) arguments".into())),
         },
         "append" => match args {
             [Value::List(items, sep, bracketed), val] => {
@@ -145,11 +145,11 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 };
                 Ok(Some(Value::List(items, Separator::Space, false)))
             }
-            _ => Err(SassError::Eval("append 需要 2-3 个参数".into())),
+            _ => Err(SassError::Eval("append requires 2-3 arguments".into())),
         },
         "join" => {
             if args.len() < 2 || args.len() > 4 {
-                return Err(SassError::Eval("join 需要 2-4 个参数".into()));
+                return Err(SassError::Eval("join requires 2-4 arguments".into()));
             }
             // 提取 list1 的 items 和 separator
             let (a_items, a_sep, a_bracketed) = match &args[0] {
@@ -216,7 +216,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     Ok(Some(Value::Null))
                 }
             }
-            _ => Err(SassError::Eval("index 需要 2 个参数".into())),
+            _ => Err(SassError::Eval("index requires 2 arguments".into())),
         },
         "list-separator" | "separator" => {
             if args.len() != 1 {
@@ -258,7 +258,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 }
                 Ok(Some(Value::List(new_items, sep.clone(), false)))
             }
-            _ => Err(SassError::Eval("set-nth 需要 3 个参数".into())),
+            _ => Err(SassError::Eval("set-nth requires 3 arguments".into())),
         },
         "is-bracketed" => match args {
             [Value::List(_, _, true)] => Ok(Some(Value::Bool(true))),
@@ -266,7 +266,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
         },
         "list-slash" => {
             if args.is_empty() {
-                return Err(SassError::Eval("list-slash 需要 1+ 个参数".into()));
+                return Err(SassError::Eval("list-slash requires 1+ arguments".into()));
             }
             Ok(Some(Value::List(
                 args.to_vec(),
@@ -276,7 +276,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
         },
         "zip" => {
             if args.len() < 2 {
-                return Err(SassError::Eval("zip 需要 2+ 个列表参数".into()));
+                return Err(SassError::Eval("zip requires 2+ list arguments".into()));
             }
             // 将每个参数转为列表（非列表值视为单元素列表）
             let lists: Vec<Vec<Value>> = args

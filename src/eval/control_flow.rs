@@ -35,7 +35,7 @@ impl Evaluator {
         let to_val = Self::eval_value(to, env)?;
         let (start, end) = match (from_val, to_val) {
             (Value::Number(s, _), Value::Number(e, _)) => (s as i64, e as i64),
-            _ => return Err(SassError::Eval("@for 范围必须是数字".into())),
+            _ => return Err(SassError::Eval("@for range must be numbers".into())),
         };
         let mut css = Vec::new();
         let mut current_env = env.clone();
@@ -45,7 +45,7 @@ impl Evaluator {
         let mut count = 0i64;
         while i != stop {
             if count > MAX_DEPTH as i64 {
-                return Err(SassError::Eval("@for 循环次数超过限制".into()));
+                return Err(SassError::Eval("@for loop iteration limit exceeded".into()));
             }
             current_env = current_env.bind(var.to_string(), Value::Number(i as f64, None));
             let (mut out, e) = Self::eval_nodes(body, &current_env)?;
@@ -96,7 +96,7 @@ impl Evaluator {
         let mut current_env = env.clone();
         for item_group in &items {
             if css.len() > 10000 {
-                return Err(SassError::Eval("@each 输出节点过多".into()));
+                return Err(SassError::Eval("@each output node limit exceeded".into()));
             }
             if vars.len() == 1 {
                 let val = item_group.first().cloned().unwrap_or(Value::Null);
@@ -141,7 +141,7 @@ impl Evaluator {
             current_env = e;
             // 限制 CSS 输出大小
             if css.len() > 10000 {
-                return Err(SassError::Eval("@while 输出节点过多".into()));
+                return Err(SassError::Eval("@while output node limit exceeded".into()));
             }
         }
         Ok((css, current_env))

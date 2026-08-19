@@ -15,7 +15,7 @@ use im::HashMap;
 fn math_param_names(name: &str) -> &'static [&'static str] {
     match name {
         "abs" | "ceil" | "floor" | "round" | "sqrt" | "sin" | "cos" | "tan"
-        | "asin" | "acos" | "atan" | "unit" | "is-unitless" | "unitless"
+        | "asin" | "acos" | "atan" | "unit" | "is-unitless"
         | "percentage" => &["number"],
         "div" => &["number1", "number2"],
         "pow" => &["base", "exponent"],
@@ -63,56 +63,134 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
     let args = merge_math_args(pos_args, kw_args, name);
     let args = args.as_slice();
     let result = match name {
-        "abs" => match args {
-            [Value::Number(n, u)] => Ok(Some(Value::Number(n.abs(), u.clone()))),
-            _ => Err(SassError::Eval("abs 需要 1 个数字参数".into())),
-        },
-        "ceil" => match args {
-            [Value::Number(n, u)] => Ok(Some(Value::Number(n.ceil(), u.clone()))),
-            _ => Err(SassError::Eval("ceil 需要 1 个数字参数".into())),
-        },
-        "floor" => match args {
-            [Value::Number(n, u)] => Ok(Some(Value::Number(n.floor(), u.clone()))),
-            _ => Err(SassError::Eval("floor 需要 1 个数字参数".into())),
-        },
-        "round" => match args {
-            [Value::Number(n, u)] => Ok(Some(Value::Number(n.round(), u.clone()))),
-            _ => Err(SassError::Eval("round 需要 1 个数字参数".into())),
-        },
+        "abs" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::Number(n, u) => Ok(Some(Value::Number(n.abs(), u.clone()))),
+                other => Err(SassError::Eval(format!(
+                    "$number: {} is not a number.", other
+                ))),
+            }
+        }
+        "ceil" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::Number(n, u) => Ok(Some(Value::Number(n.ceil(), u.clone()))),
+                other => Err(SassError::Eval(format!(
+                    "$number: {} is not a number.", other
+                ))),
+            }
+        }
+        "floor" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::Number(n, u) => Ok(Some(Value::Number(n.floor(), u.clone()))),
+                other => Err(SassError::Eval(format!(
+                    "$number: {} is not a number.", other
+                ))),
+            }
+        }
+        "round" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::Number(n, u) => Ok(Some(Value::Number(n.round(), u.clone()))),
+                other => Err(SassError::Eval(format!(
+                    "$number: {} is not a number.", other
+                ))),
+            }
+        }
         "min" => {
             if args.is_empty() {
-                return Err(SassError::Eval("min 需要至少 1 个参数".into()));
+                return Err(SassError::Eval("min requires at least 1 argument".into()));
             }
             let result = args.iter().try_fold(
                 Value::Number(f64::INFINITY, None),
                 |acc, v| match (acc, v) {
-                    (Value::Number(a, _), Value::Number(b, u)) => {
-                        Ok(Value::Number(a.min(*b), u.clone()))
+                    (Value::Number(a, ua), Value::Number(b, ub)) => {
+                        // 检查单位兼容性
+                        if !crate::eval::value::units_compatible(ua.as_deref(), ub.as_deref()) {
+                            return Err(SassError::Eval("min requires number arguments".into()));
+                        }
+                        Ok(Value::Number(a.min(*b), ub.clone()))
                     }
-                    _ => Err(SassError::Eval("min 需要数字参数".into())),
+                    _ => Err(SassError::Eval("min requires number arguments".into())),
                 },
             )?;
             Ok(Some(result))
         }
         "max" => {
             if args.is_empty() {
-                return Err(SassError::Eval("max 需要至少 1 个参数".into()));
+                return Err(SassError::Eval("max requires at least 1 argument".into()));
             }
             let result = args.iter().try_fold(
                 Value::Number(f64::NEG_INFINITY, None),
                 |acc, v| match (acc, v) {
-                    (Value::Number(a, _), Value::Number(b, u)) => {
-                        Ok(Value::Number(a.max(*b), u.clone()))
+                    (Value::Number(a, ua), Value::Number(b, ub)) => {
+                        // 检查单位兼容性
+                        if !crate::eval::value::units_compatible(ua.as_deref(), ub.as_deref()) {
+                            return Err(SassError::Eval("max requires number arguments".into()));
+                        }
+                        Ok(Value::Number(a.max(*b), ub.clone()))
                     }
-                    _ => Err(SassError::Eval("max 需要数字参数".into())),
+                    _ => Err(SassError::Eval("max requires number arguments".into())),
                 },
             )?;
             Ok(Some(result))
         }
-        "percentage" => match args {
-            [Value::Number(n, _)] => Ok(Some(Value::Number(n * 100.0, Some("%".into())))),
-            _ => Err(SassError::Eval("percentage 需要 1 个数字参数".into())),
-        },
+        "percentage" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::Number(n, _) => Ok(Some(Value::Number(n * 100.0, Some("%".into())))),
+                other => Err(SassError::Eval(format!(
+                    "$number: {} is not a number.", other
+                ))),
+            }
+        }
         "div" => match args {
             [Value::Number(a, u1), Value::Number(b, _)] => {
                 if *b == 0.0 {
@@ -123,61 +201,96 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 }
                 Ok(Some(Value::Number(a / b, u1.clone())))
             }
-            _ => Err(SassError::Eval("div 需要 2 个数字参数".into())),
+            _ => Err(SassError::Eval("div requires 2 number arguments".into())),
         },
-        "pow" => match args {
-            [Value::Number(a, _), Value::Number(b, _)] => {
-                Ok(Some(Value::Number(a.powf(*b), None)))
+        "pow" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $base.".into()));
             }
-            _ => Err(SassError::Eval("pow 需要 2 个数字参数".into())),
+            if args.len() < 2 {
+                return Err(SassError::Eval("Missing argument $exponent.".into()));
+            }
+            if args.len() > 2 {
+                return Err(SassError::Eval(format!(
+                    "Only 2 arguments allowed, but {} were passed.",
+                    args.len()
+                )));
+            }
+            let (a, ua) = match &args[0] {
+                Value::Number(n, u) => (*n, u.clone()),
+                other => return Err(SassError::Eval(format!(
+                    "$base: {} is not a number.", other
+                ))),
+            };
+            if ua.is_some() {
+                return Err(SassError::Eval(format!(
+                    "$base: Expected {}{} to have no units.",
+                    a,
+                    ua.as_deref().unwrap_or("")
+                )));
+            }
+            let (b, ub) = match &args[1] {
+                Value::Number(n, u) => (*n, u.clone()),
+                other => return Err(SassError::Eval(format!(
+                    "$exponent: {} is not a number.", other
+                ))),
+            };
+            if ub.is_some() {
+                return Err(SassError::Eval(format!(
+                    "$exponent: Expected {}{} to have no units.",
+                    b,
+                    ub.as_deref().unwrap_or("")
+                )));
+            }
+            Ok(Some(Value::Number(a.powf(b), None)))
         },
         "sqrt" => match args {
             [Value::Number(n, _)] => Ok(Some(Value::Number(n.sqrt(), None))),
-            _ => Err(SassError::Eval("sqrt 需要 1 个数字参数".into())),
+            _ => Err(SassError::Eval("sqrt requires 1 number argument".into())),
         },
         "sin" => match args {
             [Value::Number(n, _)] => Ok(Some(Value::Number(n.sin(), None))),
-            _ => Err(SassError::Eval("sin 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("sin requires 1 argument".into())),
         },
         "cos" => match args {
             [Value::Number(n, _)] => Ok(Some(Value::Number(n.cos(), None))),
-            _ => Err(SassError::Eval("cos 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("cos requires 1 argument".into())),
         },
         "tan" => match args {
             [Value::Number(n, _)] => Ok(Some(Value::Number(n.tan(), None))),
-            _ => Err(SassError::Eval("tan 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("tan requires 1 argument".into())),
         },
         "atan2" => match args {
             [Value::Number(y, _), Value::Number(x, _)] => {
                 let result = y.atan2(*x).to_degrees();
                 Ok(Some(Value::Number(result, Some("deg".to_string()))))
             }
-            _ => Err(SassError::Eval("atan2 需要 2 个数字参数".into())),
+            _ => Err(SassError::Eval("atan2 requires 2 number arguments".into())),
         },
         "asin" => match args {
             [Value::Number(n, _)] => {
                 let result = n.asin().to_degrees();
                 Ok(Some(Value::Number(result, Some("deg".to_string()))))
             }
-            _ => Err(SassError::Eval("asin 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("asin requires 1 argument".into())),
         },
         "acos" => match args {
             [Value::Number(n, _)] => {
                 let result = n.acos().to_degrees();
                 Ok(Some(Value::Number(result, Some("deg".to_string()))))
             }
-            _ => Err(SassError::Eval("acos 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("acos requires 1 argument".into())),
         },
         "atan" => match args {
             [Value::Number(n, _)] => {
                 let result = n.atan().to_degrees();
                 Ok(Some(Value::Number(result, Some("deg".to_string()))))
             }
-            _ => Err(SassError::Eval("atan 需要 1 个参数".into())),
+            _ => Err(SassError::Eval("atan requires 1 argument".into())),
         },
         "hypot" => {
             if args.is_empty() {
-                return Err(SassError::Eval("hypot 需要 1+ 个参数".into()));
+                return Err(SassError::Eval("hypot requires 1+ arguments".into()));
             }
             let sum: f64 = args
                 .iter()
@@ -207,7 +320,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 }
                 Ok(Some(Value::Number(n.log(*base), None)))
             }
-            _ => Err(SassError::Eval("log 需要 1-2 个数字参数".into())),
+            _ => Err(SassError::Eval("log requires 1-2 number arguments".into())),
         },
         "random" => match args {
             [] => Ok(Some(Value::Number(Evaluator::simple_random(), None))),
@@ -215,41 +328,67 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 (Evaluator::simple_random() * n).floor() + 1.0,
                 None,
             ))),
-            _ => Err(SassError::Eval("random 需要 0-1 个参数".into())),
+            _ => Err(SassError::Eval("random requires 0-1 arguments".into())),
         },
         "clamp" => match args {
             [Value::Number(min, _), Value::Number(val, _), Value::Number(max, _)] => {
                 Ok(Some(Value::Number(val.max(*min).min(*max), None)))
             }
-            _ => Err(SassError::Eval("clamp 需要 3 个数字参数".into())),
+            _ => Err(SassError::Eval("clamp requires 3 number arguments".into())),
         },
         "unit" => match args {
             [Value::Number(_, Some(u))] => Ok(Some(Value::String(u.clone(), false))),
             [Value::Number(_, None)] => Ok(Some(Value::String("".into(), false))),
-            _ => Err(SassError::Eval("unit 需要 1 个数字参数".into())),
+            _ => Err(SassError::Eval("unit requires 1 number argument".into())),
         },
-        "is-unitless" => match args {
-            [Value::Number(_, None)] => Ok(Some(Value::Bool(true))),
-            [Value::Number(_, Some(_))] => Ok(Some(Value::Bool(false))),
-            _ => Err(SassError::Eval("is-unitless 需要 1 个数字参数".into())),
-        },
-        "unitless" => match args {
-            [Value::Number(_, None)] => Ok(Some(Value::Bool(true))),
-            [Value::Number(_, Some(_))] => Ok(Some(Value::Bool(false))),
-            _ => Err(SassError::Eval("unitless 需要 1 个数字参数".into())),
-        },
-        "compatible" => match args {
-            [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Some(Value::Bool(
+        "is-unitless" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::Number(_, None) => Ok(Some(Value::Bool(true))),
+                Value::Number(_, Some(_)) => Ok(Some(Value::Bool(false))),
+                other => Err(SassError::Eval(format!(
+                    "$number: {} is not a number.", other
+                ))),
+            }
+        }
+        "compatible" | "comparable" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $number1.".into()));
+            }
+            if args.len() < 2 {
+                return Err(SassError::Eval("Missing argument $number2.".into()));
+            }
+            if args.len() > 2 {
+                return Err(SassError::Eval(format!(
+                    "Only 2 arguments allowed, but {} were passed.",
+                    args.len()
+                )));
+            }
+            let u1 = match &args[0] {
+                Value::Number(_, u) => u.clone(),
+                other => return Err(SassError::Eval(format!(
+                    "$number1: {} is not a number.", other
+                ))),
+            };
+            let u2 = match &args[1] {
+                Value::Number(_, u) => u.clone(),
+                other => return Err(SassError::Eval(format!(
+                    "$number2: {} is not a number.", other
+                ))),
+            };
+            Ok(Some(Value::Bool(
                 crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
-            ))),
-            _ => Err(SassError::Eval("compatible 需要 2 个数字参数".into())),
-        },
-        "comparable" => match args {
-            [Value::Number(_, u1), Value::Number(_, u2)] => Ok(Some(Value::Bool(
-                crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
-            ))),
-            _ => Err(SassError::Eval("comparable 需要 2 个数字参数".into())),
-        },
+            )))
+        }
         _ => return Ok(None),
     };
     result
