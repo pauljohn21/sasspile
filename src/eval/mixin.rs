@@ -201,10 +201,18 @@ for (ns, exports) in &mixin.captured_namespaces {
         body: &Option<Vec<Node>>,
         env: &Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        let span = crate::__tracing::info_span!("eval_at_rule", name = name, has_body = body.is_some());
+        let _enter = span.enter();
+
         let (children, has_body) = match body {
             Some(nodes) => (Self::eval_nodes(nodes, env)?.0, true),
             None => (Vec::new(), false),
         };
+
+        // 对 @media/@supports 参数做插值和表达式求值
+        let eval_params = params
+            .as_ref()
+            .map(|p| Self::eval_at_params(name, p, env));
 
         // 当 @media/@supports/@container 在规则内部时，提升到外层：
         // 将声明包裹在当前选择器的规则中，嵌套规则保持原样（选择器已合并）。
@@ -238,7 +246,7 @@ for (ns, exports) in &mixin.captured_namespaces {
                     return Ok((
                         vec![CssNode::AtRule {
                             name: name.to_string(),
-                            params: params.clone(),
+                            params: eval_params,
                             children: new_children,
                             has_body,
                         }],
@@ -249,7 +257,7 @@ for (ns, exports) in &mixin.captured_namespaces {
         Ok((
             vec![CssNode::AtRule {
                 name: name.to_string(),
-                params: params.clone(),
+                params: eval_params,
                 children,
                 has_body,
             }],
