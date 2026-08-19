@@ -129,6 +129,7 @@ src/eval/
 ├── module.rs           # @use/@forward + call_module_function
 ├── builtin.rs          # call_builtin 分派入口
 ├── builtin/
+│   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并
 │   ├── color.rs        # 颜色函数（invert/hsl/hwb/adjust-color/...）
 │   ├── list.rs         # 列表函数（length/nth/append/join/...）
 │   ├── map.rs          # 映射函数（map-get/map-merge/...）
@@ -231,7 +232,7 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 | `max(...)` | N numbers | 最大值 |
 | `percentage(n)` | 1 number | 转百分比（×100） |
 | `div(a, b)` | 2 numbers | 除法 |
-| `pow(base, exp)` | 1-2 numbers/kw | 幂运算 |
+| `pow(base, exp)` | 2 numbers | 幂运算 |
 | `sqrt(n)` | 1 number | 平方根 |
 | `sin(n)` | 1 number | 正弦（弧度） |
 | `cos(n)` | 1 number | 余弦（弧度） |
@@ -247,8 +248,11 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 | `unit(n)` | 1 number | 获取单位字符串 |
 | `is-unitless(n)` | 1 number | 是否无单位 |
 | `compatible(a, b)` | 2 numbers | 单位是否兼容 |
+| `comparable(a, b)` | 2 numbers | compatible 别名（仅全局，math.comparable 未定义） |
 
-**添加新 Math 函数**：在 `src/eval/builtin.rs` 的 `call_builtin` match 中添加分支。
+**命名参数支持**：所有 math 函数支持命名参数调用（如 `math.abs($number: 3)`、`math.clamp($min: 0, $number: 1, $max: 2)`、`math.pow($base: 2, $exponent: 3)`、`math.div($number1: 6, $number2: 3)`）。`merge_math_args()` 按参数名合并 pos_args 和 kw_args。
+
+**添加新 Math 函数**：在 `src/eval/builtin/math.rs` 的 `call()` 中添加分支，并在 `math_param_names()` 中注册参数名。
 
 ---
 
@@ -585,7 +589,8 @@ result.map_err(|e| {
    - 复杂函数组：在 `builtin/<cat>.rs` 中添加 match 分支
 4. **注册为已知函数**：在 `is_known_builtin()` 中添加名称
 5. **CSS 透传处理**：如果是 CSS 原生函数，在 `is_css_function()` 中添加
-6. **验证**：`cargo test --test compile_test`
+6. **命名参数**：如需支持命名参数（math/string/list 函数），在对应子模块中注册参数名
+7. **验证**：`cargo test --test compile_test`
 
 ### 示例：添加 `color.lightness` 的新通道读取
 
@@ -623,7 +628,7 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 �
 
 # sass-spec 全量统计（约 35 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：2571/4848 = 53%（core_functions 1686/2985 = 56%）
+# 基线：2678/4848 = 55%（core_functions 1757/2985 = 59%）
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

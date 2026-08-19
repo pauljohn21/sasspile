@@ -7,7 +7,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.5** — string/list 命名参数支持 + inspect 嵌套列表/Map 格式修正 — 2666/4848 (55%) sass-spec。
+> **v0.9.5** — 数学函数命名参数支持 + math.rs 模块拆分 — 2678/4848 (55%) sass-spec.
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
@@ -16,7 +16,7 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
-- **sass-spec 兼容**: 2571/4848 (53%) 通过，core_functions 1686/2985 (56%)
+- **sass-spec 兼容**: 2678/4848 (55%) 通过，core_functions 1757/2985 (59%)
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
 - **Element Plus**: 121/121 (100%) 全量通过 ✅
 - **tracing 调试**: 内建 span + event 追踪链路
@@ -122,7 +122,9 @@ Level 4：`is-powerless`/`is-in-gamut`/`is-legacy`
 
 ### 数学函数
 
-`abs`/`ceil`/`floor`/`round`/`min`/`max`/`percentage`/`div`/`pow`/`sqrt`/`sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`atan2`/`hypot`/`log`/`random`/`clamp`/`unit`/`compatible`
+`abs`/`ceil`/`floor`/`round`/`min`/`max`/`percentage`/`div`/`pow`/`sqrt`/`sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`atan2`/`hypot`/`log`/`random`/`clamp`/`unit`/`is-unitless`/`compatible`/`comparable`
+
+> **命名参数支持**：所有 math 函数支持命名参数调用（如 `math.abs($number: 3)`、`math.clamp($min: 0, $number: 1, $max: 2)`、`math.pow($base: 2, $exponent: 3)`、`math.div($number1: 6, $number2: 3)`）。
 
 ### 选择器函数
 
