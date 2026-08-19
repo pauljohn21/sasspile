@@ -8,10 +8,8 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                 if *bracketed {
                     return "[]".to_string();
                 }
-                if matches!(sep, Separator::Comma) {
-                    return "()".to_string();
-                }
-                return String::new();
+                // 空列表 inspect 输出 ()——不管什么 separator
+                return "()".to_string();
             }
             let sep_str = match sep {
                 Separator::Comma => ", ",
@@ -19,12 +17,54 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                 Separator::Slash => " / ",
                 Separator::Undecided => " ",
             };
-            let parts: Vec<String> = elements.iter().map(inspect_value).collect();
-            let inner = if elements.len() == 1 && matches!(sep, Separator::Comma) {
-                if *bracketed {
-                    format!("{},", parts[0])
-                } else {
-                    format!("({},)", parts[0])
+            // 嵌套列表元素：如果元素是列表，根据 separator 规则决定是否用括号包裹
+            // 规则：comma-separated 内层列表总是需要括号；
+            //       space/slash 内层列表在外层 separator 相同时需要括号
+            let parts: Vec<String> = elements
+                .iter()
+                .map(|e| {
+                    match e {
+                        Value::List(inner_items, inner_sep, false) if inner_items.len() > 1 => {
+                            let needs_paren = match inner_sep {
+                                Separator::Comma => true,
+                                _ => inner_sep == sep,
+                            };
+                            if needs_paren {
+                                let inner_parts: Vec<String> =
+                                    inner_items.iter().map(inspect_value).collect();
+                                let inner_sep_str = match inner_sep {
+                                    Separator::Comma => ", ",
+                                    Separator::Space => " ",
+                                    Separator::Slash => " / ",
+                                    Separator::Undecided => " ",
+                                };
+                                format!("({})", inner_parts.join(inner_sep_str))
+                            } else {
+                                inspect_value(e)
+                            }
+                        }
+                        _ => inspect_value(e),
+                    }
+                })
+                .collect();
+            let inner = if elements.len() == 1 {
+                match sep {
+                    Separator::Comma => {
+                        if *bracketed {
+                            format!("{},", parts[0])
+                        } else {
+                            format!("({},)", parts[0])
+                        }
+                    }
+                    Separator::Slash => {
+                        if *bracketed {
+                            format!("{}/", parts[0])
+                        } else {
+                            format!("({}/)", parts[0])
+                        }
+                    }
+                    // Space 和 Undecided 单元素不需要特殊处理
+                    _ => parts.join(sep_str),
                 }
             } else {
                 parts.join(sep_str)
@@ -36,9 +76,30 @@ pub(crate) fn inspect_value(v: &Value) -> String {
             }
         }
         Value::Map(pairs) => {
+            if pairs.is_empty() {
+                return "()".to_string();
+            }
             let parts: Vec<String> = pairs
                 .iter()
-                .map(|(k, v)| format!("{}: {}", inspect_value(k), inspect_value(v)))
+                .map(|(k, v)| {
+                    // Map 键：comma-separated 列表需要括号包裹
+                    let key_str = match k {
+                        Value::List(items, Separator::Comma, false) if items.len() > 1 => {
+                            let inner: Vec<String> = items.iter().map(inspect_value).collect();
+                            format!("({})", inner.join(", "))
+                        }
+                        _ => inspect_value(k),
+                    };
+                    // Map 值：comma-separated 列表需要括号包裹
+                    let val_str = match v {
+                        Value::List(items, Separator::Comma, false) if items.len() > 1 => {
+                            let inner: Vec<String> = items.iter().map(inspect_value).collect();
+                            format!("({})", inner.join(", "))
+                        }
+                        _ => inspect_value(v),
+                    };
+                    format!("{}: {}", key_str, val_str)
+                })
                 .collect();
             format!("({})", parts.join(", "))
         }
