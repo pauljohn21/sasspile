@@ -653,6 +653,30 @@ RUST_LOG=info cargo test --test sass_spec_full test_sass_spec_full_stats -- --no
 
 ---
 
+## 10. CodeGraph 代码导航
+
+> **优先使用 CodeGraph 进行动态代码查询**（调用者/被调用者/影响分析），`docs/CODE_INDEX.md` 仅作静态参考。
+
+### 10.1 同步规则
+
+**每次 git 提交后必须同步 CodeGraph 索引**：
+
+```bash
+codegraph sync          # 同步索引（每次提交后必跑）
+```
+
+### 10.2 查询命令
+
+```bash
+codegraph sync                  # 同步索引
+codegraph node <symbol>         # 查看符号源码 + 调用链路
+codegraph callers <function>    # 谁调了这个函数？
+codegraph impact <symbol>      # 修改影响范围分析
+codegraph explore "query"      # 自然语言探索
+```
+
+---
+
 ## 禁止事项
 
 - **禁止未追踪就修复** — 必须先用 `RUST_LOG` 看错误链路

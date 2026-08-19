@@ -2,13 +2,15 @@
 
 > 查找函数/类型/概念在哪个文件？查这张表。
 >
-> **动态查询**（调用者/被调用者/影响分析/源码查看）请用 CodeGraph：
+> **动态查询**（调用者/被调用者/影响分析/源码查看）请优先用 CodeGraph：
 > ```bash
+> codegraph sync                    # 同步索引（每次 git 提交后必跑）
 > codegraph node eval_node           # 查看符号源码 + 调用链路
 > codegraph callers apply_extends   # 谁调了这个函数？
 > codegraph impact eval_value       # 修改影响范围分析
 > codegraph explore "color conversion"  # 探索某领域
 > ```
+> **每次 git 提交后必须运行 `codegraph sync` 同步索引。**
 > 详见 [`AGENTS.md`](../AGENTS.md#codegraph-代码导航) CodeGraph 章节。
 
 ## 文件 → 职责速查

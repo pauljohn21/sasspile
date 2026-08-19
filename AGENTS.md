@@ -41,8 +41,9 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 
 ## Git 规范
 
-- 推送用 SSH：`git push github main`
+- 推送用 SSH：`git push origin main`（remote 名为 `origin`，非 `github`）
 - Commit 格式：`feat: 描述 — 总计 N/M`
+- **每次提交后必须同步 CodeGraph**：`codegraph sync`（确保代码导航索引与最新代码一致）
 
 ## 颜色系统架构
 
@@ -64,7 +65,8 @@ sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影�
 
 ## 参考文档（需要时查阅）
 
-- **代码导航**：`docs/CODE_INDEX.md`（静态）/ CodeGraph（动态查询）
+- **代码导航**：CodeGraph（动态查询，优先）/ `docs/CODE_INDEX.md`（静态参考）
+  - 每次 git 提交后必须运行 `codegraph sync` 同步索引
 - **综合开发技能**：根目录 `skill.md`（编译管线 + 内建函数 + CSS 序列化 + 调试追踪）
 - **调试技能**：`.claude/skills/tracing-debug/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
@@ -81,8 +83,10 @@ RUST_LOG="sasspile::color=trace" cargo test --test compile_test -- --nocapture
 cargo test --test cf_diag diag_<subdir> -- --nocapture
 RUST_LOG="minimize=info" cargo test --test minimize minimize_<subdir>_error -- --nocapture
 
-# CodeGraph 查询
+# CodeGraph 查询（优先使用）
+codegraph sync                # 同步索引（每次提交后必跑）
 codegraph impact <symbol>      # 影响分析
 codegraph callers <function>   # 谁调了这个函数
 codegraph explore "query"      # 自然语言探索
+codegraph node <symbol>       # 查看符号源码 + 调用链路
 ```
