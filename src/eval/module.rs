@@ -69,6 +69,10 @@ impl Evaluator {
         if caller_env.depth > 50 {
             return Ok(ModuleExports::default());
         }
+        // 模块缓存：如果路径已加载过，直接返回空 exports（不重新加载）
+        if caller_env.loaded_modules.contains(path) {
+            return Ok(ModuleExports::default());
+        }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
@@ -84,6 +88,10 @@ impl Evaluator {
             .with_load_paths(caller_env.get_load_paths().to_vec());
         env.depth = caller_env.depth + 1;
         env.plain_css = is_plain_css;
+        // 传递已加载模块缓存（Rc 共享），并把当前路径加入缓存
+        let mut loaded = (*caller_env.loaded_modules).clone();
+        loaded.insert(path.to_path_buf());
+        env.loaded_modules = Rc::new(loaded);
         // 注入 with() 配置变量（求值后注入，使 !default 尊重覆盖值）
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
@@ -101,6 +109,8 @@ impl Evaluator {
             mixins: final_env.mixins,
             functions: final_env.functions,
             css,
+            loaded_modules: final_env.loaded_modules.clone(),
+            extends: final_env.extends.clone(),
         })
     }
 
@@ -160,7 +170,14 @@ impl Evaluator {
             let func_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
                 && let Some(func) = module.functions.get(func_name) {
-                    return Self::call_user_function(func, pos_args, kw_args, env);
+                    // 注入模块的 vars 到函数环境，使函数体可访问模块变量
+                    let mut func_env = env.clone();
+                    for (k, v) in &module.vars {
+                        if !func_env.vars.contains_key(k) {
+                            func_env = func_env.bind(k.clone(), v.clone());
+                        }
+                    }
+                    return Self::call_user_function(func, pos_args, kw_args, &func_env);
                 }
         }
         // 将模块限定名映射到内建函数

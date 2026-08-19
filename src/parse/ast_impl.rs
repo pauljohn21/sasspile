@@ -204,7 +204,7 @@ impl Node {
                 if !config.is_empty() {
                     let cfg: String = config
                         .iter()
-                        .map(|(k, v)| format!("${k}: {v}"))
+                        .map(|c| format!("${}: {}", c.name, c.value))
                         .collect::<Vec<_>>()
                         .join(", ");
                     s.push_str(&format!(" with ({cfg})"));
@@ -217,6 +217,7 @@ impl Node {
                 show,
                 hide,
                 prefix,
+                config: _,
             } => {
                 let mut s = format!("{pad}@forward \"{url}\"");
                 if let Some(p) = prefix {
@@ -231,7 +232,13 @@ impl Node {
                 s.push(';');
                 s
             }
-            Node::Import { url } => format!("{pad}@import \"{url}\";"),
+            Node::Import { url, modifier } => {
+                if modifier.is_empty() {
+                    format!("{pad}@import \"{url}\";")
+                } else {
+                    format!("{pad}@import \"{url}\" {modifier};")
+                }
+            },
             // —— 其他指令 ——
             Node::Extend { selector, optional } => {
                 let opt = if *optional { " !optional" } else { "" };

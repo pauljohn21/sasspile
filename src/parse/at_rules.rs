@@ -253,6 +253,7 @@ impl<'tok> Parser<'tok> {
         }
         self.skip_ws();
         if self.peek_keyword("with") {
+            self.advance(); // 消费 with
             self.skip_ws();
             self.expect(&Token::LParen)?;
             config = self.parse_config()?;
@@ -297,6 +298,15 @@ impl<'tok> Parser<'tok> {
             hide = self.parse_member_list();
         }
         self.skip_ws();
+        // @forward "url" with ($x: val)
+        let mut config = Vec::new();
+        if self.peek_keyword("with") {
+            self.advance(); // 消费 with
+            self.skip_ws();
+            self.expect(&Token::LParen)?;
+            config = self.parse_config()?;
+        }
+        self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
@@ -305,17 +315,54 @@ impl<'tok> Parser<'tok> {
             show,
             hide,
             prefix,
+            config,
         })
     }
 
     pub(crate) fn parse_import(&mut self) -> Result<Node> {
+        // 支持 @import "a", "b", "c" 多值语法
+        // 也支持 @import "url" modifier（CSS media/supports 修饰符）
+        let mut urls = Vec::new();
+        loop {
+            self.skip_ws();
+            let url = self.parse_string_value()?;
+            urls.push(url);
+            self.skip_ws();
+            if self.peek() == Some(&Token::Comma) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        // 捕获 URL 后面的修饰符（CSS @import media query 等，到分号为止）
         self.skip_ws();
-        let url = self.parse_string_value()?;
+        let modifier = if !matches!(self.peek(), Some(Token::Semicolon) | None) {
+            let mut s = String::new();
+            while let Some(t) = self.peek() {
+                match t {
+                    Token::Semicolon | Token::LBrace | Token::Eof => break,
+                    Token::Comment(_, _) => { self.advance(); }
+                    Token::Whitespace => { s.push(' '); self.advance(); }
+                    _ => { s.push_str(&t.to_string()); self.advance(); }
+                }
+            }
+            s.trim().to_string()
+        } else {
+            String::new()
+        };
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
-        Ok(Node::Import { url })
+        // 多值 @import：拼接为多行 CSS @import 透传
+        // sasspile 的 parse_node 只返回一个 Node，多值通过拼接 URL 处理
+        let url = if urls.len() == 1 {
+            urls.into_iter().next().unwrap()
+        } else {
+            // 多值 CSS @import 拼接为 "a", "b" 格式
+            urls.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join("\", \"")
+        };
+        Ok(Node::Import { url, modifier })
     }
 
     pub(crate) fn parse_extend(&mut self) -> Result<Node> {
@@ -336,6 +383,9 @@ impl<'tok> Parser<'tok> {
                 }
                 Token::Whitespace => {
                     selector.push(' ');
+                    self.advance();
+                }
+                Token::Comment(_, _) => {
                     self.advance();
                 }
                 _ => {

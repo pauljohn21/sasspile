@@ -11,6 +11,17 @@ pub struct VarFlags {
     pub global: bool,
 }
 
+/// 配置变量——`@use`/`@forward` 的 `with ($x: val !default)` 参数。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfigVar {
+    /// 变量名（不含 $）。
+    pub name: String,
+    /// 变量值表达式。
+    pub value: Value,
+    /// `!default` 标志——仅未定义时赋值。
+    pub is_default: bool,
+}
+
 /// 函数/参数定义。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param {
@@ -148,7 +159,7 @@ pub enum Node {
         /// `as *` 通配导入标志。
         star: bool,
         /// `with ($x: val)` 配置参数列表。
-        config: Vec<(String, Value)>,
+        config: Vec<ConfigVar>,
     },
     /// `@forward` 模块转发。
     Forward {
@@ -160,11 +171,15 @@ pub enum Node {
         hide: Vec<String>,
         /// `as prefix-*` 前缀重映射。
         prefix: Option<String>,
+        /// `with ($x: val)` 配置参数列表。
+        config: Vec<ConfigVar>,
     },
     /// `@import` 导入。
     Import {
         /// 要导入的文件 URL。
         url: String,
+        /// CSS @import 修饰符（media query 等）。
+        modifier: String,
     },
 
     // —— 其他指令 ——

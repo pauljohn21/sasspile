@@ -128,6 +128,15 @@ impl Serializer {
         for (i, n) in nodes.iter().enumerate() {
             if i > 0 {
                 result.push('\n');
+                // 顶层规则之间添加空行（Dart Sass expanded 模式）
+                // 但 @import 等无 body 的 @规则之间不加空行
+                if depth == 0 {
+                    let prev_is_import = matches!(&nodes[i - 1], CssNode::AtRule { name, has_body: false, .. } if name == "import");
+                    let curr_is_import = matches!(n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
+                    if !(prev_is_import || curr_is_import) {
+                        result.push('\n');
+                    }
+                }
             }
             Self::write_node_expanded(&mut result, n, &indent, depth);
         }

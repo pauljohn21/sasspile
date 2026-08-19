@@ -18,26 +18,46 @@ enum PartialCond {
 }
 
 impl Evaluator {
-    pub(crate) fn eval_variable(
-        name: &str,
-        value: &Value,
-        flags: &VarFlags,
-        env: &Env,
-    ) -> Result<(Vec<CssNode>, Env)> {
-        if flags.default && env.has_var(name) {
-            return Ok((vec![], env.clone()));
-        }
+pub(crate) fn eval_variable(
+    name: &str,
+    value: &Value,
+    flags: &VarFlags,
+    env: &Env,
+) -> Result<(Vec<CssNode>, Env)> {
+    // 命名空间变量赋值（namespace.$var）——更新模块变量
+    if name.contains('.') {
         let val = Self::eval_value(value, env)?;
-        let new_env = env.bind(name.to_string(), val.clone());
-        // !global 变量同时写入 global_writes，供 eval_rule 传播到外层
-        if flags.global {
-            let mut env = new_env;
-            env.global_writes.insert(name.to_string(), val);
-            Ok((vec![], env))
-        } else {
-            Ok((vec![], new_env))
+        // 分割 namespace.var_name
+        let parts: Vec<&str> = name.splitn(2, '.').collect();
+        if parts.len() == 2 {
+            let ns = parts[0];
+            let var_name = parts[1];
+            // 更新命名空间模块中的变量
+            if let Some(exports) = env.namespaces.get(&ns.to_string()) {
+                let mut new_exports = (**exports).clone();
+                new_exports.vars.insert(var_name.to_string(), val.clone());
+                let mut new_env = env.clone();
+                new_env.namespaces.insert(ns.to_string(), Rc::new(new_exports));
+                return Ok((vec![], new_env));
+            }
         }
+        // 找不到命名空间——忽略
+        return Ok((vec![], env.clone()));
     }
+    if flags.default && env.has_var(name) {
+        return Ok((vec![], env.clone()));
+    }
+    let val = Self::eval_value(value, env)?;
+    let new_env = env.bind(name.to_string(), val.clone());
+    // !global 变量同时写入 global_writes，供 eval_rule 传播到外层
+    if flags.global {
+        let mut env = new_env;
+        env.global_writes.insert(name.to_string(), val);
+        Ok((vec![], env))
+    } else {
+        Ok((vec![], new_env))
+    }
+}
 
     /// 部分条件求值结果。
     fn partial_eval_condition(condition: &Value, env: &Env) -> Result<PartialCond> {

@@ -345,6 +345,37 @@ fn test_compile_supports_merge() {
 }
 
 #[test]
+fn test_forward_with_config() {
+    init_tracing();
+    let dir = std::env::temp_dir().join("sasspile-forward-with-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).ok();
+    std::fs::write(dir.join("input.scss"), "@use \"midstream\";\n").ok();
+    std::fs::write(dir.join("_midstream.scss"), "@forward \"upstream\" with ($a: configured);\n").ok();
+    std::fs::write(dir.join("_upstream.scss"), "$a: original !default;\nb {c: $a}\n").ok();
+    let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
+    tracing::info!(css = %css, "forward_with result");
+    assert!(css.contains("configured"), "expected 'configured' in output: {css}");
+}
+
+#[test]
+fn test_import_twice_forward() {
+    init_tracing();
+    let dir = std::env::temp_dir().join("sasspile-import-twice-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).ok();
+    std::fs::write(dir.join("input.scss"), "$a: configured;\n@import \"other\";\n@import \"other\";\n").ok();
+    std::fs::write(dir.join("_other.scss"), "$a: original !default;\nb {c: $a}\n").ok();
+    std::fs::write(dir.join("_other.import.scss"), "@forward \"other\";\n").ok();
+    let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
+    tracing::info!(css = %css, "import_twice result");
+    assert!(css.contains("configured"), "expected 'configured' in output: {css}");
+    // 应输出两次 b 块
+    let count = css.matches("b {").count();
+    assert_eq!(count, 2, "expected 2 b blocks, got {count}: {css}");
+}
+
+#[test]
 fn test_cli_compile() {
     let input = "a { color: red; }";
     let css = compile_expanded(input).unwrap();

@@ -142,6 +142,9 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
         sasspile::OutputStyle::Expanded,
         vec![spec_root.to_path_buf()],
     );
+    if let Ok(ref css) = result {
+        tracing::trace!(input = %case.input_path, css = %css, "compile_case_ok");
+    }
     let _ = std::fs::remove_dir_all(&tmp_dir);
     result.map_err(|e| format!("{e}"))
 }
@@ -208,12 +211,14 @@ fn diag(subdir: &str, max_show: usize) {
                             // 期望错误且确实出错了——通过
                         } else {
                             shown += 1;
-                            let key = if err_str.contains("未定义") {
+                            let key = if err_str.contains("Undefined") || err_str.contains("undefined") {
                                 "undefined".to_string()
-                            } else if err_str.contains("语法错误") {
+                            } else if err_str.contains("Parse error") || err_str.contains("parse error") || err_str.contains("Syntax") || err_str.contains("syntax") {
                                 "syntax".to_string()
-                            } else if err_str.contains("求值错误") {
+                            } else if err_str.contains("Eval") || err_str.contains("eval") || err_str.contains("type") || err_str.contains("Type") {
                                 "eval".to_string()
+                            } else if err_str.contains("Module") || err_str.contains("module") || err_str.contains("Cannot") || err_str.contains("cannot") {
+                                "module".to_string()
                             } else {
                                 "other_err".to_string()
                             };
@@ -264,12 +269,12 @@ fn diag_meta() {
 
 #[test]
 fn diag_import() {
-    diag("directives/import", 15);
+    diag("directives/import", 50);
 }
 
 #[test]
 fn diag_use() {
-    diag("directives/use", 15);
+    diag("directives/use", 50);
 }
 
 #[test]
@@ -289,7 +294,12 @@ fn diag_function() {
 
 #[test]
 fn diag_extend() {
-    diag("directives/extend", 15);
+    diag("directives/extend", 50);
+}
+
+#[test]
+fn diag_forward() {
+    diag("directives/forward", 50);
 }
 
 #[test]

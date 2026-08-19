@@ -33,8 +33,42 @@ impl Evaluator {
         let _enter = span.enter();
         let from_val = Self::eval_value(from, env)?;
         let to_val = Self::eval_value(to, env)?;
-        let (start, end) = match (from_val, to_val) {
-            (Value::Number(s, _), Value::Number(e, _)) => (s as i64, e as i64),
+        // 循环变量使用 from 的单位（Sass 语义：$i 从 from 开始，带 from 的单位）
+        let loop_unit = match &from_val {
+            Value::Number(_, u) => u.clone(),
+            _ => None,
+        };
+        let (start, end) = match (&from_val, &to_val) {
+            (Value::Number(s, su), Value::Number(e, eu)) => {
+                // 检查 from 和 to 是否为整数
+                if s.fract() != 0.0 {
+                    return Err(SassError::Eval(format!("{s} is not an int.")));
+                }
+                // 如果单位不同但兼容，将 to 转换为 from 的单位
+                let end_val = if su == eu || su.is_none() || eu.is_none() {
+                    *e
+                } else if crate::eval::value::units_compatible(su.as_deref(), eu.as_deref()) {
+                    // 简单单位转换：尝试常见长度单位
+                    let s_u = su.as_deref().unwrap_or("");
+                    let e_u = eu.as_deref().unwrap_or("");
+                    let conv = unit_conversion_factor(e_u, s_u);
+                    e * conv
+                } else {
+                    return Err(SassError::Eval(format!(
+                        "@for incompatible units: {su:?} and {eu:?}"
+                    )));
+                };
+                if end_val.fract() != 0.0 {
+                    return Err(SassError::Eval(format!("{end_val} is not an int.")));
+                }
+                (*s as i64, end_val as i64)
+            }
+            (Value::String(s, _), _) => {
+                return Err(SassError::Eval(format!("\"{s}\" is not a number.")));
+            }
+            (_, Value::String(s, _)) => {
+                return Err(SassError::Eval(format!("\"{s}\" is not a number.")));
+            }
             _ => return Err(SassError::Eval("@for range must be numbers".into())),
         };
         let mut css = Vec::new();
@@ -47,7 +81,7 @@ impl Evaluator {
             if count > MAX_DEPTH as i64 {
                 return Err(SassError::Eval("@for loop iteration limit exceeded".into()));
             }
-            current_env = current_env.bind(var.to_string(), Value::Number(i as f64, None));
+            current_env = current_env.bind(var.to_string(), Value::Number(i as f64, loop_unit.clone()));
             let (mut out, e) = Self::eval_nodes(body, &current_env)?;
             css.append(&mut out);
             current_env = e;
@@ -145,5 +179,27 @@ impl Evaluator {
             }
         }
         Ok((css, current_env))
+    }
+}
+
+/// 单位转换因子——将 from_unit 转换为 to_unit 的倍数。
+/// 仅支持常见长度单位，不支持的返回 1.0。
+fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> f64 {
+    /// 将单位转换为基准单位（mm）的倍数
+    fn to_mm(u: &str) -> Option<f64> {
+        match u {
+            "mm" => Some(1.0),
+            "cm" => Some(10.0),
+            "in" => Some(25.4),
+            "pt" => Some(25.4 / 72.0),
+            "pc" => Some(25.4 / 6.0),
+            "px" => Some(25.4 / 96.0),
+            "q" => Some(0.25),
+            _ => None,
+        }
+    }
+    match (to_mm(from_unit), to_mm(to_unit)) {
+        (Some(f), Some(t)) => f / t,
+        _ => 1.0,
     }
 }

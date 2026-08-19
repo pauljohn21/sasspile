@@ -27,11 +27,27 @@ impl<'tok> Parser<'tok> {
                 self.advance();
                 Ok(node)
             }
+            Some(Token::Semicolon) => {
+                // 顶层孤立的 ; — 跳过（如 `downstream {...};` 中的尾部分号）
+                self.advance();
+                self.skip_ws();
+                if self.peek().is_none() || matches!(self.peek(), Some(Token::Eof | Token::RBrace)) {
+                    // 文件末尾或 body 末尾的孤立 ; — 返回空注释节点
+                    return Ok(Node::Comment(String::new(), true));
+                }
+                self.parse_node()
+            }
             Some(Token::Whitespace) => {
                 self.advance();
                 self.parse_node()
             }
-            _ => self.parse_rule_or_decl(),
+            _ => {
+                // 检测命名空间变量赋值：Ident . Dollar → namespace.$var: value
+                if self.is_namespace_var() {
+                    return self.parse_namespace_var();
+                }
+                self.parse_rule_or_decl()
+            }
         }
     }
 
@@ -201,6 +217,69 @@ impl<'tok> Parser<'tok> {
                 });
             }
         };
+        self.skip_ws();
+        self.expect(&Token::Colon)?;
+        self.skip_ws();
+        let value = self.parse_value()?;
+        let flags = self.parse_var_flags()?;
+        self.skip_ws();
+        if self.peek() == Some(&Token::Semicolon) {
+            self.advance();
+        }
+        Ok(Node::Variable { name, value, flags })
+    }
+
+    /// 检测是否为命名空间变量赋值（Ident . Dollar 模式）。
+    fn is_namespace_var(&self) -> bool {
+        let mut i = self.pos;
+        // 跳过 Whitespace
+        while i < self.tokens.len() && matches!(self.tokens[i], Token::Whitespace) {
+            i += 1;
+        }
+        // Ident
+        if i >= self.tokens.len() || !matches!(self.tokens[i], Token::Ident(_)) {
+            return false;
+        }
+        i += 1;
+        while i < self.tokens.len() && matches!(self.tokens[i], Token::Whitespace) {
+            i += 1;
+        }
+        // .
+        if i >= self.tokens.len() || !matches!(self.tokens[i], Token::Dot) {
+            return false;
+        }
+        i += 1;
+        while i < self.tokens.len() && matches!(self.tokens[i], Token::Whitespace) {
+            i += 1;
+        }
+        // Dollar
+        i < self.tokens.len() && matches!(self.tokens[i], Token::Dollar(_))
+    }
+
+    /// 解析命名空间变量赋值——`namespace.$var: value;`。
+    fn parse_namespace_var(&mut self) -> Result<Node> {
+        let ns = match self.peek() {
+            Some(Token::Ident(n)) => {
+                let n = n.clone();
+                self.advance();
+                n
+            }
+            _ => unreachable!(),
+        };
+        // 消费 .
+        self.skip_ws();
+        self.expect(&Token::Dot)?;
+        self.skip_ws();
+        // 消费 $var
+        let var_name = match self.peek() {
+            Some(Token::Dollar(n)) => {
+                let n = n.clone();
+                self.advance();
+                n
+            }
+            _ => unreachable!(),
+        };
+        let name = format!("{ns}.{var_name}");
         self.skip_ws();
         self.expect(&Token::Colon)?;
         self.skip_ws();
@@ -461,7 +540,7 @@ impl<'tok> Parser<'tok> {
         Ok(args)
     }
 
-    pub(crate) fn parse_config(&mut self) -> Result<Vec<(String, Value)>> {
+    pub(crate) fn parse_config(&mut self) -> Result<Vec<ConfigVar>> {
         let mut config = Vec::new();
         loop {
             self.skip_ws();
@@ -484,9 +563,23 @@ impl<'tok> Parser<'tok> {
             self.skip_ws();
             self.expect(&Token::Colon)?;
             self.skip_ws();
-            let value = self.parse_value()?;
-            config.push((name, value));
+            // 用 parse_expr 而非 parse_value，避免消费逗号分隔列表中的逗号
+            let value = self.parse_expr(0)?;
+            // 消费 !default / !global 标志（配置值标志）
             self.skip_ws();
+            let mut is_default = false;
+            while self.peek() == Some(&Token::Bang) {
+                self.advance();
+                self.skip_ws();
+                if let Some(Token::Ident(s)) = self.peek() {
+                    if s == "default" {
+                        is_default = true;
+                    }
+                    self.advance();
+                    self.skip_ws();
+                }
+            }
+            config.push(ConfigVar { name, value, is_default });
             if self.peek() == Some(&Token::Comma) {
                 self.advance();
             } else {

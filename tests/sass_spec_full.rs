@@ -175,6 +175,78 @@ fn test_import_use_forward() {
 }
 
 #[test]
+fn test_directives_subdirs() {
+    sasspile::init_tracing();
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
+
+    let subdirs = [
+        "directives/at_root",
+        "directives/extend",
+        "directives/for",
+        "directives/forward",
+        "directives/function",
+        "directives/if",
+        "directives/import",
+        "directives/mixin",
+        "directives/use",
+    ];
+
+    let (mut tp, mut tf, mut ts, mut tc) = (0, 0, 0, 0);
+    for sub in &subdirs {
+        let (p, f, s, c) = run_spec_dir(&spec_root, sub);
+        let eval = c - s;
+        let pct = p * 100 / eval.max(1);
+        info!(sub, pass = p, fail = f, skip = s, total = c, evaluated = eval, pct = pct, "子目录");
+        tp += p;
+        tf += f;
+        ts += s;
+        tc += c;
+    }
+
+    // top-level hrx files
+    for hrx in &["debug", "each", "error", "return", "warn", "while"] {
+        let dir = spec_root.join(format!("directives/{hrx}.hrx"));
+        // treat as single-file dir
+        if dir.exists() {
+            if let Ok(content) = std::fs::read_to_string(&dir) {
+                let (mut hp, mut hf, mut hs, mut hc) = (0, 0, 0, 0);
+                for case in &parse_hrx(&content) {
+                    hc += 1;
+                    if case.expected_output.is_empty() && !case.expect_error {
+                        hs += 1;
+                        continue;
+                    }
+                    if run_case(case, &[spec_root.to_path_buf()]) {
+                        hp += 1;
+                    } else {
+                        hf += 1;
+                    }
+                }
+                let heval = hc - hs;
+                let hpct = hp * 100 / heval.max(1);
+                info!(hrx, pass = hp, fail = hf, skip = hs, total = hc, evaluated = heval, pct = hpct, "hrx文件");
+                tp += hp;
+                tf += hf;
+                ts += hs;
+                tc += hc;
+            }
+        }
+    }
+
+    let evaluated = tc - ts;
+    let pct = tp * 100 / evaluated.max(1);
+    info!(
+        pass = tp,
+        fail = tf,
+        skip = ts,
+        total = tc,
+        evaluated = evaluated,
+        pct = pct,
+        "directives 子目录汇总"
+    );
+}
+
+#[test]
 fn test_sass_spec_full_stats() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
