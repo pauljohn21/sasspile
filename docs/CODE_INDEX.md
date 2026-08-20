@@ -23,17 +23,17 @@
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
 | **lex/mod.rs** | 523 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
 | **parse/ast/mod.rs** | 502 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags, ConfigVar, ColorFormat 等）+ escape_quoted_string/escape_css_ident/escape_css_chars + hsl_to_rgb_percent/format_pct_val/format_hue/format_pct/format_alpha + ColorFormat::clone_with |
-| **parse/ast/display.rs** | 371 | Display for Value（ColorFormat 分派序列化，含 CSS Color 4 现代空间） |
+| **parse/ast/display.rs** | 373 | Display for Value（ColorFormat 分派序列化，含 CSS Color 4 现代空间 + 负 infinity 处理 + Slash 分隔符 `/`） |
 | **parse/ast_impl.rs** | 288 | Node::to_scss() |
 | **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_w/expect） |
 | **parse/nodes.rs** | 668 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args + is_namespace_var/parse_namespace_var + parse_config (ConfigVar) |
 | **parse/at_rules.rs** | 513 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
-| **parse/expr/mod.rs** | 177 | Pratt 表达式解析入口 + parse_number/parse_hash_color |
+| **parse/expr/mod.rs** | 289 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color |
 | **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
 | **eval/mod.rs** | 589 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes 字段 + loaded_modules 缓存 + extends 传播 + @import 多值/修饰符处理 |
 | **eval/rule.rs** | 197 | eval_rule + combine_selectors（规则体变量作用域隔离，传播命名空间/!global/@import 变量） |
-| **eval/value/mod.rs** | 464 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 |
-| **eval/value/ops.rs** | 209 | 值运算实现（add/sub/mul/div/modulo/compare 细节） |
+| **eval/value/mod.rs** | 482 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 + if() 命名参数支持 |
+| **eval/value/ops.rs** | 223 | 值运算实现（add/sub/mul/div/modulo/compare 细节 + infinity 带单位 calc 表达式） |
 | **eval/value/display.rs** | 244 | inspect_value + 值显示格式化 |
 | **eval/control_flow.rs** | 205 | eval_if/eval_for/eval_each/eval_while |
 | **eval/mixin.rs** | 284 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
@@ -42,7 +42,7 @@
 | **eval/module.rs** | 308 | resolve_file（含 load_paths） + load_module（含模块缓存 loaded_modules） + load_import + call_module_function（注入模块 vars 到函数环境 + 命名空间变量赋值） |
 | **eval/color.rs** | 639 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba/builtin_darken/builtin_lighten/builtin_mix + simple_random |
 | **eval/builtin.rs** | 469 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin + is_css_function + meta 函数（inspect/calc-args/calc-name 等） |
-| **eval/builtin/math.rs** | 395 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + merge_math_args 命名参数合并 + 参数验证（Missing argument / Only N arguments / $number: X is not a number） |
+| **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + merge_math_args 命名参数合并 + div 除零 calc(infinity) 表达式 + 参数验证 |
 | **eval/builtin/color.rs** | 504 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
 | **eval/builtin/color_adjust.rs** | 550 | color.adjust/change/scale 现代色彩空间实现（Oklch/Lab/Lch/Oklab/DisplayP3/sRGB 等）— 直接在 ColorFormat 中修改通道值，保留原始格式输出 |
 | **eval/builtin/color_conv.rs** | 461 | f64 精度色彩空间转换算法（sRGB↔XYZ/Lab/Oklab/Oklch/DisplayP3）— W3C 参考实现有理数分数矩阵 + 扩展传递函数（支持负值） |
