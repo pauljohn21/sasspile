@@ -69,8 +69,19 @@ impl Evaluator {
         if caller_env.depth > 50 {
             return Ok(ModuleExports::default());
         }
-        // 模块缓存：如果路径已加载过，直接返回空 exports（不重新加载）
+        // 模块缓存：如果路径已加载过，从缓存返回 exports（CSS 为空，不重复输出）。
         if caller_env.loaded_modules.contains(path) {
+            let span = crate::__tracing::debug_span!("load_module_cached", path = %path.display());
+            let _enter = span.enter();
+            if let Some(cached) = caller_env.get_module_cache().get(path) {
+                // 返回缓存的 exports，但 CSS 为空（不重复输出）
+                let cached_exports = ModuleExports {
+                    css: vec![],
+                    ..cached.clone()
+                };
+                return Ok(cached_exports);
+            }
+            // 缓存未命中（不应该发生），回退到空 exports
             return Ok(ModuleExports::default());
         }
         let source = std::fs::read_to_string(path)
@@ -85,7 +96,8 @@ impl Evaluator {
         let ast = crate::parse::Parser::parse(&tokens)?;
         let mut env = Env::default()
             .with_base_path(path.to_path_buf())
-            .with_load_paths(caller_env.get_load_paths().to_vec());
+            .with_load_paths(caller_env.get_load_paths().to_vec())
+            .with_module_cache((*caller_env.module_cache).clone());
         env.depth = caller_env.depth + 1;
         env.plain_css = is_plain_css;
         // 传递已加载模块缓存（Rc 共享），并把当前路径加入缓存
@@ -104,14 +116,23 @@ impl Evaluator {
         } else {
             module_css
         };
-        Ok(ModuleExports {
+        let exports = ModuleExports {
             vars: final_env.vars,
             mixins: final_env.mixins,
             functions: final_env.functions,
             css,
             loaded_modules: final_env.loaded_modules.clone(),
             extends: final_env.extends.clone(),
-        })
+            module_cache: final_env.module_cache.clone(),
+        };
+        // 将 exports 存入缓存（CSS 为空，避免重复输出），供后续 @use/@forward 引用
+        let mut updated_cache = (*exports.module_cache).clone();
+        updated_cache.insert(path.to_path_buf(), ModuleExports { css: vec![], module_cache: exports.module_cache.clone(), ..exports.clone() });
+        let exports = ModuleExports {
+            module_cache: Rc::new(updated_cache),
+            ..exports
+        };
+        Ok(exports)
     }
 
     /// 加载 @import 文件——内联模式：继承当前环境的所有成员。
@@ -382,6 +403,7 @@ fn merge_module_cache(env: &Env, path: &Path, exports: &ModuleExports) -> Env {
     Env {
         loaded_modules: Rc::new(new_loaded),
         extends: Rc::new(new_extends),
+        module_cache: exports.module_cache.clone(),
         ..env.clone()
     }
 }
@@ -404,7 +426,8 @@ impl Evaluator {
         if let Some(path) = Self::resolve_file(base, url, load_paths) {
             let already_loaded = env.loaded_modules.contains(&path);
             let exports = if already_loaded {
-                ModuleExports::default()
+                // 从缓存获取 exports（CSS 为空，但 vars/mixins/functions 有效）
+                env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
                 let config_pairs: Vec<(String, Value)> = config
                     .iter()
@@ -452,7 +475,8 @@ impl Evaluator {
             apply_config(&mut inherited_vars, config, env)?;
             let already_loaded = env.loaded_modules.contains(&path);
             let exports = if already_loaded {
-                ModuleExports::default()
+                // 从缓存获取 exports（CSS 为空，但 vars/mixins/functions 有效）
+                env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
                 Self::load_module(&path, &inherited_vars, env)?
             };

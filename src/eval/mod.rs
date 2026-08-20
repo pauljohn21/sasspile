@@ -22,6 +22,8 @@ pub(crate) struct ModuleExports {
     pub(crate) loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     /// 模块中收集的 @extend 关系——需要传播到顶层 CSS。
     pub(crate) extends: Rc<Vec<(String, String)>>,
+    /// 模块 exports 缓存——用于跨模块传播。
+    pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
 }
 
 /// 不可变求值环境。
@@ -57,6 +59,8 @@ pub struct Env {
     plain_css: bool,
     /// 已加载模块的路径集合——同一模块的 CSS 只输出一次。
     loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
+    /// 模块 exports 缓存——同一路径的模块只求值一次，后续 @use/@forward 从缓存取 vars/mixins/functions。
+    module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
 }
 
 /// mixin 定义存储。
@@ -205,6 +209,16 @@ impl Env {
     /// 获取加载路径。
     pub(crate) fn get_load_paths(&self) -> &[PathBuf] {
         &self.load_paths
+    }
+    /// 获取模块 exports 缓存。
+    pub(crate) fn get_module_cache(&self) -> &HashMap<PathBuf, ModuleExports> {
+        &self.module_cache
+    }
+    /// 更新模块 exports 缓存。
+    pub(crate) fn with_module_cache(&self, cache: HashMap<PathBuf, ModuleExports>) -> Self {
+        let mut new = self.clone();
+        new.module_cache = Rc::new(cache);
+        new
     }
 }
 

@@ -295,6 +295,7 @@ fn merge_module_cache(env: &Env, path: &std::path::Path, exports: &ModuleExports
     Env {
         loaded_modules: Rc::new(new_loaded),
         extends: Rc::new(new_extends),
+        module_cache: exports.module_cache.clone(),
         ..env.clone()
     }
 }
