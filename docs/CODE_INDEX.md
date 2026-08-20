@@ -22,7 +22,8 @@
 | **error.rs** | 95 | SassError 定义（全英文错误消息） |
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
 | **lex/mod.rs** | 523 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
-| **parse/ast/mod.rs** | 507 | AST 类型定义（Node, Value, Color, BinOp, Param, Arg, VarFlags, ConfigVar, ColorFormat, Separator 等）+ escape_quoted_string/escape_css_ident/escape_css_chars + hsl_to_rgb_percent/format_pct_val/format_hue/format_pct/format_alpha + ColorFormat::clone_with |
+| **parse/ast/mod.rs** | 335 | AST 类型定义（Node, Value, MixinRefData, BinOp, Param, Arg, VarFlags, ConfigVar, Separator 等）+ MixinRefData PartialEq impl |
+| **parse/ast/color_types.rs** | 180 | ColorFormat 枚举 + Color 结构体 + hsl_to_rgb_percent/format_pct_val/format_hue/format_pct/format_alpha 辅助函数 |
 | **parse/ast/display.rs** | 374 | Display for Value（ColorFormat 分派序列化，含 CSS Color 4 现代空间 + 负 infinity 处理 + Slash/SlashLiteral 分隔符区分） |
 | **parse/ast_impl.rs** | 288 | Node::to_scss() |
 | **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_w/expect） |
@@ -30,19 +31,20 @@
 | **parse/at_rules.rs** | 513 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
 | **parse/expr/mod.rs** | 293 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color（SlashLiteral 用于声明值中字面量 `/`） |
 | **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
-| **eval/mod.rs** | 475 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes 字段 + loaded_modules 缓存 + extends 传播 + eval_import + plain CSS 检查入口 |
+| **eval/mod.rs** | 490 | Env + ModuleExports（含 module_cache） + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes + loaded_modules + module_cache + extends 传播 + eval_import + plain CSS 检查入口 + get_mixin_ref_data |
+| **eval/meta_ops.rs** | 301 | meta.apply / meta.load-css mixin + meta.get-mixin / meta.module-functions / meta.module-mixins / meta.module-variables 反射函数 + merge_module_cache |
 | **eval/rule.rs** | 197 | eval_rule + combine_selectors（规则体变量作用域隔离，传播命名空间/!global/@import 变量） |
 | **eval/value/mod.rs** | 482 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 + if() 命名参数支持 |
 | **eval/value/ops.rs** | 223 | 值运算实现（add/sub/mul/div/modulo/compare 细节 + infinity 带单位 calc 表达式） |
 | **eval/value/display.rs** | 253 | inspect_value + 值显示格式化（Slash/SlashLiteral 分隔符区分） |
 | **eval/control_flow.rs** | 205 | eval_if/eval_for/eval_each/eval_while |
-| **eval/mixin.rs** | 284 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
+| **eval/mixin.rs** | 293 | eval_include + exec_mixin(pub(crate)) + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 76 | apply_extends（跨模块 @extend 传播 + 选择器合并 + 占位符替换） |
 | **eval/at_params.rs** | 240 | @media/@supports 参数插值和表达式求值 |
 | **eval/plain_css.rs** | 232 | check_plain_css_value（变量/运算符/括号/插值/Map/内建函数检查）+ check_plain_css_node（Sass at-rules/静默注释拦截）+ check_plain_css_selector（插值/占位符/父选择器后缀/前导组合器）+ check_plain_css_call（is_css_function/is_known_builtin 区分） |
-| **eval/module.rs** | 463 | resolve_file + load_module + load_import + call_module_function + eval_use + eval_forward + apply_config + bind_exports + merge_module_cache + builtin_module_exports |
+| **eval/module.rs** | 468 | resolve_file + load_module（module_cache 缓存） + load_import + call_module_function + eval_use + eval_forward + apply_config + bind_exports + merge_module_cache + builtin_module_exports |
 | **eval/color.rs** | 665 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 471 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin(pub(crate)) + is_css_function(pub(crate)) + meta 函数（inspect/calc-args/calc-name 等） |
+| **eval/builtin.rs** | 491 | call_builtin 分派入口 + is_known_builtin + is_css_function + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
 | **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
 | **eval/builtin/math_helpers.rs** | 89 | merge_math_args 命名参数合并 + math_param_names 参数名映射 + validate_single_number 参数验证辅助 |
 | **eval/builtin/color.rs** | 520 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless + flatten_space_list（SlashLiteral 兼容） |
@@ -75,7 +77,8 @@
 | `values_eq` / `inspect_value` / `is_truthy` | `eval/value/mod.rs` |
 | `eval_interp_str` / `eval_simple_expr` | `eval/value/mod.rs` |
 | `eval_if` / `eval_for` / `eval_each` / `eval_while` | `eval/control_flow.rs` |
-| `eval_include` / `bind_params` / `call_function` | `eval/mixin.rs` |
+| `eval_meta_apply` / `eval_meta_load_css` / `meta_get_mixin` / `meta_module_functions` / `meta_module_mixins` / `meta_module_variables` | `eval/meta_ops.rs` |
+| `exec_mixin` / `eval_include` / `bind_params` / `call_function` | `eval/mixin.rs` |
 | `call_user_function` / `eval_at_root` / `eval_at_rule` | `eval/mixin.rs` |
 | `apply_extends` | `eval/extend.rs` |
 | `resolve_file` / `load_module` / `load_import` / `call_module_function` | `eval/module.rs` |
@@ -146,7 +149,8 @@
 | `Parser` | `parse/mod.rs` |
 | `Env` | `eval/mod.rs` |
 | `ModuleExports` (含 extends + loaded_modules) | `eval/mod.rs` |
-| `MixinDef` / `FunctionDef` | `eval/mod.rs` |
+| `MixinRefData` | `parse/ast/mod.rs` |
+| `Value::MixinRef` | `parse/ast/mod.rs` |
 | `Evaluator` | `eval/mod.rs` |
 | `CssNode` (含 `Return(Value)`) | `css/node.rs` |
 | `SassError` | `error.rs` |

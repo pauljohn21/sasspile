@@ -72,7 +72,8 @@ RUST_LOG="sasspile::lex=trace" cargo test --test lex_test -- --nocapture
 src/parse/
 ├── mod.rs          # Parser 入口
 ├── ast/
-│   ├── mod.rs      # Node 枚举 + Value 枚举定义 + ColorFormat + 颜色辅助函数
+│   ├── mod.rs      # Node 枚举 + Value 枚举 + MixinRefData + color_types 模块
+│   ├── color_types.rs  # ColorFormat 枚举 + Color 结构体 + 颜色辅助函数
 │   └── display.rs  # Display for Value（ColorFormat 分派序列化）
 ├── ast_impl.rs     # AST 实现（to_scss 等）
 ├── at_rules.rs     # @use/@mixin/@include/@if/@for 解析
@@ -124,18 +125,20 @@ RUST_LOG="sasspile::parse=debug" cargo test --test parse_test -- --nocapture
 
 ```
 src/eval/
-├── mod.rs              # Evaluator + eval_nodes
+├── mod.rs          # Evaluator + eval_nodes
+├── meta_ops.rs    # meta.apply / meta.load-css mixin + meta.module-* 反射函数
 ├── value/
 │   ├── mod.rs          # eval_value + eval_binop + units_compatible + eval_interp_str
 │   ├── ops.rs          # 值运算实现（add/sub/mul/div/modulo/compare 细节）
 │   └── display.rs      # inspect_value + 值显示格式化
 ├── rule.rs             # Rule 求值
 ├── control_flow.rs     # @if/@for/@each/@while
-├── mixin.rs            # @mixin/@include
+├── mixin.rs            # @mixin/@include + exec_mixin（pub(crate)）
 ├── extend.rs           # @extend 后处理
 ├── at_params.rs        # @media/@supports 参数插值和表达式求值
-├── module.rs           # @use/@forward + call_module_function + load_module（缓存 + extends 传播）
-├── builtin.rs          # call_builtin 分派入口 + meta 函数
+├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + extends 传播）
+├── builtin.rs          # call_builtin 分派入口 + meta 函数（get-mixin/module-*/mixin-exists）
+├── meta_ops.rs         # meta.apply / meta.load-css mixin + meta.module-functions/mixins/variables 反射
 ├── builtin/
 │   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并 + 参数验证
 │   ├── color.rs        # 颜色函数（旧版：invert/hsl/hwb/adjust-color/...）
@@ -613,10 +616,12 @@ result.map_err(|e| {
 | `Token` | `lex/token.rs` | 词法单元 |
 | `Node` | `parse/ast.rs` | AST 节点 |
 | `Value` | `parse/ast.rs` | 求值结果 |
-| `Color` | `parse/ast.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
-| `ColorFormat` | `parse/ast.rs` | 颜色格式追踪（Auto/Rgb/RgbPercent/Hsl/Hwb） |
+| `Color` | `parse/ast/color_types.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
+| `ColorFormat` | `parse/ast/color_types.rs` | 颜色格式追踪（Auto/Rgb/RgbPercent/Hsl/Hwb） |
+| `MixinRefData` | `parse/ast/mod.rs` | mixin 引用数据（meta.get-mixin 返回值） |
+| `Value::MixinRef` | `parse/ast/mod.rs` | mixin 引用值类型 |
 | `CssNode` | `css/node.rs` | CSS 输出节点 |
-| `Env` | `eval/mod.rs` | 求值环境（变量/函数/mixin 作用域） |
+| `Env` | `eval/mod.rs` | 求值环境（变量/函数/mixin/命名空间/module_cache 作用域） |
 | `Arg` | `parse/ast.rs` | 函数调用参数 |
 | `OutputStyle` | `lib.rs` | 输出风格枚举 |
 | `SassError` | `error.rs` | 错误类型 |
@@ -667,11 +672,11 @@ cargo test --test common_test     # 5 个
 
 # 兼容性测试
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
-cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 秒）
+cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 7 秒）— 101/121 通过
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：5400/11512 = 47%（VFS + === 分组隔离，更准确）
+# 基线：2808/5362 = 52%（VFS + === 分组隔离，更准确）
 # @directives 子目录：329/605 = 54%
 # core_functions/color 子目录：2526/5715 = 44%
 
