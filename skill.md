@@ -137,7 +137,9 @@ src/eval/
 ├── extend.rs           # @extend 后处理
 ├── at_params.rs        # @media/@supports 参数插值和表达式求值
 ├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + extends 传播）
-├── builtin.rs          # call_builtin 分派入口 + meta 函数（get-mixin/module-*/mixin-exists）
+├── module_dispatch.rs # 内建函数注册结构体 + #[derive(BuiltinRegistry)] 宏单一数据源
+├── plain_css.rs        # plain CSS 模式检查（sass() 禁止 + is_css_function/is_known_builtin 区分）
+├── builtin.rs          # call_builtin 分派入口（优先宏生成 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数
 ├── meta_ops.rs         # meta.apply / meta.load-css mixin + meta.module-functions/mixins/variables 反射
 ├── builtin/
 │   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并 + 参数验证
@@ -167,7 +169,17 @@ eval_value(Call)
     → call_user_function(name, ...)     // 用户 @function
     → call_module_function(name, ...)   // color.adjust() / math.round()
     → call_builtin(name, ...)           // 旧版全局 adjust-color()
+        → dispatch_builtin_module(...)  // 宏生成的模块分派（math/string/map/list/color/selector）
+        → 手工分派                      // rgba/rgb/darken/lighten/mix + meta 函数
 ```
+
+**内建函数注册架构**（`sasspile-macros` crate）：
+- 通过 `#[derive(BuiltinRegistry)]` 在结构体上声明函数列表
+- 宏自动生成三个函数：`module_builtin_name`（模块限定名 → 全局名映射）、`is_known_builtin`（已知函数检查）、`dispatch_builtin_module`（模块分派）
+- 7 个注册结构体：MathBuiltins / StringBuiltins / MapBuiltins / ListBuiltins / ColorBuiltins / MetaBuiltins / SelectorBuiltins
+- `#[builtin(module = "math", dispatch = "math")]` 声明模块名和分派目标
+- `#[builtin(alias = "math.div")]` 声明别名
+- `dispatch = "none"` 表示只参与名称映射不分派（meta 模块）
 
 **sass:color → 全局名映射**（`src/eval/module.rs`）：
 
@@ -631,14 +643,13 @@ result.map_err(|e| {
 ## 7. 添加内建函数标准流程
 
 1. **确定类别**：判断函数属于 color/list/map/string/selector/math/meta
-2. **编辑分派入口**：在 `src/eval/builtin.rs` 的 `call_builtin` match 中添加分支
-3. **实现函数逻辑**：
-   - 简单函数：直接写在 `builtin.rs` 中
-   - 复杂函数组：在 `builtin/<cat>.rs` 中添加 match 分支
-4. **注册为已知函数**：在 `is_known_builtin()` 中添加名称
-5. **CSS 透传处理**：如果是 CSS 原生函数，在 `is_css_function()` 中添加
-6. **命名参数**：如需支持命名参数（math/string/list 函数），在对应子模块中注册参数名
-7. **验证**：`cargo test --test compile_test`
+2. **注册函数名**：在 `src/eval/module_dispatch.rs` 对应结构体（如 `MathBuiltins`）中添加字段，用 `#[builtin(module = "math")]` 或 `#[builtin(alias = "math.newfn")]` 声明
+3. **实现函数逻辑**：在 `src/eval/builtin/<cat>.rs` 的 `call()` 中添加 match 分支
+4. **CSS 透传处理**：如果是 CSS 原生函数，在 `is_css_function()` 中添加
+5. **命名参数**：如需支持命名参数（math/string/list 函数），在对应子模块中注册参数名
+6. **验证**：`cargo test --test compile_test`
+
+> **注意**：步骤 2 中，宏会自动生成 `module_builtin_name` 映射、`is_known_builtin` 检查和 `dispatch_builtin_module` 分派，无需手工维护三处 match 列表。
 
 ### 示例：添加 `color.lightness` 的新通道读取
 
@@ -672,13 +683,13 @@ cargo test --test common_test     # 5 个
 
 # 兼容性测试
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
-cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 7 秒）— 101/121 通过
+cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 7 秒）— 10/121 通过
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：2808/5362 = 52%（VFS + === 分组隔离，更准确）
-# @directives 子目录：329/605 = 54%
-# core_functions/color 子目录：2526/5715 = 44%
+# 基线：2828/5362 = 53%（VFS + === 分组隔离，更准确）
+# @directives 子目录：337/605 = 56%
+# ep_full：10/121 = 8%（@forward 模块冲突，剩余 111 个失败为 "Two forwarded modules both define a function named xxx"）
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

@@ -42,11 +42,11 @@
 | **eval/extend.rs** | 76 | apply_extends（跨模块 @extend 传播 + 选择器合并 + 占位符替换） |
 | **eval/at_params.rs** | 240 | @media/@supports 参数插值和表达式求值 |
 | **eval/import.rs** | 63 | @import 指令处理（sass: 模块加载 + .css/http 透传 + 文件加载回退） |
-| **eval/module_dispatch.rs** | 132 | 模块限定函数名 → 内建函数名映射（math.abs → abs 等全量映射表） |
+| **eval/module_dispatch.rs** | 352 | 内建函数注册结构体（MathBuiltins/StringBuiltins/...）+ `#[derive(BuiltinRegistry)]` 属性声明 + 宏生成的单一数据源注册 |
 | **eval/plain_css.rs** | 238 | check_plain_css_value + check_plain_css_node + check_plain_css_selector + check_plain_css_call（含 sass() 禁止检测 + is_css_function/is_known_builtin 区分） |
 | **eval/module.rs** | 388 | resolve_file + load_module（module_cache 缓存） + load_import + call_module_function + eval_use + eval_forward + apply_config + bind_exports（含 @forward 冲突检测） + merge_module_cache + builtin_module_exports |
 | **eval/color.rs** | 665 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 491 | call_builtin 分派入口 + is_known_builtin + is_css_function + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
+| **eval/builtin.rs** | 409 | call_builtin 分派入口（优先调用宏生成的 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
 | **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
 | **eval/builtin/math_helpers.rs** | 89 | merge_math_args 命名参数合并 + math_param_names 参数名映射 + validate_single_number 参数验证辅助 |
 | **eval/builtin/color.rs** | 520 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless + flatten_space_list（SlashLiteral 兼容） |
@@ -85,7 +85,9 @@
 | `apply_extends` | `eval/extend.rs` |
 | `resolve_file` / `load_module` / `load_import` / `call_module_function` | `eval/module.rs` |
 | `eval_use` / `eval_forward` / `apply_config` / `bind_exports` / `merge_module_cache` | `eval/module.rs` |
-| `module_builtin_name` | `eval/module_dispatch.rs` |
+| `module_builtin_name` / `is_known_builtin` / `dispatch_builtin_module` | `eval/module_dispatch.rs`（宏自动生成） |
+| `MathBuiltins` / `StringBuiltins` / `MapBuiltins` / `ListBuiltins` / `ColorBuiltins` / `MetaBuiltins` / `SelectorBuiltins` | `eval/module_dispatch.rs` |
+| `BuiltinRegistry` derive 宏 | `sasspile-macros/src/lib.rs` |
 | `eval_import` | `eval/import.rs` |
 | `check_plain_css_value` / `check_plain_css_node` / `check_plain_css_selector` / `check_plain_css_call` | `eval/plain_css.rs` |
 | `call_builtin` | `eval/builtin.rs` |
@@ -178,8 +180,8 @@
 | 颜色序列化 | `parse/ast/display.rs` → `Display for Value`（ColorFormat 分派，含 CSS Color 4 现代空间） |
 | 颜色格式追踪 | `parse/ast/mod.rs` → `ColorFormat` 枚举（Auto/Rgb/RgbPercent/Hsl/Hwb/Lab/Lch/Oklab/Oklch/DisplayP3/Srgb/...） |
 | 选择器净化 | `css/selector.rs` → `sanitize_selector` / `normalize_attr_selectors` / `has_bogus_combinators` |
-| 内建函数注册 | `eval/builtin.rs` → `call_builtin` match 分派 |
-| 数学函数分派 | `eval/builtin/math.rs` → `call()` + `merge_math_args()` 命名参数合并 |
+| 内建函数注册 | `eval/module_dispatch.rs` → `#[derive(BuiltinRegistry)]` 宏自动生成单一数据源（`sasspile-macros` crate） |
+| 数学函数分派 | `eval/builtin/math.rs` → `call()` + `merge_math_args()` 命名参数合并（由 `MathBuiltins` 结构体通过宏注册） |
 | 错误消息格式 | `error.rs` → 全英文错误消息（无前缀）；math/string 函数内联验证 |
 | CSS 序列化 | `css/mod.rs` → Serializer |
 | Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 + `eval/rule.rs` (eval_rule) |

@@ -35,10 +35,10 @@ cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
 ```
 
-**通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
+**通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 10/121
 **sass-spec 基线**：2828/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
 **@directives 子目录**：337/605 = 56%（at_root 50%, extend 41%, for 94%, forward 59%, function 48%, if 33%, import 64%, mixin 100%, use 47%）
-**ep_full**：101/121 = 83%（模块缓存修复后，$namespace 变量丢失 bug 已修复）
+**ep_full**：10/121 = 8%（@forward 模块冲突，剩余 111 个失败为 "Two forwarded modules both define a function named xxx"）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
@@ -78,6 +78,18 @@ hrx-auditor = { path = "../scss-rust" }
 
 - 已归档变更存储在 `openspec/changes/archive/` 目录
 - **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
+
+## 内建函数注册架构（builtin-dispatch-macro）
+
+- **sasspile-macros** proc-macro crate（workspace 成员）：通过 `#[derive(BuiltinRegistry)]` 将三处重复 match 合并为单一数据源
+- 依赖：syn 3.0 + quote + proc-macro2（未用 darling，改用 syn 3.0 原生 `parse_nested_meta`）
+- 7 个结构体：MathBuiltins / StringBuiltins / MapBuiltins / ListBuiltins / ColorBuiltins / MetaBuiltins / SelectorBuiltins
+- 宏自动生成：`module_builtin_name`（模块限定名 → 全局名）、`is_known_builtin`（已知函数检查）、`dispatch_builtin_module`（模块分派）
+- `#[builtin(module = "math", dispatch = "math")]` 声明模块名和分派目标
+- `#[builtin(alias = "math.div")]` 声明字段别名（模块限定名）
+- 宏自动生成 `module.kebab-case` 默认别名
+- `dispatch = "none"` 表示只参与名称映射不分派（meta 模块）
+- 手工保留：rgba/rgb/darken/lighten/mix 的分派和 is_known_builtin
 
 ## 颜色系统架构
 
