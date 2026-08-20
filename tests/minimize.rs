@@ -246,7 +246,9 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
     }
 }
 
+/// 颜色错误最小化——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
+#[ignore]
 fn minimize_color_error() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");

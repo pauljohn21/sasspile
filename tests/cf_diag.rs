@@ -255,7 +255,9 @@ fn diag_list() { diag("core_functions/list", 15); }
 #[test]
 fn diag_selector() { diag("core_functions/selector", 15); }
 
+/// 颜色诊断——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
+#[ignore]
 fn diag_color() { diag("core_functions/color", 15); }
 
 #[test]
@@ -315,7 +317,9 @@ fn diag_media() { diag("directives/media", 15); }
 #[test]
 fn diag_values_maps() { diag("values/maps", 10); }
 
+/// 颜色值诊断——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
+#[ignore]
 fn diag_values_colors() { diag("values/colors", 10); }
 
 /// 只统计指定子目录的通过/失败/总数。

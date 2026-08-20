@@ -174,5 +174,7 @@
 | Tracing events | `eval/color.rs` (sasspile::color) + `eval/extend.rs` (sasspile::extend) + `eval/value/mod.rs` (sasspile::binop) |
 | CSS diff 工具 | `tests/common/mod.rs` |
 | HRX 解析（VFS + `===` 分组） | `hrx_auditor` crate（`../scss-rust`）→ `tests/sass_spec_full.rs` + `tests/cf_diag.rs` 调用 |
+| spec 跳过列表 | `tests/spec_manifest.rs` → `SKIP_DIRS`（跳过 libsass/non_conformant/core_functions/color/values/colors） |
+| 颜色测试跳过 | `#[ignore]` 标记的 5 个颜色测试函数（cf_color/cf_diag/minimize/sass_spec_full），需 `--ignored` 手动触发 |
 | 最小化工具 | `tests/minimize.rs` |
 | AST → SCSS 序列化 | `parse/ast_impl.rs` → `Node::to_scss()` |
