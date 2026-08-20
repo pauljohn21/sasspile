@@ -65,7 +65,7 @@ impl Evaluator {
 | "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
 | "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness"
 | "whiteness" | "blackness" | "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy"
-| "channel" | "to-space" | "to-gamut" | "space" | "same" => {
+| "channel" | "to-space" | "to-gamut" | "space" | "same" | "ie-hex-str" => {
 color::call(&name, pos_args, kw_args)?
                     .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
             }
@@ -184,6 +184,7 @@ color::call(&name, pos_args, kw_args)?
             "module-functions" => Self::meta_module_functions(pos_args, kw_args, env),
             "module-mixins" => Self::meta_module_mixins(pos_args, kw_args, env),
             "module-variables" => Self::meta_module_variables(pos_args, kw_args, env),
+            "accepts-content" => Self::meta_accepts_content(pos_args, kw_args, env),
             "keywords" => match pos_args {
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords requires 1 argument".into())),
@@ -241,12 +242,10 @@ color::call(&name, pos_args, kw_args)?
             // ── selector 子模块分派 ──
             "selector-append"
             | "selector-nest"
-            | "selector-is-super"
+                        | "selector-is-superselector" | "selector-is-super"
             | "selector-parse"
-            | "selector-simple-selectors"
-            | "selector-unify"
-            | "selector-extend"
-            | "selector-replace" => selector::call(&name, pos_args, kw_args)?
+            | "selector-simple-selectors" | "selector-unify"
+            | "selector-extend" | "selector-replace" => selector::call(&name, pos_args, kw_args)?
                 .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
 
             // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
@@ -279,7 +278,8 @@ color::call(&name, pos_args, kw_args)?
 | "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
 | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
 | "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
-| "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy" | "channel" | "to-space" | "to-gamut" | "space" | "same"
+            | "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy" | "channel" | "to-space" | "to-gamut" | "space" | "same"
+            | "ie-hex-str"
             // ── map ──
             | "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge"
             | "map-remove" | "map-set" | "map-deep-merge" | "map-deep-remove"
@@ -290,13 +290,13 @@ color::call(&name, pos_args, kw_args)?
             | "type-of" | "inspect" | "if" | "feature-exists" | "content-exists" | "mixin-exists" | "function-exists"
             | "global-variable-exists" | "variable-exists" | "get-function" | "call"
             | "keywords" | "calc-args" | "calc-name" | "get-mixin"
-            | "module-functions" | "module-mixins" | "module-variables"
+            | "module-functions" | "module-mixins" | "module-variables" | "accepts-content"
             // ── list ──
             | "length" | "list-length" | "nth" | "append" | "join" | "index"
             | "list-separator" | "separator" | "set-nth" | "is-bracketed"
             | "list-slash" | "zip"
             // ── selector ──
-            | "selector-append" | "selector-nest" | "selector-is-super"
+            | "selector-is-superselector" | "selector-is-super"
             | "selector-parse" | "selector-simple-selectors" | "selector-unify"
             | "selector-extend" | "selector-replace"
             // ── CSS 原生（在 call_builtin 中有专门分支）──

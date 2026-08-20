@@ -436,6 +436,23 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
         "to-gamut" => super::color_gamut::to_gamut(args, kw_args),
         "space" => super::color_space::space(args, kw_args),
         "same" => super::color_space::same(args, kw_args),
+        "ie-hex-str" => {
+            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            match color_arg {
+                Some(Value::Color(c)) => {
+                    let alpha = (c.a * 255.0).round() as u8;
+                    let r = c.r as u8;
+                    let g = c.g as u8;
+                    let b = c.b as u8;
+                    Ok(Some(Value::String(
+                        format!("#{:02X}{:02X}{:02X}{:02X}", alpha, r, g, b),
+                        false,
+                    )))
+                }
+                Some(v) => Err(SassError::Eval(format!("$color: {v} is not a color."))),
+                None => Err(SassError::Eval("Missing argument $color.".into())),
+            }
+        }
         _ => Ok(None),
     }
 }

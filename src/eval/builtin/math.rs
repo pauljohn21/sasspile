@@ -361,6 +361,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 return Ok(Some(Value::Calc("calc(-infinity)".to_string())));
             }
             if args.len() == 2 {
+                // null base → 自然对数
+                if matches!(&args[1], Value::Null) {
+                    return Ok(Some(Value::Number(n.ln(), None)));
+                }
                 let base = match &args[1] {
                     Value::Number(b, u) => {
                         if u.is_some() {
@@ -432,7 +436,15 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 (Value::Number(min, _), Value::Number(val, _), Value::Number(max, _)) => {
                     Ok(Some(Value::Number(val.max(*min).min(*max), None)))
                 }
-                _ => Err(SassError::Eval("clamp requires 3 number arguments".into())),
+                (non_num, _, _) if !matches!(non_num, Value::Number(..)) => {
+                    Err(SassError::Eval(format!("$min: {non_num} is not a number.")))
+                }
+                (_, non_num, _) if !matches!(non_num, Value::Number(..)) => {
+                    Err(SassError::Eval(format!("$number: {non_num} is not a number.")))
+                }
+                (_, _, non_num) => {
+                    Err(SassError::Eval(format!("$max: {non_num} is not a number.")))
+                }
             }
         },
         "unit" => {

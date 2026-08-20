@@ -13,7 +13,7 @@ fn selector_param_names(name: &str) -> &'static [&'static str] {
         "selector-parse" => &["selector"],
         "selector-append" => &[],
         "selector-nest" => &[],
-        "selector-is-super" => &["super", "sub"],
+        "selector-is-superselector" | "selector-is-super" => &["super", "sub"],
         "selector-simple-selectors" => &["selector"],
         "selector-unify" => &["selector1", "selector2"],
         "selector-extend" => &["selector", "extendee", "extender"],
@@ -68,7 +68,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 .collect();
             Ok(Some(Value::String(parts.join(" "), false)))
         }
-        "selector-is-super" => match args {
+        "selector-is-superselector" | "selector-is-super" => match args {
             [Value::String(a, _), Value::String(b, _)] => {
                 Ok(Some(Value::Bool(b.contains(a.as_str()))))
             }

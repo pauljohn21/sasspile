@@ -36,7 +36,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：2823/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
+**sass-spec 基线**：2828/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
 **@directives 子目录**：337/605 = 56%（at_root 50%, extend 41%, for 94%, forward 59%, function 48%, if 33%, import 64%, mixin 100%, use 47%）
 **ep_full**：101/121 = 83%（模块缓存修复后，$namespace 变量丢失 bug 已修复）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）

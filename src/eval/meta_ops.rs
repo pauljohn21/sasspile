@@ -269,6 +269,33 @@ impl Evaluator {
         Ok(Value::Map(pairs))
     }
 
+    /// `meta.accepts-content($mixin)` 函数——检查 mixin 是否接受 @content。
+    ///
+    /// 遍历 mixin body 检查是否包含 `Node::Content` 节点。
+    pub(crate) fn meta_accepts_content(
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        _env: &Env,
+    ) -> Result<Value> {
+        let span = crate::__tracing::info_span!("meta_accepts_content");
+        let _enter = span.enter();
+
+        let mixin_arg = pos_args.first()
+            .or_else(|| kw_args.get("mixin"))
+            .or_else(|| kw_args.get("$mixin"));
+        let mixin_ref = match mixin_arg {
+            Some(Value::MixinRef(data)) => data.clone(),
+            Some(v) => return Err(SassError::Eval(format!(
+                "$mixin: {v} is not a mixin reference."
+            ))),
+            None => return Err(SassError::Eval("Missing argument $mixin.".into())),
+        };
+
+        // 检查 mixin body 中是否包含 Node::Content
+        let accepts = body_has_content(&mixin_ref.body);
+        Ok(Value::Bool(accepts))
+    }
+
     /// 从参数中提取 $module 字符串。
     fn extract_module_arg(
         pos_args: &[Value],
@@ -298,4 +325,23 @@ fn merge_module_cache(env: &Env, path: &std::path::Path, exports: &ModuleExports
         module_cache: exports.module_cache.clone(),
         ..env.clone()
     }
+}
+
+/// 递归检查 mixin body 中是否包含 `Node::Content` 节点。
+/// 用于 `meta.accepts-content` 判断 mixin 是否接受 @content 块。
+fn body_has_content(nodes: &[Node]) -> bool {
+    nodes.iter().any(|n| match n {
+        Node::Content => true,
+        // 递归检查嵌套的控制流和规则体
+        Node::If { branches, else_body } => {
+            branches.iter().any(|(_, body)| body_has_content(body))
+                || else_body.as_ref().is_some_and(|eb| body_has_content(eb))
+        }
+        Node::For { body, .. } => body_has_content(body),
+        Node::Each { body, .. } => body_has_content(body),
+        Node::While { body, .. } => body_has_content(body),
+        Node::AtRoot { body, .. } => body_has_content(body),
+        Node::Include { content, .. } => content.as_ref().is_some_and(|c| body_has_content(c)),
+        _ => false,
+    })
 }
