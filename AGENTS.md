@@ -36,7 +36,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：5400/11512 = 47%（VFS + `===` 分组隔离，更准确）
+**sass-spec 基线**：2774/5362 = 51%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
 **@directives 子目录**：329/605 = 54%（at_root 50%, extend 41%, for 94%, forward 59%, function 48%, if 33%, import 67%, mixin 100%, use 43%）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -69,7 +69,7 @@ hrx-auditor = { path = "../scss-rust" }
 
 ## Git 规范
 
-- 推送用 SSH：`git push origin main`（remote 名为 `origin`，非 `github`）
+- 推送用 SSH：`git push origin main`（remote 名为 `origin`，SSH 地址 git@github.com）
 - Commit 格式：`feat: 描述 — 总计 N/M`
 - **每次提交后必须同步 CodeGraph**：`codegraph sync`（确保代码导航索引与最新代码一致）
 

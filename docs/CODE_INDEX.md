@@ -30,7 +30,7 @@
 | **parse/at_rules.rs** | 513 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
 | **parse/expr/mod.rs** | 293 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color（SlashLiteral 用于声明值中字面量 `/`） |
 | **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
-| **eval/mod.rs** | 589 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes 字段 + loaded_modules 缓存 + extends 传播 + @import 多值/修饰符处理 |
+| **eval/mod.rs** | 475 | Env + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes 字段 + loaded_modules 缓存 + extends 传播 + eval_import + plain CSS 检查入口 |
 | **eval/rule.rs** | 197 | eval_rule + combine_selectors（规则体变量作用域隔离，传播命名空间/!global/@import 变量） |
 | **eval/value/mod.rs** | 482 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 + if() 命名参数支持 |
 | **eval/value/ops.rs** | 223 | 值运算实现（add/sub/mul/div/modulo/compare 细节 + infinity 带单位 calc 表达式） |
@@ -39,10 +39,12 @@
 | **eval/mixin.rs** | 284 | eval_include + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 76 | apply_extends（跨模块 @extend 传播 + 选择器合并 + 占位符替换） |
 | **eval/at_params.rs** | 240 | @media/@supports 参数插值和表达式求值 |
-| **eval/module.rs** | 308 | resolve_file（含 load_paths） + load_module（含模块缓存 loaded_modules） + load_import + call_module_function（注入模块 vars 到函数环境 + 命名空间变量赋值） |
+| **eval/plain_css.rs** | 232 | check_plain_css_value（变量/运算符/括号/插值/Map/内建函数检查）+ check_plain_css_node（Sass at-rules/静默注释拦截）+ check_plain_css_selector（插值/占位符/父选择器后缀/前导组合器）+ check_plain_css_call（is_css_function/is_known_builtin 区分） |
+| **eval/module.rs** | 463 | resolve_file + load_module + load_import + call_module_function + eval_use + eval_forward + apply_config + bind_exports + merge_module_cache + builtin_module_exports |
 | **eval/color.rs** | 665 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 471 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin + is_css_function + meta 函数（inspect/calc-args/calc-name 等） |
-| **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + merge_math_args 命名参数合并 + div 除零 calc(infinity) 表达式 + 参数验证 |
+| **eval/builtin.rs** | 471 | call_builtin 分派入口（match 骨架 → 子模块分派）+ is_known_builtin(pub(crate)) + is_css_function(pub(crate)) + meta 函数（inspect/calc-args/calc-name 等） |
+| **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
+| **eval/builtin/math_helpers.rs** | 89 | merge_math_args 命名参数合并 + math_param_names 参数名映射 + validate_single_number 参数验证辅助 |
 | **eval/builtin/color.rs** | 520 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless + flatten_space_list（SlashLiteral 兼容） |
 | **eval/builtin/color_adjust.rs** | 550 | color.adjust/change/scale 现代色彩空间实现（Oklch/Lab/Lch/Oklab/DisplayP3/sRGB 等）— 直接在 ColorFormat 中修改通道值，保留原始格式输出 |
 | **eval/builtin/color_conv.rs** | 461 | f64 精度色彩空间转换算法（sRGB↔XYZ/Lab/Oklab/Oklch/DisplayP3）— W3C 参考实现有理数分数矩阵 + 扩展传递函数（支持负值） |
@@ -53,7 +55,7 @@
 | **eval/builtin/list.rs** | 306 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip（SlashLiteral 兼容处理） |
 | **eval/builtin/map.rs** | 302 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
 | **eval/builtin/string.rs** | 376 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id + 参数验证（$string: X is not a string） |
-| **eval/builtin/selector.rs** | 110 | selector-append/nest/is-super/parse/simple-selectors/unify/extend |
+| **eval/builtin/selector.rs** | 110 | selector-append/nest/is-super/parse/simple-selectors/unify/extend + merge_selector_args 命名参数合并 |
 | **css/mod.rs** | 359 | Serializer（CSS 树 → 字符串，选择器净化 + 组合器验证 + @规则合并 + @import 间不加空行） |
 | **css/node.rs** | 93 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Raw/Return） |
 | **css/selector.rs** | 366 | sanitize_selector + normalize_attr_selectors + has_bogus_combinators + 占位符处理 |
@@ -77,8 +79,11 @@
 | `call_user_function` / `eval_at_root` / `eval_at_rule` | `eval/mixin.rs` |
 | `apply_extends` | `eval/extend.rs` |
 | `resolve_file` / `load_module` / `load_import` / `call_module_function` | `eval/module.rs` |
+| `eval_use` / `eval_forward` / `apply_config` / `bind_exports` / `merge_module_cache` | `eval/module.rs` |
+| `eval_import` | `eval/mod.rs` |
+| `check_plain_css_value` / `check_plain_css_node` / `check_plain_css_selector` / `check_plain_css_call` | `eval/plain_css.rs` |
 | `call_builtin` | `eval/builtin.rs` |
-| `merge_math_args` / `math_param_names` | `eval/builtin/math.rs` |
+| `merge_math_args` / `math_param_names` / `validate_single_number` | `eval/builtin/math_helpers.rs` |
 | math::call (abs/ceil/floor/round/div/pow/clamp/...) | `eval/builtin/math.rs` |
 | `call_map_builtin` / `value_to_map` / `nested_map_merge` / `nested_map_set` | `eval/builtin/map.rs` |
 | `call_string_builtin` / `str_slice` / `str_insert` / `str_split` | `eval/builtin/string.rs` |
@@ -152,10 +157,10 @@
 |------|----------|
 | SCSS 编译入口 | `lib.rs` → `compile_expanded()` / `compile_file_with_load_paths()` |
 | 变量作用域 | `eval/mod.rs` → `Env` (vars/mixins/functions/namespaces/load_paths/global_writes) + `eval/rule.rs` → 规则体变量隔离 |
-| @use 模块系统 | `eval/module.rs` → `load_module`（含缓存 + extends 传播）/ `call_module_function`（注入模块 vars） |
+| @use 模块系统 | `eval/module.rs` → `eval_use` / `load_module`（含缓存 + extends 传播）/ `call_module_function`（注入模块 vars） + `builtin_module_exports`（注册 sass:math 变量） |
 | @extend 继承 | `eval/extend.rs` → `apply_extends`（跨模块传播 + 选择器合并） |
-| @forward with() 配置 | `eval/mod.rs` → Node::Forward 分支（ConfigVar + is_default 语义） |
-| @import 多值/修饰符 | `parse/at_rules.rs` → `parse_import` + `eval/mod.rs` → Node::Import 分支 |
+| @forward with() 配置 | `eval/module.rs` → `eval_forward`（ConfigVar + is_default 语义 + apply_config + bind_exports） |
+| @import 多值/修饰符 | `parse/at_rules.rs` → `parse_import` + `eval/mod.rs` → `eval_import` |
 | 命名空间变量赋值 | `parse/nodes.rs` → `is_namespace_var` + `eval/value/mod.rs` → `eval_variable` |
 | @mixin/@include | `eval/mixin.rs` → `eval_include` / `bind_params` |
 | @return 控制流 | `eval/mixin.rs` → `call_user_function` (捕获 CssNode::Return) |
