@@ -1,85 +1,111 @@
 //! f64 精度色彩空间转换算法。
 //!
 //! 基于 CSS Color 4 规范定义的数学公式，用 f64 实现以避免 f32 精度损失。
+//! 矩阵系数使用 W3C 参考实现 (conversions.js) 的有理数分数形式和高精度小数。
 //! 支持 sRGB ↔ Lab/Lch/Oklab/Oklch/XYZ/DisplayP3/LinearRGB 转换。
 
 // ── sRGB ↔ Linear sRGB ──
 
 /// sRGB 通道值 (0-1) → 线性 sRGB。
+/// 扩展传递函数：负值在轴上反射后用幂函数。
 fn srgb_to_linear(c: f64) -> f64 {
-    if c <= 0.04045 {
+    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let abs = c.abs();
+    if abs <= 0.04045 {
         c / 12.92
     } else {
-        ((c + 0.055) / 1.055).powf(2.4)
+        sign * ((abs + 0.055) / 1.055).powf(2.4)
     }
 }
 
 /// 线性 sRGB → sRGB 通道值 (0-1)。
+/// 扩展传递函数：负值在轴上反射后用幂函数。
 fn linear_to_srgb(c: f64) -> f64 {
-    if c <= 0.0031308 {
-        c * 12.92
+    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let abs = c.abs();
+    if abs > 0.0031308 {
+        sign * (1.055 * abs.powf(1.0 / 2.4) - 0.055)
     } else {
-        1.055 * c.powf(1.0 / 2.4) - 0.055
+        12.92 * c
     }
 }
 
 // ── sRGB ↔ XYZ (D50) ──
+// 使用 CSS Color 4 规范参考实现的精确有理数分数矩阵。
+// 路径: sRGB → linear sRGB → XYZ D65 → (Bradford) → XYZ D50
+// 其中 sRGB→XYZ D65 和 D65→D50 合并为一个复合矩阵。
 
 /// sRGB (0-1) → XYZ D50。
-/// 使用 CSS Color 4 规范的 sRGB→XYZ D50 复合矩阵。
+/// 复合矩阵 = D65_to_D50 × lin_sRGB_to_XYZ（使用规范中有理数分数形式）。
 fn srgb_to_xyz_d50(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let rl = srgb_to_linear(r);
     let gl = srgb_to_linear(g);
     let bl = srgb_to_linear(b);
 
-    // sRGB (linear, D65) → XYZ D50 复合矩阵
-    // (sRGB→XYZ D65 + Bradford D65→D50 合并)
-    let x = 0.4360747 * rl + 0.3850649 * gl + 0.1430804 * bl;
-    let y = 0.2225045 * rl + 0.7168786 * gl + 0.0606169 * bl;
-    let z = 0.0139322 * rl + 0.0971045 * gl + 0.7141733 * bl;
+    // lin_sRGB → XYZ D65 (有理数分数形式)
+    let x65 = 506752.0 / 1228815.0 * rl + 87881.0 / 245763.0 * gl + 12673.0 / 70218.0 * bl;
+    let y65 = 87098.0 / 409605.0 * rl + 175762.0 / 245763.0 * gl + 12673.0 / 175545.0 * bl;
+    let z65 = 7918.0 / 409605.0 * rl + 87881.0 / 737289.0 * gl + 1001167.0 / 1053270.0 * bl;
+
+    // Bradford D65 → D50
+    let x = 1.0479297925449969 * x65 + 0.022946870601609652 * y65 - 0.05019226628920524 * z65;
+    let y = 0.02962780877005599 * x65 + 0.9904344267538799 * y65 - 0.017073799063418826 * z65;
+    let z = -0.009243040646204504 * x65 + 0.015055191490298152 * y65 + 0.7518742814281371 * z65;
 
     (x, y, z)
 }
 
 /// XYZ D50 → sRGB (0-1)。
-/// 使用 CSS Color 4 规范的 XYZ D50→sRGB 复合矩阵。
+/// 复合矩阵 = XYZ_to_lin_sRGB × D50_to_D65（使用规范中有理数分数形式）。
 fn xyz_d50_to_srgb(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
-    // XYZ D50 → sRGB (linear, D65) 复合矩阵
-    // (Bradford D50→D65 + XYZ D65→sRGB 合并)
-    let rl = 3.1338561 * x - 1.6168667 * y - 0.4906146 * z;
-    let gl = -0.9787684 * x + 1.9161415 * y + 0.0334540 * z;
-    let bl = 0.0719453 * x - 0.2289914 * y + 1.4052427 * z;
+    // Bradford D50 → D65
+    let x65 = 0.955473421488075 * x - 0.02309845494876471 * y + 0.06325924320057072 * z;
+    let y65 = -0.0283697093338637 * x + 1.0099953980813041 * y + 0.021041441191917323 * z;
+    let z65 = 0.012314014864481998 * x - 0.020507649298898964 * y + 1.330365926242124 * z;
+
+    // XYZ D65 → lin_sRGB (有理数分数形式)
+    let rl = 12831.0 / 3959.0 * x65 - 329.0 / 214.0 * y65 - 1974.0 / 3959.0 * z65;
+    let gl = -851781.0 / 878810.0 * x65 + 1648619.0 / 878810.0 * y65 + 36519.0 / 878810.0 * z65;
+    let bl = 705.0 / 12673.0 * x65 - 2585.0 / 12673.0 * y65 + 705.0 / 667.0 * z65;
 
     (linear_to_srgb(rl), linear_to_srgb(gl), linear_to_srgb(bl))
 }
 
 // ── XYZ D50 ↔ Lab ──
+// 使用 CSS Color 4 规范参考实现的精确常数。
+// D50 白点定义: [0.3457/0.3585, 1.0, (1.0-0.3457-0.3585)/0.3585]
+const D50_X: f64 = 0.3457 / 0.3585;
+const D50_Y: f64 = 1.0;
+const D50_Z: f64 = (1.0 - 0.3457 - 0.3585) / 0.3585;
+
+/// Lab epsilon = 6^3/29^3 = 216/24389
+const LAB_EPSILON: f64 = 216.0 / 24389.0;
+/// Lab kappa = 29^3/3^3 = 24389/27
+const LAB_KAPPA: f64 = 24389.0 / 27.0;
 
 fn lab_f(t: f64) -> f64 {
-    let delta: f64 = 6.0 / 29.0;
-    if t > delta.powi(3) {
-        t.powf(1.0 / 3.0)
+    if t > LAB_EPSILON {
+        t.cbrt()
     } else {
-        t / (3.0 * delta * delta) + 4.0 / 29.0
+        (LAB_KAPPA * t + 16.0) / 116.0
     }
 }
 
 fn lab_f_inv(t: f64) -> f64 {
-    let delta: f64 = 6.0 / 29.0;
-    if t > delta {
-        t.powi(3)
+    let t3 = t * t * t;
+    if t3 > LAB_EPSILON {
+        t3
     } else {
-        3.0 * delta * delta * (t - 4.0 / 29.0)
+        (116.0 * t - 16.0) / LAB_KAPPA
     }
 }
 
 /// XYZ D50 → Lab。
-/// 参考：CSS Color 4 规范。
+/// 使用 CSS Color 4 规范的精确 D50 白点定义。
 fn xyz_d50_to_lab(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
-    // D50 参考白点
-    let x_r = x / 0.96422;
-    let y_r = y / 1.0;
-    let z_r = z / 0.82521;
+    let x_r = x / D50_X;
+    let y_r = y / D50_Y;
+    let z_r = z / D50_Z;
 
     let fx = lab_f(x_r);
     let fy = lab_f(y_r);
@@ -98,9 +124,9 @@ fn lab_to_xyz_d50(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
     let fx = a / 500.0 + fy;
     let fz = fy - b / 200.0;
 
-    let x = 0.96422 * lab_f_inv(fx);
-    let y = 1.0 * lab_f_inv(fy);
-    let z = 0.82521 * lab_f_inv(fz);
+    let x = D50_X * lab_f_inv(fx);
+    let y = D50_Y * lab_f_inv(fy);
+    let z = D50_Z * lab_f_inv(fz);
 
     (x, y, z)
 }
@@ -126,53 +152,60 @@ fn lch_to_lab(l: f64, c: f64, h: f64) -> (f64, f64, f64) {
 }
 
 // ── sRGB ↔ Oklab ──
+// CSS Color 4 规范使用 XYZ D65 → LMS → Oklab 路径（而非直接线性sRGB→Oklab）。
+// 矩阵系数使用规范参考实现 (conversions.js) 的高精度值。
+// 参考: https://github.com/w3c/csswg-drafts/issues/6642#issuecomment-943521484
 
-/// 线性 sRGB → Oklab。
-fn linear_srgb_to_oklab(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-    let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
-    let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+/// XYZ D65 → Oklab。
+/// 路径: XYZ → LMS → cbrt(LMS) → Oklab
+fn xyz_d65_to_oklab(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
+    // XYZ → LMS
+    let l = 0.8190224379967030 * x + 0.3619062600528904 * y - 0.1288737815209879 * z;
+    let m = 0.0329836539323885 * x + 0.9292868615863434 * y + 0.0361446663506424 * z;
+    let s = 0.0481771893596242 * x + 0.2642395317527308 * y + 0.6335478284694309 * z;
 
     let l_ = l.cbrt();
     let m_ = m.cbrt();
     let s_ = s.cbrt();
 
-    let l_ok = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
-    let a_ok = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
-    let b_ok = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+    // LMS → Oklab
+    let l_ok = 0.2104542683093140 * l_ + 0.7936177747023054 * m_ - 0.0040720430116193 * s_;
+    let a_ok = 1.9779985324311684 * l_ - 2.4285922420485799 * m_ + 0.4505937096174110 * s_;
+    let b_ok = 0.0259040424655478 * l_ + 0.7827717124575296 * m_ - 0.8086757549230774 * s_;
 
     (l_ok, a_ok, b_ok)
 }
 
-/// Oklab → 线性 sRGB。
-fn oklab_to_linear_srgb(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
-    let l_ = l + 0.3963377774 * a + 0.2158037573 * b;
-    let m_ = l - 0.1055613458 * a - 0.0638541728 * b;
-    let s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+/// Oklab → XYZ D65。
+fn oklab_to_xyz_d65(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
+    // Oklab → LMS (non-linear)
+    let l_ = 1.0000000000000000 * l + 0.3963377773761749 * a + 0.2158037573099136 * b;
+    let m_ = 1.0000000000000000 * l - 0.1055613458156586 * a - 0.0638541728258133 * b;
+    let s_ = 1.0000000000000000 * l - 0.0894841775298119 * a - 1.2914855480194092 * b;
 
+    // cube
     let l = l_ * l_ * l_;
     let m = m_ * m_ * m_;
     let s = s_ * s_ * s_;
 
-    let r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
-    let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
-    let b_lin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+    // LMS → XYZ
+    let x = 1.2268798758459243 * l - 0.5578149944602171 * m + 0.2813910456659647 * s;
+    let y = -0.0405757452148008 * l + 1.1122868032803170 * m - 0.0717110580655164 * s;
+    let z = -0.0763729366746601 * l - 0.4214933324022432 * m + 1.5869240198367816 * s;
 
-    (r, g, b_lin)
+    (x, y, z)
 }
 
-/// sRGB (0-1) → Oklab。
+/// sRGB (0-1) → Oklab。路径: sRGB → linear sRGB → XYZ D65 → Oklab。
 pub fn srgb_to_oklab(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    let rl = srgb_to_linear(r);
-    let gl = srgb_to_linear(g);
-    let bl = srgb_to_linear(b);
-    linear_srgb_to_oklab(rl, gl, bl)
+    let (x, y, z) = srgb_to_xyz_d65(r, g, b);
+    xyz_d65_to_oklab(x, y, z)
 }
 
-/// Oklab → sRGB (0-1)。
+/// Oklab → sRGB (0-1)。路径: Oklab → XYZ D65 → sRGB。
 pub fn oklab_to_srgb(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
-    let (rl, gl, bl) = oklab_to_linear_srgb(l, a, b);
-    (linear_to_srgb(rl), linear_to_srgb(gl), linear_to_srgb(bl))
+    let (x, y, z) = oklab_to_xyz_d65(l, a, b);
+    xyz_d65_to_srgb(x, y, z)
 }
 
 // ── Oklab ↔ Oklch ──
@@ -234,21 +267,23 @@ pub fn oklch_to_srgb(l: f64, c: f64, h: f64) -> (f64, f64, f64) {
 }
 
 /// sRGB (0-1) → XYZ D65。
+/// 使用 CSS Color 4 规范参考实现的有理数分数矩阵。
 pub fn srgb_to_xyz_d65(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let rl = srgb_to_linear(r);
     let gl = srgb_to_linear(g);
     let bl = srgb_to_linear(b);
-    let x = 0.41239079926595934 * rl + 0.357584339383878 * gl + 0.1804807884018343 * bl;
-    let y = 0.21263900587151027 * rl + 0.715168678767756 * gl + 0.07219231536073371 * bl;
-    let z = 0.01933081871559182 * rl + 0.11919477979462598 * gl + 0.9505321522496607 * bl;
+    let x = 506752.0 / 1228815.0 * rl + 87881.0 / 245763.0 * gl + 12673.0 / 70218.0 * bl;
+    let y = 87098.0 / 409605.0 * rl + 175762.0 / 245763.0 * gl + 12673.0 / 175545.0 * bl;
+    let z = 7918.0 / 409605.0 * rl + 87881.0 / 737289.0 * gl + 1001167.0 / 1053270.0 * bl;
     (x, y, z)
 }
 
 /// XYZ D65 → sRGB (0-1)。
+/// 使用 CSS Color 4 规范参考实现的有理数分数矩阵。
 pub fn xyz_d65_to_srgb(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
-    let rl = 3.2409699419045226 * x - 1.5373831775700935 * y - 0.49861076029305714 * z;
-    let gl = -0.9692436362808796 * x + 1.8759675015077202 * y + 0.04155505740717559 * z;
-    let bl = 0.05563007969699366 * x - 0.20397695888897652 * y + 1.0569715142428786 * z;
+    let rl = 12831.0 / 3959.0 * x - 329.0 / 214.0 * y - 1974.0 / 3959.0 * z;
+    let gl = -851781.0 / 878810.0 * x + 1648619.0 / 878810.0 * y + 36519.0 / 878810.0 * z;
+    let bl = 705.0 / 12673.0 * x - 2585.0 / 12673.0 * y + 705.0 / 667.0 * z;
     (linear_to_srgb(rl), linear_to_srgb(gl), linear_to_srgb(bl))
 }
 
@@ -264,73 +299,88 @@ pub fn linear_srgb_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 
 // ── Display P3 ──
 // Display P3 和 sRGB 有相同的 gamma 曲线，只是原色域不同。
+// 矩阵使用 CSS Color 4 规范参考实现的有理数分数形式。
 
 /// Display P3 (0-1) → sRGB (0-1)。
 pub fn display_p3_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    // P3 → linear P3 (P3 和 sRGB 共享相同的 gamma 曲线)
     let rl = srgb_to_linear(r);
     let gl = srgb_to_linear(g);
     let bl = srgb_to_linear(b);
-    // linear P3 → XYZ D65
-    let x = 0.4865709486482162 * rl + 0.2656676931690929 * gl + 0.1982172852343625 * bl;
-    let y = 0.2289745640697488 * rl + 0.6917385218365064 * gl + 0.0792869140937449 * bl;
-    let z = 0.0000000000000000 * rl + 0.0451133818589026 * gl + 1.0439443689009760 * bl;
+    // linear P3 → XYZ D65 (有理数分数)
+    let x = 608311.0 / 1250200.0 * rl + 189793.0 / 714400.0 * gl + 198249.0 / 1000160.0 * bl;
+    let y = 35783.0 / 156275.0 * rl + 247089.0 / 357200.0 * gl + 198249.0 / 2500400.0 * bl;
+    let z = 0.0 * rl + 32229.0 / 714400.0 * gl + 5220557.0 / 5000800.0 * bl;
     xyz_d65_to_srgb(x, y, z)
 }
 
 /// sRGB (0-1) → Display P3 (0-1)。
 pub fn srgb_to_display_p3(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let (x, y, z) = srgb_to_xyz_d65(r, g, b);
-    // XYZ D65 → linear P3
-    let r_p3 = 2.493496911941425 * x - 0.9313836179191239 * y - 0.4027107844507168 * z;
-    let g_p3 = -0.8294889695615747 * x + 1.7626640603183461 * y + 0.0236246858419436 * z;
-    let b_p3 = 0.0358458302437845 * x - 0.0761723892680418 * y + 0.9568845360079346 * z;
-    // linear P3 → P3 (P3 和 sRGB 共享相同的 gamma 曲线)
+    // XYZ D65 → linear P3 (有理数分数)
+    let r_p3 = 446124.0 / 178915.0 * x - 333277.0 / 357830.0 * y - 72051.0 / 178915.0 * z;
+    let g_p3 = -14852.0 / 17905.0 * x + 63121.0 / 35810.0 * y + 423.0 / 17905.0 * z;
+    let b_p3 = 11844.0 / 330415.0 * x - 50337.0 / 660830.0 * y + 316169.0 / 330415.0 * z;
     (linear_to_srgb(r_p3), linear_to_srgb(g_p3), linear_to_srgb(b_p3))
 }
 
 // ── A98 RGB ──
+// 矩阵使用 CSS Color 4 规范参考实现的有理数分数形式。
 
 /// A98 RGB (0-1) → sRGB (0-1)。
 pub fn a98_rgb_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    // A98 RGB gamma 1/2.2 → linear
-    let rl = r.powf(563.0 / 256.0);
-    let gl = g.powf(563.0 / 256.0);
-    let bl = b.powf(563.0 / 256.0);
-    // A98 → XYZ D65
-    let x = 0.5766690429 * rl + 0.1855582379 * gl + 0.1882286462 * bl;
-    let y = 0.2973449752 * rl + 0.6273635663 * gl + 0.0752902835 * bl;
-    let z = 0.0270313614 * rl + 0.0706888525 * gl + 0.9913375368 * bl;
+    // A98 RGB gamma 563/256 → linear (扩展传递函数，支持负值)
+    let to_lin = |c: f64| {
+        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        sign * c.abs().powf(563.0 / 256.0)
+    };
+    let rl = to_lin(r);
+    let gl = to_lin(g);
+    let bl = to_lin(b);
+    // A98 → XYZ D65 (有理数分数)
+    let x = 573536.0 / 994567.0 * rl + 263643.0 / 1420810.0 * gl + 187206.0 / 994567.0 * bl;
+    let y = 591459.0 / 1989134.0 * rl + 6239551.0 / 9945670.0 * gl + 374412.0 / 4972835.0 * bl;
+    let z = 53769.0 / 1989134.0 * rl + 351524.0 / 4972835.0 * gl + 4929758.0 / 4972835.0 * bl;
     xyz_d65_to_srgb(x, y, z)
 }
 
 /// sRGB (0-1) → A98 RGB (0-1)。
 pub fn srgb_to_a98_rgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let (x, y, z) = srgb_to_xyz_d65(r, g, b);
-    let rl = 1.962427438 * x - 0.610534324 * y - 0.341340176 * z;
-    let gl = -0.978764678 * x + 1.816423363 * y + 0.162337723 * z;
-    let bl = 0.028686965 * x - 0.042977346 * y + 1.005733684 * z;
-    (rl.powf(256.0 / 563.0), gl.powf(256.0 / 563.0), bl.powf(256.0 / 563.0))
+    // XYZ D65 → linear A98 (有理数分数)
+    let rl = 1829569.0 / 896150.0 * x - 506331.0 / 896150.0 * y - 308931.0 / 896150.0 * z;
+    let gl = -851781.0 / 878810.0 * x + 1648619.0 / 878810.0 * y + 36519.0 / 878810.0 * z;
+    let bl = 16779.0 / 1248040.0 * x - 147721.0 / 1248040.0 * y + 1266979.0 / 1248040.0 * z;
+    // linear → A98 gamma 256/563 (扩展传递函数)
+    let to_gam = |c: f64| {
+        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        sign * c.abs().powf(256.0 / 563.0)
+    };
+    (to_gam(rl), to_gam(gl), to_gam(bl))
 }
 
 // ── ProPhoto RGB ──
+// 矩阵使用 CSS Color 4 规范参考实现的高精度小数。
+// gamma 1.8，线性段阈值 Et = 1/512。
 
 /// ProPhoto RGB (0-1) → sRGB (0-1)。
 pub fn prophoto_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
-    // ProPhoto gamma (1.8)
+    // ProPhoto gamma decode (Et2 = 16/512 = 1/32)
     fn prophoto_gamma_decode(c: f64) -> f64 {
-        if c < 0.03125 { 0.0 } else {
-            let v = c.powf(1.0 / 1.8);
-            v
+        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        let abs = c.abs();
+        if abs <= 16.0 / 512.0 {
+            c / 16.0
+        } else {
+            sign * abs.powf(1.0 / 1.8)
         }
     }
     let rl = prophoto_gamma_decode(r);
     let gl = prophoto_gamma_decode(g);
     let bl = prophoto_gamma_decode(b);
-    // ProPhoto → XYZ D50
-    let x = 0.7976749 * rl + 0.1351937 * gl + 0.0313435 * bl;
-    let y = 0.2880132 * rl + 0.7117400 * gl + 0.0000851 * bl;
-    let z = 0.0000000 * rl + 0.0000000 * gl + 0.8252100 * bl;
+    // ProPhoto → XYZ D50 (高精度小数)
+    let x = 0.79776664490064230 * rl + 0.13518129740053308 * gl + 0.03134773412839220 * bl;
+    let y = 0.28807482881940130 * rl + 0.71183523424187300 * gl + 0.00008993693872564 * bl;
+    let z = 0.00000000000000000 * rl + 0.00000000000000000 * gl + 0.82510460251046020 * bl;
     // XYZ D50 → sRGB
     xyz_d50_to_srgb(x, y, z)
 }
@@ -338,73 +388,74 @@ pub fn prophoto_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 /// sRGB (0-1) → ProPhoto RGB (0-1)。
 pub fn srgb_to_prophoto(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let (x, y, z) = srgb_to_xyz_d50(r, g, b);
-    // XYZ D50 → ProPhoto
-    let rl = 1.3457868816471585 * x - 0.2555720873797946 * y - 0.0511018649755453 * z;
-    let gl = -0.5446307051249019 * x + 1.5082477388709226 * y + 0.0205377574441066 * z;
-    let bl = 0.0000000 * x + 0.0000000 * y + 1.2118127545051852 * z;
-    // ProPhoto gamma
+    // XYZ D50 → ProPhoto (高精度小数)
+    let rl = 1.34578688164715830 * x - 0.25557208737979464 * y - 0.05110186497554526 * z;
+    let gl = -0.54463070512490190 * x + 1.50824774284514680 * y + 0.02052744743642139 * z;
+    let bl = 0.00000000000000000 * x + 0.00000000000000000 * y + 1.21196754563894520 * z;
+    // ProPhoto gamma encode (Et = 1/512)
     fn prophoto_gamma_encode(c: f64) -> f64 {
-        if c < 0.0 { 0.0 } else {
-            c.powf(1.8)
+        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        let abs = c.abs();
+        if abs >= 1.0 / 512.0 {
+            sign * abs.powf(1.0 / 1.8)
+        } else {
+            16.0 * c
         }
     }
     (prophoto_gamma_encode(rl), prophoto_gamma_encode(gl), prophoto_gamma_encode(bl))
 }
 
 // ── Rec2020 ──
+// 矩阵使用 CSS Color 4 规范参考实现的有理数分数形式。
+// gamma 2.4 (与 sRGB 相同的幂函数，但无线性段)。
 
 /// Rec2020 (0-1) → sRGB (0-1)。
 pub fn rec2020_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+    // Rec2020 gamma decode: pow(2.4) (扩展传递函数)
     fn rec2020_decode(c: f64) -> f64 {
-        let a = 0.7976608376771017;
-        let b = 0.0333634376239715;
-        if c < b {
-            c / 4.5
-        } else {
-            ((c + b) / (1.0 + a)).powf(1.0 / 0.45)
-        }
+        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        sign * c.abs().powf(2.4)
     }
     let rl = rec2020_decode(r);
     let gl = rec2020_decode(g);
     let bl = rec2020_decode(b);
-    // Rec2020 → XYZ D65
-    let x = 0.6369591 * rl + 0.1446175 * gl + 0.1688584 * bl;
-    let y = 0.2627049 * rl + 0.6779884 * gl + 0.0593067 * bl;
-    let z = 0.0000000 * rl + 0.0280731 * gl + 1.0609269 * bl;
+    // Rec2020 → XYZ D65 (有理数分数)
+    let x = 63426534.0 / 99577255.0 * rl + 20160776.0 / 139408157.0 * gl + 47086771.0 / 278816314.0 * bl;
+    let y = 26158966.0 / 99577255.0 * rl + 472592308.0 / 697040785.0 * gl + 8267143.0 / 139408157.0 * bl;
+    let z = 0.0 * rl + 19567812.0 / 697040785.0 * gl + 295819943.0 / 278816314.0 * bl;
     xyz_d65_to_srgb(x, y, z)
 }
 
 /// sRGB (0-1) → Rec2020 (0-1)。
 pub fn srgb_to_rec2020(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let (x, y, z) = srgb_to_xyz_d65(r, g, b);
-    let rl = 1.7166562 * x - 0.3556737 * y - 0.2533620 * z;
-    let gl = -0.6666844 * x + 1.6164785 * y + 0.0157687 * z;
-    let bl = 0.0176399 * x - 0.0427706 * y + 0.9424026 * z;
+    // XYZ D65 → linear Rec2020 (有理数分数)
+    let rl = 30757411.0 / 17917100.0 * x - 6372589.0 / 17917100.0 * y - 4539589.0 / 17917100.0 * z;
+    let gl = -19765991.0 / 29648200.0 * x + 47925759.0 / 29648200.0 * y + 467509.0 / 29648200.0 * z;
+    let bl = 792561.0 / 44930125.0 * x - 1921689.0 / 44930125.0 * y + 42328811.0 / 44930125.0 * z;
+    // linear → Rec2020 gamma: pow(1/2.4) (扩展传递函数)
     fn rec2020_encode(c: f64) -> f64 {
-        let a = 0.7976608376771017;
-        let b = 0.0333634376239715;
-        if c < 0.0 { 0.0 } else {
-            let v = (1.0 + a) * c.powf(0.45) - b;
-            v.max(0.0)
-        }
+        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        sign * c.abs().powf(1.0 / 2.4)
     }
     (rec2020_encode(rl), rec2020_encode(gl), rec2020_encode(bl))
 }
 
 // ── XYZ D50 ↔ XYZ D65 ──
+// Bradford 色适应矩阵，使用 CSS Color 4 规范参考实现的高精度值。
 
-/// XYZ D50 → XYZ D65。
+/// XYZ D50 → XYZ D65 (Bradford)。
 pub fn xyz_d50_to_xyz_d65(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
-    let x_d65 = 0.9555766 * x - 0.0230393 * y + 0.0631636 * z;
-    let y_d65 = -0.0282895 * x + 1.0099176 * y + 0.0210077 * z;
-    let z_d65 = 0.0122982 * x - 0.0204830 * y + 1.3299098 * z;
+    let x_d65 = 0.955473421488075 * x - 0.02309845494876471 * y + 0.06325924320057072 * z;
+    let y_d65 = -0.0283697093338637 * x + 1.0099953980813041 * y + 0.021041441191917323 * z;
+    let z_d65 = 0.012314014864481998 * x - 0.020507649298898964 * y + 1.330365926242124 * z;
     (x_d65, y_d65, z_d65)
 }
 
-/// XYZ D65 → XYZ D50。
+/// XYZ D65 → XYZ D50 (Bradford)。
 pub fn xyz_d65_to_xyz_d50(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
-    let x_d50 = 1.0478112 * x + 0.0228866 * y - 0.0501270 * z;
-    let y_d50 = 0.0295424 * x + 0.9904844 * y - 0.0170491 * z;
-    let z_d50 = -0.0092345 * x + 0.0150436 * y + 0.7521316 * z;
+    let x_d50 = 1.0479297925449969 * x + 0.022946870601609652 * y - 0.05019226628920524 * z;
+    let y_d50 = 0.02962780877005599 * x + 0.9904344267538799 * y - 0.017073799063418826 * z;
+    let z_d50 = -0.009243040646204504 * x + 0.015055191490298152 * y + 0.7518742814281371 * z;
     (x_d50, y_d50, z_d50)
 }

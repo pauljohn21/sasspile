@@ -346,6 +346,9 @@ fn test_sass_spec_full_stats() {
 
     for dir in &dirs {
         let (pass, fail, skip, cases) = run_spec_dir(&spec_root, dir);
+        let eval = cases - skip;
+        let pct = pass * 100 / eval.max(1);
+        info!(dir, pass, fail, skip, total = cases, evaluated = eval, pct, "sass-spec 目录");
         total_pass += pass;
         total_fail += fail;
         total_skip += skip;
@@ -363,4 +366,47 @@ fn test_sass_spec_full_stats() {
         pct = overall_pct,
         "sass-spec 全量统计（已跳过不支持的目录）"
     );
+}
+
+#[test]
+fn test_core_functions_subdirs() {
+    sasspile::init_tracing();
+    let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
+
+    let subdirs = [
+        "color/to_space",
+        "color/to_gamut",
+        "color/adjust",
+        "color/change",
+        "color/scale",
+        "color/channel",
+        "color/mix",
+        "color/hsl",
+        "color/hwb",
+        "color/rgb",
+        "color/invert",
+        "color/is_powerless",
+        "color/lab",
+        "color/lch",
+        "color/oklab",
+        "color/oklch",
+        "color/color",
+    ];
+
+    let (mut tp, mut tf, mut ts, mut tc) = (0, 0, 0, 0);
+    for sub in &subdirs {
+        let full = format!("core_functions/{}", sub);
+        let (p, f, s, c) = run_spec_dir(&spec_root, &full);
+        let eval = c - s;
+        let pct = p * 100 / eval.max(1);
+        info!(sub, pass = p, fail = f, skip = s, total = c, evaluated = eval, pct, "cf子目录");
+        tp += p;
+        tf += f;
+        ts += s;
+        tc += c;
+    }
+
+    let evaluated = tc - ts;
+    let pct = tp * 100 / evaluated.max(1);
+    info!(pass = tp, fail = tf, skip = ts, total = tc, evaluated, pct, "cf子目录汇总");
 }
