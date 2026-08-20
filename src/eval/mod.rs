@@ -19,9 +19,9 @@ pub(crate) struct ModuleExports {
     pub(crate) functions: HashMap<String, FunctionDef>,
     pub(crate) css: Vec<CssNode>,
     /// 模块加载过程中发现的已加载路径（用于缓存传播）。
-    loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
+    pub(crate) loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     /// 模块中收集的 @extend 关系——需要传播到顶层 CSS。
-    extends: Rc<Vec<(String, String)>>,
+    pub(crate) extends: Rc<Vec<(String, String)>>,
 }
 
 /// 不可变求值环境。
@@ -62,10 +62,10 @@ pub struct Env {
 /// mixin 定义存储。
 #[derive(Debug, Clone)]
 pub(crate) struct MixinDef {
-    params: Vec<Param>,
-    body: Vec<Node>,
+    pub(crate) params: Vec<Param>,
+    pub(crate) body: Vec<Node>,
     /// mixin 定义时捕获的命名空间（使 mixin 体可访问定义模块的 @use 命名空间）。
-    captured_namespaces: HashMap<String, Rc<ModuleExports>>,
+    pub(crate) captured_namespaces: HashMap<String, Rc<ModuleExports>>,
 }
 
 /// 函数定义存储。
@@ -109,6 +109,14 @@ impl Env {
     }
     pub(crate) fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
         self.mixins.get(name)
+    }
+    /// 获取 mixin 引用数据（用于 meta.get-mixin）。
+    /// 返回 mixin 的参数、体和捕获的命名空间键列表。
+    pub(crate) fn get_mixin_ref_data(&self, name: &str) -> Option<(Vec<Param>, Vec<Node>, Vec<String>)> {
+        self.mixins.get(name).map(|m| {
+            let ns_keys: Vec<String> = m.captured_namespaces.keys().cloned().collect();
+            (m.params.clone(), m.body.clone(), ns_keys)
+        })
     }
     pub(crate) fn define_function(&self, name: String, def: FunctionDef) -> Self {
         let mut new = self.clone();
@@ -468,6 +476,7 @@ mod builtin;
 mod color;
 mod control_flow;
 mod extend;
+mod meta_ops;
 mod mixin;
 mod module;
 mod plain_css;

@@ -11,6 +11,14 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_include", name = name, n_args = args.len());
         let _enter = span.enter();
+        // meta.apply mixin——动态调用 mixin 引用
+        if name == "meta.apply" {
+            return Self::eval_meta_apply(args, content, env);
+        }
+        // meta.load-css mixin——动态加载模块 CSS
+        if name == "meta.load-css" {
+            return Self::eval_meta_load_css(args, env);
+        }
         // 命名空间限定 mixin（如 midstream.b-a）
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
@@ -28,7 +36,7 @@ impl Evaluator {
     }
 
     /// 执行 mixin——绑定参数、注入 @content、求值 body。
-    fn exec_mixin(
+    pub(crate) fn exec_mixin(
         mixin: &MixinDef,
         args: &[Arg],
         content: &Option<Vec<Node>>,

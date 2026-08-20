@@ -12,8 +12,8 @@ impl super::Evaluator {
     /// 递归检查子表达式，在第一个违规处报错。
     pub(crate) fn check_plain_css_value(value: &Value) -> Result<()> {
         match value {
-            // 数值、颜色、布尔、null、Calc — 允许
-            Value::Number(..) | Value::Color(..) | Value::Bool(..) | Value::Null | Value::Calc(..) => Ok(()),
+            // 数值、颜色、布尔、null、Calc、MixinRef — 允许
+            Value::Number(..) | Value::Color(..) | Value::Bool(..) | Value::Null | Value::Calc(..) | Value::MixinRef(..) => Ok(()),
 
             // 变量引用 — 禁止
             Value::Variable(_) => Err(SassError::Eval(

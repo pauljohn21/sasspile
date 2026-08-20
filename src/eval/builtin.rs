@@ -103,6 +103,8 @@ color::call(&name, pos_args, kw_args)?
                 [Value::List(..)] => Ok(Value::String("list".into(), false)),
                 [Value::Map(..)] => Ok(Value::String("map".into(), false)),
                 [Value::Null] => Ok(Value::String("null".into(), false)),
+                [Value::MixinRef(..)] => Ok(Value::String("mixin".into(), false)),
+                [Value::Calc(..)] => Ok(Value::String("calc".into(), false)),
                 _ => Ok(Value::String("unknown".into(), false)),
             },
             "inspect" => {
@@ -145,7 +147,16 @@ color::call(&name, pos_args, kw_args)?
                 }
                 _ => Ok(Value::Bool(false)),
             },
-            "mixin-exists" => Ok(Value::Bool(false)),
+            "mixin-exists" => match pos_args {
+                [Value::String(name, _)] => {
+                    let normalized = name.replace('-', "_");
+                    let exists = env.get_mixin(name).is_some()
+                        || env.get_mixin(&normalized).is_some()
+                        || env.get_mixin(&name.replace('_', "-")).is_some();
+                    Ok(Value::Bool(exists))
+                }
+                _ => Ok(Value::Bool(false)),
+            },
             "function-exists" => match pos_args {
                 [Value::String(name, _)] => Ok(Value::Bool(env.get_function(name).is_some())),
                 _ => Ok(Value::Bool(false)),
@@ -162,6 +173,7 @@ color::call(&name, pos_args, kw_args)?
                 [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
                 _ => Err(SassError::Eval("get-function requires 1 argument".into())),
             },
+            "get-mixin" => Self::meta_get_mixin(pos_args, kw_args, env),
             "call" => match pos_args {
                 [Value::String(fname, _), rest @ ..] => {
                     let empty_kw = HashMap::new();
@@ -169,6 +181,9 @@ color::call(&name, pos_args, kw_args)?
                 }
                 _ => Err(SassError::Eval("call requires at least 1 argument".into())),
             },
+            "module-functions" => Self::meta_module_functions(pos_args, kw_args, env),
+            "module-mixins" => Self::meta_module_mixins(pos_args, kw_args, env),
+            "module-variables" => Self::meta_module_variables(pos_args, kw_args, env),
             "keywords" => match pos_args {
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords requires 1 argument".into())),
@@ -274,7 +289,8 @@ color::call(&name, pos_args, kw_args)?
             // ── meta ──
             | "type-of" | "inspect" | "if" | "feature-exists" | "content-exists" | "mixin-exists" | "function-exists"
             | "global-variable-exists" | "variable-exists" | "get-function" | "call"
-            | "keywords" | "calc-args" | "calc-name"
+            | "keywords" | "calc-args" | "calc-name" | "get-mixin"
+            | "module-functions" | "module-mixins" | "module-variables"
             // ── list ──
             | "length" | "list-length" | "nth" | "append" | "join" | "index"
             | "list-separator" | "separator" | "set-nth" | "is-bracketed"

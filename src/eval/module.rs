@@ -292,6 +292,10 @@ impl Evaluator {
             "meta.variable-exists" => "variable-exists",
             "meta.calc-args" => "calc-args",
             "meta.calc-name" => "calc-name",
+            "meta.get-mixin" => "get-mixin",
+            "meta.module-functions" => "module-functions",
+            "meta.module-mixins" => "module-mixins",
+            "meta.module-variables" => "module-variables",
             // sass:selector
             "selector.append" => "selector-append",
             "selector.nest" => "selector-nest",

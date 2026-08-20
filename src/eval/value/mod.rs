@@ -230,7 +230,8 @@ pub(crate) fn eval_variable(
             | Value::Color(..)
             | Value::Bool(..)
             | Value::Null
-            | Value::Calc(..) => Ok(value.clone()),
+            | Value::Calc(..)
+            | Value::MixinRef(..) => Ok(value.clone()),
             Value::Paren(inner) => Self::eval_value(inner, env),
             Value::String(s, quoted) => {
                 // 处理插值在字符串中
