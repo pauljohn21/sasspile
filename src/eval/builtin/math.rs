@@ -192,12 +192,29 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             }
         }
         "div" => match args {
-            [Value::Number(a, u1), Value::Number(b, _)] => {
+            [Value::Number(a, u1), Value::Number(b, u2)] => {
                 if *b == 0.0 {
                     if *a == 0.0 {
                         return Ok(Some(Value::Number(f64::NAN, u1.clone())));
                     }
-                    return Ok(Some(Value::Number(a / b, u1.clone())));
+                    // 除零产生 infinity——需要构建 calc(infinity) 表达式
+                    // 包含分子和分母单位
+                    let sign = if *a < 0.0 { "-" } else { "" };
+                    let mut calc = format!("calc({sign}infinity");
+                    // 分子单位
+                    if let Some(u) = u1 {
+                        if !u.is_empty() {
+                            calc.push_str(&format!(" * 1{u}"));
+                        }
+                    }
+                    // 分母单位
+                    if let Some(u) = u2 {
+                        if !u.is_empty() {
+                            calc.push_str(&format!(" / 1{u}"));
+                        }
+                    }
+                    calc.push(')');
+                    return Ok(Some(Value::Calc(calc)));
                 }
                 Ok(Some(Value::Number(a / b, u1.clone())))
             }

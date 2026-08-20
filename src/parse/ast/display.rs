@@ -28,7 +28,8 @@ impl std::fmt::Display for Value {
         match self {
             Value::Number(n, None) => {
                 if n.is_infinite() {
-                    return write!(f, "calc(infinity)");
+                    let sign = if *n < 0.0 { "-" } else { "" };
+                    return write!(f, "calc({sign}infinity)");
                 }
                 if n.is_nan() {
                     return write!(f, "calc(NaN)");
@@ -37,7 +38,8 @@ impl std::fmt::Display for Value {
             }
             Value::Number(n, Some(unit)) => {
                 if n.is_infinite() {
-                    return write!(f, "calc(infinity * 1{unit})");
+                    let sign = if *n < 0.0 { "-" } else { "" };
+                    return write!(f, "calc({sign}infinity * 1{unit})");
                 }
                 if n.is_nan() {
                     return write!(f, "calc(NaN * 1{unit})");
@@ -217,7 +219,7 @@ impl std::fmt::Display for Value {
                 let sep_str = match sep {
                     Separator::Comma => ", ",
                     Separator::Space => " ",
-                    Separator::Slash => " / ",
+                    Separator::Slash => "/",
                     Separator::Undecided => " ",
                 };
                 if *bracketed {

@@ -286,6 +286,24 @@ pub(crate) fn eval_variable(
                         return Self::eval_value(&args[2].value, env);
                     }
                 }
+                // if() 命名参数语法：if(condition, $if-true: val1, $if-false: val2)
+                if name == "if" && args.iter().any(|a| a.name.is_some()) {
+                    // 第一个参数应该是条件（位置参数）
+                    let pos_args: Vec<&Arg> = args.iter().filter(|a| a.name.is_none() && a.condition.is_none()).collect();
+                    if pos_args.len() == 1 {
+                        let cond = Self::eval_value(&pos_args[0].value, env)?;
+                        let if_true = args.iter().find(|a| a.name.as_deref() == Some("if-true") || a.name.as_deref() == Some("$if-true"));
+                        let if_false = args.iter().find(|a| a.name.as_deref() == Some("if-false") || a.name.as_deref() == Some("$if-false"));
+                        if Self::is_truthy(&cond) {
+                            if let Some(t) = if_true {
+                                return Self::eval_value(&t.value, env);
+                            }
+                        } else if let Some(f) = if_false {
+                            return Self::eval_value(&f.value, env);
+                        }
+                        return Ok(Value::Null);
+                    }
+                }
                 // if() 冒号语法：if(cond1: val1; cond2: val2; else: default)
                 // 使用 partial_eval_condition 进行部分求值：
                 // - sass() 部分短路求值

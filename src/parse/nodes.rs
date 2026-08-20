@@ -162,7 +162,8 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         self.expect(&Token::Colon)?;
         self.skip_ws();
-        let value = self.parse_value()?;
+        // 声明值中使用斜杠分隔符语义——`1/2` 保留为 `1/2` 而非计算除法
+        let value = self.parse_decl_value()?;
         let important = self.check_important()?;
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {

@@ -99,13 +99,27 @@ pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
 
 pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
-        (Value::Number(a, u1), Value::Number(b, _)) => {
+        (Value::Number(a, u1), Value::Number(b, u2)) => {
             if *b == 0.0 {
                 // SCSS: 1/0 = Infinity, -1/0 = -Infinity, 0/0 = NaN
                 if *a == 0.0 {
                     return Ok(Value::Number(f64::NAN, u1.clone()));
                 }
-                return Ok(Value::Number(a / b, u1.clone())); // f64 除零产生 Infinity
+                // 除零产生 infinity——构建 calc(infinity) 表达式
+                let sign = if *a < 0.0 { "-" } else { "" };
+                let mut calc = format!("calc({sign}infinity");
+                if let Some(u) = u1 {
+                    if !u.is_empty() {
+                        calc.push_str(&format!(" * 1{u}"));
+                    }
+                }
+                if let Some(u) = u2 {
+                    if !u.is_empty() {
+                        calc.push_str(&format!(" / 1{u}"));
+                    }
+                }
+                calc.push(')');
+                return Ok(Value::Calc(calc));
             }
             Ok(Value::Number(a / b, u1.clone()))
         }
