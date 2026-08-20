@@ -137,6 +137,13 @@ impl std::fmt::Display for Value {
                             write!(f, "color(display-p3 {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
                         }
                     }
+                    ColorFormat::DisplayP3Linear(r, g, b) => {
+                        if (c.a - 1.0).abs() < f64::EPSILON {
+                            write!(f, "color(display-p3-linear {} {} {})", format_num(*r), format_num(*g), format_num(*b))
+                        } else {
+                            write!(f, "color(display-p3-linear {} {} {} / {})", format_num(*r), format_num(*g), format_num(*b), format_alpha(c.a))
+                        }
+                    }
                     ColorFormat::Srgb(r, g, b) => {
                         if (c.a - 1.0).abs() < f64::EPSILON {
                             write!(f, "color(srgb {} {} {})", format_num(*r), format_num(*g), format_num(*b))

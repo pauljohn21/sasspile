@@ -443,17 +443,28 @@ impl Evaluator {
         val / 1_000_000.0
     }
 
-    pub(crate) fn builtin_rgba(args: &[Value]) -> Result<Value> {
+    pub(crate) fn builtin_rgba(fn_name: &str, args: &[Value]) -> Result<Value> {
+        // 检测是否为空格分隔的 CSS Level 4 语法（rgb(R G B) 或 rgb(R G B / A)）
+        let is_space_sep = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
         // 展开空格分隔的 List（CSS Level 4 语法：rgb(R G B / A)）
-        let args: Vec<Value> = if args.len() == 1 {
+        let args: Vec<Value> = if is_space_sep {
             if let Value::List(items, Separator::Space, false) = &args[0] {
-                items.clone()
+                let mut flat = items.clone();
+                // alpha 参数追加到末尾
+                if args.len() > 1 {
+                    flat.extend(args[1..].iter().cloned());
+                }
+                flat
             } else {
                 args.to_vec()
             }
         } else {
             args.to_vec()
         };
+        // 检测是否有 none 参数——有则 CSS 原样透传
+        let has_none = args.iter().any(|a| matches!(a, Value::String(s, false) if s == "none"));
+        // 检测 alpha 参数是否存在（4 个参数时最后一个为 alpha）
+        let has_alpha = args.len() == 4;
         match &args[..] {
             [
                 Value::Number(r, ru),
@@ -500,17 +511,28 @@ impl Evaluator {
             [Value::Color(c), Value::Number(a, _)] => {
                 Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, c.format.clone())))
             }
-            // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
-            _ if args.iter().any(|a| {
+            // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
+            _ if has_none || args.iter().any(|a| {
                 matches!(a, Value::Calc(_) | Value::String(_, false))
                     && !matches!(a, Value::Color(_))
             }) => {
-                let arg_str = args
-                    .iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                Ok(Value::String(format!("rgba({arg_str})"), false))
+                let (rgb_args, alpha) = if has_alpha {
+                    (&args[..3], Some(&args[3]))
+                } else {
+                    (&args[..], None)
+                };
+                let sep = if is_space_sep { " " } else { ", " };
+                let rgb_str = rgb_args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(sep);
+                let full_str = if let Some(a) = alpha {
+                    if is_space_sep {
+                        format!("{rgb_str} / {a}")
+                    } else {
+                        format!("{rgb_str}, {a}")
+                    }
+                } else {
+                    rgb_str
+                };
+                Ok(Value::String(format!("{fn_name}({full_str})"), false))
             }
             _ => Err(SassError::Eval("rgba requires 3-4 number arguments".into())),
         }

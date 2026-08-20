@@ -325,6 +325,8 @@ pub enum ColorFormat {
     Oklch(f64, f64, f64),
     /// color(display-p3 r g b)——Display P3 空间 (r/g/b: 0-1)。
     DisplayP3(f64, f64, f64),
+    /// color(display-p3-linear r g b)——线性 Display P3 空间 (r/g/b: 0-1)。
+    DisplayP3Linear(f64, f64, f64),
     /// color(srgb r g b)——sRGB 空间 (r/g/b: 0-1)。
     Srgb(f64, f64, f64),
     /// color(srgb-linear r g b)——线性 sRGB 空间 (r/g/b: 0-1)。

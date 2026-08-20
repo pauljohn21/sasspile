@@ -11,12 +11,26 @@ use im::HashMap;
 
 /// 展开空格分隔的 List 参数——用于 color.hsl(0 100% 50%) 等 CSS Level 4 语法。
 /// 当参数只有一个且为 space-separated list 时，展开为独立参数。
+/// 也支持 List + alpha 参数的情况（如 hsl(0 100% 50% / 0.5)）。
 fn flatten_space_list(args: &[Value]) -> Vec<Value> {
-    if args.len() == 1
-        && let Value::List(items, Separator::Space, false) = &args[0] {
+    if let Some(Value::List(items, Separator::Space, false)) = args.first() {
+        if args.len() == 1 {
             return items.clone();
         }
+        // List + alpha 参数：展开列表并追加额外参数
+        let mut flat = items.clone();
+        flat.extend(args[1..].iter().cloned());
+        return flat;
+    }
     args.to_vec()
+}
+
+/// 格式化 hue 值——无单位数字添加 deg 后缀（CSS 规范化）。
+fn format_hue(v: &Value) -> String {
+    match v {
+        Value::Number(n, None) => format!("{n}deg"),
+        _ => v.to_string(),
+    }
 }
 
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
@@ -272,10 +286,12 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
                     let c = Evaluator::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, *a);
                     Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, ColorFormat::Hwb(*h, *w / 100.0, *b / 100.0)))))
                 }
-                // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
+                // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
                 _ if flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
-                    let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(" ");
-                    Ok(Some(Value::String(format!("hwb({arg_str})"), false)))
+                    let arg_strs: Vec<String> = flat.iter().enumerate().map(|(i, a)| {
+                        if i == 0 { format_hue(a) } else { a.to_string() }
+                    }).collect();
+                    Ok(Some(Value::String(format!("hwb({})", arg_strs.join(" ")), false)))
                 }
                 _ => Err(SassError::Eval("hwb requires 3-4 arguments".into())),
             }
@@ -313,7 +329,10 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
             }
         }
         "hsl" => {
+            let is_space = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
             let flat = flatten_space_list(args);
+            // 检测是否有 none 参数
+            let has_none = flat.iter().any(|a| matches!(a, Value::String(s, false) if s == "none"));
             match &flat[..] {
             [
                 Value::Number(h, _),
@@ -332,16 +351,22 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
                 let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
                 Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, ColorFormat::Hsl(*h, *s / 100.0, *l / 100.0)))))
             }
-            // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出
-            _ if flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
-                let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
-                Ok(Some(Value::String(format!("hsl({arg_str})"), false)))
+            // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
+            _ if has_none || flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                let sep = if is_space { " " } else { ", " };
+                let arg_strs: Vec<String> = flat.iter().enumerate().map(|(i, a)| {
+                    if i == 0 { format_hue(a) } else { a.to_string() }
+                }).collect();
+                Ok(Some(Value::String(format!("hsl({})", arg_strs.join(sep)), false)))
             }
             _ => Err(SassError::Eval("hsl requires 3-4 arguments".into())),
             }
         },
         "hsla" => {
+            let is_space = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
             let flat = flatten_space_list(args);
+            // 检测是否有 none 参数
+            let has_none = flat.iter().any(|a| matches!(a, Value::String(s, false) if s == "none"));
             match &flat[..] {
             [
                 Value::Number(h, _),
@@ -353,9 +378,12 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
                 Ok(Some(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, ColorFormat::Hsl(*h, *s / 100.0, *l / 100.0)))))
             }
             // CSS 透传
-            _ if flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
-                let arg_str = flat.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
-                Ok(Some(Value::String(format!("hsla({arg_str})"), false)))
+            _ if has_none || flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                let sep = if is_space { " " } else { ", " };
+                let arg_strs: Vec<String> = flat.iter().enumerate().map(|(i, a)| {
+                    if i == 0 { format_hue(a) } else { a.to_string() }
+                }).collect();
+                Ok(Some(Value::String(format!("hsla({})", arg_strs.join(sep)), false)))
             }
             _ => Err(SassError::Eval("hsla requires 4 arguments".into())),
             }

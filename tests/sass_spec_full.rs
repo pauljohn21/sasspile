@@ -117,7 +117,10 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
         return false;
     }
 
-    let tmp_dir = std::env::temp_dir().join(format!("sass-spec-{}", std::process::id()));
+    let tmp_dir = std::env::temp_dir().join(format!("sass-spec-{}-{}", std::process::id(), std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
 

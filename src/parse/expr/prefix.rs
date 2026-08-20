@@ -162,10 +162,11 @@ impl<'tok> Parser<'tok> {
                             if self.peek() == Some(&Token::RParen) {
                                 self.advance();
                             }
-                            let mut args: Vec<Arg> = items
-                                .into_iter()
-                                .map(|v| Arg { name: None, value: v, spread: false, condition: None })
-                                .collect();
+                            // 空格分隔参数包装为列表——保留分隔符信息
+                            let channels = Value::List(items, Separator::Space, false);
+                            let mut args: Vec<Arg> = vec![
+                                Arg { name: None, value: channels, spread: false, condition: None },
+                            ];
                             if let Some(a) = alpha {
                                 args.push(Arg { name: None, value: a, spread: false, condition: None });
                             }

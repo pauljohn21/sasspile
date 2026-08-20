@@ -50,8 +50,8 @@ impl Evaluator {
             }
 
             // ── color ──
-            "rgba" => Self::builtin_rgba(pos_args),
-            "rgb" => Self::builtin_rgba(pos_args),
+            "rgba" => Self::builtin_rgba("rgba", pos_args),
+            "rgb" => Self::builtin_rgba("rgb", pos_args),
             "darken" => Self::builtin_darken(pos_args),
             "lighten" => Self::builtin_lighten(pos_args),
             "mix" => Self::builtin_mix(pos_args),

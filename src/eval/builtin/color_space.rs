@@ -397,6 +397,7 @@ fn is_same_space(fmt: &ColorFormat, target: &str) -> bool {
             | (ColorFormat::DisplayP3(_, _, _), "display-p3")
             | (ColorFormat::Srgb(_, _, _), "srgb")
             | (ColorFormat::SrgbLinear(_, _, _), "srgb-linear")
+            | (ColorFormat::DisplayP3Linear(_, _, _), "display-p3-linear")
             | (ColorFormat::A98Rgb(_, _, _), "a98-rgb")
             | (ColorFormat::ProphotoRgb(_, _, _), "prophoto-rgb")
             | (ColorFormat::Rec2020(_, _, _), "rec2020")
@@ -472,6 +473,10 @@ fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rp, gp, bp) = color_conv::srgb_to_display_p3(r, g, b);
             Ok(make_color(ColorFormat::DisplayP3(rp, gp, bp), c.a))
         }
+        "display-p3-linear" => {
+            let (rl, gl, bl) = color_conv::srgb_to_linear_srgb(r, g, b);
+            Ok(make_color(ColorFormat::DisplayP3Linear(rl, gl, bl), c.a))
+        }
         "a98-rgb" => {
             let (rp, gp, bp) = color_conv::srgb_to_a98_rgb(r, g, b);
             Ok(make_color(ColorFormat::A98Rgb(rp, gp, bp), c.a))
@@ -513,6 +518,7 @@ fn format_to_srgb_f64(fmt: &ColorFormat, r_u8: u8, g_u8: u8, b_u8: u8) -> (f64, 
         ColorFormat::DisplayP3(r, g, b) => color_conv::display_p3_to_srgb(*r, *g, *b),
         ColorFormat::Srgb(r, g, b) => (*r, *g, *b),
         ColorFormat::SrgbLinear(r, g, b) => color_conv::linear_srgb_to_srgb(*r, *g, *b),
+        ColorFormat::DisplayP3Linear(r, g, b) => color_conv::linear_srgb_to_srgb(*r, *g, *b),
         ColorFormat::A98Rgb(r, g, b) => color_conv::a98_rgb_to_srgb(*r, *g, *b),
         ColorFormat::ProphotoRgb(r, g, b) => color_conv::prophoto_to_srgb(*r, *g, *b),
         ColorFormat::Rec2020(r, g, b) => color_conv::rec2020_to_srgb(*r, *g, *b),
@@ -753,12 +759,13 @@ fn parse_color_space(args: &[Value]) -> Result<Value> {
     let b = extract_num(&nums[3], false)?;
     let fmt = match space.as_str() {
         "display-p3" => ColorFormat::DisplayP3(r, g, b),
+        "display-p3-linear" => ColorFormat::DisplayP3Linear(r, g, b),
         "srgb" => ColorFormat::Srgb(r, g, b),
         "srgb-linear" => ColorFormat::SrgbLinear(r, g, b),
         "a98-rgb" => ColorFormat::A98Rgb(r, g, b),
         "prophoto-rgb" => ColorFormat::ProphotoRgb(r, g, b),
         "rec2020" => ColorFormat::Rec2020(r, g, b),
-        "xyz" => ColorFormat::XyzD65(r, g, b),
+        "xyz" | "xyz-d65" => ColorFormat::XyzD65(r, g, b),
         "xyz-d50" => ColorFormat::XyzD50(r, g, b),
         _ => return Err(SassError::Eval(format!("Unknown color space: {space}"))),
     };
