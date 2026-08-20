@@ -32,6 +32,16 @@ impl Evaluator {
         let span =
             crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
+        // ── 宏分派：math/string/map/list/color/selector 六组 ──
+        if let Some(result) = super::module_dispatch::dispatch_builtin_module(
+            &name,
+            pos_args,
+            kw_args,
+            env,
+        ) {
+            return result;
+        }
+
         match name.as_str() {
             // ── sass-spec 测试辅助函数 ──
             "sass" => {
@@ -45,56 +55,18 @@ impl Evaluator {
                 }
                 Ok(pos_args[0].clone())
             }
-            // ── math ──（分派到 builtin::math 模块，支持命名参数）
-            "abs" | "ceil" | "floor" | "round" | "min" | "max" | "percentage"
-            | "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
-            | "atan2" | "asin" | "acos" | "atan" | "hypot" | "random" | "clamp"
-            | "unit" | "is-unitless" | "compatible" | "comparable" => {
-                math::call(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
-
-            // ── color ──
+            // ── color（手工 arm：调用 Self::builtin_* 方法）──
             "rgba" => Self::builtin_rgba("rgba", pos_args),
             "rgb" => Self::builtin_rgba("rgb", pos_args),
             "darken" => Self::builtin_darken(pos_args),
             "lighten" => Self::builtin_lighten(pos_args),
             "mix" => Self::builtin_mix(pos_args),
-            "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
-| "scale-color" | "hwb" | "complement" | "adjust-hue" | "saturate"
-| "desaturate" | "transparentize" | "fade-out" | "opacify" | "fade-in" | "alpha"
-| "opacity" | "red" | "green" | "blue" | "hue" | "saturation" | "lightness"
-| "whiteness" | "blackness" | "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy"
-| "channel" | "to-space" | "to-gamut" | "space" | "same" | "ie-hex-str" => {
-color::call(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
-            // hsl/hsla 颜色构造函数——分派到 color::call 处理
-            "hsl" | "hsla" => {
-                color::call(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
             // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
             "lab" | "lch" | "oklab" | "oklch" | "color" => {
                 color_parse::parse_color_fn(&name, pos_args, kw_args)
             }
 
-            // ── map ──
-            "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge" | "map-remove"
-            | "map-set" | "map-deep-merge" | "map-deep-remove" => {
-                let combined_args = merge_map_args(pos_args, kw_args, &name);
-                Self::call_map_builtin(&name, &combined_args, env)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
-
-            // ── string ──
-            "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
-            | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id" => {
-                Self::call_string_builtin(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
-
-            // ── meta ──
+            // ── meta（手工 arm，dispatch = "none"）──
             "type-of" => match pos_args {
                 [Value::Number(..)] => Ok(Value::String("number".into(), false)),
                 [Value::String(..)] => Ok(Value::String("string".into(), false)),
@@ -232,22 +204,6 @@ color::call(&name, pos_args, kw_args)?
                 Ok(Value::Calc(format!("{name}({arg_str})")))
             }
 
-            // ── list 子模块分派 ──
-            "length" | "list-length" | "nth" | "append" | "join" | "index" | "list-separator"
-            | "separator" | "set-nth" | "is-bracketed" | "list-slash" | "zip" => {
-                list::call(&name, pos_args, kw_args)?
-                    .ok_or_else(|| SassError::UndefinedFunction(name.clone()))
-            }
-
-            // ── selector 子模块分派 ──
-            "selector-append"
-            | "selector-nest"
-                        | "selector-is-superselector" | "selector-is-super"
-            | "selector-parse"
-            | "selector-simple-selectors" | "selector-unify"
-            | "selector-extend" | "selector-replace" => selector::call(&name, pos_args, kw_args)?
-                .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
-
             // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
             _ if Self::is_css_function(&name) => {
                 let arg_str = pos_args
@@ -264,44 +220,8 @@ color::call(&name, pos_args, kw_args)?
     /// 检查函数名是否为已知的 Sass 内置函数。
     /// 用于区分"真正未定义的函数"（应 CSS 透传）和"已知但参数错误的函数"（应报错）。
     pub(crate) fn is_known_builtin(name: &str) -> bool {
-        matches!(
-            name,
-            // ── math ──
-            "abs" | "ceil" | "floor" | "round" | "min" | "max" | "percentage"
-| "math.div" | "div" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
-| "atan2" | "asin" | "acos" | "atan" | "hypot" | "random" | "clamp" | "unit" | "is-unitless"
-            | "compatible" | "comparable"
-            // ── color ──
-            | "rgba" | "rgb" | "darken" | "lighten" | "mix"
-            | "invert" | "grayscale" | "color-channel" | "adjust-color" | "change-color"
-            | "scale-color" | "hwb" | "complement" | "hsl" | "hsla" | "adjust-hue"
-| "saturate" | "desaturate" | "transparentize" | "fade-out" | "opacify"
-| "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
-| "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
-            | "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy" | "channel" | "to-space" | "to-gamut" | "space" | "same"
-            | "ie-hex-str"
-            // ── map ──
-            | "map-get" | "map-keys" | "map-values" | "map-has-key" | "map-merge"
-            | "map-remove" | "map-set" | "map-deep-merge" | "map-deep-remove"
-            // ── string ──
-            | "str-length" | "to-upper-case" | "to-lower-case" | "unquote" | "quote"
-            | "str-slice" | "str-index" | "str-insert" | "str-split" | "unique-id"
-            // ── meta ──
-            | "type-of" | "inspect" | "if" | "feature-exists" | "content-exists" | "mixin-exists" | "function-exists"
-            | "global-variable-exists" | "variable-exists" | "get-function" | "call"
-            | "keywords" | "calc-args" | "calc-name" | "get-mixin"
-            | "module-functions" | "module-mixins" | "module-variables" | "accepts-content"
-            // ── list ──
-            | "length" | "list-length" | "nth" | "append" | "join" | "index"
-            | "list-separator" | "separator" | "set-nth" | "is-bracketed"
-            | "list-slash" | "zip"
-            // ── selector ──
-            | "selector-is-superselector" | "selector-is-super"
-            | "selector-parse" | "selector-simple-selectors" | "selector-unify"
-            | "selector-extend" | "selector-replace"
-            // ── CSS 原生（在 call_builtin 中有专门分支）──
-            | "calc" | "env" | "var"
-        )
+        super::module_dispatch::is_known_builtin(name)
+            || matches!(name, "rgba" | "rgb" | "darken" | "lighten" | "mix")
     }
 
     /// 检查函数名是否为已知 CSS 原生函数（应原样输出，不求值）。
@@ -465,7 +385,7 @@ fn map_param_names(name: &str) -> &'static [&'static str] {
 /// 将位置参数和命名参数合并为统一的位置参数列表。
 /// 按 `param_names` 顺序填充：先取 pos_args 对应位置，不足的从 kw_args 按参数名查找。
 /// 可变参数函数（如 map-get 的多 key）支持从 pos_args 追加。
-fn merge_map_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
+pub(crate) fn merge_map_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
     let param_names = map_param_names(name);
     if param_names.is_empty() {
         return pos_args.to_vec();
