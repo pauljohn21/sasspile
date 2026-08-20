@@ -417,6 +417,7 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
         }
         "channel" => super::color_space::channel(args, kw_args),
         "to-space" => super::color_space::to_space(args, kw_args),
+        "to-gamut" => super::color_gamut::to_gamut(args, kw_args),
         "space" => super::color_space::space(args, kw_args),
         "same" => super::color_space::same(args, kw_args),
         _ => Ok(None),

@@ -387,7 +387,7 @@ fn get_rgb_channel(c: &Color, channel: &str) -> Result<Value> {
 }
 
 /// 判断 ColorFormat 是否与目标空间名称匹配。
-fn is_same_space(fmt: &ColorFormat, target: &str) -> bool {
+pub(crate) fn is_same_space(fmt: &ColorFormat, target: &str) -> bool {
     matches!(
         (fmt, target),
         (ColorFormat::Lab(_, _, _), "lab")
@@ -410,7 +410,7 @@ fn is_same_space(fmt: &ColorFormat, target: &str) -> bool {
 }
 
 /// 转换颜色到目标空间，用 f64 精度算法。
-fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
+pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
     use super::color_conv;
 
     // 同空间转换——直接返回原始值，避免精度损失
@@ -503,7 +503,7 @@ fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
 }
 
 /// 从 ColorFormat 获取 sRGB (0-1) f64 值。
-fn format_to_srgb_f64(fmt: &ColorFormat, r_u8: u8, g_u8: u8, b_u8: u8) -> (f64, f64, f64) {
+pub(crate) fn format_to_srgb_f64(fmt: &ColorFormat, r_u8: u8, g_u8: u8, b_u8: u8) -> (f64, f64, f64) {
     use super::color_conv;
     match fmt {
         ColorFormat::Auto | ColorFormat::Rgb | ColorFormat::RgbPercent(_, _, _) => {
@@ -664,7 +664,7 @@ fn extract_hue(v: &Value) -> Result<f64> {
 }
 
 /// 从 f64 分量创建 Color（含 sRGB 近似值）。
-fn make_color(format: ColorFormat, alpha: f64) -> Value {
+pub(crate) fn make_color(format: ColorFormat, alpha: f64) -> Value {
     let (r, g, b) = format_to_srgb(&format);
     Value::Color(Color {
         r: (r * 255.0).round().clamp(0.0, 255.0) as u8,
