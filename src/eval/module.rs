@@ -202,132 +202,7 @@ impl Evaluator {
                 }
         }
         // 将模块限定名映射到内建函数
-        let builtin_name = match name {
-            // sass:math
-            "math.abs" => "abs",
-            "math.div" => "div",
-            "math.ceil" => "ceil",
-            "math.floor" => "floor",
-            "math.round" => "round",
-            "math.max" => "max",
-            "math.min" => "min",
-            "math.percentage" => "percentage",
-            "math.random" => "random",
-            "math.pow" => "pow",
-            "math.sqrt" => "sqrt",
-            "math.sin" => "sin",
-            "math.cos" => "cos",
-            "math.tan" => "tan",
-            "math.log" => "log",
-            "math.hypot" => "hypot",
-            "math.atan2" => "atan2",
-            "math.asin" => "asin",
-            "math.acos" => "acos",
-            "math.atan" => "atan",
-            "math.clamp" => "clamp",
-            "math.unit" => "unit",
-            "math.is-unitless" => "is-unitless",
-            "math.compatible" => "compatible",
-            // sass:string
-            "string.length" => "str-length",
-            "string.index" => "str-index",
-            "string.slice" => "str-slice",
-            "string.to-upper-case" => "to-upper-case",
-            "string.to-lower-case" => "to-lower-case",
-            "string.insert" => "str-insert",
-            "string.quote" => "quote",
-            "string.unquote" => "unquote",
-            "string.split" => "str-split",
-            "string.unique-id" => "unique-id",
-            // sass:map
-            "map.get" => "map-get",
-            "map.merge" => "map-merge",
-            "map.remove" => "map-remove",
-            "map.keys" => "map-keys",
-            "map.values" => "map-values",
-            "map.has-key" => "map-has-key",
-            "map.deep-remove" => "map-deep-remove",
-            "map.deep-merge" => "map-deep-merge",
-            "map.set" => "map-set",
-            // sass:list
-            "list.length" => "length",
-            "list.nth" => "nth",
-            "list.append" => "append",
-            "list.join" => "join",
-            "list.index" => "index",
-            "list.separator" => "separator",
-            "list.set-nth" => "set-nth",
-            "list.zip" => "zip",
-            "list.is-bracketed" => "is-bracketed",
-            "list.slash" => "list-slash",
-            // sass:color
-            "color.adjust-color" | "color.adjust" => "adjust-color",
-            "color.change-color" | "color.change" => "change-color",
-            "color.scale-color" | "color.scale" => "scale-color",
-            "color.mix" => "mix",
-            "color.invert" => "invert",
-            "color.grayscale" => "grayscale",
-            "color.complement" => "complement",
-            "color.channel" => "channel",
-            "color.space" => "space",
-            "color.same" => "same",
-            "color.whiteness" => "whiteness",
-            "color.blackness" => "blackness",
-            "color.hwb" => "hwb",
-            "color.hsl" => "hsl",
-            "color.hsla" => "hsla",
-            "color.rgb" => "rgb",
-            "color.rgba" => "rgba",
-            "color.adjust-hue" => "adjust-hue",
-            "color.saturate" => "saturate",
-            "color.desaturate" => "desaturate",
-            "color.transparentize" => "transparentize",
-            "color.fade-out" => "fade-out",
-            "color.opacify" => "opacify",
-            "color.fade-in" => "fade-in",
-            "color.alpha" => "alpha",
-            "color.opacity" => "opacity",
-            "color.red" => "red",
-            "color.green" => "green",
-            "color.blue" => "blue",
-            "color.hue" => "hue",
-            "color.saturation" => "saturation",
-            "color.lightness" => "lightness",
-            "color.is-powerless" => "is-powerless",
-            "color.is-missing" => "is-missing",
-            "color.is-in-gamut" => "is-in-gamut",
-            "color.is-legacy" => "is-legacy",
-            "color.to-space" => "to-space",
-            "color.to-gamut" => "to-gamut",
-            // sass:meta
-            "meta.type-of" => "type-of",
-            "meta.inspect" => "inspect",
-            "meta.keywords" => "keywords",
-            "meta.get-function" => "get-function",
-            "meta.call" => "call",
-            "meta.feature-exists" => "feature-exists",
-            "meta.content-exists" => "content-exists",
-            "meta.mixin-exists" => "mixin-exists",
-            "meta.function-exists" => "function-exists",
-            "meta.global-variable-exists" => "global-variable-exists",
-            "meta.variable-exists" => "variable-exists",
-            "meta.calc-args" => "calc-args",
-            "meta.calc-name" => "calc-name",
-            "meta.get-mixin" => "get-mixin",
-            "meta.module-functions" => "module-functions",
-            "meta.module-mixins" => "module-mixins",
-            "meta.module-variables" => "module-variables",
-            // sass:selector
-            "selector.append" => "selector-append",
-            "selector.nest" => "selector-nest",
-            "selector.is-superselector" => "selector-is-super",
-            "selector.parse" => "selector-parse",
-            "selector.simple-selectors" => "selector-simple-selectors",
-            "selector.unify" => "selector-unify",
-            "selector.extend" => "selector-extend",
-            "selector.replace" => "selector-replace",
-            _ => name,
-        };
+        let builtin_name = super::module_dispatch::module_builtin_name(name);
         Self::call_builtin(builtin_name, pos_args, kw_args, env)
     }
 }
@@ -376,21 +251,43 @@ fn apply_config(
 }
 
 /// 将模块导出绑定到环境（支持前缀）。
-fn bind_exports(env: Env, exports: &ModuleExports, prefix: Option<&str>) -> Env {
+/// 检测 @forward 冲突：当两个 @forward 导出同名成员且值不同时报错。
+fn bind_exports(env: Env, exports: &ModuleExports, prefix: Option<&str>) -> Result<Env> {
     let mut new_env = env;
     let fmt_key = |k: &str| -> String {
         prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}"))
     };
     for (k, v) in &exports.vars {
-        new_env = new_env.bind(fmt_key(k), v.clone());
+        let key = fmt_key(k);
+        // 检测 @forward 冲突：变量已存在且值不同
+        if let Some(existing) = new_env.vars.get(&key)
+            && existing != v
+        {
+            return Err(SassError::Module(format!(
+                "Two forwarded modules both define a variable named ${k}."
+            )));
+        }
+        new_env = new_env.bind(key, v.clone());
     }
     for (k, v) in &exports.mixins {
-        new_env = new_env.define_mixin(fmt_key(k), v.clone());
+        let key = fmt_key(k);
+        if new_env.mixins.contains_key(&key) {
+            return Err(SassError::Module(format!(
+                "Two forwarded modules both define a mixin named {k}."
+            )));
+        }
+        new_env = new_env.define_mixin(key, v.clone());
     }
     for (k, v) in &exports.functions {
-        new_env = new_env.define_function(fmt_key(k), v.clone());
+        let key = fmt_key(k);
+        if new_env.functions.contains_key(&key) {
+            return Err(SassError::Module(format!(
+                "Two forwarded modules both define a function named {k}."
+            )));
+        }
+        new_env = new_env.define_function(key, v.clone());
     }
-    new_env
+    Ok(new_env)
 }
 
 /// 合并模块缓存和 @extend 关系。
@@ -441,7 +338,7 @@ impl Evaluator {
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             if star {
-                let new_env = bind_exports(env_with_cache, &exports, None);
+                let new_env = bind_exports(env_with_cache, &exports, None)?;
                 return Ok((css, new_env));
             }
             let ns = namespace.clone().unwrap_or_else(|| {
@@ -482,7 +379,7 @@ impl Evaluator {
             };
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             let env_with_cache = merge_module_cache(env, &path, &exports);
-            let new_env = bind_exports(env_with_cache, &exports, prefix.as_deref());
+            let new_env = bind_exports(env_with_cache, &exports, prefix.as_deref())?;
             return Ok((css, new_env));
         }
         Ok((vec![], env.clone()))

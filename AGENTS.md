@@ -36,8 +36,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：2808/5362 = 52%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
-**@directives 子目录**：329/605 = 54%（at_root 50%, extend 41%, for 94%, forward 59%, function 48%, if 33%, import 67%, mixin 100%, use 43%）
+**sass-spec 基线**：2823/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
+**@directives 子目录**：337/605 = 56%（at_root 50%, extend 41%, for 94%, forward 59%, function 48%, if 33%, import 64%, mixin 100%, use 47%）
 **ep_full**：101/121 = 83%（模块缓存修复后，$namespace 变量丢失 bug 已修复）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -73,6 +73,11 @@ hrx-auditor = { path = "../scss-rust" }
 - 推送用 SSH：`git push origin main`（remote 名为 `origin`，SSH 地址 git@github.com）
 - Commit 格式：`feat: 描述 — 总计 N/M`
 - **每次提交后必须同步 CodeGraph**：`codegraph sync`（确保代码导航索引与最新代码一致）
+
+## OpenSpec 归档
+
+- 已归档变更存储在 `openspec/changes/archive/` 目录
+- **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
 
 ## 颜色系统架构
 

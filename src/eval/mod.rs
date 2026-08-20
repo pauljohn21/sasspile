@@ -220,6 +220,13 @@ impl Env {
         new.module_cache = Rc::new(cache);
         new
     }
+
+    /// 设置 plain CSS 模式标志（.css 文件加载时设为 true）。
+    pub fn with_plain_css(&self, plain_css: bool) -> Self {
+        let mut new = self.clone();
+        new.plain_css = plain_css;
+        new
+    }
 }
 
 /// 求值器。
@@ -241,7 +248,8 @@ impl Evaluator {
 
     /// 求值 AST 入口（带基础路径，支持文件加载）。
     pub fn evaluate_with_path(ast: &Ast, base_path: PathBuf) -> Result<Vec<CssNode>> {
-        let env = Env::default().with_base_path(base_path);
+        let is_plain_css = base_path.extension().and_then(|e| e.to_str()) == Some("css");
+        let env = Env::default().with_base_path(base_path).with_plain_css(is_plain_css);
         Self::evaluate_with_env(ast, env)
     }
 
@@ -426,63 +434,6 @@ impl Evaluator {
         }
     }
 
-    /// @import 指令处理。
-    pub(crate) fn eval_import(
-        url: &str,
-        modifier: &str,
-        env: &Env,
-    ) -> Result<(Vec<CssNode>, Env)> {
-        if url.starts_with("sass:") {
-            return Ok((vec![], env.add_module(url.to_string())));
-        }
-        let is_css = url.ends_with(".css")
-            || url.starts_with("http://")
-            || url.starts_with("https://")
-            || url.starts_with("url(")
-            || !modifier.is_empty()
-            || url.split("\", \"").any(|u| u.trim_matches('"').ends_with(".css"));
-        if is_css {
-            let urls: Vec<&str> = url.split("\", \"").collect();
-            let mut nodes = Vec::new();
-            for u in &urls {
-                let u = u.trim_matches('"');
-                let params = if modifier.is_empty() {
-                    format!("\"{u}\"")
-                } else {
-                    format!("\"{u}\" {modifier}")
-                };
-                nodes.push(CssNode::AtRule {
-                    name: "import".to_string(),
-                    params: Some(params),
-                    children: vec![],
-                    has_body: false,
-                });
-            }
-            return Ok((nodes, env.clone()));
-        }
-        let base = env.base_path.as_ref();
-        let load_paths = env.get_load_paths();
-        if let Some(path) = Self::resolve_file(base, url, load_paths) {
-            return Self::load_import(&path, env);
-        }
-        if !url.ends_with(".css") && !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("url(") && modifier.is_empty() {
-            return Err(SassError::Module(format!("Can't find stylesheet to import: {url}")));
-        }
-        let params = if modifier.is_empty() {
-            format!("\"{url}\"")
-        } else {
-            format!("\"{url}\" {modifier}")
-        };
-        Ok((
-            vec![CssNode::AtRule {
-                name: "import".to_string(),
-                params: Some(params),
-                children: vec![],
-                has_body: false,
-            }],
-            env.clone(),
-        ))
-    }
 }
 
 mod at_params;
@@ -490,9 +441,11 @@ mod builtin;
 mod color;
 mod control_flow;
 mod extend;
+mod import;
 mod meta_ops;
 mod mixin;
 mod module;
+mod module_dispatch;
 mod plain_css;
 mod rule;
 mod value;

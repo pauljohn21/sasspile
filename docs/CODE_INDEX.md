@@ -18,7 +18,7 @@
 | 文件 | 行数 | 职责 |
 |------|------|------|
 | **lib.rs** | 334 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing |
-| **main.rs** | 32 | CLI 入口 |
+| **main.rs** | 60 | CLI 入口（支持文件路径参数 + stdin 回退 + .css 文件 plain CSS 模式） |
 | **error.rs** | 95 | SassError 定义（全英文错误消息） |
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
 | **lex/mod.rs** | 523 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
@@ -31,7 +31,7 @@
 | **parse/at_rules.rs** | 513 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
 | **parse/expr/mod.rs** | 293 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color（SlashLiteral 用于声明值中字面量 `/`） |
 | **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
-| **eval/mod.rs** | 490 | Env + ModuleExports（含 module_cache） + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + global_writes + loaded_modules + module_cache + extends 传播 + eval_import + plain CSS 检查入口 + get_mixin_ref_data |
+| **eval/mod.rs** | 451 | Env + ModuleExports（含 module_cache） + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + with_plain_css + global_writes + loaded_modules + module_cache + extends 传播 + plain CSS 检查入口 + get_mixin_ref_data |
 | **eval/meta_ops.rs** | 301 | meta.apply / meta.load-css mixin + meta.get-mixin / meta.module-functions / meta.module-mixins / meta.module-variables 反射函数 + merge_module_cache |
 | **eval/rule.rs** | 197 | eval_rule + combine_selectors（规则体变量作用域隔离，传播命名空间/!global/@import 变量） |
 | **eval/value/mod.rs** | 482 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 + if() 命名参数支持 |
@@ -41,8 +41,10 @@
 | **eval/mixin.rs** | 293 | eval_include + exec_mixin(pub(crate)) + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
 | **eval/extend.rs** | 76 | apply_extends（跨模块 @extend 传播 + 选择器合并 + 占位符替换） |
 | **eval/at_params.rs** | 240 | @media/@supports 参数插值和表达式求值 |
-| **eval/plain_css.rs** | 232 | check_plain_css_value（变量/运算符/括号/插值/Map/内建函数检查）+ check_plain_css_node（Sass at-rules/静默注释拦截）+ check_plain_css_selector（插值/占位符/父选择器后缀/前导组合器）+ check_plain_css_call（is_css_function/is_known_builtin 区分） |
-| **eval/module.rs** | 468 | resolve_file + load_module（module_cache 缓存） + load_import + call_module_function + eval_use + eval_forward + apply_config + bind_exports + merge_module_cache + builtin_module_exports |
+| **eval/import.rs** | 63 | @import 指令处理（sass: 模块加载 + .css/http 透传 + 文件加载回退） |
+| **eval/module_dispatch.rs** | 132 | 模块限定函数名 → 内建函数名映射（math.abs → abs 等全量映射表） |
+| **eval/plain_css.rs** | 238 | check_plain_css_value + check_plain_css_node + check_plain_css_selector + check_plain_css_call（含 sass() 禁止检测 + is_css_function/is_known_builtin 区分） |
+| **eval/module.rs** | 388 | resolve_file + load_module（module_cache 缓存） + load_import + call_module_function + eval_use + eval_forward + apply_config + bind_exports（含 @forward 冲突检测） + merge_module_cache + builtin_module_exports |
 | **eval/color.rs** | 665 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
 | **eval/builtin.rs** | 491 | call_builtin 分派入口 + is_known_builtin + is_css_function + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
 | **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
@@ -83,7 +85,8 @@
 | `apply_extends` | `eval/extend.rs` |
 | `resolve_file` / `load_module` / `load_import` / `call_module_function` | `eval/module.rs` |
 | `eval_use` / `eval_forward` / `apply_config` / `bind_exports` / `merge_module_cache` | `eval/module.rs` |
-| `eval_import` | `eval/mod.rs` |
+| `module_builtin_name` | `eval/module_dispatch.rs` |
+| `eval_import` | `eval/import.rs` |
 | `check_plain_css_value` / `check_plain_css_node` / `check_plain_css_selector` / `check_plain_css_call` | `eval/plain_css.rs` |
 | `call_builtin` | `eval/builtin.rs` |
 | `merge_math_args` / `math_param_names` / `validate_single_number` | `eval/builtin/math_helpers.rs` |
@@ -187,3 +190,5 @@
 | 颜色测试跳过 | `#[ignore]` 标记的 5 个颜色测试函数（cf_color/cf_diag/minimize/sass_spec_full），需 `--ignored` 手动触发 |
 | 最小化工具 | `tests/minimize.rs` |
 | AST → SCSS 序列化 | `parse/ast_impl.rs` → `Node::to_scss()` |
+| OpenSpec specs | `openspec/specs/` — 5 个 capability spec（calc-infinity-handling / error-detection-coverage / meta-module-functions / module-member-access / param-validation-fix） |
+| OpenSpec 归档 | `openspec/changes/archive/` — 已完成变更的归档存储 |

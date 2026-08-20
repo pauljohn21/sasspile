@@ -83,9 +83,15 @@ impl super::Evaluator {
     /// Sass 内建函数（index, length, map-get 等）禁止。
     fn check_plain_css_call(name: &str, args: &[crate::parse::ast::Arg]) -> Result<()> {
         let lower = name.to_lowercase();
-        // if/sass/css 有自己的 plain CSS 逻辑，不拦截
-        if lower == "if" || lower == "sass" || lower == "css" {
+        // if/css 有自己的 plain CSS 逻辑，不拦截
+        // sass() 在 plain CSS 中禁止
+        if lower == "if" || lower == "css" {
             return Ok(());
+        }
+        if lower == "sass" {
+            return Err(SassError::Eval(
+                "sass() conditions aren't allowed in plain CSS".into(),
+            ));
         }
         // 检查参数中的命名参数（关键字参数含 $ 变量名）— 禁止
         for arg in args {
