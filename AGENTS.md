@@ -78,6 +78,7 @@ hrx-auditor = { path = "../scss-rust" }
 
 - 已归档变更存储在 `openspec/changes/archive/` 目录
 - **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
+- **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 
