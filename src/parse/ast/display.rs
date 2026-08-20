@@ -219,7 +219,8 @@ impl std::fmt::Display for Value {
                 let sep_str = match sep {
                     Separator::Comma => ", ",
                     Separator::Space => " ",
-                    Separator::Slash => "/",
+                    Separator::Slash => " / ",
+                    Separator::SlashLiteral => "/",
                     Separator::Undecided => " ",
                 };
                 if *bracketed {

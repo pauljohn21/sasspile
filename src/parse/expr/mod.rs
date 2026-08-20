@@ -58,8 +58,12 @@ impl<'tok> Parser<'tok> {
         loop {
             self.skip_ws();
             // 声明值上下文 + 顶层 + 遇到 Slash → 斜杠分隔列表
-            // 但如果 / 后面的表达式包含 +、-、*、% 运算符，则 / 做除法
-            if slash_as_sep && min_bp == 0 && matches!(self.peek(), Some(Token::Slash)) {
+            // 但以下情况 / 做除法：
+            // 1. / 后面的表达式包含 +、-、*、% 运算符
+            // 2. / 前面是括号表达式 (如 (1)/2)
+            // 3. / 前面是变量引用 (如 $x/2)
+            let is_division_context = matches!(lhs, Value::Paren(_) | Value::Variable(_));
+            if slash_as_sep && min_bp == 0 && matches!(self.peek(), Some(Token::Slash)) && !is_division_context {
                 // 检查 / 后面是否有其他算术运算符（+、-、*、%）
                 let has_outer_math = self.slash_followed_by_arith_op();
                 if !has_outer_math {
@@ -73,7 +77,7 @@ impl<'tok> Parser<'tok> {
                         self.skip_ws();
                     }
                     if slash_items.len() > 1 {
-                        lhs = Value::List(slash_items, Separator::Slash, false);
+                        lhs = Value::List(slash_items, Separator::SlashLiteral, false);
                     }
                     // 斜杠列表后面可能有空格列表——继续循环
                     continue;
@@ -101,7 +105,7 @@ impl<'tok> Parser<'tok> {
                                     self.skip_ws();
                                 }
                                 let slash_list = if slash_items.len() > 1 {
-                                    Value::List(slash_items, Separator::Slash, false)
+                                    Value::List(slash_items, Separator::SlashLiteral, false)
                                 } else {
                                     slash_items.into_iter().next().unwrap()
                                 };

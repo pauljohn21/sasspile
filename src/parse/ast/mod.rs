@@ -424,8 +424,10 @@ pub enum Separator {
     Comma,
     /// 空格分隔——`(a b c)`。
     Space,
-    /// 斜杠分隔——`(a / b / c)`。
+    /// 斜杠分隔——`(a / b / c)`。由 list.slash() 等函数创建，输出带空格。
     Slash,
+    /// 字面斜杠——声明值中直接写的 `1/2`，输出无空格。
+    SlashLiteral,
     /// 未确定——单元素或待推断。
     Undecided,
 }

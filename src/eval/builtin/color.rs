@@ -12,6 +12,7 @@ use im::HashMap;
 /// 展开空格分隔的 List 参数——用于 color.hsl(0 100% 50%) 等 CSS Level 4 语法。
 /// 当参数只有一个且为 space-separated list 时，展开为独立参数。
 /// 也支持 List + alpha 参数的情况（如 hsl(0 100% 50% / 0.5)）。
+/// 同时处理 SlashLiteral 分隔（声明值中 / 被解析为 SlashLiteral）。
 fn flatten_space_list(args: &[Value]) -> Vec<Value> {
     if let Some(Value::List(items, Separator::Space, false)) = args.first() {
         if args.len() == 1 {
@@ -21,6 +22,21 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
         let mut flat = items.clone();
         flat.extend(args[1..].iter().cloned());
         return flat;
+    }
+    // SlashLiteral 分隔的列表：hsl(H S L / A) → [Space[H,S,L], A]
+    if args.len() == 1 {
+        if let Some(Value::List(items, Separator::SlashLiteral | Separator::Slash, false)) = args.first() {
+            if items.len() == 2 {
+                let mut flat = Vec::new();
+                if let Some(Value::List(hsl_items, Separator::Space, false)) = items.first() {
+                    flat.extend(hsl_items.iter().cloned());
+                } else {
+                    flat.push(items[0].clone());
+                }
+                flat.push(items[1].clone());
+                return flat;
+            }
+        }
     }
     args.to_vec()
 }

@@ -14,7 +14,8 @@ pub(crate) fn inspect_value(v: &Value) -> String {
             let sep_str = match sep {
                 Separator::Comma => ", ",
                 Separator::Space => " ",
-                Separator::Slash => "/",
+                Separator::Slash => " / ",
+                Separator::SlashLiteral => "/",
                 Separator::Undecided => " ",
             };
             // 嵌套列表元素：如果元素是列表，根据 separator 规则决定是否用括号包裹
@@ -35,7 +36,8 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                                 let inner_sep_str = match inner_sep {
                                     Separator::Comma => ", ",
                                     Separator::Space => " ",
-                                    Separator::Slash => "/",
+                                    Separator::Slash => " / ",
+                                    Separator::SlashLiteral => "/",
                                     Separator::Undecided => " ",
                                 };
                                 format!("({})", inner_parts.join(inner_sep_str))
@@ -57,6 +59,13 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                         }
                     }
                     Separator::Slash => {
+                        if *bracketed {
+                            format!("{} /", parts[0])
+                        } else {
+                            format!("({} /)", parts[0])
+                        }
+                    }
+                    Separator::SlashLiteral => {
                         if *bracketed {
                             format!("{}/", parts[0])
                         } else {

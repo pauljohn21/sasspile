@@ -7,7 +7,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.6** — CSS Color 4 现代色彩空间 + W3C 精确转换矩阵 + 色域映射 + slash 分隔符语义 — 5287/11512 (46%) sass-spec.
+> **v0.9.6** — CSS Color 4 现代色彩空间 + W3C 精确转换矩阵 + 色域映射 + slash 分隔符语义 — 5400/11512 (47%) sass-spec.
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
@@ -16,7 +16,7 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
-- **sass-spec 兼容**: 5287/11512 (46%) 全量通过（VFS + `===` 分组隔离，更准确），@directives 子目录 329/605 (54%)，core_functions/color 2342/5715 (41%)，manifest 精简只跳过 libsass/non_conformant 弃用目录
+- **sass-spec 兼容**: 5400/11512 (47%) 全量通过（VFS + `===` 分组隔离，更准确），@directives 子目录 329/605 (54%)，core_functions/color 2526/5715 (44%)，manifest 精简只跳过 libsass/non_conformant 弃用目录
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
 - **Element Plus**: 121/121 (100%) 全量通过 ✅
 - **tracing 调试**: 内建 span + event 追踪链路

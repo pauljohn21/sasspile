@@ -453,12 +453,32 @@ impl Evaluator {
         // 检测是否为空格分隔的 CSS Level 4 语法（rgb(R G B) 或 rgb(R G B / A)）
         let is_space_sep = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
         // 展开空格分隔的 List（CSS Level 4 语法：rgb(R G B / A)）
+        // 同时处理 SlashLiteral 分隔的情况（rgb(R G B / A) 中 / 被解析为 SlashLiteral）
         let args: Vec<Value> = if is_space_sep {
             if let Value::List(items, Separator::Space, false) = &args[0] {
                 let mut flat = items.clone();
                 // alpha 参数追加到末尾
                 if args.len() > 1 {
                     flat.extend(args[1..].iter().cloned());
+                }
+                flat
+            } else {
+                args.to_vec()
+            }
+        } else if matches!(args.first(), Some(Value::List(_, Separator::SlashLiteral | Separator::Slash, false))) {
+            // rgb(R G B / A) — SlashLiteral 分隔的列表
+            if let Some(Value::List(items, sep, false)) = args.first() {
+                let _ = sep;
+                let mut flat = Vec::new();
+                // 第一个元素可能是 Space 分隔的 [R, G, B]
+                if let Some(Value::List(rgb_items, Separator::Space, false)) = items.first() {
+                    flat.extend(rgb_items.iter().cloned());
+                } else {
+                    flat.extend(items[..items.len().saturating_sub(1)].iter().cloned());
+                }
+                // 最后一个元素是 alpha
+                if items.len() >= 2 {
+                    flat.push(items[items.len() - 1].clone());
                 }
                 flat
             } else {

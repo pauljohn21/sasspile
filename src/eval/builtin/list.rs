@@ -101,6 +101,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 // Undecided separator → Space when appending
                 let new_sep = match sep {
                     Separator::Undecided => Separator::Space,
+                    Separator::SlashLiteral => Separator::Slash,
                     other => other.clone(),
                 };
                 Ok(Some(Value::List(new_items, new_sep, *bracketed)))
@@ -112,6 +113,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     "slash" => Separator::Slash,
                     _ => match sep {
                         Separator::Undecided => Separator::Space,
+                        Separator::SlashLiteral => Separator::Slash,
                         other => other.clone(),
                     },
                 };
@@ -180,12 +182,14 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
                     _ => {
-                        if a_sep == Separator::Undecided { b_sep } else { a_sep }
+                        let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                        if auto_sep == Separator::SlashLiteral { Separator::Slash } else { auto_sep }
                     }
                 }
             } else {
                 // 无 separator 参数 → auto
-                if a_sep == Separator::Undecided { b_sep } else { a_sep }
+                let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                if auto_sep == Separator::SlashLiteral { Separator::Slash } else { auto_sep }
             };
             // 解析 bracketed 参数
             let bracketed = if let Some(Value::Bool(b)) = args.get(3) {
@@ -236,6 +240,9 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 Value::List(_, Separator::Slash, _) => {
                     Ok(Some(Value::String("slash".into(), false)))
                 }
+                Value::List(_, Separator::SlashLiteral, _) => {
+                    Ok(Some(Value::String("slash".into(), false)))
+                }
                 Value::List(_, Separator::Undecided, _) => {
                     Ok(Some(Value::String("space".into(), false)))
                 }
@@ -268,11 +275,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             if args.is_empty() {
                 return Err(SassError::Eval("list-slash requires 1+ arguments".into()));
             }
-            Ok(Some(Value::List(
-                args.to_vec(),
-                Separator::Slash,
-                false,
-            )))
+            Ok(Some(Value::List(args.to_vec(), Separator::Slash, false)))
         },
         "zip" => {
             if args.len() < 2 {
