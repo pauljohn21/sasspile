@@ -343,6 +343,24 @@ pub enum ColorFormat {
     XyzD50(f64, f64, f64),
 }
 
+impl ColorFormat {
+    /// 用新的 RGB 通道值克隆当前格式（用于现代 RGB 空间）。
+    pub fn clone_with(&self, r: f64, g: f64, b: f64) -> Self {
+        match self {
+            ColorFormat::DisplayP3(_, _, _) => ColorFormat::DisplayP3(r, g, b),
+            ColorFormat::Srgb(_, _, _) => ColorFormat::Srgb(r, g, b),
+            ColorFormat::SrgbLinear(_, _, _) => ColorFormat::SrgbLinear(r, g, b),
+            ColorFormat::DisplayP3Linear(_, _, _) => ColorFormat::DisplayP3Linear(r, g, b),
+            ColorFormat::A98Rgb(_, _, _) => ColorFormat::A98Rgb(r, g, b),
+            ColorFormat::ProphotoRgb(_, _, _) => ColorFormat::ProphotoRgb(r, g, b),
+            ColorFormat::Rec2020(_, _, _) => ColorFormat::Rec2020(r, g, b),
+            ColorFormat::XyzD65(_, _, _) => ColorFormat::XyzD65(r, g, b),
+            ColorFormat::XyzD50(_, _, _) => ColorFormat::XyzD50(r, g, b),
+            _ => self.clone(),
+        }
+    }
+}
+
 /// 颜色。
 #[derive(Debug, Clone)]
 pub struct Color {

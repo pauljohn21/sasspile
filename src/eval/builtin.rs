@@ -4,6 +4,7 @@
 //! 各函数组已拆分到子模块：color/list/map/string/selector。
 
 pub mod color;
+pub mod color_adjust;
 pub mod color_conv;
 pub mod color_space;
 pub mod list;
