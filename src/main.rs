@@ -20,7 +20,11 @@ fn main() {
     // 编译
     let style = OutputStyle::Expanded;
     match compile(&input, style) {
-        Ok(css) => print!("{css}"),
+        Ok(css) => {
+            use std::io::Write;
+            let mut stdout = std::io::stdout();
+            let _ = stdout.write_all(css.as_bytes());
+        }
         Err(e) => {
             #[cfg(feature = "tracing")]
             tracing::error!(error = %e, "编译错误");

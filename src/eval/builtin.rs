@@ -15,6 +15,7 @@ pub mod map;
 pub mod selector;
 pub mod string;
 pub mod math;
+pub mod math_helpers;
 
 use super::*;
 use crate::error::{Result, SassError};
@@ -230,7 +231,7 @@ color::call(&name, pos_args, kw_args)?
             | "selector-simple-selectors"
             | "selector-unify"
             | "selector-extend"
-            | "selector-replace" => selector::call(&name, pos_args)?
+            | "selector-replace" => selector::call(&name, pos_args, kw_args)?
                 .ok_or_else(|| SassError::UndefinedFunction(name.clone())),
 
             // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
@@ -288,7 +289,7 @@ color::call(&name, pos_args, kw_args)?
     }
 
     /// 检查函数名是否为已知 CSS 原生函数（应原样输出，不求值）。
-    fn is_css_function(name: &str) -> bool {
+    pub(crate) fn is_css_function(name: &str) -> bool {
         matches!(
             name,
             // CSS 变换函数

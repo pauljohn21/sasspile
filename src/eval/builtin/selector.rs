@@ -1,11 +1,52 @@
 //! Selector 内建函数。
 //!
-//! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend。
+//! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend/replace。
+//! 支持命名参数（如 `selector.parse($selector: "c")`）。
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
+use im::HashMap;
 
-pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
+/// 返回每个 selector 函数的参数名列表（按位置顺序）。
+fn selector_param_names(name: &str) -> &'static [&'static str] {
+    match name {
+        "selector-parse" => &["selector"],
+        "selector-append" => &[],
+        "selector-nest" => &[],
+        "selector-is-super" => &["super", "sub"],
+        "selector-simple-selectors" => &["selector"],
+        "selector-unify" => &["selector1", "selector2"],
+        "selector-extend" => &["selector", "extendee", "extender"],
+        "selector-replace" => &["selector", "original", "replacement"],
+        _ => &[],
+    }
+}
+
+/// 合并位置参数和命名参数。
+fn merge_selector_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
+    let param_names = selector_param_names(name);
+    if param_names.is_empty() {
+        return pos_args.to_vec();
+    }
+    let mut result = Vec::with_capacity(param_names.len().max(pos_args.len()));
+    for (i, pname) in param_names.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
+    if pos_args.len() > param_names.len() {
+        result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
+}
+
+pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
+    let args = merge_selector_args(pos_args, kw_args, name);
+    let args = args.as_slice();
     match name {
         "selector-append" => {
             let parts: Vec<String> = args

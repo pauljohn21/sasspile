@@ -306,3 +306,158 @@ impl Evaluator {
         Self::call_builtin(builtin_name, pos_args, kw_args, env)
     }
 }
+
+/// 返回内建模块的导出变量。
+/// sass:math 模块导出 $pi, $e, $epsilon, $max-safe-integer, $min-safe-integer, $max-number, $min-number。
+pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports> {
+    match module_name {
+        "sass:math" => {
+            let mut vars = HashMap::new();
+            vars.insert("pi".to_string(), Value::Number(std::f64::consts::PI, None));
+            vars.insert("e".to_string(), Value::Number(std::f64::consts::E, None));
+            vars.insert("epsilon".to_string(), Value::Number(f64::EPSILON, None));
+            vars.insert("max-safe-integer".to_string(), Value::Number(9007199254740991.0, None));
+            vars.insert("min-safe-integer".to_string(), Value::Number(-9007199254740991.0, None));
+            vars.insert("max-number".to_string(), Value::Number(f64::MAX, None));
+            vars.insert("min-number".to_string(), Value::Number(f64::MIN_POSITIVE, None));
+            Some(ModuleExports {
+                vars,
+                ..Default::default()
+            })
+        }
+        _ => None,
+    }
+}
+
+/// 使用 ConfigVar 列表更新 inherited_vars。
+fn apply_config(
+    inherited_vars: &mut Vec<(String, Value)>,
+    config: &[crate::parse::ast::ConfigVar],
+    env: &Env,
+) -> Result<()> {
+    for cfg in config {
+        let val = Evaluator::eval_value(&cfg.value, env)?;
+        if cfg.is_default {
+            if !inherited_vars.iter().any(|(n, _)| n.as_str() == cfg.name.as_str()) {
+                inherited_vars.push((cfg.name.clone(), val));
+            }
+        } else if let Some(idx) = inherited_vars.iter().position(|(n, _)| n.as_str() == cfg.name.as_str()) {
+            inherited_vars[idx].1 = val;
+        } else {
+            inherited_vars.push((cfg.name.clone(), val));
+        }
+    }
+    Ok(())
+}
+
+/// 将模块导出绑定到环境（支持前缀）。
+fn bind_exports(env: Env, exports: &ModuleExports, prefix: Option<&str>) -> Env {
+    let mut new_env = env;
+    let fmt_key = |k: &str| -> String {
+        prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}"))
+    };
+    for (k, v) in &exports.vars {
+        new_env = new_env.bind(fmt_key(k), v.clone());
+    }
+    for (k, v) in &exports.mixins {
+        new_env = new_env.define_mixin(fmt_key(k), v.clone());
+    }
+    for (k, v) in &exports.functions {
+        new_env = new_env.define_function(fmt_key(k), v.clone());
+    }
+    new_env
+}
+
+/// 合并模块缓存和 @extend 关系。
+fn merge_module_cache(env: &Env, path: &Path, exports: &ModuleExports) -> Env {
+    let mut new_loaded = (*env.loaded_modules).clone();
+    new_loaded.insert(path.to_path_buf());
+    new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
+    let mut new_extends = (*env.extends).clone();
+    new_extends.extend((*exports.extends).clone().iter().cloned());
+    Env {
+        loaded_modules: Rc::new(new_loaded),
+        extends: Rc::new(new_extends),
+        ..env.clone()
+    }
+}
+
+impl Evaluator {
+    /// @use 指令处理。
+    pub(crate) fn eval_use(
+        url: &str,
+        namespace: &Option<String>,
+        star: bool,
+        config: &[crate::parse::ast::ConfigVar],
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
+        // 内建模块 sass:math/string/list/map/color/meta/selector
+        if url.starts_with("sass:") {
+            return Ok((vec![], env.add_module(url.to_string())));
+        }
+        let base = env.base_path.as_ref();
+        let load_paths = env.get_load_paths();
+        if let Some(path) = Self::resolve_file(base, url, load_paths) {
+            let already_loaded = env.loaded_modules.contains(&path);
+            let exports = if already_loaded {
+                ModuleExports::default()
+            } else {
+                let config_pairs: Vec<(String, Value)> = config
+                    .iter()
+                    .map(|c| {
+                        let val = Self::eval_value(&c.value, env).unwrap_or(Value::Null);
+                        (c.name.clone(), val)
+                    })
+                    .collect();
+                Self::load_module(&path, &config_pairs, env)?
+            };
+            let env_with_cache = merge_module_cache(env, &path, &exports);
+            let css = if already_loaded { vec![] } else { exports.css.clone() };
+            if star {
+                let new_env = bind_exports(env_with_cache, &exports, None);
+                return Ok((css, new_env));
+            }
+            let ns = namespace.clone().unwrap_or_else(|| {
+                let url_stem = std::path::Path::new(url)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(url);
+                let base = url_stem.split('.').next().unwrap_or(url_stem);
+                base.trim_start_matches('_').to_string()
+            });
+            return Ok((css, env_with_cache.add_namespace(ns, exports)));
+        }
+        Ok((vec![], env.clone()))
+    }
+
+    /// @forward 指令处理。
+    pub(crate) fn eval_forward(
+        url: &str,
+        prefix: &Option<String>,
+        config: &[crate::parse::ast::ConfigVar],
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
+        let base = env.base_path.as_ref();
+        let load_paths = env.get_load_paths();
+        if let Some(path) = Self::resolve_file(base, url, load_paths) {
+            let mut inherited_vars: Vec<(String, Value)> = env
+                .vars
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            apply_config(&mut inherited_vars, config, env)?;
+            let already_loaded = env.loaded_modules.contains(&path);
+            let exports = if already_loaded {
+                ModuleExports::default()
+            } else {
+                Self::load_module(&path, &inherited_vars, env)?
+            };
+            let css = if already_loaded { vec![] } else { exports.css.clone() };
+            let env_with_cache = merge_module_cache(env, &path, &exports);
+            let new_env = bind_exports(env_with_cache, &exports, prefix.as_deref());
+            return Ok((css, new_env));
+        }
+        Ok((vec![], env.clone()))
+    }
+
+}

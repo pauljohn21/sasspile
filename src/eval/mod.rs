@@ -132,11 +132,17 @@ impl Env {
             .map(|c| c.as_slice())
             .zip(self.content_env.as_ref().map(|e| e.as_ref()))
     }
-    /// 注册已加载内建模块。
+    /// 注册已加载内建模块，并注册模块变量到命名空间。
     pub fn add_module(&self, name: String) -> Self {
         let mut new = self.clone();
         if !new.builtin_modules.contains(&name) {
-            new.builtin_modules.push(name);
+            new.builtin_modules.push(name.clone());
+        }
+        // 注册内建模块的变量到命名空间（如 math.$pi, math.$e）
+        // 命名空间名是 url 中 "sass:" 后的部分（如 "sass:math" → "math"）
+        let ns_name = name.strip_prefix("sass:").unwrap_or(&name).to_string();
+        if let Some(exports) = module::builtin_module_exports(&name) {
+            new.namespaces.insert(ns_name, Rc::new(exports));
         }
         new
     }
@@ -261,13 +267,32 @@ impl Evaluator {
     /// 求值单个节点。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(node, env), fields(depth = env.depth)))]
     fn eval_node(node: &Node, env: &Env) -> Result<(Vec<CssNode>, Env)> {
+        // plain CSS 模式——检查节点合法性（Use/Forward/Import 除外，由模块系统处理）
+        if env.plain_css && !matches!(node, Node::Use { .. } | Node::Forward { .. } | Node::Import { .. }) {
+            Self::check_plain_css_node(node)?;
+        }
         match node {
-            Node::Rule { selector, body } => Self::eval_rule(selector, body, env),
+            Node::Rule { selector, body } => {
+                // plain CSS 模式——检查选择器合法性
+                if env.plain_css {
+                    Self::check_plain_css_selector(selector)?;
+                }
+                Self::eval_rule(selector, body, env)
+            },
             Node::Decl {
                 property,
                 value,
                 important,
             } => {
+                // plain CSS 模式——检查值和属性名中的非法表达式
+                if env.plain_css {
+                    Self::check_plain_css_value(value)?;
+                    if property.contains("#{") {
+                        return Err(SassError::Eval(
+                            "Interpolation isn't allowed in plain CSS.".into(),
+                        ));
+                    }
+                }
                 let val = Self::eval_value(value, env)?;
                 // SCSS 中 null 值声明不输出
                 if matches!(val, Value::Null) {
@@ -348,213 +373,15 @@ impl Evaluator {
                 namespace,
                 star,
                 config,
-            } => {
-                // 内建模块 sass:math/string/list/map/color/meta/selector
-                if url.starts_with("sass:") {
-                    return Ok((vec![], env.add_module(url.clone())));
-                }
-                // 文件模块——解析路径并加载
-                let base = env.base_path.as_ref();
-                let load_paths = env.get_load_paths();
-                if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    // 模块缓存：同一路径只加载一次，CSS 只输出一次
-                    let already_loaded = env.loaded_modules.contains(&path);
-                    // 已加载过的模块直接返回空 exports（不重新加载）
-                    let exports = if already_loaded {
-                        ModuleExports::default()
-                    } else {
-                        // 将 ConfigVar 转换为 (String, Value) 列表
-                        let config_pairs: Vec<(String, Value)> = config
-                            .iter()
-                            .map(|c| {
-                                let val = Self::eval_value(&c.value, env)
-                                    .unwrap_or(Value::Null);
-                                (c.name.clone(), val)
-                            })
-                            .collect();
-                        Self::load_module(&path, &config_pairs, env)?
-                    };
-                    // 更新 loaded_modules 缓存：合并子模块发现的路径
-                    let mut new_loaded = (*env.loaded_modules).clone();
-                    new_loaded.insert(path.clone());
-                    new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
-                    // 合并模块的 @extend 关系到当前 env
-                    let mut new_extends = (*env.extends).clone();
-                    new_extends.extend((*exports.extends).clone().iter().cloned());
-                    let env_with_cache = Env {
-                        loaded_modules: Rc::new(new_loaded),
-                        extends: Rc::new(new_extends),
-                        ..env.clone()
-                    };
-                    // CSS 只在首次加载时输出
-                    let css = if already_loaded { vec![] } else { exports.css.clone() };
-                    if *star {
-                        let mut new_env = env_with_cache;
-                        for (k, v) in &exports.vars {
-                            new_env = new_env.bind(k.clone(), v.clone());
-                        }
-                        for (k, v) in &exports.mixins {
-                            new_env = new_env.define_mixin(k.clone(), v.clone());
-                        }
-                        for (k, v) in &exports.functions {
-                            new_env = new_env.define_function(k.clone(), v.clone());
-                        }
-                        return Ok((css, new_env));
-                    }
-                    let ns = namespace.clone().unwrap_or_else(|| {
-                        // 命名空间从 URL 的 basename 计算，去掉所有扩展名和前导下划线
-                        let url_stem = std::path::Path::new(url)
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or(url);
-                        // 去掉所有扩展名（如 other.foo.bar.baz → other）
-                        let base = url_stem.split('.').next().unwrap_or(url_stem);
-                        base.trim_start_matches('_').to_string()
-                    });
-                    return Ok((css, env_with_cache.add_namespace(ns, exports)));
-                }
-                // 找不到文件——静默跳过
-                Ok((vec![], env.clone()))
-            }
+            } => Self::eval_use(url, namespace, *star, config, env),
             Node::Forward {
                 url,
                 show: _,
                 hide: _,
                 prefix,
                 config,
-            } => {
-                // @forward 'url' —— 转发模块成员到当前作用域
-                // as prefix-* 时，成员名加前缀（如 c → d-c）
-                let base = env.base_path.as_ref();
-                let load_paths = env.get_load_paths();
-                if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    // 构建配置变量列表：@forward with() 配置 + caller_env 的变量
-                    // 使被加载模块中的 !default 变量能看到当前作用域已定义的值
-                    let mut inherited_vars: Vec<(String, Value)> = env
-                        .vars
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-                    // with() 配置覆盖 caller_env 的同名变量
-                    for cfg in config {
-                        let val = Self::eval_value(&cfg.value, env)?;
-                        // with() 配置：!default 时仅未定义才赋值，否则覆盖
-                        if cfg.is_default {
-                            if !inherited_vars.iter().any(|(n, _)| n.as_str() == cfg.name.as_str()) {
-                                inherited_vars.push((cfg.name.clone(), val));
-                            }
-                        } else if let Some(idx) = inherited_vars.iter().position(|(n, _)| n.as_str() == cfg.name.as_str()) {
-                            inherited_vars[idx].1 = val;
-                        } else {
-                            inherited_vars.push((cfg.name.clone(), val));
-                        }
-                    }
-                    // 模块缓存：同一路径只输出一次 CSS
-                    let already_loaded = env.loaded_modules.contains(&path);
-                    // 已加载过的模块直接返回空 exports（不重新加载）
-                    let exports = if already_loaded {
-                        ModuleExports::default()
-                    } else {
-                        Self::load_module(&path, &inherited_vars, env)?
-                    };
-                    let css = if already_loaded { vec![] } else { exports.css.clone() };
-                    // 更新 loaded_modules 缓存：合并子模块发现的路径
-                    let mut new_loaded = (*env.loaded_modules).clone();
-                    new_loaded.insert(path.clone());
-                    new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
-                    // 合并模块的 @extend 关系到当前 env
-                    let mut new_extends = (*env.extends).clone();
-                    new_extends.extend((*exports.extends).clone().iter().cloned());
-                    let mut new_env = Env {
-                        loaded_modules: Rc::new(new_loaded),
-                        extends: Rc::new(new_extends),
-                        ..env.clone()
-                    };
-                    if let Some(prefix) = prefix {
-                        // 带前缀重映射：c → prefix-c
-                        for (k, v) in &exports.vars {
-                            new_env = new_env.bind(format!("{prefix}{k}"), v.clone());
-                        }
-                        for (k, v) in &exports.mixins {
-                            new_env = new_env.define_mixin(format!("{prefix}{k}"), v.clone());
-                        }
-                        for (k, v) in &exports.functions {
-                            new_env = new_env.define_function(format!("{prefix}{k}"), v.clone());
-                        }
-                    } else {
-                        // 无前缀：原样绑定
-                        for (k, v) in &exports.vars {
-                            new_env = new_env.bind(k.clone(), v.clone());
-                        }
-                        for (k, v) in &exports.mixins {
-                            new_env = new_env.define_mixin(k.clone(), v.clone());
-                        }
-                        for (k, v) in &exports.functions {
-                            new_env = new_env.define_function(k.clone(), v.clone());
-                        }
-                    }
-                    return Ok((css, new_env));
-                }
-                Ok((vec![], env.clone()))
-            }
-            Node::Import { url, modifier } => {
-                // @import 'url' —— 旧版内联：加载文件内容注入当前作用域
-                if url.starts_with("sass:") {
-                    return Ok((vec![], env.add_module(url.clone())));
-                }
-                // CSS @import 透传：以 .css 结尾或 url() 包裹，或带修饰符，或多值 CSS @import
-                let is_css_import = url.ends_with(".css")
-                    || url.starts_with("http://")
-                    || url.starts_with("https://")
-                    || url.starts_with("url(")
-                    || !modifier.is_empty()
-                    || url.split("\", \"").any(|u| u.trim_matches('"').ends_with(".css"));
-                if is_css_import {
-                    // 多值 @import "a", "b" → 输出多行
-                    let urls: Vec<&str> = url.split("\", \"").collect();
-                    let mut nodes = Vec::new();
-                    for u in &urls {
-                        let u = u.trim_matches('"');
-                        let params = if modifier.is_empty() {
-                            format!("\"{u}\"")
-                        } else {
-                            format!("\"{u}\" {modifier}")
-                        };
-                        nodes.push(CssNode::AtRule {
-                            name: "import".to_string(),
-                            params: Some(params),
-                            children: vec![],
-                            has_body: false,
-                        });
-                    }
-                    return Ok((nodes, env.clone()));
-                }
-                let base = env.base_path.as_ref();
-                let load_paths = env.get_load_paths();
-                if let Some(path) = Self::resolve_file(base, url, load_paths) {
-                    // @import 内联：继承当前环境（变量/mixin/函数），使被导入文件能看到之前定义的成员
-                    return Self::load_import(&path, env);
-                }
-                // 文件未找到：如果不是 CSS URL（.css / http / url()），报错
-                if !url.ends_with(".css") && !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("url(") && modifier.is_empty() {
-                    return Err(SassError::Module(format!("Can't find stylesheet to import: {url}")));
-                }
-                // CSS @import 透传（带修饰符或 CSS URL）
-                let params = if modifier.is_empty() {
-                    format!("\"{url}\"")
-                } else {
-                    format!("\"{url}\" {modifier}")
-                };
-                Ok((
-                    vec![CssNode::AtRule {
-                        name: "import".to_string(),
-                        params: Some(params),
-                        children: vec![],
-                        has_body: false,
-                    }],
-                    env.clone(),
-                ))
-            }
+            } => Self::eval_forward(url, prefix, config, env),
+            Node::Import { url, modifier } => Self::eval_import(url, modifier, env),
             Node::Extend {
                 selector,
                 optional: _,
@@ -576,6 +403,64 @@ impl Evaluator {
             }
         }
     }
+
+    /// @import 指令处理。
+    pub(crate) fn eval_import(
+        url: &str,
+        modifier: &str,
+        env: &Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
+        if url.starts_with("sass:") {
+            return Ok((vec![], env.add_module(url.to_string())));
+        }
+        let is_css = url.ends_with(".css")
+            || url.starts_with("http://")
+            || url.starts_with("https://")
+            || url.starts_with("url(")
+            || !modifier.is_empty()
+            || url.split("\", \"").any(|u| u.trim_matches('"').ends_with(".css"));
+        if is_css {
+            let urls: Vec<&str> = url.split("\", \"").collect();
+            let mut nodes = Vec::new();
+            for u in &urls {
+                let u = u.trim_matches('"');
+                let params = if modifier.is_empty() {
+                    format!("\"{u}\"")
+                } else {
+                    format!("\"{u}\" {modifier}")
+                };
+                nodes.push(CssNode::AtRule {
+                    name: "import".to_string(),
+                    params: Some(params),
+                    children: vec![],
+                    has_body: false,
+                });
+            }
+            return Ok((nodes, env.clone()));
+        }
+        let base = env.base_path.as_ref();
+        let load_paths = env.get_load_paths();
+        if let Some(path) = Self::resolve_file(base, url, load_paths) {
+            return Self::load_import(&path, env);
+        }
+        if !url.ends_with(".css") && !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("url(") && modifier.is_empty() {
+            return Err(SassError::Module(format!("Can't find stylesheet to import: {url}")));
+        }
+        let params = if modifier.is_empty() {
+            format!("\"{url}\"")
+        } else {
+            format!("\"{url}\" {modifier}")
+        };
+        Ok((
+            vec![CssNode::AtRule {
+                name: "import".to_string(),
+                params: Some(params),
+                children: vec![],
+                has_body: false,
+            }],
+            env.clone(),
+        ))
+    }
 }
 
 mod at_params;
@@ -585,5 +470,6 @@ mod control_flow;
 mod extend;
 mod mixin;
 mod module;
+mod plain_css;
 mod rule;
 mod value;
