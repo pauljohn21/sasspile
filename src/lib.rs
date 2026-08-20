@@ -72,7 +72,7 @@
 //!
 //! - Bootstrap 5.3.8：全量编译通过 ✅
 //! - Element Plus：121/121 (100%) 全量通过 ✅
-//! - sass-spec：2666/4848 (55%)
+//! - sass-spec：5195/11512 (45%)
 
 /// 内部 tracing 桥接模块——当 `tracing` feature 启用时重导出 tracing crate，
 /// 关闭时提供 no-op 宏替代。

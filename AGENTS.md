@@ -36,9 +36,9 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：5163/11512 = 44%（VFS + `===` 分组隔离，更准确）
+**sass-spec 基线**：5195/11512 = 45%（VFS + `===` 分组隔离，更准确）
 **@directives 子目录**：329/605 = 54%（at_root 50%, extend 41%, for 94%, forward 58%, function 48%, if 33%, import 67%, mixin 100%, use 43%）
-**core_functions/color 子目录**：2224/5715 = 38%（to_space 37%, adjust 56%, change 39%, scale 39%, to_gamut 45%, channel 81%, mix 10%, hsl 31%, hwb 12%, rgb 54%, invert 12%, is_powerless 72%, lab 17%, lch 22%, oklab 25%, oklch 22%, color 34%）
+**core_functions/color 子目录**：2277/5715 = 39%（to_space 38%, adjust 56%, change 39%, scale 39%, to_gamut 45%, channel 81%, mix 10%, hsl 31%, hwb 12%, rgb 52%, invert 12%, is_powerless 74%, lab 17%, lch 22%, oklab 25%, oklch 22%, color 34%）
 
 ## HRX 解析架构（hrx-auditor 集成）
 

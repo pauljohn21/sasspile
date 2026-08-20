@@ -46,8 +46,10 @@
 | **eval/builtin/color.rs** | 504 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless |
 | **eval/builtin/color_adjust.rs** | 550 | color.adjust/change/scale 现代色彩空间实现（Oklch/Lab/Lch/Oklab/DisplayP3/sRGB 等）— 直接在 ColorFormat 中修改通道值，保留原始格式输出 |
 | **eval/builtin/color_conv.rs** | 461 | f64 精度色彩空间转换算法（sRGB↔XYZ/Lab/Oklab/Oklch/DisplayP3）— W3C 参考实现有理数分数矩阵 + 扩展传递函数（支持负值） |
+| **eval/builtin/color_conv_ops.rs** | 261 | 颜色空间转换工具函数：is_same_space/convert_space/format_to_srgb_f64/make_color + HSL/HWB f64 精度转换 |
 | **eval/builtin/color_gamut.rs** | 293 | color.to-gamut 实现（clip 直接截断 + local-minde 在 Oklch 空间二分搜索减小 chroma） |
-| **eval/builtin/color_space.rs** | 794 | color.channel/to-space/space/same 函数 + is_same_space/convert_space/format_to_srgb_f64/make_color（pub(crate)） |
+| **eval/builtin/color_parse.rs** | 158 | CSS Color 4 颜色函数解析：lab/lch/oklab/oklch/color() — 从 Sass 值参数解析为 Value::Color |
+| **eval/builtin/color_space.rs** | 390 | color.channel/to-space/space/same 函数 + get_channel_value（各空间通道值提取） |
 | **eval/builtin/list.rs** | 303 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip |
 | **eval/builtin/map.rs** | 302 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
 | **eval/builtin/string.rs** | 376 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id + 参数验证（$string: X is not a string） |
@@ -87,7 +89,9 @@
 | `is_channel_powerless` | `eval/builtin/color.rs` |
 | `to_gamut` / `clip_gamut` / `local_minde` | `eval/builtin/color_gamut.rs` |
 | `srgb_to_linear` / `linear_to_srgb` / `srgb_to_xyz` / `xyz_to_lab` / `xyz_to_oklab` / `lab_to_lch` / `oklab_to_oklch` / `bradford_d50_to_d65` | `eval/builtin/color_conv.rs` |
-| `channel` / `to_space` / `is_same_space` / `convert_space` / `format_to_srgb_f64` / `make_color` | `eval/builtin/color_space.rs` |
+| `channel` / `to_space` / `space` / `same` | `eval/builtin/color_space.rs` |
+| `is_same_space` / `convert_space` / `format_to_srgb_f64` / `make_color` / `hsl_to_srgb_f64` / `hwb_to_srgb_f64` | `eval/builtin/color_conv_ops.rs` |
+| `parse_color_fn` / `parse_lab` / `parse_lch` / `parse_oklab` / `parse_oklch` / `parse_color_space` | `eval/builtin/color_parse.rs` |
 | `adjust` / `change` / `scale`（现代色彩空间） | `eval/builtin/color_adjust.rs` |
 | `clone_with` | `parse/ast/mod.rs` (ColorFormat 方法) |
 | `sanitize_selector` / `normalize_attr_selectors` / `has_bogus_combinators` | `css/selector.rs` |
@@ -158,7 +162,7 @@
 | 控制流 (@if/@for/@each/@while) | `eval/control_flow.rs` |
 | @media/@supports 参数求值 | `eval/at_params.rs` → 参数插值和表达式求值 |
 | 颜色转换 | `eval/color.rs` → `hsl_to_rgb` / `rgb_to_hsl` / `hwb_to_rgb` + `parse/ast/mod.rs` → `hsl_to_rgb_percent` + `eval/builtin/color_conv.rs` → sRGB↔XYZ/Lab/Oklab 矩阵转换 |
-| CSS Color 4 色彩空间 | `eval/builtin/color_space.rs` → `channel`/`to_space`/`space`/`same` + `eval/builtin/color_adjust.rs` → 现代空间 adjust/change/scale + `eval/builtin/color_gamut.rs` → `to_gamut` (clip + local-minde) + `eval/builtin/color_conv.rs` → W3C 有理数分数矩阵 |
+| CSS Color 4 色彩空间 | `eval/builtin/color_space.rs` → `channel`/`to_space`/`space`/`same` + `eval/builtin/color_conv_ops.rs` → `convert_space`/`format_to_srgb_f64`/`make_color` + `eval/builtin/color_parse.rs` → `parse_color_fn` + `eval/builtin/color_adjust.rs` → 现代空间 adjust/change/scale + `eval/builtin/color_gamut.rs` → `to_gamut` (clip + local-minde) + `eval/builtin/color_conv.rs` → W3C 有理数分数矩阵 |
 | 颜色序列化 | `parse/ast/display.rs` → `Display for Value`（ColorFormat 分派，含 CSS Color 4 现代空间） |
 | 颜色格式追踪 | `parse/ast/mod.rs` → `ColorFormat` 枚举（Auto/Rgb/RgbPercent/Hsl/Hwb/Lab/Lch/Oklab/Oklch/DisplayP3/Srgb/...） |
 | 选择器净化 | `css/selector.rs` → `sanitize_selector` / `normalize_attr_selectors` / `has_bogus_combinators` |

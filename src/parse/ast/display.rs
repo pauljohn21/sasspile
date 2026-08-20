@@ -72,9 +72,9 @@ impl std::fmt::Display for Value {
                     }
                     ColorFormat::Rgb => {
                         if (c.a - 1.0).abs() < f64::EPSILON {
-                            write!(f, "rgb({}, {}, {})", c.r, c.g, c.b)
+                            write!(f, "rgb({}, {}, {})", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8)
                         } else {
-                            write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
+                            write!(f, "rgba({}, {}, {}, {})", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8, format_alpha(c.a))
                         }
                     }
                     ColorFormat::RgbPercent(h, s, l) => {
@@ -199,10 +199,10 @@ impl std::fmt::Display for Value {
                             if let Some(name) = crate::eval::Evaluator::reverse_lookup_named_color(c) {
                                 write!(f, "{name}")
                             } else {
-                                write!(f, "#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+                                write!(f, "#{:02x}{:02x}{:02x}", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8)
                             }
                         } else {
-                            write!(f, "rgba({}, {}, {}, {})", c.r, c.g, c.b, format_alpha(c.a))
+                            write!(f, "rgba({}, {}, {}, {})", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8, format_alpha(c.a))
                         }
                     }
                 }

@@ -428,25 +428,25 @@ pub(crate) fn parse_hash_color(s: &str) -> Color {
     let bytes = s.as_bytes();
     match bytes.len() {
         3 => Color::rgb(
-            hex2(bytes[0], bytes[0]),
-            hex2(bytes[1], bytes[1]),
-            hex2(bytes[2], bytes[2]),
+            hex2(bytes[0], bytes[0]) as f64,
+            hex2(bytes[1], bytes[1]) as f64,
+            hex2(bytes[2], bytes[2]) as f64,
         ),
         4 => Color::rgba(
-            hex2(bytes[1], bytes[1]),
-            hex2(bytes[2], bytes[2]),
-            hex2(bytes[3], bytes[3]),
+            hex2(bytes[1], bytes[1]) as f64,
+            hex2(bytes[2], bytes[2]) as f64,
+            hex2(bytes[3], bytes[3]) as f64,
             hex1(bytes[0]) as f64 / 15.0,
         ),
         6 => Color::rgb(
-            hex2(bytes[0], bytes[1]),
-            hex2(bytes[2], bytes[3]),
-            hex2(bytes[4], bytes[5]),
+            hex2(bytes[0], bytes[1]) as f64,
+            hex2(bytes[2], bytes[3]) as f64,
+            hex2(bytes[4], bytes[5]) as f64,
         ),
         8 => Color::rgba(
-            hex2(bytes[0], bytes[1]),
-            hex2(bytes[2], bytes[3]),
-            hex2(bytes[4], bytes[5]),
+            hex2(bytes[0], bytes[1]) as f64,
+            hex2(bytes[2], bytes[3]) as f64,
+            hex2(bytes[4], bytes[5]) as f64,
             hex2(bytes[6], bytes[7]) as f64 / 255.0,
         ),
         _ => Color::default(),

@@ -364,31 +364,34 @@ impl ColorFormat {
 /// 颜色。
 #[derive(Debug, Clone)]
 pub struct Color {
-    /// 红色通道（0-255）。
-    pub r: u8,
-    /// 绿色通道（0-255）。
-    pub g: u8,
-    /// 蓝色通道（0-255）。
-    pub b: u8,
+    /// 红色通道（0.0-255.0）。
+    pub r: f64,
+    /// 绿色通道（0.0-255.0）。
+    pub g: f64,
+    /// 蓝色通道（0.0-255.0）。
+    pub b: f64,
     /// Alpha 通道（0.0-1.0）。
     pub a: f64,
     /// 颜色格式（追踪创建方式）。
     pub format: ColorFormat,
 }
 
-/// 颜色相等性仅比较 RGBA 值，忽略格式。
+/// 颜色相等性仅比较 RGBA 值（浮点容差 0.5），忽略格式。
 impl PartialEq for Color {
     fn eq(&self, other: &Self) -> bool {
-        self.r == other.r && self.g == other.g && self.b == other.b && self.a == other.a
+        (self.r - other.r).abs() < 0.5
+            && (self.g - other.g).abs() < 0.5
+            && (self.b - other.b).abs() < 0.5
+            && (self.a - other.a).abs() < 0.0001
     }
 }
 
 impl Default for Color {
     fn default() -> Self {
         Self {
-            r: 0,
-            g: 0,
-            b: 0,
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
             a: 1.0,
             format: ColorFormat::Auto,
         }
@@ -397,19 +400,19 @@ impl Default for Color {
 
 impl Color {
     /// 创建 RGB 颜色。
-    pub fn rgb(r: u8, g: u8, b: u8) -> Self {
+    pub fn rgb(r: f64, g: f64, b: f64) -> Self {
         Self { r, g, b, a: 1.0, format: ColorFormat::Auto }
     }
     /// 创建 RGBA 颜色。
-    pub fn rgba(r: u8, g: u8, b: u8, a: f64) -> Self {
+    pub fn rgba(r: f64, g: f64, b: f64, a: f64) -> Self {
         Self { r, g, b, a, format: ColorFormat::Auto }
     }
     /// 创建带格式的 RGB 颜色。
-    pub fn rgb_fmt(r: u8, g: u8, b: u8, format: ColorFormat) -> Self {
+    pub fn rgb_fmt(r: f64, g: f64, b: f64, format: ColorFormat) -> Self {
         Self { r, g, b, a: 1.0, format }
     }
     /// 创建带格式的 RGBA 颜色。
-    pub fn rgba_fmt(r: u8, g: u8, b: u8, a: f64, format: ColorFormat) -> Self {
+    pub fn rgba_fmt(r: f64, g: f64, b: f64, a: f64, format: ColorFormat) -> Self {
         Self { r, g, b, a, format }
     }
 }

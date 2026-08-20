@@ -12,7 +12,7 @@ use crate::parse::ast::{Color, ColorFormat, Value};
 use im::HashMap;
 
 use super::color_conv;
-use super::color_space::{is_same_space, format_to_srgb_f64, make_color};
+use super::color_conv_ops::{is_same_space, format_to_srgb_f64};
 
 /// `color.to-gamut($color, $space: null, $method: null)`
 pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
@@ -149,14 +149,14 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
             r >= 0.0 && g >= 0.0 && b >= 0.0
         }
         "hsl" => {
-            let (h, s, l) = match c.format {
+            let (_h, s, l) = match c.format {
                 ColorFormat::Hsl(h, s, l) => (h, s, l),
                 _ => return true, // legacy 颜色始终在色域内
             };
             s >= 0.0 && s <= 1.0 && l >= 0.0 && l <= 1.0
         }
         "hwb" => {
-            let (h, w, b) = match c.format {
+            let (_h, w, b) = match c.format {
                 ColorFormat::Hwb(h, w, b) => (h, w, b),
                 _ => return true,
             };
@@ -180,7 +180,7 @@ fn get_rgb_channels(c: &Color, space: &str) -> (f64, f64, f64) {
         _ => {
             // Legacy RGB → 0-1
             if space == "rgb" || space == "srgb" {
-                (c.r as f64 / 255.0, c.g as f64 / 255.0, c.b as f64 / 255.0)
+                (c.r / 255.0, c.g / 255.0, c.b / 255.0)
             } else {
                 format_to_srgb_f64(&c.format, c.r, c.g, c.b)
             }
@@ -285,7 +285,7 @@ fn local_minde_rgb(c: &Color, space: &str) -> Value {
 
 /// 转换颜色到目标空间。
 fn convert_to_space(c: &Color, target_space: &str) -> Result<Color> {
-    use super::color_space::convert_space;
+    use super::color_conv_ops::convert_space;
     match convert_space(c, target_space)? {
         Value::Color(new_c) => Ok(new_c),
         _ => Err(SassError::Eval("Color conversion failed".into())),

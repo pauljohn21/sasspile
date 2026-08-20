@@ -427,17 +427,17 @@ fn scale_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result
 // ── Legacy (RGB/HSL/HWB) ──
 
 fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let mut r = c.r as f64;
-    let mut g = c.g as f64;
-    let mut b = c.b as f64;
+    let mut r = c.r;
+    let mut g = c.g;
+    let mut b = c.b;
     let mut a = c.a;
     let mut has_hsl = false;
     let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
     let mut has_hwb = false;
     let (mut hw, mut hb) = {
-        let r = c.r as f64 / 255.0;
-        let g = c.g as f64 / 255.0;
-        let b = c.b as f64 / 255.0;
+        let r = c.r / 255.0;
+        let g = c.g / 255.0;
+        let b = c.b / 255.0;
         (r.min(g).min(b), 1.0 - r.max(g).max(b))
     };
 
@@ -452,33 +452,33 @@ fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     if let Some(v) = get_pct_or_num(kw_args, "blackness")? { hb = (hb + v).clamp(0.0, 1.0); has_hwb = true; }
     if has_hwb {
         let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
-        r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+        r = new_c.r; g = new_c.g; b = new_c.b;
     } else if has_hsl {
         let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+        r = new_c.r; g = new_c.g; b = new_c.b;
     }
     let fmt = if has_hsl || has_hwb { ColorFormat::RgbPercent(h, s, l) } else { ColorFormat::Auto };
     Ok(Value::Color(Color::rgba_fmt(
-        r.round().clamp(0.0, 255.0) as u8,
-        g.round().clamp(0.0, 255.0) as u8,
-        b.round().clamp(0.0, 255.0) as u8,
+        r.clamp(0.0, 255.0),
+        g.clamp(0.0, 255.0),
+        b.clamp(0.0, 255.0),
         a.clamp(0.0, 1.0),
         fmt,
     )))
 }
 
 fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let mut r = c.r as f64;
-    let mut g = c.g as f64;
-    let mut b = c.b as f64;
+    let mut r = c.r;
+    let mut g = c.g;
+    let mut b = c.b;
     let mut a = c.a;
     let mut has_hsl = false;
     let (mut h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
     let mut has_hwb = false;
     let (mut hw, mut hb) = {
-        let r = c.r as f64 / 255.0;
-        let g = c.g as f64 / 255.0;
-        let b = c.b as f64 / 255.0;
+        let r = c.r / 255.0;
+        let g = c.g / 255.0;
+        let b = c.b / 255.0;
         (r.min(g).min(b), 1.0 - r.max(g).max(b))
     };
 
@@ -493,25 +493,25 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     if let Some(v) = get_pct_or_num(kw_args, "blackness")? { hb = v.clamp(0.0, 1.0); has_hwb = true; }
     if has_hwb {
         let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
-        r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+        r = new_c.r; g = new_c.g; b = new_c.b;
     } else if has_hsl {
         let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+        r = new_c.r; g = new_c.g; b = new_c.b;
     }
     let fmt = if has_hsl || has_hwb { ColorFormat::RgbPercent(h, s, l) } else { ColorFormat::Auto };
     Ok(Value::Color(Color::rgba_fmt(
-        r.round().clamp(0.0, 255.0) as u8,
-        g.round().clamp(0.0, 255.0) as u8,
-        b.round().clamp(0.0, 255.0) as u8,
+        r.clamp(0.0, 255.0),
+        g.clamp(0.0, 255.0),
+        b.clamp(0.0, 255.0),
         a.clamp(0.0, 1.0),
         fmt,
     )))
 }
 
 fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let mut r = c.r as f64;
-    let mut g = c.g as f64;
-    let mut b = c.b as f64;
+    let mut r = c.r;
+    let mut g = c.g;
+    let mut b = c.b;
     let mut a = c.a;
     let mut has_hsl = false;
     let (h, mut s, mut l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
@@ -537,13 +537,13 @@ fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     }
     if has_hsl {
         let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        r = new_c.r as f64; g = new_c.g as f64; b = new_c.b as f64;
+        r = new_c.r; g = new_c.g; b = new_c.b;
     }
     let fmt = if has_hsl { ColorFormat::RgbPercent(h, s, l) } else { ColorFormat::Auto };
     Ok(Value::Color(Color::rgba_fmt(
-        r.round().clamp(0.0, 255.0) as u8,
-        g.round().clamp(0.0, 255.0) as u8,
-        b.round().clamp(0.0, 255.0) as u8,
+        r.clamp(0.0, 255.0),
+        g.clamp(0.0, 255.0),
+        b.clamp(0.0, 255.0),
         a.clamp(0.0, 1.0),
         fmt,
     )))

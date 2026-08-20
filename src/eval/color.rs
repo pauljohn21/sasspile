@@ -157,156 +157,162 @@ impl Evaluator {
             _ => return None,
         };
         let alpha = if name == "transparent" { 0.0 } else { 1.0 };
-        Some(Color::rgba(r, g, b, alpha))
+        Some(Color::rgba(r as f64, g as f64, b as f64, alpha))
     }
 
     /// CSS 命名颜色反向查找——根据 RGB 值返回名称（如 (255,0,0) → "red"）。
     /// 用于序列化时优先输出颜色名称。
+    /// 使用 0.5 容差匹配，适应 f64 浮点运算后的微小偏差。
     pub(crate) fn reverse_lookup_named_color(c: &Color) -> Option<&'static str> {
-        if c.a != 1.0 {
+        if (c.a - 1.0).abs() > 0.0001 {
             return None;
         }
-        Some(match (c.r, c.g, c.b) {
-            (240, 248, 255) => "aliceblue",
-            (250, 235, 215) => "antiquewhite",
-            (0, 255, 255) => "aqua",
-            (127, 255, 212) => "aquamarine",
-            (240, 255, 255) => "azure",
-            (245, 245, 220) => "beige",
-            (255, 228, 196) => "bisque",
-            (0, 0, 0) => "black",
-            (255, 235, 205) => "blanchedalmond",
-            (0, 0, 255) => "blue",
-            (138, 43, 226) => "blueviolet",
-            (165, 42, 42) => "brown",
-            (222, 184, 135) => "burlywood",
-            (95, 158, 160) => "cadetblue",
-            (127, 255, 0) => "chartreuse",
-            (210, 105, 30) => "chocolate",
-            (255, 127, 80) => "coral",
-            (100, 149, 237) => "cornflowerblue",
-            (255, 248, 220) => "cornsilk",
-            (220, 20, 60) => "crimson",
-            (0, 139, 139) => "darkcyan",
-            (184, 134, 11) => "darkgoldenrod",
-            (169, 169, 169) => "darkgray",
-            (0, 100, 0) => "darkgreen",
-            (189, 183, 107) => "darkkhaki",
-            (139, 0, 139) => "darkmagenta",
-            (85, 107, 47) => "darkolivegreen",
-            (255, 140, 0) => "darkorange",
-            (153, 50, 204) => "darkorchid",
-            (139, 0, 0) => "darkred",
-            (233, 150, 122) => "darksalmon",
-            (143, 188, 143) => "darkseagreen",
-            (72, 61, 139) => "darkslateblue",
-            (47, 79, 79) => "darkslategray",
-            (0, 206, 209) => "darkturquoise",
-            (148, 0, 211) => "darkviolet",
-            (255, 20, 147) => "deeppink",
-            (0, 191, 255) => "deepskyblue",
-            (105, 105, 105) => "dimgray",
-            (30, 144, 255) => "dodgerblue",
-            (178, 34, 34) => "firebrick",
-            (255, 250, 240) => "floralwhite",
-            (34, 139, 34) => "forestgreen",
-            (255, 0, 255) => "fuchsia",
-            (220, 220, 220) => "gainsboro",
-            (248, 248, 255) => "ghostwhite",
-            (255, 215, 0) => "gold",
-            (218, 165, 32) => "goldenrod",
-            (128, 128, 128) => "gray",
-            (0, 128, 0) => "green",
-            (173, 255, 47) => "greenyellow",
-            (240, 255, 240) => "honeydew",
-            (255, 105, 180) => "hotpink",
-            (205, 92, 92) => "indianred",
-            (75, 0, 130) => "indigo",
-            (255, 255, 240) => "ivory",
-            (240, 230, 140) => "khaki",
-            (230, 230, 250) => "lavender",
-            (255, 240, 245) => "lavenderblush",
-            (124, 252, 0) => "lawngreen",
-            (255, 250, 205) => "lemonchiffon",
-            (173, 216, 230) => "lightblue",
-            (240, 128, 128) => "lightcoral",
-            (224, 255, 255) => "lightcyan",
-            (250, 250, 210) => "lightgoldenrodyellow",
-            (211, 211, 211) => "lightgray",
-            (144, 238, 144) => "lightgreen",
-            (255, 182, 193) => "lightpink",
-            (255, 160, 122) => "lightsalmon",
-            (32, 178, 170) => "lightseagreen",
-            (135, 206, 250) => "lightskyblue",
-            (119, 136, 153) => "lightslategray",
-            (176, 196, 222) => "lightsteelblue",
-            (255, 255, 224) => "lightyellow",
-            (0, 255, 0) => "lime",
-            (50, 205, 50) => "limegreen",
-            (250, 240, 230) => "linen",
-            (128, 0, 0) => "maroon",
-            (102, 205, 170) => "mediumaquamarine",
-            (0, 0, 205) => "mediumblue",
-            (186, 85, 211) => "mediumorchid",
-            (147, 112, 219) => "mediumpurple",
-            (60, 179, 113) => "mediumseagreen",
-            (123, 104, 238) => "mediumslateblue",
-            (0, 250, 154) => "mediumspringgreen",
-            (72, 209, 204) => "mediumturquoise",
-            (199, 21, 133) => "mediumvioletred",
-            (25, 25, 112) => "midnightblue",
-            (245, 255, 250) => "mintcream",
-            (255, 228, 225) => "mistyrose",
-            (255, 228, 181) => "moccasin",
-            (255, 222, 173) => "navajowhite",
-            (0, 0, 128) => "navy",
-            (253, 245, 230) => "oldlace",
-            (128, 128, 0) => "olive",
-            (107, 142, 35) => "olivedrab",
-            (255, 165, 0) => "orange",
-            (255, 69, 0) => "orangered",
-            (218, 112, 214) => "orchid",
-            (238, 232, 170) => "palegoldenrod",
-            (152, 251, 152) => "palegreen",
-            (175, 238, 238) => "paleturquoise",
-            (219, 112, 147) => "palevioletred",
-            (255, 239, 213) => "papayawhip",
-            (255, 218, 185) => "peachpuff",
-            (205, 133, 63) => "peru",
-            (255, 192, 203) => "pink",
-            (221, 160, 221) => "plum",
-            (176, 224, 230) => "powderblue",
-            (128, 0, 128) => "purple",
-            (102, 51, 153) => "rebeccapurple",
-            (255, 0, 0) => "red",
-            (188, 143, 143) => "rosybrown",
-            (65, 105, 225) => "royalblue",
-            (139, 69, 19) => "saddlebrown",
-            (250, 128, 114) => "salmon",
-            (244, 164, 96) => "sandybrown",
-            (46, 139, 87) => "seagreen",
-            (255, 245, 238) => "seashell",
-            (160, 82, 45) => "sienna",
-            (192, 192, 192) => "silver",
-            (135, 206, 235) => "skyblue",
-            (106, 90, 205) => "slateblue",
-            (112, 128, 144) => "slategray",
-            (255, 250, 250) => "snow",
-            (0, 255, 127) => "springgreen",
-            (70, 130, 180) => "steelblue",
-            (210, 180, 140) => "tan",
-            (0, 128, 128) => "teal",
-            (216, 191, 216) => "thistle",
-            (255, 99, 71) => "tomato",
-            (64, 224, 208) => "turquoise",
-            (238, 130, 238) => "violet",
-            (245, 222, 179) => "wheat",
-            (255, 255, 255) => "white",
-            (245, 245, 245) => "whitesmoke",
-            (255, 255, 0) => "yellow",
-            (154, 205, 50) => "yellowgreen",
-            _ => return None,
-        })
+        const NAMED_COLORS: &[(f64, f64, f64, &str)] = &[
+            (240.0, 248.0, 255.0, "aliceblue"),
+            (250.0, 235.0, 215.0, "antiquewhite"),
+            (0.0, 255.0, 255.0, "aqua"),
+            (127.0, 255.0, 212.0, "aquamarine"),
+            (240.0, 255.0, 255.0, "azure"),
+            (245.0, 245.0, 220.0, "beige"),
+            (255.0, 228.0, 196.0, "bisque"),
+            (0.0, 0.0, 0.0, "black"),
+            (255.0, 235.0, 205.0, "blanchedalmond"),
+            (0.0, 0.0, 255.0, "blue"),
+            (138.0, 43.0, 226.0, "blueviolet"),
+            (165.0, 42.0, 42.0, "brown"),
+            (222.0, 184.0, 135.0, "burlywood"),
+            (95.0, 158.0, 160.0, "cadetblue"),
+            (127.0, 255.0, 0.0, "chartreuse"),
+            (210.0, 105.0, 30.0, "chocolate"),
+            (255.0, 127.0, 80.0, "coral"),
+            (100.0, 149.0, 237.0, "cornflowerblue"),
+            (255.0, 248.0, 220.0, "cornsilk"),
+            (220.0, 20.0, 60.0, "crimson"),
+            (0.0, 139.0, 139.0, "darkcyan"),
+            (184.0, 134.0, 11.0, "darkgoldenrod"),
+            (169.0, 169.0, 169.0, "darkgray"),
+            (0.0, 100.0, 0.0, "darkgreen"),
+            (189.0, 183.0, 107.0, "darkkhaki"),
+            (139.0, 0.0, 139.0, "darkmagenta"),
+            (85.0, 107.0, 47.0, "darkolivegreen"),
+            (255.0, 140.0, 0.0, "darkorange"),
+            (153.0, 50.0, 204.0, "darkorchid"),
+            (139.0, 0.0, 0.0, "darkred"),
+            (233.0, 150.0, 122.0, "darksalmon"),
+            (143.0, 188.0, 143.0, "darkseagreen"),
+            (72.0, 61.0, 139.0, "darkslateblue"),
+            (47.0, 79.0, 79.0, "darkslategray"),
+            (0.0, 206.0, 209.0, "darkturquoise"),
+            (148.0, 0.0, 211.0, "darkviolet"),
+            (255.0, 20.0, 147.0, "deeppink"),
+            (0.0, 191.0, 255.0, "deepskyblue"),
+            (105.0, 105.0, 105.0, "dimgray"),
+            (30.0, 144.0, 255.0, "dodgerblue"),
+            (178.0, 34.0, 34.0, "firebrick"),
+            (255.0, 250.0, 240.0, "floralwhite"),
+            (34.0, 139.0, 34.0, "forestgreen"),
+            (255.0, 0.0, 255.0, "fuchsia"),
+            (220.0, 220.0, 220.0, "gainsboro"),
+            (248.0, 248.0, 255.0, "ghostwhite"),
+            (255.0, 215.0, 0.0, "gold"),
+            (218.0, 165.0, 32.0, "goldenrod"),
+            (128.0, 128.0, 128.0, "gray"),
+            (0.0, 128.0, 0.0, "green"),
+            (173.0, 255.0, 47.0, "greenyellow"),
+            (240.0, 255.0, 240.0, "honeydew"),
+            (255.0, 105.0, 180.0, "hotpink"),
+            (205.0, 92.0, 92.0, "indianred"),
+            (75.0, 0.0, 130.0, "indigo"),
+            (255.0, 255.0, 240.0, "ivory"),
+            (240.0, 230.0, 140.0, "khaki"),
+            (230.0, 230.0, 250.0, "lavender"),
+            (255.0, 240.0, 245.0, "lavenderblush"),
+            (124.0, 252.0, 0.0, "lawngreen"),
+            (255.0, 250.0, 205.0, "lemonchiffon"),
+            (173.0, 216.0, 230.0, "lightblue"),
+            (240.0, 128.0, 128.0, "lightcoral"),
+            (224.0, 255.0, 255.0, "lightcyan"),
+            (250.0, 250.0, 210.0, "lightgoldenrodyellow"),
+            (211.0, 211.0, 211.0, "lightgray"),
+            (144.0, 238.0, 144.0, "lightgreen"),
+            (255.0, 182.0, 193.0, "lightpink"),
+            (255.0, 160.0, 122.0, "lightsalmon"),
+            (32.0, 178.0, 170.0, "lightseagreen"),
+            (135.0, 206.0, 250.0, "lightskyblue"),
+            (119.0, 136.0, 153.0, "lightslategray"),
+            (176.0, 196.0, 222.0, "lightsteelblue"),
+            (255.0, 255.0, 224.0, "lightyellow"),
+            (0.0, 255.0, 0.0, "lime"),
+            (50.0, 205.0, 50.0, "limegreen"),
+            (250.0, 240.0, 230.0, "linen"),
+            (128.0, 0.0, 0.0, "maroon"),
+            (102.0, 205.0, 170.0, "mediumaquamarine"),
+            (0.0, 0.0, 205.0, "mediumblue"),
+            (186.0, 85.0, 211.0, "mediumorchid"),
+            (147.0, 112.0, 219.0, "mediumpurple"),
+            (60.0, 179.0, 113.0, "mediumseagreen"),
+            (123.0, 104.0, 238.0, "mediumslateblue"),
+            (0.0, 250.0, 154.0, "mediumspringgreen"),
+            (72.0, 209.0, 204.0, "mediumturquoise"),
+            (199.0, 21.0, 133.0, "mediumvioletred"),
+            (25.0, 25.0, 112.0, "midnightblue"),
+            (245.0, 255.0, 250.0, "mintcream"),
+            (255.0, 228.0, 225.0, "mistyrose"),
+            (255.0, 228.0, 181.0, "moccasin"),
+            (255.0, 222.0, 173.0, "navajowhite"),
+            (0.0, 0.0, 128.0, "navy"),
+            (253.0, 245.0, 230.0, "oldlace"),
+            (128.0, 128.0, 0.0, "olive"),
+            (107.0, 142.0, 35.0, "olivedrab"),
+            (255.0, 165.0, 0.0, "orange"),
+            (255.0, 69.0, 0.0, "orangered"),
+            (218.0, 112.0, 214.0, "orchid"),
+            (238.0, 232.0, 170.0, "palegoldenrod"),
+            (152.0, 251.0, 152.0, "palegreen"),
+            (175.0, 238.0, 238.0, "paleturquoise"),
+            (219.0, 112.0, 147.0, "palevioletred"),
+            (255.0, 239.0, 213.0, "papayawhip"),
+            (255.0, 218.0, 185.0, "peachpuff"),
+            (205.0, 133.0, 63.0, "peru"),
+            (255.0, 192.0, 203.0, "pink"),
+            (221.0, 160.0, 221.0, "plum"),
+            (176.0, 224.0, 230.0, "powderblue"),
+            (128.0, 0.0, 128.0, "purple"),
+            (102.0, 51.0, 153.0, "rebeccapurple"),
+            (255.0, 0.0, 0.0, "red"),
+            (188.0, 143.0, 143.0, "rosybrown"),
+            (65.0, 105.0, 225.0, "royalblue"),
+            (139.0, 69.0, 19.0, "saddlebrown"),
+            (250.0, 128.0, 114.0, "salmon"),
+            (244.0, 164.0, 96.0, "sandybrown"),
+            (46.0, 139.0, 87.0, "seagreen"),
+            (255.0, 245.0, 238.0, "seashell"),
+            (160.0, 82.0, 45.0, "sienna"),
+            (192.0, 192.0, 192.0, "silver"),
+            (135.0, 206.0, 235.0, "skyblue"),
+            (106.0, 90.0, 205.0, "slateblue"),
+            (112.0, 128.0, 144.0, "slategray"),
+            (255.0, 250.0, 250.0, "snow"),
+            (0.0, 255.0, 127.0, "springgreen"),
+            (70.0, 130.0, 180.0, "steelblue"),
+            (210.0, 180.0, 140.0, "tan"),
+            (0.0, 128.0, 128.0, "teal"),
+            (216.0, 191.0, 216.0, "thistle"),
+            (255.0, 99.0, 71.0, "tomato"),
+            (64.0, 224.0, 208.0, "turquoise"),
+            (238.0, 130.0, 238.0, "violet"),
+            (245.0, 222.0, 179.0, "wheat"),
+            (255.0, 255.0, 255.0, "white"),
+            (245.0, 245.0, 245.0, "whitesmoke"),
+            (255.0, 255.0, 0.0, "yellow"),
+            (154.0, 205.0, 50.0, "yellowgreen"),
+        ];
+        for &(r, g, b, name) in NAMED_COLORS {
+            if (c.r - r).abs() < 0.5 && (c.g - g).abs() < 0.5 && (c.b - b).abs() < 0.5 {
+                return Some(name);
+            }
+        }
+        None
     }
 
     pub(crate) fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Color {
@@ -334,9 +340,9 @@ impl Evaluator {
             (c, 0.0, x)
         };
         let result = Color::rgb(
-            ((r1 + m) * 255.0).round() as u8,
-            ((g1 + m) * 255.0).round() as u8,
-            ((b1 + m) * 255.0).round() as u8,
+            (r1 + m) * 255.0,
+            (g1 + m) * 255.0,
+            (b1 + m) * 255.0,
         );
         crate::__tracing::trace!(
             target: "sasspile::color",
@@ -386,24 +392,24 @@ impl Evaluator {
         let g = to_rgb(h);
         let bl = to_rgb(h - 1.0 / 3.0);
         Color::rgba(
-            (r * 255.0).round() as u8,
-            (g * 255.0).round() as u8,
-            (bl * 255.0).round() as u8,
+            r * 255.0,
+            g * 255.0,
+            bl * 255.0,
             alpha,
         )
     }
 
     /// RGB → HSL 转换。
-    pub(crate) fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
+    pub(crate) fn rgb_to_hsl(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
         crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "rgb_to_hsl",
             r = r, g = g, b = b,
             "converting RGB to HSL"
         );
-        let r = r as f64 / 255.0;
-        let g = g as f64 / 255.0;
-        let b = b as f64 / 255.0;
+        let r = r / 255.0;
+        let g = g / 255.0;
+        let b = b / 255.0;
         let max = r.max(g).max(b);
         let min = r.min(g).min(b);
         let l = (max + min) / 2.0;
@@ -472,9 +478,9 @@ impl Evaluator {
                 Value::Number(b, bu),
             ] => {
                 // 百分比参数转换为 0-255
-                let r_val = if ru.as_deref() == Some("%") { (r * 255.0 / 100.0).round() as u8 } else { *r as u8 };
-                let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
-                let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
+                let r_val = if ru.as_deref() == Some("%") { r * 255.0 / 100.0 } else { *r };
+                let g_val = if gu.as_deref() == Some("%") { g * 255.0 / 100.0 } else { *g };
+                let b_val = if bu.as_deref() == Some("%") { b * 255.0 / 100.0 } else { *b };
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
@@ -489,9 +495,9 @@ impl Evaluator {
                 Value::Number(b, bu),
                 Value::Number(a, ua),
             ] => {
-                let r_val = if ru.as_deref() == Some("%") { (r * 255.0 / 100.0).round() as u8 } else { *r as u8 };
-                let g_val = if gu.as_deref() == Some("%") { (g * 255.0 / 100.0).round() as u8 } else { *g as u8 };
-                let b_val = if bu.as_deref() == Some("%") { (b * 255.0 / 100.0).round() as u8 } else { *b as u8 };
+                let r_val = if ru.as_deref() == Some("%") { r * 255.0 / 100.0 } else { *r };
+                let g_val = if gu.as_deref() == Some("%") { g * 255.0 / 100.0 } else { *g };
+                let b_val = if bu.as_deref() == Some("%") { b * 255.0 / 100.0 } else { *b };
                 let alpha = if ua.as_deref() == Some("%") {
                     *a / 100.0
                 } else {
@@ -602,9 +608,9 @@ impl Evaluator {
                     "mix 2-arg input"
                 );
                 Ok(Value::Color(Color::rgba(
-                    ((a.r as u16 + b.r as u16) / 2) as u8,
-                    ((a.g as u16 + b.g as u16) / 2) as u8,
-                    ((a.b as u16 + b.b as u16) / 2) as u8,
+                    (a.r + b.r) / 2.0,
+                    (a.g + b.g) / 2.0,
+                    (a.b + b.b) / 2.0,
                     (a.a + b.a) / 2.0,
                 )))
             }
@@ -617,9 +623,9 @@ impl Evaluator {
                 );
                 let weight = *w / 100.0;
                 Ok(Value::Color(Color::rgba(
-                    (a.r as f64 * (1.0 - weight) + b.r as f64 * weight) as u8,
-                    (a.g as f64 * (1.0 - weight) + b.g as f64 * weight) as u8,
-                    (a.b as f64 * (1.0 - weight) + b.b as f64 * weight) as u8,
+                    a.r * (1.0 - weight) + b.r * weight,
+                    a.g * (1.0 - weight) + b.g * weight,
+                    a.b * (1.0 - weight) + b.b * weight,
                     a.a * (1.0 - weight) + b.a * weight,
                 )))
             }

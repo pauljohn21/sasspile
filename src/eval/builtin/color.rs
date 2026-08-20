@@ -69,9 +69,9 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
 },
         "color-channel" => match args {
             [Value::Color(c), Value::String(ch, _)] => match ch.as_str() {
-                "red" => Ok(Some(Value::Number(c.r as f64, None))),
-                "green" => Ok(Some(Value::Number(c.g as f64, None))),
-                "blue" => Ok(Some(Value::Number(c.b as f64, None))),
+                "red" => Ok(Some(Value::Number(c.r, None))),
+                "green" => Ok(Some(Value::Number(c.g, None))),
+                "blue" => Ok(Some(Value::Number(c.b, None))),
                 "alpha" => Ok(Some(Value::Number(c.a, None))),
                 _ => Err(SassError::Eval(format!("Unknown color channel: {ch}"))),
             },
@@ -139,7 +139,7 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(c)) => {
-                    let w = c.r.min(c.g).min(c.b) as f64 / 255.0 * 100.0;
+                    let w = c.r.min(c.g).min(c.b) / 255.0 * 100.0;
                     Ok(Some(Value::Number(w, Some("%".to_string()))))
                 }
                 _ => Err(SassError::Eval("whiteness requires 1 color argument".into())),
@@ -149,7 +149,7 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(c)) => {
-                    let b = (1.0 - c.r.max(c.g).max(c.b) as f64 / 255.0) * 100.0;
+                    let b = (1.0 - c.r.max(c.g).max(c.b) / 255.0) * 100.0;
                     Ok(Some(Value::Number(b, Some("%".to_string()))))
                 }
                 _ => Err(SassError::Eval("blackness requires 1 color argument".into())),
@@ -322,21 +322,21 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
         "red" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
-                Some(Value::Color(c)) => Ok(Some(Value::Number(c.r as f64, None))),
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.r, None))),
                 _ => Err(SassError::Eval("red requires 1 color argument".into())),
             }
         }
         "green" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
-                Some(Value::Color(c)) => Ok(Some(Value::Number(c.g as f64, None))),
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.g, None))),
                 _ => Err(SassError::Eval("green requires 1 color argument".into())),
             }
         }
         "blue" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
-                Some(Value::Color(c)) => Ok(Some(Value::Number(c.b as f64, None))),
+                Some(Value::Color(c)) => Ok(Some(Value::Number(c.b, None))),
                 _ => Err(SassError::Eval("blue requires 1 color argument".into())),
             }
         }
@@ -432,8 +432,8 @@ _ => Err(SassError::Eval("grayscale requires 1 argument".into())),
 /// - LCH/OKLCH: hue 在 chroma ≈ 0 时无效
 fn is_channel_powerless(c: &Color, channel: &str) -> bool {
     let (_h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
-    let max = c.r.max(c.g).max(c.b) as f64 / 255.0;
-    let min = c.r.min(c.g).min(c.b) as f64 / 255.0;
+    let max = c.r.max(c.g).max(c.b) / 255.0;
+    let min = c.r.min(c.g).min(c.b) / 255.0;
     let w = min;
     let b = 1.0 - max;
     let w_b_sum = (w + b).min(1.0);

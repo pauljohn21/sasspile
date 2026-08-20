@@ -6,7 +6,9 @@
 pub mod color;
 pub mod color_adjust;
 pub mod color_conv;
+pub mod color_conv_ops;
 pub mod color_gamut;
+pub mod color_parse;
 pub mod color_space;
 pub mod list;
 pub mod map;
@@ -73,7 +75,7 @@ color::call(&name, pos_args, kw_args)?
             }
             // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
             "lab" | "lch" | "oklab" | "oklch" | "color" => {
-                color_space::parse_color_fn(&name, pos_args, kw_args)
+                color_parse::parse_color_fn(&name, pos_args, kw_args)
             }
 
             // ── map ──
