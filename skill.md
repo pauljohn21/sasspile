@@ -138,7 +138,11 @@ src/eval/
 ├── builtin.rs          # call_builtin 分派入口 + meta 函数
 ├── builtin/
 │   ├── math.rs         # 数学函数（abs/ceil/floor/round/div/pow/clamp/...）+ 命名参数合并 + 参数验证
-│   ├── color.rs        # 颜色函数（invert/hsl/hwb/adjust-color/...）
+│   ├── color.rs        # 颜色函数（旧版：invert/hsl/hwb/adjust-color/...）
+│   ├── color_adjust.rs # CSS Color 4 adjust/change/scale（现代空间：Oklch/Lab/Lch/Oklab/DisplayP3）
+│   ├── color_conv.rs   # 色彩空间转换矩阵（sRGB↔XYZ/Lab/Oklab，W3C 有理数分数）
+│   ├── color_gamut.rs  # color.to-gamut（clip + local-minde 色域映射）
+│   ├── color_space.rs  # color.channel/to-space/space/same（CSS Color 4 空间函数）
 │   ├── list.rs         # 列表函数（length/nth/append/join/...）
 │   ├── map.rs          # 映射函数（map-get/map-merge/...）
 │   ├── string.rs       # 字符串函数（str-length/str-slice/...）+ 参数验证
@@ -316,6 +320,14 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 | `is-powerless($color, $channel)` | 通道是否无效 | `builtin/color.rs` |
 | `is-in-gamut($color)` | 是否在色域内 | `builtin/color.rs` |
 | `is-legacy($color)` | 是否 legacy 空间 | `builtin/color.rs` |
+| `color.channel($color, $channel, $space)` | 提取通道值 | `builtin/color_space.rs` |
+| `color.to-space($color, $space)` | 转换色彩空间 | `builtin/color_space.rs` |
+| `color.space($color)` | 获取颜色空间名 | `builtin/color_space.rs` |
+| `color.same($color1, $color2)` | 颜色是否等价 | `builtin/color_space.rs` |
+| `color.to-gamut($color, $space, $method)` | 色域映射 (clip/local-minde) | `builtin/color_gamut.rs` |
+| `color.adjust($color, $kw...)` | 现代空间增量调整 | `builtin/color_adjust.rs` |
+| `color.change($color, $kw...)` | 现代空间绝对替换 | `builtin/color_adjust.rs` |
+| `color.scale($color, $kw...)` | 现代空间比例缩放 | `builtin/color_adjust.rs` |
 
 **颜色辅助函数**（`src/eval/color.rs`）：
 - `rgb_to_hsl(r, g, b) → (h, s, l)`
@@ -329,7 +341,7 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 - `format_pct(v) → String` — 格式化百分比值（0-1 → 0%-100%）
 - `format_alpha(a) → String` — 格式化 alpha 值
 
-**ColorFormat 枚举**（`src/parse/ast.rs`）：
+**ColorFormat 枚举**（`src/parse/ast/mod.rs`）：
 
 | 格式 | 用途 | 序列化示例 |
 |------|------|------------|
@@ -338,6 +350,24 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 | `RgbPercent(h,s,l)` | HSL 操作结果的百分比输出 | `rgb(72%, 0%, 0%)` |
 | `Hsl(h,s,l)` | hsl() 创建的颜色保留格式 | `hsl(120, 50%, 50%)` |
 | `Hwb(h,w,b)` | hwb() 创建的颜色保留格式 | `hwb(0 30% 40%)` |
+| `Lab(l,a,b)` | lab() CSS Color 4 Lab 空间 | `lab(50% 40 59.5)` |
+| `Lch(l,c,h)` | lch() CSS Color 4 LCH 空间 | `lch(50% 50 270)` |
+| `Oklab(l,a,b)` | oklab() CSS Color 4 OkLab 空间 | `oklab(59% 0.1 0.1)` |
+| `Oklch(l,c,h)` | oklch() CSS Color 4 OKLCH 空间 | `oklch(70% 0.1 180)` |
+| `DisplayP3(r,g,b)` | color(display-p3 ...) | `color(display-p3 1 0 0)` |
+| `Srgb(r,g,b)` | color(srgb ...) | `color(srgb 1 0 0)` |
+| `XyzD65(x,y,z)` / `XyzD50(x,y,z)` | color(xyz ...) / color(xyz-d50 ...) | `color(xyz 0.5 0.5 0.5)` |
+
+**CSS Color 4 转换架构**（`src/eval/builtin/color_conv.rs`）：
+- 使用 W3C 参考实现 (conversions.js) 的有理数分数矩阵
+- sRGB 传递函数支持负值扩展（轴上反射后幂函数）
+- sRGB↔Linear→XYZ→Lab/Lch 和 sRGB↔Linear→XYZ→LMS→Oklab/Oklch 路径
+- Lab epsilon/kappa 用 216/24389 和 24389/27（W3C 精确分数）
+- Bradford D50↔D65 色度适应矩阵
+
+**色域映射**（`src/eval/builtin/color_gamut.rs`）：
+- `clip` 方法：直接将通道值 clamp 到目标空间范围
+- `local-minde` 方法：在 Oklch 空间二分搜索减小 chroma，直到颜色落入目标色域
 
 **颜色算法说明**：
 - `darken`/`lighten`：通过 HSL lightness 增减实现（非 RGB 倍数）
@@ -641,8 +671,9 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 28 �
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：3355/11512 = 29%（VFS + === 分组隔离，更准确）
-# @directives 子目录：327/605 = 54%
+# 基线：5163/11512 = 44%（VFS + === 分组隔离，更准确）
+# @directives 子目录：329/605 = 54%
+# core_functions/color 子目录：2224/5715 = 38%
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

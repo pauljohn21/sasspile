@@ -36,8 +36,9 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：3355/11512 = 29%（VFS + `===` 分组隔离，更准确）
-**@directives 子目录**：327/605 = 54%（at_root 50%, extend 41%, for 94%, forward 59%, function 34%, if 33%, import 67%, mixin 100%, use 44%）
+**sass-spec 基线**：5163/11512 = 44%（VFS + `===` 分组隔离，更准确）
+**@directives 子目录**：329/605 = 54%（at_root 50%, extend 41%, for 94%, forward 58%, function 48%, if 33%, import 67%, mixin 100%, use 43%）
+**core_functions/color 子目录**：2224/5715 = 38%（to_space 37%, adjust 56%, change 39%, scale 39%, to_gamut 45%, channel 81%, mix 10%, hsl 31%, hwb 12%, rgb 54%, invert 12%, is_powerless 72%, lab 17%, lch 22%, oklab 25%, oklch 22%, color 34%）
 
 ## HRX 解析架构（hrx-auditor 集成）
 
@@ -70,11 +71,19 @@ sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影�
 | `RgbPercent(h,s,l)` | rgb(r%,g%,b%) 百分比输出（HSL 操作结果） | `rgb(72%, 0%, 0%)` |
 | `Hsl(h,s,l)` | hsl(h,s%,l%) / hsla(...)（保留原始 HSL） | `hsl(120, 50%, 50%)` |
 | `Hwb(h,w,b)` | hwb(h w% b%) / hwb(h w% b% / a) | `hwb(0 30% 40%)` |
+| `Lab(l,a,b)` | lab(L% a b)（CSS Color 4 Lab） | `lab(50% 40 59.5)` |
+| `Lch(l,c,h)` | lch(L% C Hdeg)（CSS Color 4 LCH） | `lch(50% 50 270)` |
+| `Oklab(l,a,b)` | oklab(L% a b)（CSS Color 4 OkLab） | `oklab(59% 0.1 0.1)` |
+| `Oklch(l,c,h)` | oklch(L% C Hdeg)（CSS Color 4 OKLCH） | `oklch(70% 0.1 180)` |
+| `DisplayP3(r,g,b)` | color(display-p3 r g b) | `color(display-p3 1 0 0)` |
+| `Srgb(r,g,b)` | color(srgb r g b) | `color(srgb 1 0 0)` |
+| `XyzD65(x,y,z)` / `XyzD50(x,y,z)` | color(xyz r g b) / color(xyz-d50 r g b) | `color(xyz 0.5 0.5 0.5)` |
 
 **关键规则**：
 - `hsl()`/`hsla()` 创建的颜色保留 HSL 格式输出
 - `darken`/`lighten`/`saturate`/`adjust-hue`/`complement`/`invert`/`grayscale` 等操作函数用 `RgbPercent` 输出
 - `adjust-color`/`change-color`/`scale-color` 修改 HSL/HWB 参数时用 `RgbPercent`，纯 RGB 参数时用 `Auto`
+- **CSS Color 4 现代空间**：`color_conv.rs` 使用 W3C 有理数分数矩阵（sRGB↔XYZ/Lab/Oklab），`color_adjust.rs` 支持现代空间 adjust/change/scale，`color_gamut.rs` 实现 clip + local-minde 色域映射
 - 依赖 `color` crate v0.3 提供色彩空间转换参考
 
 ## 参考文档（需要时查阅）

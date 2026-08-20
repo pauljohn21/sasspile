@@ -7,7 +7,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.6** — hrx-auditor 集成 + VFS `===` 分组隔离 — 3355/11512 (29%) sass-spec.
+> **v0.9.6** — CSS Color 4 现代色彩空间 + W3C 精确转换矩阵 + 色域映射 — 5163/11512 (44%) sass-spec.
 
 sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
 
@@ -16,7 +16,7 @@ sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。�
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
-- **sass-spec 兼容**: 3355/11512 (29%) 全量通过（VFS + `===` 分组隔离，更准确），@directives 子目录 327/605 (54%)，manifest 精简只跳过 libsass/non_conformant 弃用目录
+- **sass-spec 兼容**: 5163/11512 (44%) 全量通过（VFS + `===` 分组隔离，更准确），@directives 子目录 329/605 (54%)，core_functions/color 2224/5715 (38%)，manifest 精简只跳过 libsass/non_conformant 弃用目录
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
 - **Element Plus**: 121/121 (100%) 全量通过 ✅
 - **tracing 调试**: 内建 span + event 追踪链路
@@ -102,11 +102,13 @@ println!("{}", css);
 
 操作：`adjust-color`/`change-color`/`scale-color`/`mix`/`darken`/`lighten`/`adjust-hue`/`saturate`/`desaturate`/`grayscale`/`complement`/`invert`/`opacify`/`fade-in`/`transparentize`/`fade-out`
 
-> **颜色序列化**：HSL 操作结果用 `rgb(r%, g%, b%)` 百分比格式输出（匹配 sass-spec），依赖 `color` crate v0.3 提供色彩空间转换参考。
+CSS Color 4：`color.to-space`/`color.to-gamut`/`color.channel`/`color.adjust`/`color.change`/`color.scale`（支持 Lab/Lch/Oklab/Oklch/DisplayP3/sRGB/XYZ 等现代色彩空间）
+
+> **颜色序列化**：HSL 操作结果用 `rgb(r%, g%, b%)` 百分比格式输出（匹配 sass-spec）。CSS Color 4 转换使用 W3C 参考实现的有理数分数矩阵，色域映射支持 clip 和 local-minde 方法。
 
 通道：`red`/`green`/`blue`/`alpha`/`opacity`/`hue`/`saturation`/`lightness`/`whiteness`/`blackness`/`color-channel`
 
-Level 4：`is-powerless`/`is-in-gamut`/`is-legacy`
+Level 4：`is-powerless`/`is-in-gamut`/`is-legacy`/`to-space`/`to-gamut`/`channel`/`space`/`same`
 
 ### 字符串函数
 
@@ -155,7 +157,7 @@ Level 4：`is-powerless`/`is-in-gamut`/`is-legacy`
 
 ```bash
 # 核心测试
-cargo test --test compile_test      # 41 个
+cargo test --test compile_test      # 43 个
 cargo test --test stage_test        # 10 个
 cargo test --test ast_test          # 8 个
 cargo test --test common_test       # 5 个
@@ -165,7 +167,7 @@ cargo test --test bs_spec           # 15 Bootstrap 测试
 cargo test --test ep_full           # 121 Element Plus 测试（约 28 秒）
 ```
 
-全部通过：**compile 41/41 + stage 10/10 + ast 8/8 + common 5/5 + BS 15/15 + EP 121/121**
+全部通过：**compile 43/43 + stage 10/10 + ast 8/8 + common 5/5 + BS 15/15 + EP 121/121**
 
 > 详见根目录 `skill.md` 获取完整开发指南。
 
