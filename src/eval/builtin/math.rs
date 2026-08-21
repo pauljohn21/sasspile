@@ -10,7 +10,7 @@ use super::super::Evaluator;
 use super::math_helpers::{merge_math_args, validate_single_number};
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use im::HashMap;
+use std::collections::HashMap;
 
 /// Math 函数分派。返回 Ok(Some(value)) 表示已处理，Ok(None) 表示不匹配。
 pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {

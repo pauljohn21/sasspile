@@ -8,7 +8,7 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::{Color, ColorFormat, Value};
-use im::HashMap;
+use std::collections::HashMap;
 
 use super::super::Evaluator;
 

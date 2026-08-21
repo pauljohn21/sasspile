@@ -4,7 +4,7 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::{ColorFormat, Value, Separator};
-use im::HashMap;
+use std::collections::HashMap;
 
 use super::color_conv_ops::make_color;
 

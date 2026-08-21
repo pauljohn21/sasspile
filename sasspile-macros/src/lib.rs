@@ -245,7 +245,7 @@ fn expand_builtin_registry(input: &DeriveInput) -> syn::Result<TokenStream2> {
         #vis fn #fn_dsp(
             name: &str,
             pos_args: &[crate::parse::ast::Value],
-            kw_args: &im::HashMap<String, crate::parse::ast::Value>,
+            kw_args: &std::collections::HashMap<String, crate::parse::ast::Value>,
             env: &crate::eval::Env,
         ) -> Option<crate::error::Result<crate::parse::ast::Value>> {
             match name {

@@ -2,7 +2,7 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use im::HashMap;
+use std::collections::HashMap;
 
 /// 返回每个 math 函数的参数名列表（按位置顺序）。
 /// 用于将命名参数（kw_args）按参数名映射到位置参数。

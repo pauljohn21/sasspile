@@ -9,7 +9,7 @@
 use crate::error::Result;
 use crate::eval::Env;
 use crate::parse::ast::Value;
-use im::HashMap;
+use std::collections::HashMap;
 use sasspile_macros::BuiltinRegistry;
 
 // ─── math ─────────────────────────────────────────────────

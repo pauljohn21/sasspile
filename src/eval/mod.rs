@@ -7,7 +7,7 @@ use crate::lex::token::Token;
 use crate::parse::ast::*;
 use crate::__tracing::warn;
 
-use im::HashMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 

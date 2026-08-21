@@ -5,7 +5,7 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use im::HashMap;
+use std::collections::HashMap;
 
 /// 返回每个 selector 函数的参数名列表（按位置顺序）。
 fn selector_param_names(name: &str) -> &'static [&'static str] {

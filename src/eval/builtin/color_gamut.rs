@@ -9,7 +9,7 @@
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::{Color, ColorFormat, Value};
-use im::HashMap;
+use std::collections::HashMap;
 
 use super::color_conv;
 use super::color_conv_ops::{is_same_space, format_to_srgb_f64};
