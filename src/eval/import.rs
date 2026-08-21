@@ -39,6 +39,8 @@ impl Evaluator {
         }
         let base = env.base_path.as_ref();
         let load_paths = env.get_load_paths();
+        // @import 文件歧义检测：partial 和 non-partial 同时存在时报错
+        Self::check_resolve_ambiguity(base, url, load_paths)?;
         if let Some(path) = Self::resolve_file(base, url, load_paths) {
             return Self::load_import(&path, env);
         }

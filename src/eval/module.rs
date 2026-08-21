@@ -1,5 +1,6 @@
 use super::*;
 use crate::error::{Result, SassError};
+use crate::eval::value::values_eq;
 use std::path::{Path, PathBuf};
 
 impl Evaluator {
@@ -32,7 +33,7 @@ impl Evaluator {
         let url_path = std::path::Path::new(url);
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
         let filename = url_path
-            .file_stem() // file_stem 自动去除扩展名
+            .file_stem()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| url.to_string());
         let candidates = [
@@ -55,6 +56,37 @@ impl Evaluator {
             }
         }
         None
+    }
+
+    /// 检查文件解析歧义：partial 和 non-partial 同时存在时返回错误。
+    pub(crate) fn check_resolve_ambiguity(
+        base: Option<&PathBuf>,
+        url: &str,
+        load_paths: &[PathBuf],
+    ) -> Result<()> {
+        let base_dir = base
+            .as_ref()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| PathBuf::from("."));
+        for dir in std::iter::once(&base_dir).chain(load_paths.iter()) {
+            let url_path = std::path::Path::new(url);
+            let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
+            let filename = url_path
+                .file_stem()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| url.to_string());
+            for ext in &["scss", "sass", "css"] {
+                let partial = dir.join(parent).join(format!("_{filename}.{ext}"));
+                let non_partial = dir.join(parent).join(format!("{filename}.{ext}"));
+                if partial.exists() && non_partial.exists() {
+                    return Err(SassError::Eval(format!(
+                        "It's not clear which file to import. Found:\n  {}\n  {}",
+                        partial.display(), non_partial.display()
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
@@ -198,6 +230,10 @@ impl Evaluator {
         for (k, v) in final_env.forwarded_functions.clone() {
             final_env.local_functions.entry(k).or_insert(v);
         }
+        // @import 内联后清空 forwarded 表——避免后续 @forward 冲突检测误报
+        final_env.forwarded_vars.clear();
+        final_env.forwarded_mixins.clear();
+        final_env.forwarded_functions.clear();
         // @import 内联的变量应传播到外层——把 partial 中新增的变量写入 global_writes
         for (name, val) in &final_env.local_vars {
             if !caller_env.local_vars.contains_key(name) {
@@ -342,23 +378,32 @@ fn bind_exports(
                 let var_key = format!("${key}");
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == var_key) { continue; }
                 if filter.hide.iter().any(|s| *s == var_key) { continue; }
-                // 冲突检测：forwarded_vars 已存在同名且来源不同时报错
-                if new_env.forwarded_vars.contains_key(&key) {
-                    return Err(SassError::Eval(format!(
-                        "Two forwarded modules both define a variable named ${key}."
-                    )));
+                // 冲突检测：forwarded_vars 已存在同名时报错
+                // 但如果值相同（来自同一底层模块）则跳过不报错
+                if let Some(existing) = new_env.forwarded_vars.get(&key) {
+                    if !values_eq(existing, v) {
+                        return Err(SassError::Eval(format!(
+                            "Two forwarded modules both define a variable named ${key}."
+                        )));
+                    }
+                } else {
+                    new_env.forwarded_vars.insert(key, v.clone());
                 }
-                new_env.forwarded_vars.insert(key, v.clone());
             }
             for (k, v) in &merged_mixins {
                 if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
                 if filter.hide.iter().any(|s| *s == key) { continue; }
-                if new_env.forwarded_mixins.contains_key(&key) {
-                    return Err(SassError::Eval(format!(
-                        "Two forwarded modules both define a mixin named {key}."
-                    )));
+                // 冲突检测：forwarded_mixins 已存在同名且内容不同时报错
+                if let Some(existing) = new_env.forwarded_mixins.get(&key) {
+                    let existing_str = format!("{:?}", existing.body);
+                    let new_str = format!("{:?}", v.body);
+                    if existing_str != new_str {
+                        return Err(SassError::Eval(format!(
+                            "Two forwarded modules both define a mixin named {key}."
+                        )));
+                    }
                 }
                 new_env = new_env.define_forwarded_mixin(key, v.clone());
             }
@@ -367,10 +412,15 @@ fn bind_exports(
                 let key = fmt_key(k);
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
                 if filter.hide.iter().any(|s| *s == key) { continue; }
-                if new_env.forwarded_functions.contains_key(&key) {
-                    return Err(SassError::Eval(format!(
-                        "Two forwarded modules both define a function named {key}."
-                    )));
+                // 冲突检测：forwarded_functions 已存在同名且内容不同时报错
+                if let Some(existing) = new_env.forwarded_functions.get(&key) {
+                    let existing_str = format!("{:?}", existing.body);
+                    let new_str = format!("{:?}", v.body);
+                    if existing_str != new_str {
+                        return Err(SassError::Eval(format!(
+                            "Two forwarded modules both define a function named {key}."
+                        )));
+                    }
                 }
                 new_env = new_env.define_forwarded_function(key, v.clone());
             }

@@ -35,9 +35,13 @@ pub(crate) fn eval_variable(
             // 更新命名空间模块中的变量
             if let Some(exports) = env.namespaces.get(&ns.to_string()) {
                 let mut new_exports = (**exports).clone();
-                new_exports.local_vars.insert(var_name.to_string(), val.clone());
-                // 同步更新 forwarded_vars 中可能存在的同名变量
-                new_exports.forwarded_vars.remove(var_name);
+                // namespace 赋值优先修改 forwarded_vars（原始模块的变量引用），
+                // 只有当 forwarded 中没有该变量时才修改 local_vars
+                if new_exports.forwarded_vars.contains_key(var_name) {
+                    new_exports.forwarded_vars.insert(var_name.to_string(), val);
+                } else {
+                    new_exports.local_vars.insert(var_name.to_string(), val);
+                }
                 let mut new_env = env.clone();
                 new_env.namespaces.insert(ns.to_string(), Rc::new(new_exports));
                 return Ok((vec![], new_env));
