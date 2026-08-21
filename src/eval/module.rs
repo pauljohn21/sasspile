@@ -110,7 +110,8 @@ impl Evaluator {
             let val = Self::eval_value(value, caller_env)?;
             // null 配置值不注入——让上游 !default 生效
             if !matches!(val, Value::Null) {
-                env.pending_config.insert(name.clone(), val);
+                let key = name.replace('-', "_");
+                env.pending_config.insert(key, val);
             }
         }
         let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
@@ -444,25 +445,37 @@ impl Evaluator {
         let load_paths = env.get_load_paths();
         if let Some(path) = Self::resolve_file(base, url, load_paths) {
             // @forward with 配置值 + 从下游继承的 pending_config 透传给上游
+            // 处理 as 前缀：pending_config 中的 "b-a" → 去掉 "b-" 前缀 → "a"
             let config_pairs: Vec<(String, Value)> = {
+                let prefix_str = prefix.as_deref();
+                let strip_prefix = |k: &str| -> String {
+                    if let Some(p) = prefix_str {
+                        // 前缀已含 -（如 "b-"），normalize 为 "b_" 后匹配
+                        let pfx = p.replace('-', "_");
+                        let k_norm = k.replace('-', "_");
+                        if k_norm.starts_with(&pfx) {
+                            return k_norm[pfx.len()..].to_string();
+                        }
+                    }
+                    k.replace('-', "_")
+                };
                 let mut pairs: Vec<(String, Value)> = env
                     .pending_config
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .map(|(k, v)| (strip_prefix(k), v.clone()))
                     .collect();
                 for cfg in config {
                     let val = Evaluator::eval_value(&cfg.value, env)?;
+                    let name = strip_prefix(&cfg.name);
                     if cfg.is_default {
-                        // !default 配置：只在下游没有配置时才设置
-                        if !pairs.iter().any(|(n, _)| n == &cfg.name) && !matches!(val, Value::Null) {
-                            pairs.push((cfg.name.clone(), val));
+                        if !pairs.iter().any(|(n, _)| n == &name) && !matches!(val, Value::Null) {
+                            pairs.push((name, val));
                         }
                     } else if !matches!(val, Value::Null) {
-                        // 非 !default 配置：覆盖下游值
-                        if let Some(idx) = pairs.iter().position(|(n, _)| n == &cfg.name) {
+                        if let Some(idx) = pairs.iter().position(|(n, _)| n == &name) {
                             pairs[idx].1 = val;
                         } else {
-                            pairs.push((cfg.name.clone(), val));
+                            pairs.push((name, val));
                         }
                     }
                 }
