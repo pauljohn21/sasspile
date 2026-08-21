@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::error::{Result, SassError};
+use crate::eval::value::values_eq;
 use std::path::Path;
 
 /// 返回内建模块的导出变量。
@@ -98,13 +99,18 @@ pub(crate) fn bind_exports(
                 let var_key = format!("${key}");
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == var_key) { continue; }
                 if filter.hide.iter().any(|s| *s == var_key) { continue; }
-                // 冲突检测：forwarded_vars 已存在同名且来源不同时报错
-                if new_env.forwarded_vars.contains_key(&key) {
-                    return Err(SassError::Eval(format!(
-                        "Two forwarded modules both define a variable named ${key}."
-                    )));
+                // 冲突检测：forwarded_vars 已存在同名时报错
+                // 但如果值相同（来自同一底层模块）则跳过不报错
+                if let Some(existing) = new_env.forwarded_vars.get(&key) {
+                    // 冲突检测：值相同则跳过（values_eq + Display 字符串后备）
+                    if !values_eq(existing, v) && format!("{existing}") != format!("{v}") {
+                        return Err(SassError::Eval(format!(
+                            "Two forwarded modules both define a variable named ${key}."
+                        )));
+                    }
+                } else {
+                    new_env.forwarded_vars.insert(key, v.clone());
                 }
-                new_env.forwarded_vars.insert(key, v.clone());
             }
             for (k, v) in &merged_mixins {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
@@ -112,10 +118,15 @@ pub(crate) fn bind_exports(
                 let key = fmt_key(k);
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
                 if filter.hide.iter().any(|s| *s == key) { continue; }
-                if new_env.forwarded_mixins.contains_key(&key) {
-                    return Err(SassError::Eval(format!(
-                        "Two forwarded modules both define a mixin named {key}."
-                    )));
+                if let Some(existing) = new_env.forwarded_mixins.get(&key) {
+                    // 用 body Debug 比较相同则跳过
+                    let existing_str = format!("{:?}", existing.body);
+                    let new_str = format!("{:?}", v.body);
+                    if existing_str != new_str {
+                        return Err(SassError::Eval(format!(
+                            "Two forwarded modules both define a mixin named {key}."
+                        )));
+                    }
                 }
                 new_env = new_env.define_forwarded_mixin(key, v.clone());
             }
@@ -125,10 +136,15 @@ pub(crate) fn bind_exports(
                 let key = fmt_key(k);
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
                 if filter.hide.iter().any(|s| *s == key) { continue; }
-                if new_env.forwarded_functions.contains_key(&key) {
-                    return Err(SassError::Eval(format!(
-                        "Two forwarded modules both define a function named {key}."
-                    )));
+                if let Some(existing) = new_env.forwarded_functions.get(&key) {
+                    // 用 body Debug 比较相同则跳过
+                    let existing_str = format!("{:?}", existing.body);
+                    let new_str = format!("{:?}", v.body);
+                    if existing_str != new_str {
+                        return Err(SassError::Eval(format!(
+                            "Two forwarded modules both define a function named {key}."
+                        )));
+                    }
                 }
                 new_env = new_env.define_forwarded_function(key, v.clone());
             }

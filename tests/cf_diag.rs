@@ -64,7 +64,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
                 })
             })
             .filter(|(p, _)| {
-                (p.ends_with(".scss") || p.ends_with(".css")) && !p.contains("/sass/")
+                (p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass")) && !p.contains("/sass/")
             })
             .collect();
 

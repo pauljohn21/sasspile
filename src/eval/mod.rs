@@ -206,7 +206,7 @@ impl Env {
         // 注册内建模块的变量到命名空间（如 math.$pi, math.$e）
         // 命名空间名是 url 中 "sass:" 后的部分（如 "sass:math" → "math"）
         let ns_name = name.strip_prefix("sass:").unwrap_or(&name).to_string();
-        if let Some(exports) = module::builtin_module_exports(&name) {
+        if let Some(exports) = module_helpers::builtin_module_exports(&name) {
             new.namespaces.insert(ns_name, Rc::new(exports));
         }
         new
@@ -494,6 +494,7 @@ mod builtin;
 mod color;
 mod control_flow;
 mod extend;
+mod file_resolver;
 mod import;
 mod meta_ops;
 mod mixin;
