@@ -35,7 +35,9 @@ pub(crate) fn eval_variable(
             // 更新命名空间模块中的变量
             if let Some(exports) = env.namespaces.get(&ns.to_string()) {
                 let mut new_exports = (**exports).clone();
-                new_exports.vars.insert(var_name.to_string(), val.clone());
+                new_exports.local_vars.insert(var_name.to_string(), val.clone());
+                // 同步更新 forwarded_vars 中可能存在的同名变量
+                new_exports.forwarded_vars.remove(var_name);
                 let mut new_env = env.clone();
                 new_env.namespaces.insert(ns.to_string(), Rc::new(new_exports));
                 return Ok((vec![], new_env));
@@ -254,7 +256,7 @@ pub(crate) fn eval_variable(
                     let ns = &name[..dot];
                     let var_name = &name[dot + 1..];
                     if let Some(module) = env.get_namespace(ns)
-                        && let Some(val) = module.vars.get(var_name) {
+                        && let Some(val) = module.all_vars().find(|(k, _)| *k == var_name).map(|(_, v)| v) {
                             return Ok(val.clone());
                         }
                 }

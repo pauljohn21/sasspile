@@ -171,7 +171,7 @@ impl Evaluator {
         // 先在模块命名空间中查找
         if let Some(ns) = &module_ns
             && let Some(module) = env.get_namespace(ns)
-            && let Some(mixin) = module.mixins.get(&lookup_name).or_else(|| module.mixins.get(&name))
+            && let Some(mixin) = module.all_mixins().find(|(k, _)| *k == &lookup_name || *k == &name).map(|(_, m)| m)
         {
             let ns_keys: Vec<String> = mixin.captured_namespaces.keys().cloned().collect();
             return Ok(Value::MixinRef(std::rc::Rc::new(
@@ -214,8 +214,8 @@ impl Evaluator {
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
         let module = env.get_namespace(&ns_name)
             .ok_or_else(|| SassError::Eval(format!("There is no module with namespace \"{ns_name}\".")))?;
-        let pairs: Vec<(Value, Value)> = module.functions.keys()
-            .map(|name| {
+        let pairs: Vec<(Value, Value)> = module.all_functions()
+            .map(|(name, _)| {
                 (Value::String(name.clone(), true), Value::String(name.clone(), false))
             })
             .collect();
@@ -234,7 +234,7 @@ impl Evaluator {
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
         let module = env.get_namespace(&ns_name)
             .ok_or_else(|| SassError::Eval(format!("There is no module with namespace \"{ns_name}\".")))?;
-        let pairs: Vec<(Value, Value)> = module.mixins.iter()
+        let pairs: Vec<(Value, Value)> = module.all_mixins()
             .map(|(name, mixin)| {
                 let ns_keys: Vec<String> = mixin.captured_namespaces.keys().cloned().collect();
                 let ref_data = MixinRefData {
@@ -262,7 +262,7 @@ impl Evaluator {
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
         let module = env.get_namespace(&ns_name)
             .ok_or_else(|| SassError::Eval(format!("There is no module with namespace \"{ns_name}\".")))?;
-        let pairs: Vec<(Value, Value)> = module.vars.iter()
+        let pairs: Vec<(Value, Value)> = module.all_vars()
             .filter(|(name, _)| !name.starts_with('_'))
             .map(|(name, val)| (Value::String(name.clone(), true), val.clone()))
             .collect();

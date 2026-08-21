@@ -117,9 +117,12 @@ impl Evaluator {
             module_css
         };
         let exports = ModuleExports {
-            vars: final_env.vars,
-            mixins: final_env.mixins,
-            functions: final_env.functions,
+            local_vars: final_env.local_vars.clone(),
+            local_mixins: final_env.local_mixins.clone(),
+            local_functions: final_env.local_functions.clone(),
+            forwarded_vars: final_env.forwarded_vars.clone(),
+            forwarded_mixins: final_env.forwarded_mixins.clone(),
+            forwarded_functions: final_env.forwarded_functions.clone(),
             css,
             loaded_modules: final_env.loaded_modules.clone(),
             extends: final_env.extends.clone(),
@@ -166,9 +169,19 @@ impl Evaluator {
         // 恢复调用者的 base_path 和 depth，使父作用域后续 @import 使用正确的基准目录
         final_env.base_path = caller_env.base_path.clone();
         final_env.depth = caller_env.depth;
+        // @import 内联语义：forwarded 成员应合并到 local（@import 把一切引入当前作用域）
+        for (k, v) in final_env.forwarded_vars.clone() {
+            final_env.local_vars.entry(k).or_insert(v);
+        }
+        for (k, v) in final_env.forwarded_mixins.clone() {
+            final_env.local_mixins.entry(k).or_insert(v);
+        }
+        for (k, v) in final_env.forwarded_functions.clone() {
+            final_env.local_functions.entry(k).or_insert(v);
+        }
         // @import 内联的变量应传播到外层——把 partial 中新增的变量写入 global_writes
-        for (name, val) in &final_env.vars {
-            if !caller_env.vars.contains_key(name) {
+        for (name, val) in &final_env.local_vars {
+            if !caller_env.local_vars.contains_key(name) {
                 final_env.global_writes.insert(name.clone(), val.clone());
             }
         }
@@ -190,11 +203,11 @@ impl Evaluator {
             let ns = &name[..dot];
             let func_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
-                && let Some(func) = module.functions.get(func_name) {
+                && let Some(func) = module.all_functions().find(|(k, _)| *k == func_name).map(|(_, f)| f) {
                     // 注入模块的 vars 到函数环境，使函数体可访问模块变量
                     let mut func_env = env.clone();
-                    for (k, v) in &module.vars {
-                        if !func_env.vars.contains_key(k) {
+                    for (k, v) in module.all_vars() {
+                        if !func_env.local_vars.contains_key(k) {
                             func_env = func_env.bind(k.clone(), v.clone());
                         }
                     }
@@ -221,7 +234,7 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
             vars.insert("max-number".to_string(), Value::Number(f64::MAX, None));
             vars.insert("min-number".to_string(), Value::Number(f64::MIN_POSITIVE, None));
             Some(ModuleExports {
-                vars,
+                local_vars: vars,
                 ..Default::default()
             })
         }
@@ -250,42 +263,101 @@ fn apply_config(
     Ok(())
 }
 
-/// 将模块导出绑定到环境（支持前缀）。
-/// 检测 @forward 冲突：当两个 @forward 导出同名成员且值不同时报错。
-fn bind_exports(env: Env, exports: &ModuleExports, prefix: Option<&str>) -> Result<Env> {
+/// 绑定模式：Use 写入 local 表，Forward 写入 forwarded 表。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum BindMode {
+    Use,
+    Forward,
+}
+
+/// 前缀过滤配置：show/hide。
+#[derive(Clone, Default)]
+pub(crate) struct FilterConfig {
+    pub(crate) show: Vec<String>,
+    pub(crate) hide: Vec<String>,
+}
+
+/// 合并 local 和 forwarded（local 优先）。
+fn merge_with_local_precedence<'a>(
+    local: &'a HashMap<String, Value>,
+    forwarded: &'a HashMap<String, Value>,
+) -> impl Iterator<Item = (&'a String, &'a Value)> {
+    local.iter().chain(
+        forwarded.iter().filter(|(k, _)| !local.contains_key(*k))
+    )
+}
+
+/// 将模块导出绑定到环境（支持前缀、模式和来源路径）。
+/// Use 模式写入 local 表；Forward 模式写入 forwarded 表。
+/// 冲突检测基于来源路径：同来源跳过，不同来源报错。
+fn bind_exports(
+    env: Env,
+    exports: &ModuleExports,
+    prefix: Option<&str>,
+    mode: BindMode,
+    source_path: &Path,
+    filter: &FilterConfig,
+) -> Result<Env> {
+    let span = crate::__tracing::debug_span!("bind_exports", mode = ?mode, source = %source_path.display());
+    let _enter = span.enter();
     let mut new_env = env;
     let fmt_key = |k: &str| -> String {
         prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}"))
     };
-    for (k, v) in &exports.vars {
-        let key = fmt_key(k);
-        // 检测 @forward 冲突：变量已存在且值不同
-        if let Some(existing) = new_env.vars.get(&key)
-            && existing != v
-        {
-            return Err(SassError::Module(format!(
-                "Two forwarded modules both define a variable named ${k}."
-            )));
+    // 根据模式选择源 exports 和目标表
+    // Use: 从 exports.local_* 绑定到 env.local_*
+    // Forward: 合并 exports.local_* + exports.forwarded_*（local 优先）后绑定到 env.forwarded_*
+    match mode {
+        BindMode::Use => {
+            // Use 模式：从 local + forwarded 合并后绑定到 local 表（local 优先），后写覆盖先写
+            for (k, v) in merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars) {
+                let key = fmt_key(k);
+                new_env = new_env.bind(key, v.clone());
+            }
+            for (k, v) in exports.all_mixins() {
+                let key = fmt_key(k);
+                new_env = new_env.define_local_mixin(key, v.clone());
+            }
+            for (k, v) in exports.all_functions() {
+                let key = fmt_key(k);
+                new_env = new_env.define_local_function(key, v.clone());
+            }
         }
-        new_env = new_env.bind(key, v.clone());
-    }
-    for (k, v) in &exports.mixins {
-        let key = fmt_key(k);
-        if new_env.mixins.contains_key(&key) {
-            return Err(SassError::Module(format!(
-                "Two forwarded modules both define a mixin named {k}."
-            )));
+        BindMode::Forward => {
+            // Forward 模式：合并 local + forwarded（local 优先）
+            let merged_vars: Vec<(String, Value)> = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let merged_mixins: Vec<(String, MixinDef)> = exports.local_mixins.iter()
+                .chain(exports.forwarded_mixins.iter().filter(|(k, _)| !exports.local_mixins.contains_key(*k)))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let merged_functions: Vec<(String, FunctionDef)> = exports.local_functions.iter()
+                .chain(exports.forwarded_functions.iter().filter(|(k, _)| !exports.local_functions.contains_key(*k)))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            for (k, v) in &merged_vars {
+                let key = fmt_key(k);
+                // 变量名带 $ 前缀比较：filter 中 $a → 比较 $key
+                let var_key = format!("${key}");
+                if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == var_key) { continue; }
+                if filter.hide.iter().any(|s| *s == var_key) { continue; }
+                // Forward 模式：直接写入 forwarded 表，后写覆盖先写
+                new_env.forwarded_vars.insert(key, v.clone());
+            }
+            for (k, v) in &merged_mixins {
+                let key = fmt_key(k);
+                if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
+                if filter.hide.iter().any(|s| *s == key) { continue; }
+                new_env = new_env.define_forwarded_mixin(key, v.clone());
+            }
+            for (k, v) in &merged_functions {
+                let key = fmt_key(k);
+                if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
+                if filter.hide.iter().any(|s| *s == key) { continue; }
+                new_env = new_env.define_forwarded_function(key, v.clone());
+            }
         }
-        new_env = new_env.define_mixin(key, v.clone());
-    }
-    for (k, v) in &exports.functions {
-        let key = fmt_key(k);
-        if new_env.functions.contains_key(&key) {
-            return Err(SassError::Module(format!(
-                "Two forwarded modules both define a function named {k}."
-            )));
-        }
-        new_env = new_env.define_function(key, v.clone());
     }
     Ok(new_env)
 }
@@ -297,10 +369,15 @@ fn merge_module_cache(env: &Env, path: &Path, exports: &ModuleExports) -> Env {
     new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
     let mut new_extends = (*env.extends).clone();
     new_extends.extend((*exports.extends).clone().iter().cloned());
+    // 合并 env 的 module_cache 和 exports 的 module_cache（exports 可能缺少 env 已有的缓存）
+    let mut new_cache = (*env.module_cache).clone();
+    for (k, v) in &*exports.module_cache {
+        new_cache.insert(k.clone(), v.clone());
+    }
     Env {
         loaded_modules: Rc::new(new_loaded),
         extends: Rc::new(new_extends),
-        module_cache: exports.module_cache.clone(),
+        module_cache: Rc::new(new_cache),
         ..env.clone()
     }
 }
@@ -338,7 +415,15 @@ impl Evaluator {
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             if star {
-                let new_env = bind_exports(env_with_cache, &exports, None)?;
+                // @use as *：从模块的 local 成员绑定到当前文件的 local 表
+                let new_env = bind_exports(
+                    env_with_cache,
+                    &exports,
+                    None,
+                    BindMode::Use,
+                    &path,
+                    &FilterConfig::default(),
+                )?;
                 return Ok((css, new_env));
             }
             let ns = namespace.clone().unwrap_or_else(|| {
@@ -360,12 +445,16 @@ impl Evaluator {
         prefix: &Option<String>,
         config: &[crate::parse::ast::ConfigVar],
         env: &Env,
+        show: &[String],
+        hide: &[String],
     ) -> Result<(Vec<CssNode>, Env)> {
+        let span = crate::__tracing::info_span!("eval_forward", url = url, has_prefix = prefix.is_some());
+        let _enter = span.enter();
         let base = env.base_path.as_ref();
         let load_paths = env.get_load_paths();
         if let Some(path) = Self::resolve_file(base, url, load_paths) {
             let mut inherited_vars: Vec<(String, Value)> = env
-                .vars
+                .local_vars
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
@@ -379,7 +468,19 @@ impl Evaluator {
             };
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             let env_with_cache = merge_module_cache(env, &path, &exports);
-            let new_env = bind_exports(env_with_cache, &exports, prefix.as_deref())?;
+            // Forward 模式：合并 local + forwarded（local 优先）后写入 forwarded 表
+            let filter = FilterConfig {
+                show: show.to_vec(),
+                hide: hide.to_vec(),
+            };
+            let new_env = bind_exports(
+                env_with_cache,
+                &exports,
+                prefix.as_deref(),
+                BindMode::Forward,
+                &path,
+                &filter,
+            )?;
             return Ok((css, new_env));
         }
         Ok((vec![], env.clone()))

@@ -599,7 +599,7 @@ impl<'tok> Parser<'tok> {
             match t {
                 Token::Semicolon | Token::LBrace => break,
                 Token::Dollar(n) => {
-                    members.push(n.clone());
+                    members.push(format!("${n}"));
                     self.advance();
                 }
                 Token::Ident(n) => {

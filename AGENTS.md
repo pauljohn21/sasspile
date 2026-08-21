@@ -35,10 +35,10 @@ cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
 ```
 
-**通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 10/121
-**sass-spec 基线**：2828/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
-**@directives 子目录**：337/605 = 56%（at_root 50%, extend 41%, for 94%, forward 59%, function 48%, if 33%, import 64%, mixin 100%, use 47%）
-**ep_full**：10/121 = 8%（@forward 模块冲突，剩余 111 个失败为 "Two forwarded modules both define a function named xxx"）
+**通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
+**sass-spec 基线**：2811/5362 = 52%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
+**@directives 子目录**：337/605 = 56%（at_root 50%, extend 41%, for 94%, forward 52%, function 48%, if 33%, import 62%, mixin 100%, use 44%）
+**ep_full**：121/121 = 100%（fix-forward-use-conflict 修复后全部通过）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
@@ -79,6 +79,7 @@ hrx-auditor = { path = "../scss-rust" }
 - 已归档变更存储在 `openspec/changes/archive/` 目录
 - **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
 - **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
+- **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 

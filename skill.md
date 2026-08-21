@@ -136,7 +136,7 @@ src/eval/
 ├── mixin.rs            # @mixin/@include + exec_mixin（pub(crate)）
 ├── extend.rs           # @extend 后处理
 ├── at_params.rs        # @media/@supports 参数插值和表达式求值
-├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + extends 传播）
+├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + extends 传播）+ bind_exports（BindMode Use/Forward + show/hide 过滤）+ load_import（forwarded→local 合并）
 ├── module_dispatch.rs # 内建函数注册结构体 + #[derive(BuiltinRegistry)] 宏单一数据源
 ├── plain_css.rs        # plain CSS 模式检查（sass() 禁止 + is_css_function/is_known_builtin 区分）
 ├── builtin.rs          # call_builtin 分派入口（优先宏生成 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数
@@ -683,13 +683,13 @@ cargo test --test common_test     # 5 个
 
 # 兼容性测试
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
-cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 7 秒）— 10/121 通过
+cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 120 秒）— 121/121 通过
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：2828/5362 = 53%（VFS + === 分组隔离，更准确）
+# 基线：2811/5362 = 52%（VFS + === 分组隔离，更准确）
 # @directives 子目录：337/605 = 56%
-# ep_full：10/121 = 8%（@forward 模块冲突，剩余 111 个失败为 "Two forwarded modules both define a function named xxx"）
+# ep_full：121/121 = 100%（fix-forward-use-conflict 修复后全部通过）
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture

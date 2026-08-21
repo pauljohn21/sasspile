@@ -14,9 +14,14 @@ use std::rc::Rc;
 /// 模块导出——加载的文件模块的成员。
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ModuleExports {
-    pub(crate) vars: HashMap<String, Value>,
-    pub(crate) mixins: HashMap<String, MixinDef>,
-    pub(crate) functions: HashMap<String, FunctionDef>,
+    /// 模块文件内部定义 + @use as * 导入的成员（当前文件可见）。
+    pub(crate) local_vars: HashMap<String, Value>,
+    pub(crate) local_mixins: HashMap<String, MixinDef>,
+    pub(crate) local_functions: HashMap<String, FunctionDef>,
+    /// @forward 导出的成员（当前文件不可见，只传递给下游）。
+    pub(crate) forwarded_vars: HashMap<String, Value>,
+    pub(crate) forwarded_mixins: HashMap<String, MixinDef>,
+    pub(crate) forwarded_functions: HashMap<String, FunctionDef>,
     pub(crate) css: Vec<CssNode>,
     /// 模块加载过程中发现的已加载路径（用于缓存传播）。
     pub(crate) loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
@@ -26,17 +31,40 @@ pub(crate) struct ModuleExports {
     pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
 }
 
+impl ModuleExports {
+    /// 合并迭代器：local 优先于 forwarded（供 meta 反射用）。
+    pub(crate) fn all_functions(&self) -> impl Iterator<Item = (&String, &FunctionDef)> {
+        self.local_functions.iter().chain(
+            self.forwarded_functions.iter().filter(|(k, _)| !self.local_functions.contains_key(*k))
+        )
+    }
+    /// 合并迭代器：local 优先于 forwarded（供 meta 反射用）。
+    pub(crate) fn all_mixins(&self) -> impl Iterator<Item = (&String, &MixinDef)> {
+        self.local_mixins.iter().chain(
+            self.forwarded_mixins.iter().filter(|(k, _)| !self.local_mixins.contains_key(*k))
+        )
+    }
+    /// 合并迭代器：local 优先于 forwarded（供 meta 反射用）。
+    pub(crate) fn all_vars(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.local_vars.iter().chain(
+            self.forwarded_vars.iter().filter(|(k, _)| !self.local_vars.contains_key(*k))
+        )
+    }
+}
+
 /// 不可变求值环境。
 #[derive(Debug, Clone, Default)]
 pub struct Env {
-    /// 变量绑定（扁平，用作用域前缀模拟）。
-    vars: HashMap<String, Value>,
+    /// —— local：当前文件定义 + @use as * 导入（当前文件可见）——
+    local_vars: HashMap<String, Value>,
+    local_mixins: HashMap<String, MixinDef>,
+    local_functions: HashMap<String, FunctionDef>,
+    /// —— forwarded：@forward 导出（当前文件不可见，只传递给下游）——
+    forwarded_vars: HashMap<String, Value>,
+    forwarded_mixins: HashMap<String, MixinDef>,
+    forwarded_functions: HashMap<String, FunctionDef>,
     /// !global 变量写入——规则体内 !global 赋值需要传播到外层。
     global_writes: HashMap<String, Value>,
-    /// mixin 定义。
-    mixins: HashMap<String, MixinDef>,
-    /// 用户函数定义。
-    functions: HashMap<String, FunctionDef>,
     /// @content 内容块（Rc 共享，避免深拷贝）。
     content: Option<Rc<Vec<Node>>>,
     /// @content 的环境（Rc 共享，避免深拷贝）。
@@ -95,40 +123,62 @@ impl Env {
     /// 不可变插入变量绑定，返回新环境。
     pub fn bind(&self, name: String, value: Value) -> Self {
         let mut new = self.clone();
-        new.vars.insert(name, value);
+        new.local_vars.insert(name, value);
         new
     }
-    /// 按名查找变量引用。
+    /// 按名查找变量引用（只查 local 表——forwarded 不可见）。
     pub fn lookup(&self, name: &str) -> Option<&Value> {
-        self.vars.get(name)
+        self.local_vars.get(name)
     }
-    /// 判断变量是否已定义。
+    /// 判断变量是否已定义（只查 local 表）。
     pub fn has_var(&self, name: &str) -> bool {
-        self.vars.contains_key(name)
+        self.local_vars.contains_key(name)
     }
+    /// 定义 local mixin（@mixin 节点定义的是当前文件成员）。
     pub(crate) fn define_mixin(&self, name: String, def: MixinDef) -> Self {
+        self.define_local_mixin(name, def)
+    }
+    /// 定义 local mixin。
+    pub(crate) fn define_local_mixin(&self, name: String, def: MixinDef) -> Self {
         let mut new = self.clone();
-        new.mixins.insert(name, def);
+        new.local_mixins.insert(name, def);
+        new
+    }
+    /// 定义 forwarded mixin。
+    pub(crate) fn define_forwarded_mixin(&self, name: String, def: MixinDef) -> Self {
+        let mut new = self.clone();
+        new.forwarded_mixins.insert(name, def);
         new
     }
     pub(crate) fn get_mixin(&self, name: &str) -> Option<&MixinDef> {
-        self.mixins.get(name)
+        self.local_mixins.get(name)
     }
     /// 获取 mixin 引用数据（用于 meta.get-mixin）。
     /// 返回 mixin 的参数、体和捕获的命名空间键列表。
     pub(crate) fn get_mixin_ref_data(&self, name: &str) -> Option<(Vec<Param>, Vec<Node>, Vec<String>)> {
-        self.mixins.get(name).map(|m| {
+        self.local_mixins.get(name).map(|m| {
             let ns_keys: Vec<String> = m.captured_namespaces.keys().cloned().collect();
             (m.params.clone(), m.body.clone(), ns_keys)
         })
     }
+    /// 定义 local function（@function 节点定义的是当前文件成员）。
     pub(crate) fn define_function(&self, name: String, def: FunctionDef) -> Self {
+        self.define_local_function(name, def)
+    }
+    /// 定义 local function。
+    pub(crate) fn define_local_function(&self, name: String, def: FunctionDef) -> Self {
         let mut new = self.clone();
-        new.functions.insert(name, def);
+        new.local_functions.insert(name, def);
+        new
+    }
+    /// 定义 forwarded function。
+    pub(crate) fn define_forwarded_function(&self, name: String, def: FunctionDef) -> Self {
+        let mut new = self.clone();
+        new.forwarded_functions.insert(name, def);
         new
     }
     pub(crate) fn get_function(&self, name: &str) -> Option<&FunctionDef> {
-        self.functions.get(name)
+        self.local_functions.get(name)
     }
     /// 设置 @content 内容块。
     pub fn set_content(&self, content: Vec<Node>, content_env: Env) -> Self {
@@ -406,11 +456,11 @@ impl Evaluator {
             } => Self::eval_use(url, namespace, *star, config, env),
             Node::Forward {
                 url,
-                show: _,
-                hide: _,
+                show,
+                hide,
                 prefix,
                 config,
-            } => Self::eval_forward(url, prefix, config, env),
+            } => Self::eval_forward(url, prefix, config, env, show, hide),
             Node::Import { url, modifier } => Self::eval_import(url, modifier, env),
             Node::Extend {
                 selector,

@@ -24,7 +24,7 @@ impl Evaluator {
             let ns = &name[..dot];
             let mixin_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
-                && let Some(mixin) = module.mixins.get(mixin_name) {
+                && let Some(mixin) = module.all_mixins().find(|(k, _)| *k == mixin_name).map(|(_, m)| m) {
                     return Self::exec_mixin(mixin, args, content, env);
                 }
         }
@@ -51,9 +51,9 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
                 mixin_env.namespaces.insert(ns.clone(), exports.clone());
             }
             // 将命名空间模块中的函数注入到 mixin 环境，使 mixin 体可直接调用
-            for (fname, fdef) in &exports.functions {
-                if !mixin_env.functions.contains_key(fname) {
-                    mixin_env = mixin_env.define_function(fname.clone(), fdef.clone());
+            for (fname, fdef) in exports.all_functions() {
+                if !mixin_env.local_functions.contains_key(fname) {
+                    mixin_env = mixin_env.define_local_function(fname.clone(), fdef.clone());
                 }
             }
         }
@@ -137,7 +137,7 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         }
         // 在命名空间模块中查找同名函数（支持 mixin 体内调用同模块的私有函数）
         for (_, exports) in &env.namespaces {
-            if let Some(func) = exports.functions.get(name) {
+            if let Some(func) = exports.all_functions().find(|(k, _)| *k == name).map(|(_, f)| f) {
                 return Self::call_user_function(func, pos_args, kw_args, env);
             }
         }

@@ -143,7 +143,7 @@ impl Evaluator {
     // - 内建模块注册
     let mut return_env = env.clone();
     // 传播命名空间变量赋值（名字含 . 的）
-    for (name, val) in &new_env.vars {
+    for (name, val) in &new_env.local_vars {
         if name.contains('.') {
             return_env = return_env.bind(name.clone(), val.clone());
         }
@@ -152,14 +152,30 @@ impl Evaluator {
     for (name, val) in &new_env.global_writes {
         return_env = return_env.bind(name.clone(), val.clone());
     }
-    for (name, def) in &new_env.mixins {
-        if !env.mixins.contains_key(name) {
-            return_env = return_env.define_mixin(name.clone(), def.clone());
+    for (name, def) in &new_env.local_mixins {
+        if !env.local_mixins.contains_key(name) {
+            return_env = return_env.define_local_mixin(name.clone(), def.clone());
         }
     }
-    for (name, def) in &new_env.functions {
-        if !env.functions.contains_key(name) {
-            return_env = return_env.define_function(name.clone(), def.clone());
+    for (name, def) in &new_env.local_functions {
+        if !env.local_functions.contains_key(name) {
+            return_env = return_env.define_local_function(name.clone(), def.clone());
+        }
+    }
+    // 传播 forwarded 成员
+    for (name, def) in &new_env.forwarded_mixins {
+        if !env.forwarded_mixins.contains_key(name) {
+            return_env = return_env.define_forwarded_mixin(name.clone(), def.clone());
+        }
+    }
+    for (name, def) in &new_env.forwarded_functions {
+        if !env.forwarded_functions.contains_key(name) {
+            return_env = return_env.define_forwarded_function(name.clone(), def.clone());
+        }
+    }
+    for (name, val) in &new_env.forwarded_vars {
+        if !env.forwarded_vars.contains_key(name) {
+            return_env.forwarded_vars.insert(name.clone(), val.clone());
         }
     }
     return_env.extends = new_env.extends.clone();
