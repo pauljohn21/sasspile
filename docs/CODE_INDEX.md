@@ -44,7 +44,9 @@
 | **eval/import.rs** | 63 | @import 指令处理（sass: 模块加载 + .css/http 透传 + 文件加载回退） |
 | **eval/module_dispatch.rs** | 352 | 内建函数注册结构体（MathBuiltins/StringBuiltins/...）+ `#[derive(BuiltinRegistry)]` 属性声明 + 宏生成的单一数据源注册 |
 | **eval/plain_css.rs** | 238 | check_plain_css_value + check_plain_css_node + check_plain_css_selector + check_plain_css_call（含 sass() 禁止检测 + is_css_function/is_known_builtin 区分） |
-| **eval/module.rs** | 479 | resolve_file + load_module（module_cache 缓存） + load_import（forwarded→local 合并） + call_module_function + eval_use + eval_forward + apply_config + bind_exports（BindMode Use/Forward + show/hide 过滤） + merge_module_cache + builtin_module_exports |
+| **eval/module.rs** | 348 | load_module（module_cache 缓存 + pending_config 注入） + load_import（forwarded→local 合并） + call_module_function + eval_use + eval_forward |
+| **eval/file_resolver.rs** | 198 | resolve_file + try_resolve_dir + check_resolve_ambiguity（partial/extension/index/import-only 四种冲突检测） |
+| **eval/module_helpers.rs** | 174 | bind_exports（BindMode Use/Forward + show/hide 过滤 + values_eq + Display 后备） + merge_module_cache + builtin_module_exports + BindMode + FilterConfig + merge_with_local_precedence |
 | **eval/color.rs** | 665 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
 | **eval/builtin.rs** | 409 | call_builtin 分派入口（优先调用宏生成的 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
 | **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
@@ -83,8 +85,10 @@
 | `exec_mixin` / `eval_include` / `bind_params` / `call_function` | `eval/mixin.rs` |
 | `call_user_function` / `eval_at_root` / `eval_at_rule` | `eval/mixin.rs` |
 | `apply_extends` | `eval/extend.rs` |
-| `resolve_file` / `load_module` / `load_import` / `call_module_function` | `eval/module.rs` |
-| `eval_use` / `eval_forward` / `apply_config` / `bind_exports` / `merge_module_cache` | `eval/module.rs` |
+| `resolve_file` / `try_resolve_dir` / `check_resolve_ambiguity` | `eval/file_resolver.rs` |
+| `load_module` / `load_import` / `call_module_function` | `eval/module.rs` |
+| `eval_use` / `eval_forward` | `eval/module.rs` |
+| `bind_exports` / `merge_module_cache` / `builtin_module_exports` / `BindMode` / `FilterConfig` | `eval/module_helpers.rs` |
 | `module_builtin_name` / `is_known_builtin` / `dispatch_builtin_module` | `eval/module_dispatch.rs`（宏自动生成） |
 | `MathBuiltins` / `StringBuiltins` / `MapBuiltins` / `ListBuiltins` / `ColorBuiltins` / `MetaBuiltins` / `SelectorBuiltins` | `eval/module_dispatch.rs` |
 | `BuiltinRegistry` derive 宏 | `sasspile-macros/src/lib.rs` |

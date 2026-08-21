@@ -36,9 +36,9 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：2811/5362 = 52%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
-**@directives 子目录**：337/605 = 56%（at_root 50%, extend 41%, for 94%, forward 52%, function 48%, if 33%, import 62%, mixin 100%, use 44%）
-**ep_full**：121/121 = 100%（fix-forward-use-conflict 修复后全部通过）
+**sass-spec 基线**：2828/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
+**@directives 子目录**：forward 76%，import 32 FAIL（conflict 5/5 修复，pending_config 架构生效）
+**ep_full**：121/121 = 100%（file_resolver.rs 拆分 + module_helpers 统一后无回归）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
@@ -80,6 +80,7 @@ hrx-auditor = { path = "../scss-rust" }
 - **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
 - **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
 - **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
+- **directives-100**（进行中）：文件歧义检测增强（partial/extension/index/import-only 四种冲突）+ module_helpers 统一 + .sass 测试修复 — conflict 5/5 修复, import 37→32 FAIL
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 
@@ -127,6 +128,16 @@ sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影�
 - **调试技能**：`.claude/skills/tracing-debug/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
 - **源文件结构**：见 `docs/CODE_INDEX.md`
+
+## 文件解析架构（file_resolver.rs）
+
+- `file_resolver.rs` 承载文件路径解析逻辑：`resolve_file`、`try_resolve_dir`、`check_resolve_ambiguity`
+- `check_resolve_ambiguity` 检测四种文件冲突场景：
+  1. partial vs non-partial（`_file.scss` 和 `file.scss` 同时存在）
+  2. extension 冲突（`file.scss` 和 `file.sass` 同时存在）
+  3. index 冲突（`dir/_index.scss` 和 `dir/index.scss` 同时存在）
+  4. import-only 冲突（`file.import.scss` 和 `file.import.sass`）
+- `module_helpers.rs` 统一承载 `bind_exports`（含 values_eq + Display 后备检查）、`merge_module_cache`、`BindMode`、`FilterConfig` 等 pub(crate) 辅助函数
 
 ## 常用命令（需要时查阅）
 

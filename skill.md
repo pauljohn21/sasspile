@@ -136,7 +136,9 @@ src/eval/
 ├── mixin.rs            # @mixin/@include + exec_mixin（pub(crate)）
 ├── extend.rs           # @extend 后处理
 ├── at_params.rs        # @media/@supports 参数插值和表达式求值
-├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + extends 传播）+ bind_exports（BindMode Use/Forward + show/hide 过滤）+ load_import（forwarded→local 合并）
+├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + pending_config + extends 传播）+ load_import（forwarded→local 合并）
+├── file_resolver.rs    # resolve_file + try_resolve_dir + check_resolve_ambiguity（partial/extension/index/import-only 四种冲突检测）
+├── module_helpers.rs   # bind_exports（BindMode Use/Forward + show/hide 过滤 + values_eq + Display 后备）+ merge_module_cache + builtin_module_exports + BindMode + FilterConfig
 ├── module_dispatch.rs # 内建函数注册结构体 + #[derive(BuiltinRegistry)] 宏单一数据源
 ├── plain_css.rs        # plain CSS 模式检查（sass() 禁止 + is_css_function/is_known_builtin 区分）
 ├── builtin.rs          # call_builtin 分派入口（优先宏生成 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数
@@ -181,7 +183,7 @@ eval_value(Call)
 - `#[builtin(alias = "math.div")]` 声明别名
 - `dispatch = "none"` 表示只参与名称映射不分派（meta 模块）
 
-**sass:color → 全局名映射**（`src/eval/module.rs`）：
+**sass:color → 全局名映射**（`src/eval/module_dispatch.rs`）：
 
 ```rust
 "color.adjust" => "adjust-color"
@@ -587,7 +589,7 @@ RUST_LOG="minimize=info" cargo test --test minimize minimize_color_error -- --no
 | `$string: X is not a string` | string 函数收到非字符串参数 | 检查 `call_string_builtin` 参数验证 |
 | `$base: Expected Xpx to have no units` | math.pow 带单位参数 | 检查 `pow` 单位验证逻辑 |
 | `Parse error: expected X` | 解析器不支持该语法 | 检查 `parse_value` / `parse_args` |
-| `Cannot load module: ...` | 文件路径解析失败 | 检查 `resolve_file` |
+| `Cannot load module: ...` | 文件路径解析失败 | 检查 `file_resolver.rs` 中的 `resolve_file` |
 | `content_diff` | 输出内容差异 | 用 `RUST_LOG="cssdiff=debug"` 看逐行 diff |
 | `missing_output` | 实际输出缺少行 | 检查 CSS 序列化 |
 
