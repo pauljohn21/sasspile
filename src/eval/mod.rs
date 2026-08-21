@@ -499,6 +499,8 @@ mod meta_ops;
 mod mixin;
 mod module;
 mod module_dispatch;
+mod module_helpers;
+mod module_validation;
 mod plain_css;
 mod rule;
 mod value;

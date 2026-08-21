@@ -25,33 +25,6 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
     }
 }
 
-/// 使用 ConfigVar 列表更新 inherited_vars。
-pub(crate) fn apply_config(
-    inherited_vars: &mut Vec<(String, Value)>,
-    config: &[crate::parse::ast::ConfigVar],
-    env: &Env,
-) -> Result<()> {
-    for cfg in config {
-        let val = Evaluator::eval_value(&cfg.value, env)?;
-        // null 配置值不注入——让上游模块的 !default 生效
-        if matches!(val, Value::Null) && !cfg.is_default {
-            // 移除已有的同名变量（如果有），让 !default 重新生效
-            inherited_vars.retain(|(n, _)| n != cfg.name);
-            continue;
-        }
-        if cfg.is_default {
-            if !inherited_vars.iter().any(|(n, _)| n.as_str() == cfg.name.as_str()) {
-                inherited_vars.push((cfg.name.clone(), val));
-            }
-        } else if let Some(idx) = inherited_vars.iter().position(|(n, _)| n.as_str() == cfg.name.as_str()) {
-            inherited_vars[idx].1 = val;
-        } else {
-            inherited_vars.push((cfg.name.clone(), val));
-        }
-    }
-    Ok(())
-}
-
 /// 绑定模式：Use 写入 local 表，Forward 写入 forwarded 表。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum BindMode {

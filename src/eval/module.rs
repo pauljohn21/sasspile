@@ -114,6 +114,17 @@ impl Evaluator {
                 env.pending_config.insert(key, val);
             }
         }
+        // 验证配置变量在上游模块中必须带 !default 声明
+        if !env.pending_config.is_empty() {
+            let default_vars = crate::eval::module_validation::collect_default_vars(&ast.nodes);
+            for (name, _) in &env.pending_config {
+                if !default_vars.iter().any(|d| d.replace('-', "_") == *name) {
+                    return Err(SassError::Eval(
+                        "This variable was not declared with !default in the @used module.".into(),
+                    ));
+                }
+            }
+        }
         let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
         // plain CSS 输出用 AtRoot 包裹，防止序列化器展平嵌套
         let css = if is_plain_css {
@@ -324,24 +335,43 @@ fn bind_exports(
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             for (k, v) in &merged_vars {
+                // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
+                if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
                 // 变量名带 $ 前缀比较：filter 中 $a → 比较 $key
                 let var_key = format!("${key}");
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == var_key) { continue; }
                 if filter.hide.iter().any(|s| *s == var_key) { continue; }
-                // Forward 模式：直接写入 forwarded 表，后写覆盖先写
+                // 冲突检测：forwarded_vars 已存在同名且来源不同时报错
+                if new_env.forwarded_vars.contains_key(&key) {
+                    return Err(SassError::Eval(format!(
+                        "Two forwarded modules both define a variable named ${key}."
+                    )));
+                }
                 new_env.forwarded_vars.insert(key, v.clone());
             }
             for (k, v) in &merged_mixins {
+                if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
                 if filter.hide.iter().any(|s| *s == key) { continue; }
+                if new_env.forwarded_mixins.contains_key(&key) {
+                    return Err(SassError::Eval(format!(
+                        "Two forwarded modules both define a mixin named {key}."
+                    )));
+                }
                 new_env = new_env.define_forwarded_mixin(key, v.clone());
             }
             for (k, v) in &merged_functions {
+                if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
                 if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
                 if filter.hide.iter().any(|s| *s == key) { continue; }
+                if new_env.forwarded_functions.contains_key(&key) {
+                    return Err(SassError::Eval(format!(
+                        "Two forwarded modules both define a function named {key}."
+                    )));
+                }
                 new_env = new_env.define_forwarded_function(key, v.clone());
             }
         }
@@ -389,6 +419,12 @@ impl Evaluator {
             // 循环加载检测：已加入 loaded 但缓存中无模块 → 正在加载中
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
+            }
+            // 已加载的模块不能再次 with 配置
+            if already_loaded && !config.is_empty() {
+                return Err(SassError::Eval(
+                    "This module was already loaded, so it can't be configured using \"with\".".into(),
+                ));
             }
             let exports = if already_loaded {
                 // 从缓存获取 exports（CSS 为空，但 vars/mixins/functions 有效）
@@ -485,6 +521,12 @@ impl Evaluator {
             // 循环加载检测：已加入 loaded 但缓存中无模块 → 正在加载中
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
+            }
+            // 已加载的模块不能再次 with 配置
+            if already_loaded && !config.is_empty() {
+                return Err(SassError::Eval(
+                    "This module was already loaded, so it can't be configured using \"with\".".into(),
+                ));
             }
             let exports = if already_loaded {
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
