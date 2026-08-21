@@ -314,6 +314,8 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_body(&mut self) -> Result<Vec<Node>> {
         let mut nodes = Vec::new();
+        let prev = self.in_body;
+        self.in_body = true;
         loop {
             self.skip_ws();
             match self.peek() {
@@ -325,6 +327,7 @@ impl<'tok> Parser<'tok> {
         if self.peek() == Some(&Token::RBrace) {
             self.advance();
         }
+        self.in_body = prev;
         Ok(nodes)
     }
 
@@ -543,6 +546,10 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_config(&mut self) -> Result<Vec<ConfigVar>> {
         let mut config = Vec::new();
+        self.skip_ws();
+        if self.peek() == Some(&Token::RParen) {
+            return Err(SassError::Eval("expected \"$\".".into()));
+        }
         loop {
             self.skip_ws();
             if self.peek() == Some(&Token::RParen) {
@@ -551,22 +558,20 @@ impl<'tok> Parser<'tok> {
             let name = match self.peek() {
                 Some(Token::Dollar(n)) => {
                     let n = n.clone();
+                    if n.is_empty() {
+                        return Err(SassError::Eval("Expected identifier.".into()));
+                    }
                     self.advance();
                     n
                 }
                 _ => {
-                    return Err(SassError::Parse {
-                        expected: "$var".into(),
-                        found: "other".into(),
-                    });
+                    return Err(SassError::Eval("expected \"$\".".into()));
                 }
             };
             self.skip_ws();
             self.expect(&Token::Colon)?;
             self.skip_ws();
-            // 用 parse_expr 而非 parse_value，避免消费逗号分隔列表中的逗号
             let value = self.parse_expr(0)?;
-            // 消费 !default / !global 标志（配置值标志）
             self.skip_ws();
             let mut is_default = false;
             while self.peek() == Some(&Token::Bang) {
@@ -583,6 +588,11 @@ impl<'tok> Parser<'tok> {
             config.push(ConfigVar { name, value, is_default });
             if self.peek() == Some(&Token::Comma) {
                 self.advance();
+                self.skip_ws();
+                let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
+                if !is_ok && !matches!(self.peek(), Some(Token::RParen)) {
+                    return Err(SassError::Eval("expected \")\".".into()));
+                }
             } else {
                 break;
             }
@@ -593,26 +603,46 @@ impl<'tok> Parser<'tok> {
         Ok(config)
     }
 
-    pub(crate) fn parse_member_list(&mut self) -> Vec<String> {
+    pub(crate) fn parse_member_list(&mut self) -> Result<Vec<String>> {
         let mut members = Vec::new();
-        while let Some(t) = self.peek() {
-            match t {
-                Token::Semicolon | Token::LBrace => break,
-                Token::Dollar(n) => {
+        self.skip_ws();
+        loop {
+            match self.peek() {
+                Some(Token::Semicolon) | Some(Token::LBrace) | None => break,
+                Some(Token::Dollar(n)) => {
+                    if n.is_empty() {
+                        return Err(SassError::Eval(
+                            "Expected variable, mixin, or function name".into(),
+                        ));
+                    }
                     members.push(format!("${n}"));
                     self.advance();
                 }
-                Token::Ident(n) => {
+                Some(Token::Ident(n)) => {
                     members.push(n.clone());
                     self.advance();
                 }
-                Token::Whitespace | Token::Comma => {
-                    self.advance();
+                _ => {
+                    return Err(SassError::Eval(
+                        "Expected variable, mixin, or function name".into(),
+                    ));
                 }
-                _ => break,
+            }
+            self.skip_ws();
+            if self.peek() == Some(&Token::Comma) {
+                self.advance();
+                self.skip_ws();
+                let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
+                if !is_ok && !matches!(self.peek(), Some(Token::Ident(_))) {
+                    return Err(SassError::Eval(
+                        "Expected variable, mixin, or function name".into(),
+                    ));
+                }
+            } else {
+                break;
             }
         }
-        members
+        Ok(members)
     }
 
     // —— 辅助方法 ——

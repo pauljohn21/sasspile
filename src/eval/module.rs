@@ -104,10 +104,14 @@ impl Evaluator {
         let mut loaded = (*caller_env.loaded_modules).clone();
         loaded.insert(path.to_path_buf());
         env.loaded_modules = Rc::new(loaded);
-        // 注入 with() 配置变量（求值后注入，使 !default 尊重覆盖值）
+        // 注入 with() 配置变量到 pending_config——不进入 local_vars，
+        // 使 meta.variable-exists() 在声明前返回 false，!default 赋值时消费
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
-            env = env.bind(name.clone(), val);
+            // null 配置值不注入——让上游 !default 生效
+            if !matches!(val, Value::Null) {
+                env.pending_config.insert(name.clone(), val);
+            }
         }
         let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
         // plain CSS 输出用 AtRoot 包裹，防止序列化器展平嵌套
@@ -146,7 +150,10 @@ impl Evaluator {
         let span =
             crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
         let _enter = span.enter();
-        // 防止循环导入导致栈溢出
+        // 循环加载检测：已加载但缓存中无模块 → 正在加载中
+        if caller_env.loaded_modules.contains(path) && !caller_env.get_module_cache().contains_key(path) {
+            return Err(SassError::Module("This file is already being loaded.".into()));
+        }
         if caller_env.depth > 50 {
             return Ok((vec![], caller_env.clone()));
         }
@@ -240,27 +247,6 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
         }
         _ => None,
     }
-}
-
-/// 使用 ConfigVar 列表更新 inherited_vars。
-fn apply_config(
-    inherited_vars: &mut Vec<(String, Value)>,
-    config: &[crate::parse::ast::ConfigVar],
-    env: &Env,
-) -> Result<()> {
-    for cfg in config {
-        let val = Evaluator::eval_value(&cfg.value, env)?;
-        if cfg.is_default {
-            if !inherited_vars.iter().any(|(n, _)| n.as_str() == cfg.name.as_str()) {
-                inherited_vars.push((cfg.name.clone(), val));
-            }
-        } else if let Some(idx) = inherited_vars.iter().position(|(n, _)| n.as_str() == cfg.name.as_str()) {
-            inherited_vars[idx].1 = val;
-        } else {
-            inherited_vars.push((cfg.name.clone(), val));
-        }
-    }
-    Ok(())
 }
 
 /// 绑定模式：Use 写入 local 表，Forward 写入 forwarded 表。
@@ -399,6 +385,10 @@ impl Evaluator {
         let load_paths = env.get_load_paths();
         if let Some(path) = Self::resolve_file(base, url, load_paths) {
             let already_loaded = env.loaded_modules.contains(&path);
+            // 循环加载检测：已加入 loaded 但缓存中无模块 → 正在加载中
+            if already_loaded && !env.get_module_cache().contains_key(&path) {
+                return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
+            }
             let exports = if already_loaded {
                 // 从缓存获取 exports（CSS 为空，但 vars/mixins/functions 有效）
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
@@ -453,18 +443,40 @@ impl Evaluator {
         let base = env.base_path.as_ref();
         let load_paths = env.get_load_paths();
         if let Some(path) = Self::resolve_file(base, url, load_paths) {
-            let mut inherited_vars: Vec<(String, Value)> = env
-                .local_vars
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            apply_config(&mut inherited_vars, config, env)?;
+            // @forward with 配置值 + 从下游继承的 pending_config 透传给上游
+            let config_pairs: Vec<(String, Value)> = {
+                let mut pairs: Vec<(String, Value)> = env
+                    .pending_config
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                for cfg in config {
+                    let val = Evaluator::eval_value(&cfg.value, env)?;
+                    if cfg.is_default {
+                        // !default 配置：只在下游没有配置时才设置
+                        if !pairs.iter().any(|(n, _)| n == &cfg.name) && !matches!(val, Value::Null) {
+                            pairs.push((cfg.name.clone(), val));
+                        }
+                    } else if !matches!(val, Value::Null) {
+                        // 非 !default 配置：覆盖下游值
+                        if let Some(idx) = pairs.iter().position(|(n, _)| n == &cfg.name) {
+                            pairs[idx].1 = val;
+                        } else {
+                            pairs.push((cfg.name.clone(), val));
+                        }
+                    }
+                }
+                pairs
+            };
             let already_loaded = env.loaded_modules.contains(&path);
+            // 循环加载检测：已加入 loaded 但缓存中无模块 → 正在加载中
+            if already_loaded && !env.get_module_cache().contains_key(&path) {
+                return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
+            }
             let exports = if already_loaded {
-                // 从缓存获取 exports（CSS 为空，但 vars/mixins/functions 有效）
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
-                Self::load_module(&path, &inherited_vars, env)?
+                Self::load_module(&path, &config_pairs, env)?
             };
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             let env_with_cache = merge_module_cache(env, &path, &exports);
@@ -483,7 +495,6 @@ impl Evaluator {
             )?;
             return Ok((css, new_env));
         }
-        Ok((vec![], env.clone()))
+        Err(SassError::Eval("Can't find stylesheet to import.".into()))
     }
-
 }

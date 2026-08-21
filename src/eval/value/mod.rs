@@ -46,8 +46,21 @@ pub(crate) fn eval_variable(
         // 找不到命名空间——忽略
         return Ok((vec![], env.clone()));
     }
-    if flags.default && env.has_var(name) {
-        return Ok((vec![], env.clone()));
+    if flags.default {
+        // !default 赋值：先检查 pending_config（with 配置覆盖值）
+        // Sass 中 - 和 _ 在变量名中等价
+        let normalized = name.replace('-', "_");
+        let config_val = env.pending_config.get(&normalized)
+            .or_else(|| env.pending_config.get(name))
+            .cloned();
+        if let Some(val) = config_val {
+            let new_env = env.bind(name.to_string(), val);
+            return Ok((vec![], new_env));
+        }
+        // 无配置覆盖：已有变量则跳过
+        if env.has_var(name) {
+            return Ok((vec![], env.clone()));
+        }
     }
     let val = Self::eval_value(value, env)?;
     let new_env = env.bind(name.to_string(), val.clone());

@@ -89,6 +89,9 @@ pub struct Env {
     loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     /// 模块 exports 缓存——同一路径的模块只求值一次，后续 @use/@forward 从缓存取 vars/mixins/functions。
     module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
+    /// `with()` 配置变量——不进入 local_vars，在 !default 赋值时消费。
+    /// key 不带 $ 前缀，value 是配置值。
+    pending_config: HashMap<String, Value>,
 }
 
 /// mixin 定义存储。

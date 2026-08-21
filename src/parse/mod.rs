@@ -12,12 +12,16 @@ use crate::__tracing::warn;
 pub struct Parser<'tok> {
     tokens: &'tok [Token],
     pos: usize,
+    /// 是否在规则体（mixin/function/style_rule）内——用于 @forward 上下文验证。
+    in_body: bool,
+    /// 是否已解析过非模块规则（非 @forward/@use/@import）。
+    saw_other_rule: bool,
 }
 
 impl<'tok> Parser<'tok> {
     /// 创建新的 Parser。
     pub fn new(tokens: &'tok [Token]) -> Self {
-        Self { tokens, pos: 0 }
+        Self { tokens, pos: 0, in_body: false, saw_other_rule: false }
     }
 
     /// 解析入口。
@@ -29,7 +33,13 @@ impl<'tok> Parser<'tok> {
             if p.at_end() {
                 break;
             }
-            nodes.push(p.parse_node()?);
+            let node = p.parse_node()?;
+            // 跟踪非模块规则——@forward 必须在这些规则之前
+            match &node {
+                Node::Forward { .. } | Node::Use { .. } | Node::Import { .. } => {}
+                _ => p.saw_other_rule = true,
+            }
+            nodes.push(node);
         }
         Ok(Ast { nodes })
     }

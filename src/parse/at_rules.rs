@@ -271,40 +271,78 @@ impl<'tok> Parser<'tok> {
     }
 
     pub(crate) fn parse_forward(&mut self) -> Result<Node> {
+        // @forward 不能在 mixin/function/style_rule 内使用
+        if self.in_body {
+            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
+        }
+        // @forward 必须在其他规则之前
+        if self.saw_other_rule {
+            return Err(SassError::Eval("@forward rules must be written before any other rules.".into()));
+        }
         self.skip_ws();
-        let url = self.parse_string_value()?;
+        // @forward 的 URL 必须是字符串字面量
+        let url = match self.peek() {
+            Some(Token::String(s, _)) => {
+                let s = s.clone();
+                self.advance();
+                s
+            }
+            _ => return Err(SassError::Eval("Expected string.".into())),
+        };
         let mut show = Vec::new();
         let mut hide = Vec::new();
         let mut prefix = None;
         self.skip_ws();
         if self.peek_keyword("as") {
-            self.advance(); // 消费 as
+            self.advance();
             self.skip_ws();
-            // as prefix-*
-            if let Some(Token::Ident(s)) = self.peek() {
-                prefix = Some(s.clone());
-                self.advance();
+            match self.peek() {
+                Some(Token::Ident(s)) => {
+                    prefix = Some(s.clone());
+                    self.advance();
+                }
+                _ => return Err(SassError::Eval("Expected identifier.".into())),
             }
+            self.skip_ws();
             if self.peek() == Some(&Token::Star) {
                 self.advance();
+            } else {
+                return Err(SassError::Eval("expected \"*\".".into()));
             }
             self.skip_ws();
         }
         if self.peek_keyword("show") {
-            self.advance(); // 消费 show
-            show = self.parse_member_list();
+            self.advance();
+            show = self.parse_member_list()?;
+            if show.is_empty() {
+                return Err(SassError::Eval("Expected variable, mixin, or function name".into()));
+            }
+            self.skip_ws();
+            if self.peek_keyword("hide") {
+                return Err(SassError::Eval("expected \";\".".into()));
+            }
         } else if self.peek_keyword("hide") {
-            self.advance(); // 消费 hide
-            hide = self.parse_member_list();
+            self.advance();
+            hide = self.parse_member_list()?;
+            if hide.is_empty() {
+                return Err(SassError::Eval("Expected variable, mixin, or function name".into()));
+            }
+            self.skip_ws();
+            if self.peek_keyword("show") {
+                return Err(SassError::Eval("expected \";\".".into()));
+            }
         }
         self.skip_ws();
-        // @forward "url" with ($x: val)
         let mut config = Vec::new();
         if self.peek_keyword("with") {
-            self.advance(); // 消费 with
+            self.advance();
             self.skip_ws();
             self.expect(&Token::LParen)?;
             config = self.parse_config()?;
+            self.skip_ws();
+            if self.peek_keyword("as") || self.peek_keyword("show") || self.peek_keyword("hide") {
+                return Err(SassError::Eval("expected \";\".".into()));
+            }
         }
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
