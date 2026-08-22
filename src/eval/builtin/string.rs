@@ -48,9 +48,12 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
         },
         "insert" => match &args[..] {
             [Value::String(s, st), Value::String(insert, _), Value::Number(idx, _)] => {
-                let i = (*idx as usize).saturating_sub(1).min(s.len());
-                let mut result = s.clone();
-                result.insert_str(i, insert);
+                // 使用字符迭代器而非字节索引
+                let chars: Vec<char> = s.chars().collect();
+                let i = (*idx as usize).saturating_sub(1).min(chars.len());
+                let mut result: String = chars[..i].iter().collect();
+                result.push_str(insert);
+                result.extend(chars[i..].iter());
                 Ok(Value::String(result, *st))
             }
             _ => Err(SassError::eval("str-insert() expects string, string, number")),
@@ -68,6 +71,15 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
                 Ok(Value::String(result, *st))
             }
             _ => Err(SassError::eval("str-slice() expects string and numbers")),
+        },
+        "split" => match &args[..] {
+            [Value::String(s, st), Value::String(sep, _)] => {
+                let parts: Vec<Value> = s.split(sep.as_str())
+                    .map(|p| Value::String(p.to_string(), *st))
+                    .collect();
+                Ok(Value::List(parts, crate::eval::value::Separator::Comma, false))
+            }
+            _ => Err(SassError::eval("string.split() expects two strings")),
         },
         _ => Err(SassError::eval(format!("Unknown string function: {field}"))),
     }

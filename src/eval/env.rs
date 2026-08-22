@@ -28,6 +28,7 @@ pub struct ModuleExports {
     pub variables: HashMap<String, Value>,
     pub mixins: HashMap<String, MixinDef>,
     pub functions: HashMap<String, FunctionDef>,
+    pub css: Vec<crate::css::CssNode>,
 }
 
 /// 求值环境——move 语义。

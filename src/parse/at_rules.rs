@@ -2,8 +2,7 @@
 
 use crate::error::{Result, SassError};
 use crate::lex::Token;
-use crate::parse::{Node, Parser};
-use crate::eval::value::Value;
+use crate::parse::{Node, Parser, ast::ConfigVar};
 
 impl Parser {
     /// 解析 @ 开头的 at-rule。
@@ -11,8 +10,7 @@ impl Parser {
         let name = match self.bump() {
             Token::AtRule(n) => n,
             t => return Err(SassError::parse(format!("Expected at-rule, got {:?}", t))),
-        };
-
+                };
         match name.as_str() {
             "if" => self.parse_if(),
             "for" => self.parse_for(),
@@ -65,7 +63,6 @@ impl Parser {
 
         // @else if / @else
         loop {
-            // 检查 @else
             if let Token::AtRule(s) = self.peek() {
                 if s == "else" {
                     self.bump(); // @else
@@ -177,6 +174,16 @@ impl Parser {
             Token::Ident(s) => s,
             t => return Err(SassError::parse(format!("Expected mixin name in @include, got {:?}", t))),
         };
+        // 命名空间限定 mixin（如 midstream.b-a）
+        let name = if matches!(self.peek(), Token::Dot) {
+            self.bump();
+            match self.bump() {
+                Token::Ident(rest) => format!("{name}.{rest}"),
+                t => return Err(SassError::parse(format!("Expected ident after '.', got {:?}", t))),
+            }
+        } else {
+            name
+        };
         let args = self.parse_args()?;
 
         // optional @content block
@@ -272,12 +279,18 @@ impl Parser {
             t => return Err(SassError::parse(format!("Expected string in @import, got {:?}", t))),
         };
 
-        // modifier (plain css)
-        let modifier = if let Token::Ident(s) = self.peek() {
-            let m = s.clone();
-            self.bump();
-            Some(m)
-        } else { None };
+        // modifier (plain css) — 收集到分号为止
+        let modifier = if matches!(self.peek(), Token::Ident(_)) {
+            let mut s = String::new();
+            while !matches!(self.peek(), Token::Semicolon | Token::Eof) {
+                s.push_str(self.peek().as_str());
+                s.push(' ');
+                self.bump();
+            }
+            s.trim().to_string()
+        } else {
+            String::new()
+        };
 
         self.consume_until_semicolon();
         Ok(Node::Import { url, modifier })
@@ -286,20 +299,31 @@ impl Parser {
     fn parse_extend(&mut self) -> Result<Node> {
         // 收集选择器
         let mut sel = String::new();
+        let mut optional = false;
         while !matches!(self.peek(), Token::Semicolon | Token::Eof) {
-            sel.push_str(&match self.bump() {
-                Token::Ident(s) => s,
-                Token::Variable(s) => format!("${s}"),
-                Token::Dot => ".".to_string(),
-                Token::Hash => "#".to_string(),
-                Token::Colon => ":".to_string(),
-                Token::Ampersand => "&".to_string(),
-                t => t.as_str().to_string(),
-            });
+            match self.peek().clone() {
+                Token::Bang => {
+                    self.bump();
+                    if let Token::Ident(s) = self.peek() {
+                        if s == "optional" {
+                            optional = true;
+                            self.bump();
+                            continue;
+                        }
+                    }
+                }
+                Token::Ident(s) => { sel.push_str(&s); self.bump(); }
+                Token::Variable(s) => { sel.push_str(&format!("${s}")); self.bump(); }
+                Token::Dot => { sel.push('.'); self.bump(); }
+                Token::Hash => { sel.push('#'); self.bump(); }
+                Token::Colon => { sel.push(':'); self.bump(); }
+                Token::Ampersand => { sel.push('&'); self.bump(); }
+                Token::Percent => { sel.push('%'); self.bump(); }
+                Token::Star => { sel.push('*'); self.bump(); }
+                t => { sel.push_str(t.as_str()); self.bump(); }
+            }
         }
         self.consume_until_semicolon();
-        let optional = sel.ends_with("!optional");
-        if optional { sel = sel.trim_end_matches("!optional").trim().to_string(); }
         Ok(Node::Extend { selector: sel.trim().to_string(), optional })
     }
 
@@ -309,10 +333,12 @@ impl Parser {
             self.bump();
             let mut q = String::new();
             while !matches!(self.peek(), Token::RParen) {
-                q.push_str(self.bump().as_str());
+                q.push_str(self.peek().as_str());
+                q.push(' ');
+                self.bump();
             }
             self.bump();
-            Some(q)
+            Some(q.trim().to_string())
         } else { None };
 
         self.eat(&Token::LBrace)?;
@@ -327,12 +353,21 @@ impl Parser {
         loop {
             match self.peek() {
                 Token::LBrace | Token::Semicolon | Token::Eof => break,
+                Token::Comment(_) | Token::SilentComment(_) => { self.bump(); }
                 t => {
-                    params.push_str(t.as_str());
+                    let s = t.as_str();
+                    if !s.is_empty() {
+                        if !params.is_empty() && !params.ends_with(' ') {
+                            params.push(' ');
+                        }
+                        params.push_str(s);
+                    }
                     self.bump();
                 }
             }
         }
+
+        let params_opt = if params.is_empty() { None } else { Some(params) };
 
         let body = if matches!(self.peek(), Token::LBrace) {
             self.bump();
@@ -346,12 +381,12 @@ impl Parser {
 
         Ok(Node::AtRule {
             name: name.to_string(),
-            params: params.trim().to_string(),
+            params: params_opt,
             body,
         })
     }
 
-    fn parse_config(&mut self) -> Result<Vec<(String, Value)>> {
+    fn parse_config(&mut self) -> Result<Vec<ConfigVar>> {
         let mut config = Vec::new();
         self.eat(&Token::LParen)?;
         if matches!(self.peek(), Token::RParen) {
@@ -365,7 +400,18 @@ impl Parser {
             };
             self.eat(&Token::Colon)?;
             let value = self.parse_value()?;
-            config.push((name, value));
+            // !default 标志
+            let mut is_default = false;
+            if matches!(self.peek(), Token::Bang) {
+                self.bump();
+                if let Token::Ident(s) = self.peek() {
+                    if s == "default" {
+                        is_default = true;
+                    }
+                    self.bump();
+                }
+            }
+            config.push(ConfigVar { name, value, is_default });
             match self.peek() {
                 Token::Comma => { self.bump(); }
                 Token::RParen => { self.bump(); break; }

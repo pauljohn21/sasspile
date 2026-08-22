@@ -78,6 +78,28 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
             [Value::ArgList(_)] => Ok(Value::Map(Vec::new())),
             _ => Err(SassError::eval("keywords() expects an argument list")),
         },
+        "get_mixin" => match &args[..] {
+            [Value::String(s, _)] | [Value::Ident(s)] => {
+                Ok(Value::String(s.clone(), QuoteStyle::None))
+            }
+            _ => Err(SassError::eval("get-mixin() expects a string")),
+        },
+        "module_functions" => match &args[..] {
+            [Value::String(_, _)] | [Value::Ident(_)] => {
+                Ok(Value::Map(Vec::new()))
+            }
+            _ => Err(SassError::eval("module-functions() expects a string")),
+        },
+        "module_variables" => match &args[..] {
+            [Value::String(_, _)] | [Value::Ident(_)] => {
+                Ok(Value::Map(Vec::new()))
+            }
+            _ => Err(SassError::eval("module-variables() expects a string")),
+        },
+        "load_css" => {
+            // TODO: 实现真正的 CSS 加载
+            Ok(Value::Null)
+        }
         _ => Err(SassError::eval(format!("Unknown meta function: {field}"))),
     }
 }
@@ -96,5 +118,8 @@ fn type_name(v: &Value) -> String {
         Value::Function(_) => "function".to_string(),
         Value::Variable(_) => "string".to_string(),
         Value::ArgList(_) => "arglist".to_string(),
+        // AST 级别——求值前 fallback
+        Value::Call(_, _) | Value::Interp(_) | Value::BinOp(_)
+        | Value::UnaryOp(_, _) | Value::Calc(_) | Value::Paren(_) => "string".to_string(),
     }
 }

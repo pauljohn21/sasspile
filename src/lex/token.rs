@@ -45,6 +45,8 @@ pub enum Token {
     NotEq,                               // !=
     Arrow,                               // =>
     DotDotDot,                           // ...
+    Caret,                               // ^ (属性选择器 ^=)
+    Pipe,                                // | (CSS 命名空间)
 
     // 特殊
     AtRule(String),       // @media, @import 等（合并 token）
@@ -58,6 +60,8 @@ impl Token {
             Token::Number(n, _) => n,
             Token::Interp(s) | Token::Comment(s) | Token::SilentComment(s) => s,
             Token::AtRule(s) => s,
+            Token::Caret => "^",
+            Token::Pipe => "|",
             _ => "",
         }
     }

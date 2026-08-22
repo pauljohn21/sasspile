@@ -21,9 +21,23 @@ pub struct Param {
 /// 函数调用参数。
 #[derive(Debug, Clone)]
 pub struct Arg {
-    pub name: Option<String>,  // named arg
+    /// 命名参数名。
+    pub name: Option<String>,
+    /// 参数值表达式。
     pub value: Value,
-    pub spread: bool,  // ...
+    /// 是否展开剩余参数（`...`）。
+    pub spread: bool,
+}
+
+/// 配置变量——`@use`/`@forward` 的 `with ($x: val)` 参数。
+#[derive(Debug, Clone)]
+pub struct ConfigVar {
+    /// 变量名（不含 $）。
+    pub name: String,
+    /// 变量值表达式。
+    pub value: Value,
+    /// `!default` 标志。
+    pub is_default: bool,
 }
 
 /// AST 节点。
@@ -51,13 +65,13 @@ pub enum Node {
     Return(Value),
 
     // 模块系统
-    Use { url: String, namespace: Option<String>, star: bool, config: Vec<(String, Value)> },
-    Forward { url: String, show: Vec<String>, hide: Vec<String>, prefix: Option<String>, config: Vec<(String, Value)> },
-    Import { url: String, modifier: Option<String> },
+    Use { url: String, namespace: Option<String>, star: bool, config: Vec<ConfigVar> },
+    Forward { url: String, show: Vec<String>, hide: Vec<String>, prefix: Option<String>, config: Vec<ConfigVar> },
+    Import { url: String, modifier: String },
 
     // 其他 at-rules
     AtRoot { query: Option<String>, body: Vec<Node> },
-    AtRule { name: String, params: String, body: Option<Vec<Node>> },
+    AtRule { name: String, params: Option<String>, body: Option<Vec<Node>> },
     Extend { selector: String, optional: bool },
     Warn(Value),
     Debug(Value),

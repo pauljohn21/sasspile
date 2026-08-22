@@ -63,6 +63,8 @@ impl<'a> Scanner<'a> {
             '-' => self.scan_minus()?,
             '*' => { self.bump(); Token::Star }
             '%' => { self.bump(); Token::Percent }
+            '^' => { self.bump(); Token::Caret }
+            '|' => { self.bump(); Token::Pipe }
             '=' => {
                 self.bump();
                 if self.peek() == Some('>') {

@@ -10,7 +10,7 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
     let args: Vec<Value> = args.iter().map(|a| eval_value(&a.value, env)).collect();
     match field {
         "abs" => match &args[..] {
-            [Value::Number(n, _)] => Ok(Value::Number(n.abs(), None)),
+            [Value::Number(n, u)] => Ok(Value::Number(n.abs(), u.clone())),
             _ => Err(SassError::eval("abs() expects a number")),
         },
         "ceil" => match &args[..] {
@@ -26,24 +26,36 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
             _ => Err(SassError::eval("round() expects a number")),
         },
         "max" => {
-            let nums: Vec<f64> = args.iter().filter_map(|v| match v {
-                Value::Number(n, _) => Some(*n),
+            let nums: Vec<(f64, Option<String>)> = args.iter().filter_map(|v| match v {
+                Value::Number(n, u) => Some((*n, u.clone())),
                 _ => None,
             }).collect();
-            nums.iter().copied().fold(None, |acc, n| {
-                Some(acc.map_or(n, |a: f64| a.max(n)))
-            }).map(|n| Value::Number(n, None))
-                .ok_or_else(|| SassError::eval("max() expects numbers"))
+            if nums.is_empty() {
+                return Err(SassError::eval("max() expects numbers"));
+            }
+            let mut result = nums[0].clone();
+            for (n, u) in &nums[1..] {
+                if *n > result.0 {
+                    result = (*n, u.clone());
+                }
+            }
+            Ok(Value::Number(result.0, result.1))
         },
         "min" => {
-            let nums: Vec<f64> = args.iter().filter_map(|v| match v {
-                Value::Number(n, _) => Some(*n),
+            let nums: Vec<(f64, Option<String>)> = args.iter().filter_map(|v| match v {
+                Value::Number(n, u) => Some((*n, u.clone())),
                 _ => None,
             }).collect();
-            nums.iter().copied().fold(None, |acc, n| {
-                Some(acc.map_or(n, |a: f64| a.min(n)))
-            }).map(|n| Value::Number(n, None))
-                .ok_or_else(|| SassError::eval("min() expects numbers"))
+            if nums.is_empty() {
+                return Err(SassError::eval("min() expects numbers"));
+            }
+            let mut result = nums[0].clone();
+            for (n, u) in &nums[1..] {
+                if *n < result.0 {
+                    result = (*n, u.clone());
+                }
+            }
+            Ok(Value::Number(result.0, result.1))
         },
         "is_unitless" => match &args[..] {
             [Value::Number(_, unit)] => Ok(Value::Bool(unit.is_none())),
@@ -72,6 +84,74 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
                 Ok(Value::Number(a / b, unit))
             }
             _ => Err(SassError::eval("math.div() expects two numbers")),
+        },
+        "clamp" => match &args[..] {
+            [Value::Number(min, _), Value::Number(n, u), Value::Number(max, _)] => {
+                if min > max {
+                    Ok(Value::Number(*min, u.clone()))
+                } else {
+                    Ok(Value::Number(n.clamp(*min, *max), u.clone()))
+                }
+            }
+            _ => Err(SassError::eval("clamp() expects three numbers")),
+        },
+        "hypot" => {
+            let nums: Vec<f64> = args.iter().filter_map(|v| match v {
+                Value::Number(n, _) => Some(*n),
+                _ => None,
+            }).collect();
+            if nums.is_empty() {
+                return Err(SassError::eval("hypot() expects numbers"));
+            }
+            let sum: f64 = nums.iter().map(|n| n * n).sum();
+            Ok(Value::Number(sum.sqrt(), None))
+        },
+        "sqrt" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.sqrt(), None)),
+            _ => Err(SassError::eval("sqrt() expects a number")),
+        },
+        "pow" => match &args[..] {
+            [Value::Number(base, _), Value::Number(exp, _)] => {
+                Ok(Value::Number(base.powf(*exp), None))
+            }
+            _ => Err(SassError::eval("pow() expects two numbers")),
+        },
+        "log" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.ln(), None)),
+            [Value::Number(n, _), Value::Number(base, _)] => {
+                Ok(Value::Number(n.log(*base), None))
+            }
+            _ => Err(SassError::eval("log() expects a number")),
+        },
+        "sin" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.to_radians().sin(), None)),
+            _ => Err(SassError::eval("sin() expects a number")),
+        },
+        "cos" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.to_radians().cos(), None)),
+            _ => Err(SassError::eval("cos() expects a number")),
+        },
+        "tan" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.to_radians().tan(), None)),
+            _ => Err(SassError::eval("tan() expects a number")),
+        },
+        "asin" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.asin().to_degrees(), None)),
+            _ => Err(SassError::eval("asin() expects a number")),
+        },
+        "acos" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.acos().to_degrees(), None)),
+            _ => Err(SassError::eval("acos() expects a number")),
+        },
+        "atan" => match &args[..] {
+            [Value::Number(n, _)] => Ok(Value::Number(n.atan().to_degrees(), None)),
+            _ => Err(SassError::eval("atan() expects a number")),
+        },
+        "atan2" => match &args[..] {
+            [Value::Number(y, _), Value::Number(x, _)] => {
+                Ok(Value::Number(y.atan2(*x).to_degrees(), None))
+            }
+            _ => Err(SassError::eval("atan2() expects two numbers")),
         },
         _ => Err(SassError::eval(format!("Unknown math function: {field}"))),
     }

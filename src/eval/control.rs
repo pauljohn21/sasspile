@@ -17,13 +17,13 @@ pub fn eval_if(
         let c = eval_value(cond, &env);
         if c.is_truthy() {
             let child_env = env.enter_scope();
-            let css = eval_nodes(body, child_env)?;
+            let css = eval_nodes(body, child_env)?.0;
             return Ok((Some(css), env));
         }
     }
     if let Some(body) = else_body {
         let child_env = env.enter_scope();
-        let css = eval_nodes(body, child_env)?;
+        let css = eval_nodes(body, child_env)?.0;
         return Ok((Some(css), env));
     }
     Ok((None, env))
@@ -47,15 +47,32 @@ pub fn eval_for(
         _ => return Ok((None, env)),
     };
 
-    let end = if inclusive { to_val + 1 } else { to_val };
-    let mut output = Vec::new();
-    let mut env = env;
+    // 处理负方向（from > to 时递减）
+    let (start, end, step) = if from_val <= to_val {
+        (from_val, to_val, 1i64)
+    } else {
+        (from_val, to_val, -1i64)
+    };
 
-    for i in from_val..end {
-        env = env.define_var(var, Value::Number(i as f64, None));
-        let child_env = env.enter_scope();
-        let css = eval_nodes(body, child_env)?;
+    let end_cond = if inclusive {
+        end + step
+    } else {
+        end
+    };
+
+    let mut output = Vec::new();
+    let env = env;
+
+    let mut i = start;
+    loop {
+        if step > 0 && i >= end_cond { break; }
+        if step < 0 && i <= end_cond { break; }
+
+        // 循环变量定义在子作用域中
+        let child_env = env.enter_scope().define_var(var, Value::Number(i as f64, None));
+        let css = eval_nodes(body, child_env)?.0;
         output.extend(css);
+        i += step;
     }
 
     Ok((Some(output), env))
@@ -68,32 +85,41 @@ pub fn eval_each(
     body: &[Node],
     env: Env,
 ) -> Result<(Option<Vec<CssNode>>, Env)> {
-    let items = match eval_value(list, &env) {
-        Value::List(items, _, _) => items,
-        Value::ArgList(items) => items,
-        v => vec![v],
+    let evaluated = eval_value(list, &env);
+    let items = match &evaluated {
+        Value::List(items, _, _) => items.clone(),
+        Value::ArgList(items) => items.clone(),
+        Value::Map(pairs) => {
+            // Map → (key, value) 对
+            pairs.iter().flat_map(|(k, v)| vec![k.clone(), v.clone()]).collect()
+        }
+        v => vec![v.clone()],
     };
 
     let mut output = Vec::new();
-    let mut env = env;
+    let env = env;
 
     for item in items {
+        let child_env = env.enter_scope();
         // 多变量绑定
         if vars.len() == 1 {
-            env = env.define_var(&vars[0], item);
+            let child_env = child_env.define_var(&vars[0], item);
+            let css = eval_nodes(body, child_env)?.0;
+            output.extend(css);
         } else {
+            // 解构：List → 多变量
             let parts = match &item {
                 Value::List(items, _, _) => items.clone(),
                 _ => vec![item],
             };
+            let mut child_env = child_env;
             for (i, var) in vars.iter().enumerate() {
                 let v = parts.get(i).cloned().unwrap_or(Value::Null);
-                env = env.define_var(var, v);
+                child_env = child_env.define_var(var, v);
             }
+            let css = eval_nodes(body, child_env)?.0;
+            output.extend(css);
         }
-        let child_env = env.enter_scope();
-        let css = eval_nodes(body, child_env)?;
-        output.extend(css);
     }
 
     Ok((Some(output), env))
@@ -102,7 +128,7 @@ pub fn eval_each(
 /// @while 求值。
 pub fn eval_while(cond: &Value, body: &[Node], env: Env) -> Result<(Option<Vec<CssNode>>, Env)> {
     let mut output = Vec::new();
-    let mut env = env;
+    let env = env;
     let mut iterations = 0;
 
     loop {
@@ -111,11 +137,12 @@ pub fn eval_while(cond: &Value, body: &[Node], env: Env) -> Result<(Option<Vec<C
 
         iterations += 1;
         if iterations > 100_000 {
+            tracing::warn!(iterations, "@while reached iteration limit");
             return Ok((Some(output), env));
         }
 
         let child_env = env.enter_scope();
-        let css = eval_nodes(body, child_env)?;
+        let css = eval_nodes(body, child_env)?.0;
         output.extend(css);
     }
 

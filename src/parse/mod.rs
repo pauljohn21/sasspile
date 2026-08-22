@@ -91,6 +91,21 @@ impl Parser {
         matches!(self.peek(), Token::Eof)
     }
 
+    /// 当前位置。
+    pub fn pos(&self) -> usize {
+        self.pos
+    }
+
+    /// token 总数。
+    pub fn tokens_len(&self) -> usize {
+        self.tokens.len()
+    }
+
+    /// 获取指定位置的 token 引用。
+    pub fn token_at(&self, i: usize) -> &Token {
+        self.tokens.get(i).unwrap_or(&Token::Eof)
+    }
+
     /// 跳过静默注释（// ...）。
     fn skip_silent_comments(&mut self) {
         while matches!(self.peek(), Token::SilentComment(_)) {

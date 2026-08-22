@@ -40,7 +40,6 @@ fn serialize_nodes(
 ) {
     for (i, node) in nodes.iter().enumerate() {
         if i > 0 && style == OutputStyle::Expanded {
-            // 规则之间空行
             if needs_blank_line(node, &nodes[i - 1]) {
                 output.push('\n');
             }
@@ -49,10 +48,9 @@ fn serialize_nodes(
     }
 }
 
-fn needs_blank_line(_current: &CssNode, _prev: &CssNode) -> bool {
-    // 规则之间加空行，声明之间不加
-    matches!(_current, CssNode::Rule { .. } | CssNode::AtRule { .. })
-        || matches!(_prev, CssNode::Rule { .. } | CssNode::AtRule { .. })
+fn needs_blank_line(current: &CssNode, prev: &CssNode) -> bool {
+    matches!(current, CssNode::Rule { .. } | CssNode::AtRule { .. })
+        || matches!(prev, CssNode::Rule { .. } | CssNode::AtRule { .. })
 }
 
 fn serialize_node(
@@ -69,17 +67,23 @@ fn serialize_node(
 
     match node {
         CssNode::Rule { selector, declarations, children } => {
-            // 选择器行
+            // 跳过空规则（无声明且无子规则）
+            if declarations.is_empty() && children.is_empty() {
+                return;
+            }
+
             output.push_str(&indent_str);
             output.push_str(selector);
-            output.push_str(" {");
+            if style == OutputStyle::Expanded {
+                output.push_str(" {");
+            } else {
+                output.push('{');
+            }
 
-            // 声明
             for decl in declarations {
                 serialize_node(decl, output, style, indent + 1);
             }
 
-            // 子规则
             for child in children {
                 if style == OutputStyle::Expanded && !declarations.is_empty() {
                     output.push('\n');
@@ -87,7 +91,6 @@ fn serialize_node(
                 serialize_node(child, output, style, indent + 1);
             }
 
-            // 闭合
             if style == OutputStyle::Expanded {
                 output.push('\n');
                 output.push_str(&indent_str);
@@ -101,26 +104,29 @@ fn serialize_node(
                 output.push_str(&indent_str);
             }
             output.push_str(property);
-            output.push_str(": ");
+            if style == OutputStyle::Expanded {
+                output.push_str(": ");
+            } else {
+                output.push(':');
+            }
             output.push_str(value);
             if *important {
-                output.push_str(" !important");
+                if style == OutputStyle::Expanded {
+                    output.push_str(" !important");
+                } else {
+                    output.push_str("!important");
+                }
             }
-            if style == OutputStyle::Expanded {
-                output.push(';');
-            } else {
-                output.push(';');
-            }
-            if style == OutputStyle::Expanded {
-                // 不换行——serialize_nodes 循环中处理
-            }
+            output.push(';');
         }
         CssNode::Comment(s) => {
+            // compressed 模式跳过注释
+            if style == OutputStyle::Compressed {
+                return;
+            }
             output.push_str(&indent_str);
             output.push_str(&format!("/*{s}*/"));
-            if style == OutputStyle::Expanded {
-                output.push('\n');
-            }
+            output.push('\n');
         }
         CssNode::AtRule { name, params, children, has_body } => {
             output.push_str(&indent_str);
@@ -146,8 +152,6 @@ fn serialize_node(
         CssNode::AtRoot(nodes) => {
             serialize_nodes(nodes, output, style, indent);
         }
-        CssNode::Return(_) => {
-            // 不输出——函数返回值在求值阶段处理
-        }
+        CssNode::Return(_) => {}
     }
 }

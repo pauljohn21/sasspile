@@ -3,7 +3,6 @@
 use crate::error::{Result, SassError};
 use crate::lex::Token;
 use crate::parse::ast::{Param, Arg};
-use crate::eval::value::Value;
 use super::Parser;
 
 impl Parser {
@@ -38,7 +37,7 @@ impl Parser {
             // : default
             let default = if matches!(self.peek(), Token::Colon) {
                 self.bump();
-                Some(self.parse_value()?)
+                Some(self.parse_single_value()?)
             } else {
                 None
             };
@@ -70,22 +69,19 @@ impl Parser {
 
         loop {
             // named arg? $name: value
-            let (name, value) = if matches!(self.peek(), Token::Variable(_)) {
-                let saved = self.pos;
+            // 使用 lookahead 检测：Variable 后面跟 Colon
+            let is_named = matches!(self.peek(), Token::Variable(_))
+                && matches!(self.peek_n(1), Token::Colon);
+
+            let (name, value) = if is_named {
                 let n = match self.bump() {
                     Token::Variable(n) => n,
                     _ => unreachable!(),
                 };
-                if matches!(self.peek(), Token::Colon) {
-                    self.bump();
-                    (Some(n), self.parse_value()?)
-                } else {
-                    // not named, restore
-                    self.pos = saved;
-                    (None, self.parse_value()?)
-                }
+                self.bump(); // :
+                (Some(n), self.parse_single_value()?)
             } else {
-                (None, self.parse_value()?)
+                (None, self.parse_single_value()?)
             };
 
             let spread = matches!(self.peek(), Token::DotDotDot);

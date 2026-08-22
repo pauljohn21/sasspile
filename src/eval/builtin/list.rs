@@ -83,7 +83,7 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
             [Value::List(_, sep, _)] => Ok(match sep {
                 Separator::Comma => Value::String("comma".to_string(), crate::lex::token::QuoteStyle::None),
                 Separator::Space => Value::String("space".to_string(), crate::lex::token::QuoteStyle::None),
-                Separator::Slash => Value::String("slash".to_string(), crate::lex::token::QuoteStyle::None),
+                Separator::Slash | Separator::SlashLiteral => Value::String("slash".to_string(), crate::lex::token::QuoteStyle::None),
                 Separator::Undecided => Value::String("space".to_string(), crate::lex::token::QuoteStyle::None),
             }),
             _ => Ok(Value::String("space".to_string(), crate::lex::token::QuoteStyle::None)),
@@ -110,6 +110,12 @@ pub fn dispatch(field: &str, args: &[Arg], env: &Env) -> Result<Value> {
                 Value::List(items, Separator::Space, false)
             }).collect();
             Ok(Value::List(result, Separator::Comma, false))
+        }
+        "slash" => {
+            if args.is_empty() {
+                return Ok(Value::List(Vec::new(), Separator::Slash, false));
+            }
+            Ok(Value::List(args.to_vec(), Separator::Slash, false))
         }
         _ => Err(SassError::eval(format!("Unknown list function: {field}"))),
     }

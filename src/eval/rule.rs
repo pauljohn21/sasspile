@@ -12,14 +12,16 @@ pub fn eval_rule(selector: &str, body: &[Node], env: Env) -> Result<(Option<Vec<
     let resolved_selector = resolve_selector(selector, &env);
 
     let child_env = env.enter_scope().with_selector(resolved_selector.clone());
-    let children = eval_nodes(body, child_env)?;
+    let children = eval_nodes(body, child_env)?.0;
 
     // 分离 declarations 和子规则
     let mut declarations = Vec::new();
     let mut nested = Vec::new();
+    let mut root_nodes = Vec::new();
     for child in children {
         match child {
             CssNode::Declaration { .. } | CssNode::Comment(_) => declarations.push(child),
+            CssNode::AtRoot(nodes) => root_nodes.extend(nodes),
             _ => nested.push(child),
         }
     }
@@ -33,7 +35,11 @@ pub fn eval_rule(selector: &str, body: &[Node], env: Env) -> Result<(Option<Vec<
         children: nested,
     };
 
-    Ok((Some(vec![rule]), env))
+    // AtRoot 节点提升到顶层
+    let mut result = vec![rule];
+    result.extend(root_nodes);
+
+    Ok((Some(result), env))
 }
 
 /// 把父选择器传播到子规则——实现 SCSS 嵌套。
@@ -42,11 +48,22 @@ fn nest_rule_in_children(children: Vec<CssNode>, parent: &str) -> Vec<CssNode> {
     for child in children {
         match child {
             CssNode::Rule { selector, declarations, children } => {
-                // 合并选择器：parent + " " + child（如果 child 没用 &）
+                // 处理选择器列表：每个逗号分隔的选择器分别嵌套
                 let merged = if selector.contains('&') {
                     selector.replace('&', parent)
                 } else {
-                    format!("{parent} {selector}")
+                    // 处理逗号分隔的父选择器和子选择器
+                    let parent_parts: Vec<&str> = parent.split(',').map(|s| s.trim()).collect();
+                    let child_parts: Vec<&str> = selector.split(',').map(|s| s.trim()).collect();
+                    if parent_parts.len() == 1 {
+                        format!("{parent} {selector}")
+                    } else {
+                        // 笛卡尔积嵌套
+                        let combinations: Vec<String> = child_parts.iter().flat_map(|child| {
+                            parent_parts.iter().map(move |p| format!("{p} {child}"))
+                        }).collect();
+                        combinations.join(", ")
+                    }
                 };
                 let children = nest_rule_in_children(children, &merged);
                 result.push(CssNode::Rule {
@@ -56,8 +73,13 @@ fn nest_rule_in_children(children: Vec<CssNode>, parent: &str) -> Vec<CssNode> {
                 });
             }
             CssNode::AtRule { name, params, children, has_body } => {
-                // @at-root 不传播父选择器
-                result.push(CssNode::AtRule { name, params, children, has_body });
+                // @keyframes 不传播父选择器
+                let processed_children = if matches!(name.as_str(), "keyframes" | "-webkit-keyframes" | "-moz-keyframes") {
+                    children
+                } else {
+                    nest_rule_in_children(children, parent)
+                };
+                result.push(CssNode::AtRule { name, params, children: processed_children, has_body });
             }
             other => result.push(other),
         }
@@ -68,7 +90,7 @@ fn nest_rule_in_children(children: Vec<CssNode>, parent: &str) -> Vec<CssNode> {
 /// 解析选择器——替换 $var 和 & 父选择器。
 fn resolve_selector(selector: &str, env: &Env) -> String {
     let mut result = selector.to_string();
-    // TODO: 处理 #{...} 插值
+    // 替换 $var
     for (name, value) in &env.local_vars {
         let placeholder = format!("${name}");
         result = result.replace(&placeholder, &value.to_css_string());
