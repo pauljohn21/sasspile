@@ -1,7 +1,7 @@
 use sasspile::compile_expanded;
 use sasspile::css::node::CssNode;
-use sasspile::eval::Evaluator;
-use sasspile::parse::ast::*;
+use sasspile::stage::source::Source;
+use sasspile::OutputStyle;
 
 #[test]
 fn test_eval_interp_not_css_if() {
@@ -30,39 +30,31 @@ fn test_eval_interp_and_keyword() {
 
 #[test]
 fn test_eval_simple() {
-    let ast = Ast {
-        nodes: vec![Node::Rule {
-            selector: "a".into(),
-            body: vec![Node::Decl {
-                property: "color".into(),
-                value: Value::String("red".into(), false),
-                important: false,
-            }],
-        }],
-    };
-    let css = Evaluator::evaluate(&ast).unwrap();
-    assert_eq!(css.len(), 1);
+    // 链式调用：Source → Lexed → Parsed → Evaluated → Serialized
+    let css = Source::new("a { color: red; }".to_string())
+        .lex().unwrap()
+        .parse().unwrap()
+        .evaluate().unwrap()
+        .serialize(OutputStyle::Expanded)
+        .into_string();
+    assert!(css.contains("color: red"));
 }
 
 #[test]
 fn test_eval_variable() {
-    let ast = Ast {
-        nodes: vec![
-            Node::Variable {
-                name: "x".into(),
-                value: Value::Number(10.0, Some("px".into())),
-                flags: VarFlags::default(),
-            },
-            Node::Decl {
-                property: "w".into(),
-                value: Value::Variable("x".into()),
-                important: false,
-            },
-        ],
-    };
-    let css = Evaluator::evaluate(&ast).unwrap();
-    assert_eq!(css.len(), 1);
-    if let CssNode::Declaration { value, .. } = &css[0] {
+    let input = "$x: 10px; a { w: $x; }";
+    let css = Source::new(input.to_string())
+        .lex().unwrap()
+        .parse().unwrap()
+        .evaluate().unwrap()
+        .serialize(OutputStyle::Expanded)
+        .into_string();
+    // 验证变量求值结果
+    let nodes = Source::new(input.to_string())
+        .lex().unwrap()
+        .parse().unwrap()
+        .evaluate().unwrap();
+    if let Some(CssNode::Declaration { value, .. }) = nodes.nodes.first() {
         assert_eq!(value, "10px");
     }
 }

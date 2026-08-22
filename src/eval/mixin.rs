@@ -7,7 +7,7 @@ impl Evaluator {
         name: &str,
         args: &[Arg],
         content: &Option<Vec<Node>>,
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_include", name = name, n_args = args.len());
         let _enter = span.enter();
@@ -23,10 +23,11 @@ impl Evaluator {
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let mixin_name = &name[dot + 1..];
-            if let Some(module) = env.get_namespace(ns)
-                && let Some(mixin) = module.all_mixins().find(|(k, _)| *k == mixin_name).map(|(_, m)| m) {
-                    return Self::exec_mixin(mixin, args, content, env);
-                }
+            let ns_mixin = env.get_namespace(ns)
+                .and_then(|module| module.all_mixins().find(|(k, _)| *k == mixin_name).map(|(_, m)| m.clone()));
+            if let Some(mixin) = ns_mixin {
+                return Self::exec_mixin(&mixin, args, content, env);
+            }
         }
         let mixin = env
             .get_mixin(name)
@@ -40,10 +41,10 @@ impl Evaluator {
         mixin: &MixinDef,
         args: &[Arg],
         content: &Option<Vec<Node>>,
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-// 绑定参数
-let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
+        // 绑定参数
+        let mixin_env = Self::bind_params(&mixin.params, args, &env)?.incr_depth();
         // 合并 mixin 定义时捕获的命名空间
         let mut mixin_env = mixin_env;
         for (ns, exports) in &mixin.captured_namespaces {
@@ -57,15 +58,17 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
                 }
             }
         }
-// 注入 @content 块
+        // 注入 @content 块——content_env 是调用者环境的快照
+        let content_env = env.clone();
         let mixin_env = if let Some(content_nodes) = content {
-            mixin_env.set_content(content_nodes.clone(), env.clone())
+            mixin_env.set_content(content_nodes.clone(), content_env)
         } else {
             mixin_env
         };
-        // 求值 mixin body
-        let (css, _) = Self::eval_nodes(&mixin.body, &mixin_env)?;
-        Ok((css, env.clone()))
+        // 求值 mixin body——move mixin_env，返回 css（env 丢弃，mixin 作用域不传播）
+        let (css, _) = Self::eval_nodes(&mixin.body, mixin_env)?;
+        // 返回原 env（mixin 内部变量不泄漏到外层）
+        Ok((css, env))
     }
 
     pub(crate) fn bind_params(params: &[Param], args: &[Arg], env: &Env) -> Result<Env> {
@@ -75,13 +78,11 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         for arg in args {
             let val = Self::eval_value(&arg.value, env)?;
             if arg.spread {
-                // 展开 $args... 为多个参数
                 match &val {
                     Value::List(items, _, _) => {
                         positional.extend(items.iter().cloned());
                     }
                     Value::Map(pairs) => {
-                        // Map spread → 关键字参数（key=value 对）
                         for (k, v) in pairs {
                             if let Value::String(key, _) = k {
                                 keyword.insert(key.clone(), v.clone());
@@ -103,15 +104,10 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         let mut pos_idx = 0;
         for param in params.iter() {
             if param.rest {
-                // 剩余参数——收集剩余位置参数
                 let rest: Vec<Value> = positional[pos_idx..].to_vec();
-                new_env = new_env.bind(
-                    param.name.clone(),
-                    Value::List(rest, Separator::Comma, false),
-                );
+                new_env = new_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
                 break;
             }
-            // 优先用关键字参数
             if let Some(val) = keyword.get(&param.name) {
                 new_env = new_env.bind(param.name.clone(), val.clone());
             } else if pos_idx < positional.len() {
@@ -135,8 +131,8 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
-        // 在命名空间模块中查找同名函数（支持 mixin 体内调用同模块的私有函数）
-        for (_, exports) in &env.namespaces {
+        // 在命名空间模块中查找同名函数
+        for (_, exports) in env.namespaces.iter() {
             if let Some(func) = exports.all_functions().find(|(k, _)| *k == name).map(|(_, f)| f) {
                 return Self::call_user_function(func, pos_args, kw_args, env);
             }
@@ -161,8 +157,8 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
             n_args = pos_args.len()
         );
         let _enter = span.enter();
-        let mut func_env = env.incr_depth();
-        // 合并函数定义时捕获的命名空间（使函数体可访问定义模块的 @use 命名空间）
+        let mut func_env = env.clone().incr_depth();
+        // 合并函数定义时捕获的命名空间
         for (ns, exports) in &func.captured_namespaces {
             if !func_env.namespaces.contains_key(ns) {
                 func_env.namespaces.insert(ns.clone(), exports.clone());
@@ -171,12 +167,10 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         let mut pos_idx = 0;
         for param in func.params.iter() {
             if param.rest {
-                // 剩余参数——收集剩余位置参数
                 let rest: Vec<Value> = pos_args[pos_idx..].to_vec();
                 func_env = func_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
                 break;
             }
-            // 优先用关键字参数
             if let Some(val) = kw_args.get(&param.name) {
                 func_env = func_env.bind(param.name.clone(), val.clone());
             } else if pos_idx < pos_args.len() {
@@ -191,9 +185,8 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         }
         // 求值函数体，找 @return
         for node in &func.body {
-            let (out, e) = Self::eval_node(node, &func_env)?;
+            let (out, e) = Self::eval_node(node, func_env)?;
             func_env = e;
-            // 检查 Return 标记
             for css in &out {
                 if let CssNode::Return(val) = css {
                     return Ok(val.clone());
@@ -207,10 +200,9 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
     pub(crate) fn eval_at_root(
         _query: &Option<String>,
         body: &[Node],
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         let (css, new_env) = Self::eval_nodes(body, env)?;
-        // 包装为 AtRoot，信号 eval_rule 不嵌套
         Ok((vec![CssNode::AtRoot(css)], new_env))
     }
 
@@ -219,25 +211,27 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         name: &str,
         params: &Option<String>,
         body: &Option<Vec<Node>>,
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_at_rule", name = name, has_body = body.is_some());
         let _enter = span.enter();
 
-        let (children, has_body) = match body {
-            Some(nodes) => (Self::eval_nodes(nodes, env)?.0, true),
-            None => (Vec::new(), false),
+        let (children, has_body, new_env) = match body {
+            Some(nodes) => {
+                let (css, e) = Self::eval_nodes(nodes, env)?;
+                (css, true, e)
+            }
+            None => (Vec::new(), false, env),
         };
 
         // 对 @media/@supports 参数做插值和表达式求值
         let eval_params = params
             .as_ref()
-            .map(|p| Self::eval_at_params(name, p, env));
+            .map(|p| Self::eval_at_params(name, p, &new_env));
 
-        // 当 @media/@supports/@container 在规则内部时，提升到外层：
-        // 将声明包裹在当前选择器的规则中，嵌套规则保持原样（选择器已合并）。
+        // 当 @media/@supports/@container 在规则内部时，提升到外层
         if matches!(name, "media" | "supports" | "container")
-            && let Some(sel) = env.get_selector()
+            && let Some(sel) = new_env.get_selector()
                 && !sel.is_empty() {
                     let mut new_children = Vec::new();
                     let mut current_decls = Vec::new();
@@ -270,7 +264,7 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
                             children: new_children,
                             has_body,
                         }],
-                        env.clone(),
+                        new_env,
                     ));
                 }
 
@@ -281,7 +275,7 @@ let mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
                 children,
                 has_body,
             }],
-            env.clone(),
+            new_env,
         ))
     }
 

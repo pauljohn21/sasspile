@@ -210,12 +210,12 @@ pub enum OutputStyle {
 ///
 /// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
-    let source = Source::new(input.to_string());
-    let lexed = source.lex()?;
-    let parsed = lexed.parse()?;
-    let evaluated = parsed.evaluate()?;
-    let serialized = evaluated.serialize(style);
-    Ok(serialized.into_string())
+    Ok(Source::new(input.to_string())
+        .lex()?
+        .parse()?
+        .evaluate()?
+        .serialize(style)
+        .into_string())
 }
 
 /// 编译 SCSS 为展开式 CSS。
@@ -281,14 +281,12 @@ pub fn compile_compressed(input: &str) -> Result<String> {
 ///
 /// 返回 [`SassError`] 如果文件不存在或编译失败。
 pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
-    let input = std::fs::read_to_string(path)?;
-    let source = Source::new(input);
-    let lexed = source.lex()?;
-    let parsed = lexed.parse()?;
-    use crate::eval::Evaluator;
-    let nodes = Evaluator::evaluate_with_path(&parsed.ast, path.clone())?;
-    let serialized = crate::css::Serializer::serialize(&nodes, style);
-    Ok(serialized)
+    Ok(Source::from_file(path)?
+        .lex()?
+        .parse()?
+        .evaluate()?
+        .serialize(style)
+        .into_string())
 }
 
 /// 编译 SCSS 文件为 CSS 字符串（带加载路径）。
@@ -323,12 +321,11 @@ pub fn compile_file_with_load_paths(
     style: OutputStyle,
     load_paths: Vec<PathBuf>,
 ) -> Result<String> {
-    let input = std::fs::read_to_string(path)?;
-    let source = Source::new(input);
-    let lexed = source.lex()?;
-    let parsed = lexed.parse()?;
-    use crate::eval::Evaluator;
-    let nodes = Evaluator::evaluate_with_path_and_load_paths(&parsed.ast, path.clone(), load_paths)?;
-    let serialized = crate::css::Serializer::serialize(&nodes, style);
-    Ok(serialized)
+    Ok(Source::from_file(path)?
+        .with_load_paths(load_paths)
+        .lex()?
+        .parse()?
+        .evaluate()?
+        .serialize(style)
+        .into_string())
 }

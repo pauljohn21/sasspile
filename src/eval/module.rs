@@ -22,20 +22,17 @@ impl Evaluator {
             let span = crate::__tracing::debug_span!("load_module_cached", path = %path.display());
             let _enter = span.enter();
             if let Some(cached) = caller_env.get_module_cache().get(path) {
-                // 返回缓存的 exports，但 CSS 为空（不重复输出）
                 let cached_exports = ModuleExports {
                     css: vec![],
                     ..cached.clone()
                 };
                 return Ok(cached_exports);
             }
-            // 缓存未命中（不应该发生），回退到空 exports
             return Ok(ModuleExports::default());
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
-        // `.css` 文件——以 plain CSS 模式解析，保留嵌套不展开选择器
         let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
 
         let tokens: Vec<Token> = Lexer::new(&source)
@@ -48,15 +45,12 @@ impl Evaluator {
             .with_module_cache((*caller_env.module_cache).clone());
         env.depth = caller_env.depth + 1;
         env.plain_css = is_plain_css;
-        // 传递已加载模块缓存（Rc 共享），并把当前路径加入缓存
         let mut loaded = (*caller_env.loaded_modules).clone();
         loaded.insert(path.to_path_buf());
         env.loaded_modules = Rc::new(loaded);
-        // 注入 with() 配置变量到 pending_config——不进入 local_vars，
-        // 使 meta.variable-exists() 在声明前返回 false，!default 赋值时消费
+        // 注入 with() 配置变量到 pending_config
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
-            // null 配置值不注入——让上游 !default 生效
             if !matches!(val, Value::Null) {
                 let key = name.replace('-', "_");
                 env.pending_config.insert(key, val);
@@ -65,7 +59,7 @@ impl Evaluator {
         // 验证配置变量在上游模块中必须带 !default 声明
         if !env.pending_config.is_empty() {
             let default_vars = crate::eval::module_validation::collect_default_vars(&ast.nodes);
-            for (name, _) in &env.pending_config {
+            for (name, _) in env.pending_config.iter() {
                 if !default_vars.iter().any(|d| d.replace('-', "_") == *name) {
                     return Err(SassError::Eval(
                         "This variable was not declared with !default in the @used module.".into(),
@@ -73,8 +67,7 @@ impl Evaluator {
                 }
             }
         }
-        let (module_css, final_env) = Self::eval_nodes(&ast.nodes, &env)?;
-        // plain CSS 输出用 AtRoot 包裹，防止序列化器展平嵌套
+        let (module_css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(module_css)]
         } else {
@@ -92,7 +85,6 @@ impl Evaluator {
             extends: final_env.extends.clone(),
             module_cache: final_env.module_cache.clone(),
         };
-        // 将 exports 存入缓存（CSS 为空，避免重复输出），供后续 @use/@forward 引用
         let mut updated_cache = (*exports.module_cache).clone();
         updated_cache.insert(path.to_path_buf(), ModuleExports { css: vec![], module_cache: exports.module_cache.clone(), ..exports.clone() });
         let exports = ModuleExports {
@@ -106,57 +98,50 @@ impl Evaluator {
     ///
     /// SCSS @import 语义：被导入文件在当前作用域执行，
     /// 能看到之前定义的所有变量/mixin/函数，且定义的成员在导入后可见。
-    pub(crate) fn load_import(path: &Path, caller_env: &Env) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn load_import(path: &Path, caller_env: Env) -> Result<(Vec<CssNode>, Env)> {
         let span =
             crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
         let _enter = span.enter();
-        // 循环加载检测：已加载但缓存中无模块 → 正在加载中
+        // 循环加载检测
         if caller_env.loaded_modules.contains(path) && !caller_env.get_module_cache().contains_key(path) {
             return Err(SassError::Module("This file is already being loaded.".into()));
         }
         if caller_env.depth > 50 {
-            return Ok((vec![], caller_env.clone()));
+            return Ok((vec![], caller_env));
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
-        // `.css` 文件——以 plain CSS 模式解析
         let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
 
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
         let ast = crate::parse::Parser::parse(&tokens)?;
-        // 继承当前环境的所有成员（变量、mixin、函数、命名空间）
-        let mut env = caller_env.clone();
+        // 继承当前环境的所有成员
+        let mut env = caller_env;
+        let saved_base_path = env.base_path.clone();
+        let saved_depth = env.depth;
         env.base_path = Some(path.to_path_buf());
-        env.depth = caller_env.depth + 1;
+        env.depth += 1;
         env.plain_css = is_plain_css;
-        let (css, mut final_env) = Self::eval_nodes(&ast.nodes, &env)?;
-        // 恢复调用者的 base_path 和 depth，使父作用域后续 @import 使用正确的基准目录
-        final_env.base_path = caller_env.base_path.clone();
-        final_env.depth = caller_env.depth;
-        // @import 内联语义：forwarded 成员应合并到 local（@import 把一切引入当前作用域）
-        for (k, v) in final_env.forwarded_vars.clone() {
+        let (css, mut final_env) = Self::eval_nodes(&ast.nodes, env)?;
+        // 恢复调用者的 base_path 和 depth
+        final_env.base_path = saved_base_path;
+        final_env.depth = saved_depth;
+        // @import 内联语义：forwarded 成员合并到 local
+        for (k, v) in final_env.forwarded_vars.iter().map(|(k, v)| (k.clone(), v.clone())) {
             final_env.local_vars.entry(k).or_insert(v);
         }
-        for (k, v) in final_env.forwarded_mixins.clone() {
+        for (k, v) in final_env.forwarded_mixins.iter().map(|(k, v)| (k.clone(), v.clone())) {
             final_env.local_mixins.entry(k).or_insert(v);
         }
-        for (k, v) in final_env.forwarded_functions.clone() {
+        for (k, v) in final_env.forwarded_functions.iter().map(|(k, v)| (k.clone(), v.clone())) {
             final_env.local_functions.entry(k).or_insert(v);
         }
-        // @import 内联后清空 forwarded 表——避免后续 @forward 冲突检测误报
         final_env.forwarded_vars.clear();
         final_env.forwarded_mixins.clear();
         final_env.forwarded_functions.clear();
-        // @import 内联的变量应传播到外层——把 partial 中新增的变量写入 global_writes
-        for (name, val) in &final_env.local_vars {
-            if !caller_env.local_vars.contains_key(name) {
-                final_env.global_writes.insert(name.clone(), val.clone());
-            }
-        }
-        // plain CSS 输出用 AtRoot 包裹
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(css)]
         } else {
@@ -198,43 +183,39 @@ impl Evaluator {
         namespace: &Option<String>,
         star: bool,
         config: &[crate::parse::ast::ConfigVar],
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         // 内建模块 sass:math/string/list/map/color/meta/selector
         if url.starts_with("sass:") {
             return Ok((vec![], env.add_module(url.to_string())));
         }
-        let base = env.base_path.as_ref();
-        let load_paths = env.get_load_paths();
-        if let Some(path) = Self::resolve_file(base, url, load_paths) {
+        let base = env.base_path.clone();
+        let load_paths = env.get_load_paths().to_vec();
+        if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
             let already_loaded = env.loaded_modules.contains(&path);
-            // 循环加载检测：已加入 loaded 但缓存中无模块 → 正在加载中
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
             }
-            // 已加载的模块不能再次 with 配置
             if already_loaded && !config.is_empty() {
                 return Err(SassError::Eval(
                     "This module was already loaded, so it can't be configured using \"with\".".into(),
                 ));
             }
             let exports = if already_loaded {
-                // 从缓存获取 exports（CSS 为空，但 vars/mixins/functions 有效）
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
                 let config_pairs: Vec<(String, Value)> = config
                     .iter()
                     .map(|c| {
-                        let val = Self::eval_value(&c.value, env).unwrap_or(Value::Null);
+                        let val = Self::eval_value(&c.value, &env).unwrap_or(Value::Null);
                         (c.name.clone(), val)
                     })
                     .collect();
-                Self::load_module(&path, &config_pairs, env)?
+                Self::load_module(&path, &config_pairs, &env)?
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             if star {
-                // @use as *：从模块的 local 成员绑定到当前文件的 local 表
                 let new_env = bind_exports(
                     env_with_cache,
                     &exports,
@@ -255,7 +236,7 @@ impl Evaluator {
             });
             return Ok((css, env_with_cache.add_namespace(ns, exports)));
         }
-        Ok((vec![], env.clone()))
+        Ok((vec![], env))
     }
 
     /// @forward 指令处理。
@@ -263,22 +244,19 @@ impl Evaluator {
         url: &str,
         prefix: &Option<String>,
         config: &[crate::parse::ast::ConfigVar],
-        env: &Env,
+        env: Env,
         show: &[String],
         hide: &[String],
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_forward", url = url, has_prefix = prefix.is_some());
         let _enter = span.enter();
-        let base = env.base_path.as_ref();
-        let load_paths = env.get_load_paths();
-        if let Some(path) = Self::resolve_file(base, url, load_paths) {
-            // @forward with 配置值 + 从下游继承的 pending_config 透传给上游
-            // 处理 as 前缀：pending_config 中的 "b-a" → 去掉 "b-" 前缀 → "a"
+        let base = env.base_path.clone();
+        let load_paths = env.get_load_paths().to_vec();
+        if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
             let config_pairs: Vec<(String, Value)> = {
                 let prefix_str = prefix.as_deref();
                 let strip_prefix = |k: &str| -> String {
                     if let Some(p) = prefix_str {
-                        // 前缀已含 -（如 "b-"），normalize 为 "b_" 后匹配
                         let pfx = p.replace('-', "_");
                         let k_norm = k.replace('-', "_");
                         if k_norm.starts_with(&pfx) {
@@ -293,7 +271,7 @@ impl Evaluator {
                     .map(|(k, v)| (strip_prefix(k), v.clone()))
                     .collect();
                 for cfg in config {
-                    let val = Evaluator::eval_value(&cfg.value, env)?;
+                    let val = Evaluator::eval_value(&cfg.value, &env)?;
                     let name = strip_prefix(&cfg.name);
                     if cfg.is_default {
                         if !pairs.iter().any(|(n, _)| n == &name) && !matches!(val, Value::Null) {
@@ -310,11 +288,9 @@ impl Evaluator {
                 pairs
             };
             let already_loaded = env.loaded_modules.contains(&path);
-            // 循环加载检测：已加入 loaded 但缓存中无模块 → 正在加载中
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
             }
-            // 已加载的模块不能再次 with 配置
             if already_loaded && !config.is_empty() {
                 return Err(SassError::Eval(
                     "This module was already loaded, so it can't be configured using \"with\".".into(),
@@ -323,11 +299,10 @@ impl Evaluator {
             let exports = if already_loaded {
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
-                Self::load_module(&path, &config_pairs, env)?
+                Self::load_module(&path, &config_pairs, &env)?
             };
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             let env_with_cache = merge_module_cache(env, &path, &exports);
-            // Forward 模式：合并 local + forwarded（local 优先）后写入 forwarded 表
             let filter = FilterConfig {
                 show: show.to_vec(),
                 hide: hide.to_vec(),

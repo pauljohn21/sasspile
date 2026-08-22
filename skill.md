@@ -159,9 +159,18 @@ src/eval/
 
 **求值入口**：
 ```rust
-Evaluator::evaluate(ast) -> Result<Vec<CssNode>>
-Evaluator::evaluate_with_path(ast, base_path) -> Result<Vec<CssNode>>
-Evaluator::evaluate_with_path_and_load_paths(ast, base_path, load_paths) -> Result<Vec<CssNode>>
+// lib.rs 链式调用
+Source::from_file(path)?
+    .with_load_paths(load_paths)
+    .lex()?
+    .parse()?
+    .evaluate()?          // Parsed::evaluate() 内部构建 Env
+    .serialize(style)
+    .into_string()
+
+// eval/mod.rs 内部
+Evaluator::evaluate(ast) -> Result<Vec<CssNode>>           // 无路径
+Evaluator::evaluate_with_env(ast, env) -> Result<Vec<CssNode>>  // pub(crate)，stage 调用
 ```
 
 **内建函数分派链**：

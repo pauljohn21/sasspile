@@ -1,10 +1,12 @@
 //! 阶段 2: Lexed —— Token 序列。
 //!
 //! 词法分析器的输出，包含从源码中提取的所有 Token。
+//! 携带文件路径和加载路径，传递给后续阶段。
 
 use super::parsed::Parsed;
 use crate::error::Result;
 use crate::lex::token::Token;
+use std::path::PathBuf;
 
 /// 词法分析产物——有序 Token 序列。
 ///
@@ -22,6 +24,10 @@ use crate::lex::token::Token;
 pub struct Lexed {
     /// Token 列表。
     pub tokens: Vec<Token>,
+    /// 源文件路径（透传给 Parsed）。
+    pub base_path: Option<PathBuf>,
+    /// 加载路径（透传给 Parsed）。
+    pub load_paths: Vec<PathBuf>,
 }
 
 impl Lexed {
@@ -30,12 +36,11 @@ impl Lexed {
     /// 消费自身，返回抽象语法树（AST）或错误。
     ///
     /// # 返回
-    /// 成功返回 `Parsed`（包含 AST），失败返回语法错误。
+    /// 成功返回 `Parsed`（包含 AST 和路径信息），失败返回语法错误。
     pub fn parse(self) -> Result<Parsed> {
         use crate::parse::Parser;
 
         let ast = Parser::parse(&self.tokens)?;
-        Ok(Parsed { ast })
+        Ok(Parsed { ast, base_path: self.base_path, load_paths: self.load_paths })
     }
 }
-

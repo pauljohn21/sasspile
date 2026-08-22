@@ -14,7 +14,7 @@ impl Evaluator {
     pub(crate) fn eval_meta_apply(
         args: &[Arg],
         content: &Option<Vec<Node>>,
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_meta_apply", n_args = args.len());
         let _enter = span.enter();
@@ -24,7 +24,7 @@ impl Evaluator {
         }
 
         // 求值第一个参数（mixin 引用）
-        let mixin_ref_val = Self::eval_value(&args[0].value, env)?;
+        let mixin_ref_val = Self::eval_value(&args[0].value, &env)?;
         let mixin_ref = match &mixin_ref_val {
             Value::MixinRef(data) => data.clone(),
             _ => {
@@ -44,7 +44,7 @@ impl Evaluator {
             body: mixin_ref.body.clone(),
             captured_namespaces: Self::resolve_captured_namespaces(
                 &mixin_ref.captured_ns_keys,
-                env,
+                &env,
             ),
         };
 
@@ -56,7 +56,7 @@ impl Evaluator {
     /// 加载指定模块并将其 CSS 输出注入当前上下文。
     pub(crate) fn eval_meta_load_css(
         args: &[Arg],
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_meta_load_css", n_args = args.len());
         let _enter = span.enter();
@@ -66,7 +66,7 @@ impl Evaluator {
         }
 
         // 求值模块名参数
-        let module_val = Self::eval_value(&args[0].value, env)?;
+        let module_val = Self::eval_value(&args[0].value, &env)?;;
         let module_name = match &module_val {
             Value::String(s, _) => s.clone(),
             _ => {
@@ -79,7 +79,7 @@ impl Evaluator {
 
         // 求值 $with 配置参数（可选）
         let with_config: Vec<(String, Value)> = if args.len() > 1 {
-            let with_val = Self::eval_value(&args[1].value, env)?;
+            let with_val = Self::eval_value(&args[1].value, &env)?;;
             match &with_val {
                 Value::Map(pairs) => pairs
                     .iter()
@@ -105,24 +105,24 @@ impl Evaluator {
 
         // 内建模块（sass:math 等）——无 CSS 输出
         if module_name.starts_with("sass:") {
-            return Ok((vec![], env.clone()));
+            return Ok((vec![], env));
         }
 
         // 解析文件路径
-        let base = env.base_path.as_ref();
-        let load_paths = env.get_load_paths();
-        let path = Self::resolve_file(base, &module_name, load_paths)
+        let base = env.base_path.clone();
+        let load_paths = env.get_load_paths().to_vec();
+        let path = Self::resolve_file(base.as_ref(), &module_name, &load_paths)
             .ok_or_else(|| SassError::Module(format!("Can't find stylesheet to import: {module_name}")))?;
 
         // 检查是否已加载
         if env.loaded_modules.contains(&path) {
-            return Ok((vec![], env.clone()));
+            return Ok((vec![], env));
         }
 
         // 加载模块
-        let exports = Self::load_module(&path, &with_config, env)?;
+        let exports = Self::load_module(&path, &with_config, &env)?;
         let css = exports.css.clone();
-        let env_with_cache = merge_module_cache(env, &path, &exports);
+        let env_with_cache = super::module_helpers::merge_module_cache(env, &path, &exports);
 
         Ok((css, env_with_cache))
     }
@@ -309,21 +309,6 @@ impl Evaluator {
             Some(v) => Err(SassError::Eval(format!("$module: {v} is not a string."))),
             None => Err(SassError::Eval("Missing argument $module.".into())),
         }
-    }
-}
-
-/// 合并模块缓存和 @extend 关系。
-fn merge_module_cache(env: &Env, path: &std::path::Path, exports: &ModuleExports) -> Env {
-    let mut new_loaded = (*env.loaded_modules).clone();
-    new_loaded.insert(path.to_path_buf());
-    new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
-    let mut new_extends = (*env.extends).clone();
-    new_extends.extend((*exports.extends).clone().iter().cloned());
-    Env {
-        loaded_modules: Rc::new(new_loaded),
-        extends: Rc::new(new_extends),
-        module_cache: exports.module_cache.clone(),
-        ..env.clone()
     }
 }
 

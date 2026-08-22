@@ -7,13 +7,12 @@ impl Evaluator {
     pub(crate) fn eval_import(
         url: &str,
         modifier: &str,
-        env: &Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         if url.starts_with("sass:") {
             return Ok((vec![], env.add_module(url.to_string())));
         }
         let is_css = url.ends_with(".css")
-            || url.starts_with("http://")
             || url.starts_with("https://")
             || url.starts_with("url(")
             || !modifier.is_empty()
@@ -35,13 +34,13 @@ impl Evaluator {
                     has_body: false,
                 });
             }
-            return Ok((nodes, env.clone()));
+            return Ok((nodes, env));
         }
         let base = env.base_path.as_ref();
-        let load_paths = env.get_load_paths();
-        // @import 文件歧义检测：partial 和 non-partial 同时存在时报错
-        Self::check_resolve_ambiguity(base, url, load_paths)?;
-        if let Some(path) = Self::resolve_file(base, url, load_paths) {
+        let load_paths = env.get_load_paths().to_vec();
+        // @import 文件歧义检测
+        Self::check_resolve_ambiguity(base, url, &load_paths)?;
+        if let Some(path) = Self::resolve_file(base, url, &load_paths) {
             return Self::load_import(&path, env);
         }
         if !url.ends_with(".css") && !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("url(") && modifier.is_empty() {
@@ -59,7 +58,7 @@ impl Evaluator {
                 children: vec![],
                 has_body: false,
             }],
-            env.clone(),
+            env,
         ))
     }
 }

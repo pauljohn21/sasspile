@@ -7,9 +7,19 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.7** — 文件歧义检测增强 + module_helpers 统一 + conflict 5/5 修复 — 2828/5362 (53%) sass-spec, ep_full 121/121 (100%).
+> **v0.9.7** — 函数式链式调用重构 + Env move 语义（零 clone） + stage 管线携带路径 — 2828/5362 (53%) sass-spec, ep_full 121/121 (100%).
 
-sasspile 是一个从零实现的 SCSS 编译器，采用纯函数式风格。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 Iterator + fold + 不可变数据结构实现零副作用的编译流程。
+sasspile 是一个从零实现的 SCSS 编译器，采用 Rust 所有权管线。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 move 语义实现零 clone 的数据流。
+
+```rust
+Source::from_file(&path)?
+    .with_load_paths(load_paths)
+    .lex()?
+    .parse()?
+    .evaluate()?
+    .serialize(OutputStyle::Expanded)
+    .into_string()
+```
 
 ## 特性
 

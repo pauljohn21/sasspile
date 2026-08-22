@@ -31,17 +31,17 @@
 | **parse/at_rules.rs** | 513 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
 | **parse/expr/mod.rs** | 293 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color（SlashLiteral 用于声明值中字面量 `/`） |
 | **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
-| **eval/mod.rs** | 491 | Env（local_*/forwarded_* 双层结构） + ModuleExports（local_*/forwarded_* + all_*() 合并迭代器） + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node + with_plain_css + global_writes + loaded_modules + module_cache + extends 传播 + plain CSS 检查入口 + get_mixin_ref_data |
-| **eval/meta_ops.rs** | 301 | meta.apply / meta.load-css mixin + meta.get-mixin / meta.module-functions / meta.module-mixins / meta.module-variables 反射函数 + merge_module_cache |
-| **eval/rule.rs** | 197 | eval_rule + combine_selectors（规则体变量作用域隔离，传播命名空间/!global/@import 变量） |
+| **eval/mod.rs** | 282 | Env（move 语义 self→Self + HashMap 字段） + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node（Env move） + evaluate_with_env(pub(crate)) + plain CSS 检查入口 |
+| **eval/meta_ops.rs** | 329 | meta.apply / meta.load-css mixin + meta.get-mixin / meta.module-functions / meta.module-mixins / meta.module-variables 反射函数 |
+| **eval/rule.rs** | 155 | eval_rule（move 语义） + combine_selectors（规则体变量作用域隔离，传播命名空间/!global 变量） |
 | **eval/value/mod.rs** | 482 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 + if() 命名参数支持 |
 | **eval/value/ops.rs** | 223 | 值运算实现（add/sub/mul/div/modulo/compare 细节 + infinity 带单位 calc 表达式） |
 | **eval/value/display.rs** | 253 | inspect_value + 值显示格式化（Slash/SlashLiteral 分隔符区分） |
 | **eval/control_flow.rs** | 205 | eval_if/eval_for/eval_each/eval_while |
-| **eval/mixin.rs** | 293 | eval_include + exec_mixin(pub(crate)) + bind_params + call_function + call_user_function + eval_at_root + eval_at_rule + is_truthy |
+| **eval/mixin.rs** | 287 | eval_include（move） + exec_mixin（move） + bind_params（&Env） + call_function（&Env） + call_user_function（&Env） + eval_at_root（move） + eval_at_rule（move） + is_truthy |
 | **eval/extend.rs** | 76 | apply_extends（跨模块 @extend 传播 + 选择器合并 + 占位符替换） |
 | **eval/at_params.rs** | 240 | @media/@supports 参数插值和表达式求值 |
-| **eval/import.rs** | 63 | @import 指令处理（sass: 模块加载 + .css/http 透传 + 文件加载回退） |
+| **eval/import.rs** | 66 | eval_import（move 语义）— sass: 模块加载 + .css/http 透传 + 文件加载回退 |
 | **eval/module_dispatch.rs** | 352 | 内建函数注册结构体（MathBuiltins/StringBuiltins/...）+ `#[derive(BuiltinRegistry)]` 属性声明 + 宏生成的单一数据源注册 |
 | **eval/plain_css.rs** | 238 | check_plain_css_value + check_plain_css_node + check_plain_css_selector + check_plain_css_call（含 sass() 禁止检测 + is_css_function/is_known_builtin 区分） |
 | **eval/module.rs** | 348 | load_module（module_cache 缓存 + pending_config 注入） + load_import（forwarded→local 合并） + call_module_function + eval_use + eval_forward |
@@ -65,7 +65,7 @@
 | **css/mod.rs** | 359 | Serializer（CSS 树 → 字符串，选择器净化 + 组合器验证 + @规则合并 + @import 间不加空行） |
 | **css/node.rs** | 93 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Raw/Return） |
 | **css/selector.rs** | 366 | sanitize_selector + normalize_attr_selectors + has_bogus_combinators + 占位符处理 |
-| **stage/*.rs** | 14-89 | 管线阶段类型（Source/Lexed/Parsed/Evaluated/Serialized） |
+| **stage/*.rs** | 15-86 | 管线阶段类型（Source: from_file+base_path+load_paths / Lexed: 透传路径 / Parsed: evaluate()构建Env / Evaluated / Serialized） |
 
 ## 函数 → 文件定位
 
@@ -73,7 +73,7 @@
 
 | 函数 | 文件 |
 |------|------|
-| `evaluate` / `evaluate_with_path` / `evaluate_with_path_and_load_paths` | `eval/mod.rs` |
+| `evaluate` / `evaluate_with_env` | `eval/mod.rs` |
 | `eval_nodes` / `eval_node` | `eval/mod.rs` |
 | `eval_rule` / `combine_selectors` | `eval/rule.rs` |
 | `eval_value` / `eval_binop` / `units_compatible` | `eval/value/mod.rs` |

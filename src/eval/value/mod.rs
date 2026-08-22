@@ -22,11 +22,11 @@ pub(crate) fn eval_variable(
     name: &str,
     value: &Value,
     flags: &VarFlags,
-    env: &Env,
+    mut env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
     // 命名空间变量赋值（namespace.$var）——更新模块变量
     if name.contains('.') {
-        let val = Self::eval_value(value, env)?;
+        let val = Self::eval_value(value, &env)?;
         // 分割 namespace.var_name
         let parts: Vec<&str> = name.splitn(2, '.').collect();
         if parts.len() == 2 {
@@ -42,13 +42,12 @@ pub(crate) fn eval_variable(
                 } else {
                     new_exports.local_vars.insert(var_name.to_string(), val);
                 }
-                let mut new_env = env.clone();
-                new_env.namespaces.insert(ns.to_string(), Rc::new(new_exports));
-                return Ok((vec![], new_env));
+                env.namespaces.insert(ns.to_string(), Rc::new(new_exports));
+                return Ok((vec![], env));
             }
         }
         // 找不到命名空间——忽略
-        return Ok((vec![], env.clone()));
+        return Ok((vec![], env));
     }
     if flags.default {
         // !default 赋值：先检查 pending_config（with 配置覆盖值）
@@ -63,10 +62,10 @@ pub(crate) fn eval_variable(
         }
         // 无配置覆盖：已有变量则跳过
         if env.has_var(name) {
-            return Ok((vec![], env.clone()));
+            return Ok((vec![], env));
         }
     }
-    let val = Self::eval_value(value, env)?;
+    let val = Self::eval_value(value, &env)?;
     let new_env = env.bind(name.to_string(), val.clone());
     // !global 变量同时写入 global_writes，供 eval_rule 传播到外层
     if flags.global {

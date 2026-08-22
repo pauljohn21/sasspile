@@ -5,11 +5,7 @@
 
 use sasspile::css::Serializer;
 use sasspile::css::node::CssNode;
-use sasspile::lex::token::Token;
-use sasspile::parse::ast::Ast;
 use sasspile::stage::evaluated::Evaluated;
-use sasspile::stage::lexed::Lexed;
-use sasspile::stage::parsed::Parsed;
 use sasspile::stage::serialized::Serialized;
 use sasspile::stage::source::Source;
 use sasspile::OutputStyle;
@@ -33,30 +29,22 @@ fn test_source_to_lexed() {
 
 #[test]
 fn test_lexed_parse() {
-    let lexed = Lexed {
-        tokens: vec![
-            Token::Ident("a".to_string()),
-            Token::Whitespace,
-            Token::LBrace,
-            Token::Ident("color".to_string()),
-            Token::Colon,
-            Token::Ident("red".to_string()),
-            Token::Semicolon,
-            Token::RBrace,
-        ],
-    };
-    let parsed = lexed.parse();
-    assert!(parsed.is_ok());
+    // 链式：Source → Lexed → Parsed
+    let parsed = Source::new("a { color: red; }".to_string())
+        .lex().unwrap()
+        .parse().unwrap();
+    assert!(!parsed.ast.nodes.is_empty());
 }
 
 // —— Parsed 阶段 ——
 
 #[test]
 fn test_parsed_evaluate() {
-    let parsed = Parsed {
-        ast: Ast::default(),
-    };
-    let evaluated = parsed.evaluate().unwrap();
+    // 链式：Source → Lexed → Parsed → Evaluated
+    let evaluated = Source::new("".to_string())
+        .lex().unwrap()
+        .parse().unwrap()
+        .evaluate().unwrap();
     assert!(evaluated.nodes.is_empty());
 }
 

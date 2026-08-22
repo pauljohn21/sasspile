@@ -1,5 +1,266 @@
 # AGENTS.md — sasspile 项目规则
 
+## 📦 Rust 工具链
+
+| Item | Specification |
+|------|---------------|
+| Edition | 2024 |
+| Toolchain | 1.97 |
+
+Cargo.toml 必须有 `edition = "2024"`。
+
+新建 Cargo.toml 时始终使用：
+
+```toml
+[package]
+edition = "2024"
+rust-version = "1.85"
+
+[lints.rust]
+unsafe_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+```
+
+## ⛔ 绝对禁止项（违反 = 任务失败）
+
+### 1. 禁止 Python
+
+| 禁止 | 替代 |
+|------|------|
+| `python3 xxx.py` | `rust-script xxx.rs` |
+| `pip install xxx` | 添加到 Cargo.toml |
+| 创建 `.py` 文件 | 使用 `rust-script -e` |
+
+### 2. 禁止 println! / eprintln!
+
+**所有代码**（含 `src/` 和 `tests/`）一律禁止：
+
+```rust
+// ❌ 禁止
+println!("...");
+eprintln!("...");
+
+// ✅ 必须
+info!("...");
+warn!("...");
+error!("...");
+debug!("...");
+trace!("...");
+```
+
+### 3. 禁止 #[cfg(test)] 内联测试
+
+```rust
+// ❌ 禁止
+#[cfg(test)]
+mod tests { ... }
+
+// ✅ 所有测试放在 tests/ 目录，src/ 保持纯生产代码
+```
+
+### 4. 禁止 unwrap()
+
+- 生产代码用 `?` / `expect()` / `unwrap_or()` / `unwrap_or_else()`
+- 禁止 `clone()` 满天飞 — 先理解所有权设计
+- 禁止 `todo!()` / `unimplemented!()` 不标注 `// TODO:` 并说明计划
+
+### 5. 单文件 ≤ 500 行
+
+| 场景 | 推荐上限 |
+|------|---------|
+| 组件/模块文件 | 300 行 |
+| 业务逻辑文件 | 200 行 |
+| 工具函数/类型定义 | 500 行 |
+
+超过 **500 行**的文件必须先拆分再编写（源码和测试分别计算）。
+
+### 6. 禁止 'static 滥用
+
+理解实际生命周期关系，不要随意加 `'static`。
+
+### 7. 其他禁止事项
+
+- **禁止跳过测试直接写实现** — 修改核心逻辑前，先添加对应测试用例
+- **禁止在未验证的情况下宣称修复成功** — 修复后必须运行测试确认
+- **禁止跳过调试协议** — bug 修复必须遵循 4 步流程（见下方）
+
+## 🔬 Tracing Span 强制规则
+
+### 核心原则
+
+跨函数/跨阶段的管道处理**必须**用 `tracing::span!`（或 `#[instrument]`），记录上下文与耗时。**禁止仅用 event! 单一日志**。
+
+### Span 创建优先级
+
+**默认首选：`#[instrument]` 宏** — 函数入口自动创建 span，参数自动记录为字段。
+
+```rust
+// ✅ 首选：函数入口用 #[instrument]
+#[tracing::instrument(skip(large_param), fields(result = tracing::field::Empty))]
+fn my_function(large_param: &BigType, input: &str) -> Result<...> {
+    let result = do_work(large_param, input)?;
+    tracing::Span::current().record("result", &result);
+    Ok(result)
+}
+
+// ✅ 返回值自动记录
+#[tracing::instrument(ret)]
+fn my_function(input: &str) -> i32 { 42 }
+
+// ✅ 错误自动记录
+#[tracing::instrument(err)]
+fn my_function(input: &str) -> Result<(), std::io::Error> { Ok(()) }
+
+// ✅ async 函数（自动处理 span 跨 await）
+#[tracing::instrument]
+async fn my_async_fn() { /* ... */ }
+```
+
+**备选 1: `.entered()` — 条件分支/内联代码块**
+
+```rust
+let _span = info_span!("parse_expr", expr = ?input, pos = self.pos).entered();
+// ... logic ...
+// _span drop 时自动退出
+```
+
+**备选 2: `enter()` + `field::Empty` — 需要延迟记录返回值**
+
+```rust
+let span = info_span!("eval", result = tracing::field::Empty);
+let _enter = span.enter();
+// ... 计算 result ...
+span.record("result", &result);  // 传原始值，不用 format!
+```
+
+### Field Value Recording（官方语法）
+
+| Sigil | Example | Trait Used | 说明 |
+|-------|---------|------------|------|
+| `?` | `field = ?value` | `fmt::Debug` | 调试格式化 |
+| `%` | `field = %value` | `fmt::Display` | 显示格式化 |
+| (none) | `field = value` | `tracing::Value` | 需实现 Value trait |
+| shorthand | `field` | 同 `field = field` | 局部变量简写 |
+
+```rust
+// ✅ 正确
+info_span!("eval", expr = ?ast, selector = %s);
+
+// ❌ 错误：手动 format! 传给 record
+span.record("result", &format!("{:?}", result));
+```
+
+### `#[instrument]` 选项速查
+
+| 选项 | 说明 | 示例 |
+|------|------|------|
+| `skip(a, b)` | 不记录指定参数 | `#[instrument(skip(self, large))]` |
+| `skip_all` | 跳过所有参数 | `#[instrument(skip_all)]` |
+| `fields(k = v)` | 添加额外字段 | `#[instrument(fields(next = i + 1))]` |
+| `level = "trace"` | 设置级别 | `#[instrument(level = "debug")]` |
+| `name = "x"` | 覆盖 span 名 | `#[instrument(name = "my_span")]` |
+| `ret` | 记录返回值 | `#[instrument(ret)]` |
+| `ret(Display)` | 用 Display 记录返回值 | `#[instrument(ret(Display))]` |
+| `err` | 记录 Err 返回值 | `#[instrument(err)]` |
+
+**注意**：`fields` 中定义与参数同名的字段会隐式 skip 该参数。
+
+### Async 代码警告
+
+**禁止**在 async/await 中使用 `Span::enter`：
+
+```rust
+// ❌ 错误：guard 跨 await 点导致 trace 错乱
+async fn my_fn() {
+    let span = info_span!("my_fn");
+    let _enter = span.enter();
+    some_async_op().await;
+}
+
+// ✅ 正确：用 #[instrument] 或 .instrument()
+#[instrument]
+async fn my_fn() {
+    some_async_op().await;
+}
+
+// ✅ 正确：用 in_scope 包裹同步代码
+async fn my_fn() {
+    let span = info_span!("my_fn");
+    let val = span.in_scope(|| sync_code());
+    some_async_op(val).await;
+}
+```
+
+### 必需业务字段
+
+| 字段 | 用途 |
+|------|------|
+| `stage` | 管道阶段（lexer/parser/eval/serialize/compile） |
+| `module` | 功能模块（import/use/include/extend/for/each/if） |
+| `id` | 节点/语句标识 |
+| `expr` | 表达式内容 |
+| `value` | 求值结果 |
+| `token` | 当前 token |
+| `node` | AST 节点类型 |
+| `elapsed_ms` | 耗时（毫秒） |
+| `error` | 错误消息（用 `%` Display sigil） |
+| `file` | 源文件路径 |
+
+### 禁止模式
+
+| 禁止 | 原因 |
+|------|------|
+| 仅用 `event!` 无 `span!` | 无上下文边界 |
+| Span 无业务字段 | trace 不可读 |
+| `span.record("x", &format!(...))` | 应传原始值或用 `?`/`%` sigil |
+| `Span::enter` 跨 await 点 | async 代码 trace 错乱 |
+
+## 🔬 调试协议（4 步强制流程）
+
+> **核心原则**：禁止凭直觉猜测根因。所有 bug 修复必须基于 tracing trace 证据链。
+
+### Step 1: SPAN 插桩
+
+在疑似路径每个入口/出口加 span：
+- **首选 `#[instrument]` 宏** — 函数入口自动创建 span
+- 条件分支/闭包用手动 `info_span!`/`debug_span!` + `.entered()`
+- 必须携带业务字段（用 `?` Debug / `%` Display sigil）
+- 延迟记录的返回值用 `field::Empty` 声明，后续 `.record()` 记录
+- **插桩完成前不修改逻辑代码**
+
+### Step 2: TRACE 采集
+
+```bash
+RUST_LOG=trace cargo test test_name 2>&1 | tee /tmp/trace.log
+```
+
+保留 trace 输出作为**证据**。
+
+### Step 3: 根因定位（必须引用 span + 字段值）
+
+```
+Evidence collected:
+- span: parse_expr[expr="$i == 1"] → returned Number(1)  ← should be Bool
+- span: eval_condition[cond=Number(1)] → missing implicit bool conversion
+Root cause: parse_expr doesn't convert Number(1) to true semantically
+```
+
+### Step 4: 修复验证
+
+- 修复后重新运行测试，确认错误消失或推进
+- **移除临时 debug span**，或降级为 `trace!`/`debug!`
+- 保留生产级 span（管道阶段入口、公开 API）
+
+### 简化场景
+
+| 场景 | 处理 |
+|------|------|
+| 简单拼写/语法错误 | 跳过插桩，注明 "可见错误，无需 tracing" |
+| 初始代码探索 | 轻量 `debug_span!` 可接受 |
+
 ## ⛔ sasspile 特定规则
 
 1. **禁止 #[cfg(test)] 内联测试**：所有测试放在 tests/ 目录，src/ 保持纯生产代码。
@@ -18,8 +279,48 @@ sasspile 是纯 Rust 函数式 SCSS 编译器。架构：
 
 ```
 Source → Lexer → Parser → Evaluator → Serializer → CSS
-         (lex/)   (parse/)  (eval/)     (css/)
+(lex/)   (parse/)  (eval/)     (css/)
 ```
+
+### 函数式管线（链式调用 + move 语义）
+
+入口 `lib.rs` 全部链式调用，数据通过 move 语义流过管线：
+
+```rust
+// 字符串编译
+Source::new(input.to_string())
+    .lex()?
+    .parse()?
+    .evaluate()?
+    .serialize(style)
+    .into_string()
+
+// 文件编译
+Source::from_file(path)?
+    .with_load_paths(load_paths)
+    .lex()?
+    .parse()?
+    .evaluate()?
+    .serialize(style)
+    .into_string()
+```
+
+### Stage 类型状态机
+
+每个阶段是一个新类型，阶段转换是该类型的方法：
+- `Source` — 携带 `text` + `base_path` + `load_paths`
+- `Lexed` — 携带 `tokens` + 透传 `base_path` + `load_paths`
+- `Parsed` — 携带 `ast` + `base_path` + `load_paths`，`evaluate()` 内部构建 `Env`
+- `Evaluated` — 携带 `Vec<CssNode>`
+- `Serialized` — 最终 CSS 字符串
+
+### Env 设计（move 语义，零 clone）
+
+- `Env` 方法全部 `self -> Self`（链式）
+- `eval_xxx` 方法接收 `Env`（move），返回 `(Vec<CssNode>, Env)`
+- 只读辅助方法（`call_function` / `bind_params` / `load_module`）保持 `&Env`
+- **禁止** `env.clone()`（除 `@content` 上下文快照）
+- **禁止** `Rc::make_mut`（字段已恢复为 `HashMap`）
 
 ## 验证清单（修复后必跑）
 
@@ -29,7 +330,7 @@ cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 cargo test --test bs_spec -- --nocapture    # 15 个
-cargo test --test ep_full -- --nocapture    # 121 个（约 28 秒）
+cargo test --test ep_full -- --nocapture    # 121 个（约 38 秒）
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
@@ -68,11 +369,14 @@ hrx-auditor = { path = "../scss-rust" }
 - 测试代码按 `===` 分隔符将 entries 分成独立组，每组构建自己的 VFS，正确隔离不同测试组的文件
 - 已迁移全部 8 个测试文件：`sass_spec_full.rs`、`cf_diag.rs`、`css_diag.rs`、`expr_diag.rs`、`sass_spec.rs`、`diag_detail.rs`、`minimize.rs`、`cf_color.rs`
 
-## Git 规范
+## 🔄 Git 规范
 
-- 推送用 SSH：`git push origin main`（remote 名为 `origin`，SSH 地址 git@github.com）
-- Commit 格式：`feat: 描述 — 总计 N/M`
-- **每次提交后必须同步 CodeGraph**：`codegraph sync`（确保代码导航索引与最新代码一致）
+| 规则 | 说明 |
+|------|------|
+| 推送方式 | SSH：`git push github main`（remote 名为 `github`，SSH 地址 git@github.com） |
+| Commit 格式 | `feat: 描述 — 总计 N/M` |
+| 只提交不推送 | commit 后必须等用户确认再推送 |
+| 提交后同步 | 每次提交后必须 `codegraph sync`（确保代码导航索引与最新代码一致） |
 
 ## OpenSpec 归档
 
@@ -120,10 +424,102 @@ sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影�
 - **CSS Color 4 现代空间**：`color_conv.rs` 使用 W3C 有理数分数矩阵（sRGB↔XYZ/Lab/Oklab），`color_adjust.rs` 支持现代空间 adjust/change/scale，`color_gamut.rs` 实现 clip + local-minde 色域映射
 - 依赖 `color` crate v0.3 提供色彩空间转换参考
 
+## 🤖 AI 代码生成防抖规范
+
+> 防止 AI 在长文件中反复修改、上下文丢失、产生矛盾代码
+
+### 行为准则
+
+1. **先读后写** — 修改前必须先读取文件完整内容，理解现有结构
+2. **一次一事** — 单次任务只做一种改动（重构 / 修 bug / 加特性分开提交）
+3. **锚点保留** — 保留现有分区注释格式
+4. **小步快跑** — 每次生成代码控制在 **50 行以内**的 diff
+5. **上下文锚定** — 在关键代码段添加 `// ANCHOR: <name>` 注释，便于 AI 精确定位
+6. **测试先行** — 修改核心逻辑前，先添加对应测试用例
+
+### 抖动前兆检测
+
+出现以下任一情况，**立即停止当前任务**并通知用户：
+
+- 修改波及 **3 个以上**不相关函数/结构体
+- 同一行被反复修改 **2 次以上**
+- 新增代码与现有枚举/trait 定义矛盾
+- 生成代码超过目标文件行数限制的 **80%**
+- AI 重复生成相同或相似的代码片段
+
+## 📝 编码规范速查
+
+### 命名
+
+| 类型 | 规范 | 示例 |
+|------|------|------|
+| 函数/变量 | snake_case | `fn parse_input()` |
+| 类型/结构体 | CamelCase | `struct HttpClient` |
+| 常量 | SCREAMING_CASE | `const MAX_RETRIES: u32 = 3;` |
+| 模块 | snake_case | `mod user_service;` |
+
+### 转换方法命名
+
+| 前缀 | 语义 | 开销 | 示例 |
+|------|------|------|------|
+| `as_` | 廉价引用转换 | `&T` | `as_str()` |
+| `to_` | 昂贵转换 | 分配 | `to_string()` |
+| `into_` | 消耗所有权 | move | `into_vec()` |
+
+### 已弃用 → 推荐
+
+| 已弃用 | 推荐 | 起始版本 |
+|--------|------|---------|
+| `lazy_static!` | `std::sync::OnceLock` | 1.70 |
+| `once_cell::Lazy` | `std::sync::LazyLock` | 1.80 |
+| `std::sync::mpsc` | `crossbeam::channel` | — |
+| `std::sync::Mutex` | `parking_lot::Mutex` | — |
+| `failure` / `error-chain` | `thiserror` / `anyhow` | — |
+| `try!()` | `?` 操作符 | 2018 |
+
+### 文档注释
+
+- 公开 API 必须有 `///` 文档注释
+- 模块用 `//!` 文档注释
+
+## 🔍 CodeGraph 优先
+
+查询调用链、影响分析、代码流向时，**使用 CodeGraph CLI**（优先于 LSP 或手动阅读）：
+
+### 索引管理
+
+```bash
+codegraph init [path]          # 初始化项目索引
+codegraph sync [path]          # 增量同步（最常用）
+codegraph index [path]         # 全量重建
+codegraph status [path]        # 索引统计
+codegraph files                # 项目文件结构
+```
+
+### 代码查询
+
+```bash
+codegraph callers <symbol>     # 谁调了这个函数
+codegraph callees <symbol>     # 这个函数调用了什么
+codegraph impact <symbol>      # 修改某符号的影响
+codegraph affected [files...]  # 受影响的测试文件
+codegraph node [name]          # 符号定义 + 调用链
+codegraph explore <query...>   # 自然语言代码探索
+codegraph query <search>       # 搜索符号
+```
+
+### 工作流
+
+1. 代码变更后 → `codegraph sync`（更新索引）
+2. 查找调用者 → `codegraph callers fn`
+3. 影响分析 → `codegraph impact fn`
+4. 探索不熟悉代码 → `codegraph explore "auth flow"`
+5. 符号定义 → `codegraph node parse_expr`
+6. 受影响测试 → `codegraph affected src/parser.rs`
+
 ## 参考文档（需要时查阅）
 
 - **代码导航**：CodeGraph（动态查询，优先）/ `docs/CODE_INDEX.md`（静态参考）
-  - 每次 git 提交后必须运行 `codegraph sync` 同步索引
 - **综合开发技能**：根目录 `skill.md`（编译管线 + 内建函数 + CSS 序列化 + 调试追踪）
 - **调试技能**：`.claude/skills/tracing-debug/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
@@ -156,4 +552,35 @@ codegraph impact <symbol>      # 影响分析
 codegraph callers <function>   # 谁调了这个函数
 codegraph explore "query"      # 自然语言探索
 codegraph node <symbol>       # 查看符号源码 + 调用链路
+
+# Rust 通用命令
+cargo check                              # 快速检查
+cargo clippy --workspace                 # 全 workspace clippy
+cargo clippy -- -W clippy::pedantic      # 严格 clippy
+cargo test                               # 运行所有测试
+cargo nextest run                        # 使用 nextest（更快）
+cargo build --release                    # 发布构建
+cargo doc --open                         # 生成并打开文档
+cargo fmt                                # 格式化所有代码
+cargo fmt -- --check                     # 检查格式（CI 用）
+cargo tree                               # 依赖树
 ```
+
+## ✅ 自检清单
+
+每次任务完成后：
+
+- [ ] 未使用 Python
+- [ ] 所有输出用 tracing 宏（无 println!/eprintln!）
+- [ ] 测试在 tests/ 目录（无 inline #[cfg(test)]）
+- [ ] 跨函数/管道使用 tracing span（或 `#[instrument]`）
+- [ ] span 字段用 `?`/`%` sigil（非 `&format!(...)`）
+- [ ] async 代码不用 `Span::enter`（用 `#[instrument]` 或 `.instrument()`）
+- [ ] 无 `unwrap()`（用 `?`/`expect()`/`unwrap_or()`）
+- [ ] 无 `clone()` 满天飞（先理解所有权设计）
+- [ ] 无 `todo!()`/`unimplemented!()` 不标注 TODO
+- [ ] 公开 API 有 `///` 文档注释
+- [ ] 单文件 ≤ 500 行
+- [ ] 调试遵循 4 步协议（如果是 bug 修复）
+- [ ] CodeGraph 用于代码查询
+- [ ] Commit 等用户确认后再推送
