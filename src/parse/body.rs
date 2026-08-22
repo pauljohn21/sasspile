@@ -32,12 +32,8 @@ impl Parser {
             };
 
             // ... (rest)
-            let rest = if matches!(self.peek(), Token::Ident(s) if s == "...") {
-                self.bump();
-                true
-            } else {
-                false
-            };
+            let rest = matches!(self.peek(), Token::DotDotDot);
+            if rest { self.bump(); }
 
             // : default
             let default = if matches!(self.peek(), Token::Colon) {
@@ -92,7 +88,7 @@ impl Parser {
                 (None, self.parse_value()?)
             };
 
-            let spread = matches!(self.peek(), Token::Ident(s) if s == "...");
+            let spread = matches!(self.peek(), Token::DotDotDot);
             if spread { self.bump(); }
 
             args.push(Arg { name, value, spread });

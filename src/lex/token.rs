@@ -17,6 +17,17 @@ pub enum Token {
     String(String, QuoteStyle),
     HexColor(String),  // #ff0000
     Variable(String),  // $name
+    Interp(String),      // #{...}
+    Comment(String),       // /* */
+    SilentComment(String), // //
+
+    // 关键字
+    True,
+    False,
+    Null,
+    And,
+    Or,
+    Not,
 
     // 标点
     LBrace, RBrace,       // { }
@@ -25,19 +36,18 @@ pub enum Token {
     Colon, Semicolon,     // : ;
     Comma, Dot,           // , .
     Hash,                 // #
-    At,                   // @
     Ampersand,            // &
+    Bang,                 // !
 
     // 运算符
     Plus, Minus, Star, Slash, Percent,  // + - * / %
     Eq, Gt, Lt, Gte, Lte,               // = > < >= <=
     NotEq,                               // !=
     Arrow,                               // =>
+    DotDotDot,                           // ...
 
     // 特殊
-    Interp(String),      // #{...}
-    Comment(String),       // /* */
-    SilentComment(String), // //
+    AtRule(String),       // @media, @import 等（合并 token）
     Eof,
 }
 
@@ -47,6 +57,7 @@ impl Token {
             Token::Ident(s) | Token::String(s, _) | Token::HexColor(s) | Token::Variable(s) => s,
             Token::Number(n, _) => n,
             Token::Interp(s) | Token::Comment(s) | Token::SilentComment(s) => s,
+            Token::AtRule(s) => s,
             _ => "",
         }
     }

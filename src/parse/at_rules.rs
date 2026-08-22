@@ -8,10 +8,9 @@ use crate::eval::value::Value;
 impl Parser {
     /// 解析 @ 开头的 at-rule。
     pub fn parse_at_rule(&mut self) -> Result<Node> {
-        self.bump(); // @
         let name = match self.bump() {
-            Token::Ident(s) => s,
-            t => return Err(SassError::parse(format!("Expected ident after @, got {:?}", t))),
+            Token::AtRule(n) => n,
+            t => return Err(SassError::parse(format!("Expected at-rule, got {:?}", t))),
         };
 
         match name.as_str() {
@@ -67,34 +66,28 @@ impl Parser {
         // @else if / @else
         loop {
             // 检查 @else
-            if matches!(self.peek(), Token::At) {
-                let saved = self.pos;
-                self.bump(); // @
-                if let Token::Ident(s) = self.peek() {
-                    if s == "else" {
-                        self.bump(); // else
-                        // else if?
-                        if let Token::Ident(s2) = self.peek() {
-                            if s2 == "if" {
-                                self.bump(); // if
-                                let cond2 = self.parse_value()?;
-                                self.eat(&Token::LBrace)?;
-                                let body2 = self.parse_body()?;
-                                self.eat(&Token::RBrace)?;
-                                branches.push((cond2, body2));
-                                continue;
-                            }
+            if let Token::AtRule(s) = self.peek() {
+                if s == "else" {
+                    self.bump(); // @else
+                    // else if?
+                    if let Token::AtRule(s2) = self.peek() {
+                        if s2 == "if" {
+                            self.bump(); // @if
+                            let cond2 = self.parse_value()?;
+                            self.eat(&Token::LBrace)?;
+                            let body2 = self.parse_body()?;
+                            self.eat(&Token::RBrace)?;
+                            branches.push((cond2, body2));
+                            continue;
                         }
-                        // plain else
-                        self.eat(&Token::LBrace)?;
-                        let body2 = self.parse_body()?;
-                        self.eat(&Token::RBrace)?;
-                        else_body = Some(body2);
-                        break;
                     }
+                    // plain else
+                    self.eat(&Token::LBrace)?;
+                    let body2 = self.parse_body()?;
+                    self.eat(&Token::RBrace)?;
+                    else_body = Some(body2);
+                    break;
                 }
-                // 不是 @else，恢复
-                self.pos = saved;
             }
             break;
         }

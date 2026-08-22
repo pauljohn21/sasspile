@@ -91,9 +91,16 @@ impl Parser {
         matches!(self.peek(), Token::Eof)
     }
 
-    /// 跳过静默注释（// ...），保留块注释。
+    /// 跳过静默注释（// ...）。
     fn skip_silent_comments(&mut self) {
         while matches!(self.peek(), Token::SilentComment(_)) {
+            self.bump();
+        }
+    }
+
+    /// 跳过注释（静默 + 块注释）。
+    fn skip_comments(&mut self) {
+        while matches!(self.peek(), Token::SilentComment(_) | Token::Comment(_)) {
             self.bump();
         }
     }
@@ -117,10 +124,14 @@ impl Parser {
     fn parse_statement(&mut self) -> Result<Option<Node>> {
         match self.peek() {
             Token::Semicolon => { self.bump(); Ok(None) }
-            Token::At => self.parse_at_rule().map(Some),
+            Token::Comment(s) => {
+                let s = s.clone();
+                self.bump();
+                Ok(Some(Node::Comment(s)))
+            }
+            Token::AtRule(_) => self.parse_at_rule().map(Some),
             Token::Variable(_) => variable::parse_variable_decl(self).map(Some),
             Token::LBrace => {
-                // 不应该出现在顶层
                 Err(SassError::parse("Unexpected {"))
             }
             _ => self.parse_rule_or_decl().map(Some),

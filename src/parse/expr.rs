@@ -19,7 +19,7 @@ impl Parser {
 
     fn parse_or(&mut self) -> Result<Value> {
         let mut left = self.parse_and()?;
-        while self.is_ident("or") {
+        while matches!(self.peek(), Token::Or) {
             self.bump();
             let right = self.parse_and()?;
             left = Value::or(left, right);
@@ -29,7 +29,7 @@ impl Parser {
 
     fn parse_and(&mut self) -> Result<Value> {
         let mut left = self.parse_not()?;
-        while self.is_ident("and") {
+        while matches!(self.peek(), Token::And) {
             self.bump();
             let right = self.parse_not()?;
             left = Value::and(left, right);
@@ -38,7 +38,7 @@ impl Parser {
     }
 
     fn parse_not(&mut self) -> Result<Value> {
-        if self.is_ident("not") {
+        if matches!(self.peek(), Token::Not) {
             self.bump();
             let val = self.parse_comparison()?;
             return Ok(Value::not(val));
@@ -113,11 +113,11 @@ impl Parser {
             }
             Token::Ident(s) => {
                 self.bump();
-                if s == "true" { Ok(Value::Bool(true)) }
-                else if s == "false" { Ok(Value::Bool(false)) }
-                else if s == "null" { Ok(Value::Null) }
-                else { Ok(Value::Ident(s)) }
+                Ok(Value::Ident(s))
             }
+            Token::True => { self.bump(); Ok(Value::Bool(true)) }
+            Token::False => { self.bump(); Ok(Value::Bool(false)) }
+            Token::Null => { self.bump(); Ok(Value::Null) }
             Token::LParen => {
                 self.bump();
                 let v = self.parse_value()?;
@@ -146,7 +146,4 @@ impl Parser {
         }
     }
 
-    fn is_ident(&self, expected: &str) -> bool {
-        matches!(self.peek(), Token::Ident(s) if s == expected)
-    }
 }

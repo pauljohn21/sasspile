@@ -5,10 +5,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// 源码文本 + 文件路径 + load paths。
-pub(crate) struct Source {
-    pub(crate) text: String,
-    pub(crate) base_path: Option<PathBuf>,
-    pub(crate) load_paths: Vec<PathBuf>,
+pub struct Source {
+    pub text: String,
+    pub base_path: Option<PathBuf>,
+    pub load_paths: Vec<PathBuf>,
 }
 
 impl Source {

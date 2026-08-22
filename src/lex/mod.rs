@@ -4,16 +4,16 @@ use crate::error::{Result, SassError};
 use crate::source::Source;
 use std::path::PathBuf;
 
-pub(crate) mod token;
+pub mod token;
 mod scan;
 
 pub use token::Token;
 
 /// 词法分析完成。
-pub(crate) struct Lexed {
-    pub(crate) tokens: Vec<Token>,
-    pub(crate) base_path: Option<PathBuf>,
-    pub(crate) load_paths: Vec<PathBuf>,
+pub struct Lexed {
+    pub tokens: Vec<Token>,
+    pub base_path: Option<PathBuf>,
+    pub load_paths: Vec<PathBuf>,
 }
 
 impl TryFrom<Source> for Lexed {

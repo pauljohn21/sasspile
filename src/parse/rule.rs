@@ -60,12 +60,8 @@ pub fn parse_rule_or_decl(parser: &mut Parser) -> Result<Node> {
 }
 
 fn check_important(parser: &mut Parser) -> Result<bool> {
-    if matches!(parser.peek(), Token::Ident(s) if s == "!important") {
-        parser.bump();
-        return Ok(true);
-    }
     // !important
-    if matches!(parser.peek(), Token::Ident(s) if s == "!") {
+    if matches!(parser.peek(), Token::Bang) {
         parser.bump();
         if matches!(parser.peek(), Token::Ident(s) if s == "important") {
             parser.bump();
@@ -94,7 +90,7 @@ fn token_to_string(t: &Token) -> String {
         Token::Colon => ":".to_string(),
         Token::Comma => ", ".to_string(),
         Token::Dot => ".".to_string(),
-        Token::At => "@".to_string(),
+        Token::AtRule(s) => format!("@{s}"),
         Token::Plus => " + ".to_string(),
         Token::Minus => " - ".to_string(),
         Token::Star => "*".to_string(),
@@ -116,6 +112,14 @@ fn token_to_string(t: &Token) -> String {
         Token::Lte => " <= ".to_string(),
         Token::NotEq => " != ".to_string(),
         Token::Arrow => " => ".to_string(),
+        Token::Bang => "!".to_string(),
+        Token::DotDotDot => "...".to_string(),
+        Token::True => "true".to_string(),
+        Token::False => "false".to_string(),
+        Token::Null => "null".to_string(),
+        Token::And => " and ".to_string(),
+        Token::Or => " or ".to_string(),
+        Token::Not => " not ".to_string(),
         Token::SilentComment(_) => String::new(),
         Token::Eof => String::new(),
     }

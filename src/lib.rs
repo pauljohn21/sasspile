@@ -9,12 +9,12 @@
 //! 每个阶段是不可变类型，阶段转换是 `TryFrom` 实现。
 //! 所有内部类型 `pub(crate)`，仅公开编译入口函数。
 
-mod error;
-mod source;
-mod lex;
-mod parse;
-mod eval;
-mod css;
+pub mod error;
+pub mod source;
+pub mod lex;
+pub mod parse;
+pub mod eval;
+pub mod css;
 
 use std::path::{Path, PathBuf};
 

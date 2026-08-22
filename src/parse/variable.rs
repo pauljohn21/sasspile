@@ -32,15 +32,7 @@ fn parse_var_flags(parser: &mut Parser) -> Result<VarFlags> {
     let mut flags = VarFlags::default();
     loop {
         match parser.peek() {
-            Token::Ident(s) if s == "!default" || s == "default" => {
-                flags.default = true;
-                parser.bump();
-            }
-            Token::Ident(s) if s == "!global" || s == "global" => {
-                flags.global = true;
-                parser.bump();
-            }
-            Token::Ident(s) if s == "!" => {
+            Token::Bang => {
                 parser.bump();
                 if let Token::Ident(t) = parser.peek() {
                     if t == "default" { flags.default = true; }
