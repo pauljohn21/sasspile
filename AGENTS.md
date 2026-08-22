@@ -157,23 +157,43 @@ impl TryFrom<Parsed> for Evaluated { ... }
 - `exit_scope(self, child: &Env) -> Env`：从子作用域提取传播字段
 - Builder 方法：`with_xxx(xxx) -> Self`、`define_xxx(name, val) -> Self`
 - 只读方法：`get_xxx() -> &T`
+- `eval_nodes` 返回 `(Vec<CssNode>, Env)` — 允许模块系统获取最终环境
+
+### 模块系统
+
+- `file_resolver.rs` — 文件路径解析（partial/extension/index/import-only 四种冲突检测）
+- `module.rs` — @use 文件加载 + 模块缓存、@forward show/hide/prefix 过滤、@import 内联
+- `module_helpers.rs` — bind_exports + merge_module_cache
+
+### @extend 后处理
+
+- `extend.rs` — 选择器匹配 + 替换 + bogus extend 跳过 + !optional 抑制
+- `plain_css.rs` — CSS @import 提升到顶部（hoist_css_imports）
 
 ### 内建函数 dispatch（const 静态表）
 
 - `BUILTIN_TABLE: &[BuiltinEntry]` — 编译期 const 注册
 - 无 proc-macro，无运行时反射
 - 三个函数从同一张表生成：`module_builtin_name`、`is_known_builtin`、`dispatch_builtin`
+- 已实现 7 个模块：math（trig/log/pow/sqrt/clamp/hypot 等）、string（split/quote/unquote/upper/lower/index/insert/slice）、map（get/merge/remove/keys/values/has-key/deep-merge/deep-remove）、list（length/nth/set-nth/join/append/zip/index/separator/slash）、color（mix/adjust/change/scale 骨架）、meta（call/type-of/inspect/feature-exists/function-exists/get-function/get-mixin 等）、selector（nest/append/parse/is-superselector）
+
+### 值系统
+
+- `Value` 枚举支持 AST 级别延迟求值（BinOp/UnaryOp/Call/Interp/Calc/Paren）
+- `Color` 结构含 RGB + Alpha + ColorFormat（Auto/Rgb/Hsl/Hwb）
+- `equals` 支持 Number/String/Ident/Bool/Null/Color/List/Map 比较
 
 ## ✅ 验证清单
 
 ```bash
-cargo test --test compile_test    # 6 个
+cargo test --test compile_test    # 19 个
+cargo test --test lex_test        # 29 个
 cargo test --test bs_spec          # 15 个 Bootstrap
 cargo test --test ep_full          # Element Plus 全量
 cargo test --test sass_spec_full   # sass-spec 全量统计
 ```
 
-**当前基线**：6/6 + 15/15 + 16/121 + 279/5362 (5%)
+**当前基线**：19/19 + 29/29 + 15/15 + 1235/5362 (23%) + ep_full 10/121
 
 ## 🔄 Git 规范
 
@@ -186,7 +206,7 @@ cargo test --test sass_spec_full   # sass-spec 全量统计
 ## OpenSpec
 
 - `openspec/config.yaml` — 项目上下文（每次 openspec 命令自动加载）
-- 当前变更：`align-sasspile` — 自底向上逐层补全（8 层 56 个任务）
+- 已归档变更：`align-sasspile`（2026-08-22 归档）— 自底向上逐层补全（8 层 59 个任务，sass-spec 5%→23%）
 
 ## 🔍 CodeGraph
 

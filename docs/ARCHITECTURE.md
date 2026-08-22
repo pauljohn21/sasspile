@@ -68,24 +68,30 @@ src/
 │   └── expr.rs         // 表达式解析 (prefix/infix)
 │
 ├── eval/
-│   ├── mod.rs          // Evaluator + eval_nodes + eval_node 分发
-│   ├── env.rs          // Env 定义 + builder + enter_scope/exit_scope
-│   ├── rule.rs         // eval_rule
+│   ├── mod.rs          // Evaluator + eval_nodes + eval_node 分发 + Evaluated::try_from（调用 apply_extends + hoist_css_imports）
+│   ├── env.rs          // Env 定义 + builder + enter_scope/exit_scope + ModuleExports
+│   ├── rule.rs         // eval_rule + nest_rule_in_children（逗号选择器笛卡尔积嵌套）
 │   ├── mixin.rs        // exec_mixin + bind_params
 │   ├── function.rs     // call_function + call_user_function
 │   ├── module.rs       // load_module / load_import / eval_use / eval_forward
+│   ├── file_resolver.rs // resolve_file + check_resolve_ambiguity（四种冲突检测）
 │   ├── control.rs      // eval_if / eval_for / eval_each / eval_while
-│   ├── value.rs        // eval_value (大 match)
+│   ├── extend.rs       // apply_extends + check_extend_targets
+│   ├── plain_css.rs    // hoist_css_imports
+│   ├── value/
+│   │   ├── mod.rs      // Value 枚举 + Color + equals + parse_hex_color
+│   │   ├── display.rs  // to_css_string + ColorFormat + color_to_css + rgb_to_hsl/hwb
+│   │   └── ops.rs      // add/sub/mul/div/rem/neg
 │   └── builtin/
-│       ├── mod.rs      // call_builtin 入口 + is_known_builtin
-│       ├── dispatch.rs // const 静态表 + module_builtin_name + dispatch
-│       ├── math.rs
-│       ├── string.rs
-│       ├── map.rs
-│       ├── list.rs
-│       ├── color.rs
-│       ├── meta.rs
-│       └── selector.rs
+│       ├── mod.rs      // call_builtin 入口
+│       ├── dispatch.rs // const 静态表 + module_builtin_name + is_known_builtin + dispatch_builtin
+│       ├── math.rs     // abs/ceil/floor/round/max/min/div/clamp/hypot/sqrt/pow/log/sin/cos/tan/asin/acos/atan/atan2/unit/is_unitless/percentage/random
+│       ├── string.rs   // length/quote/unquote/to_upper/to_lower/index/insert/slice/split
+│       ├── map.rs      // get/merge/remove/keys/values/has_key/deep_merge/deep_remove
+│       ├── list.rs     // length/nth/set_nth/join/append/zip/index/is_bracketed/separator/slash
+│       ├── color.rs    // mix/adjust/change/scale（骨架）
+│       ├── meta.rs     // call/type_of/inspect/feature_exists/function_exists/mixin_exists/variable_exists/get_function/get_mixin/module_functions/module_variables/load_css/content_exists/keywords
+│       └── selector.rs  // nest/append/parse/is_super_selector
 │
 ├── css/
 │   ├── mod.rs          // Serializer + serialize 入口
@@ -121,9 +127,11 @@ Source::from_file(path)?
 
 ### 3.3 后处理链（纯函数）
 ```
-let css = eval_nodes(ast, env)?;      // Vec<CssNode>
-let css = apply_extends(css, &extends); // Vec<CssNode> -> Vec<CssNode>
-let css = hoist_css_imports(css);       // Vec<CssNode> -> Vec<CssNode
+let (mut css, final_env) = eval_nodes(ast, env)?;  // (Vec<CssNode>, Env)
+let extends = final_env.get_extends().to_vec();
+apply_extends(&mut css, &extends);     // 选择器匹配 + 替换
+check_extend_targets(&css, &extends)?; // 验证非 optional extend
+hoist_css_imports(&mut css);          // CSS @import 提升到顶部
 ```
 
 ## 4. Env 设计
@@ -191,3 +199,27 @@ pub fn dispatch_builtin_module(...) -> Option<Result<Value>> { ... }
 - 每个管线阶段有独立测试文件
 - sass-spec 集成测试从第一天就有
 - 颜色测试单独跳过列表，防止无限修复循环
+
+## 7. 测试基线（align-sasspile 归档后）
+
+| 测试套件 | 通过/总数 | 通过率 |
+|----------|-----------|--------|
+| compile_test | 19/19 | 100% |
+| lex_test | 29/29 | 100% |
+| bs_spec | 15/15 | 100% |
+| sass_spec | 1235/5362 | 23% |
+| ep_full | 10/121 | 8% |
+
+### sass-spec 各目录通过率
+
+| 目录 | 通过/总数 | 通过率 |
+|------|-----------|--------|
+| variables | 3/3 | 100% |
+| values | 141/1169 | 12% |
+| css | 133/830 | 16% |
+| operators | 6/30 | 20% |
+| expressions | 64/212 | 30% |
+| directives | 222/775 | 36% |
+| core_functions | 660/2519 | 26% |
+| parser | 1/4 | 25% |
+| callable | 5/71 | 11% |

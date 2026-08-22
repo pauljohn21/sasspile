@@ -21,6 +21,7 @@ context: |
   4. 禁止内联测试：src/ 保持纯生产代码，所有测试放在 tests/ 目录
   5. 单文件 ≤ 500 行：源码和测试分别计算，超出必须拆分
   6. 使用 SSH 方式推送 GitHub
+  7. 禁止参照 dart-sass 的算法设计：dart-sass 有 GC，Rust 没有 GC。不能照搬 dart-sass 的递归/后处理模式——后处理递归会导致中间数据在调用栈上累积不释放（OOM 根因）。必须在求值阶段当场处理，利用 move 语义让每层数据在返回后被 drop
 
   ## 调试协议（强制）
   核心原则：禁止凭直觉猜测根因。所有 bug 修复必须基于 tracing trace 证据链。
@@ -34,8 +35,8 @@ context: |
   只提交不推送：commit 后必须等用户确认
 
   ## 测试基线
-  compile_test 6/6 + bs_spec 15/15 + ep_full 16/121 = 13% + sass_spec_full 279/5362 = 5%
-  目标：对齐 sasspile 功能，sass-spec 从 5% 提升到 40%+
+  compile_test 19/19 + lex_test 29/29 + bs_spec 15/15 + sass_spec 1235/5362 = 23% + ep_full 10/121
+  目标：对齐 sasspile 功能，sass-spec 从 23% 继续提升
 
-  ## 当前变更
-  align-sasspile：自底向上逐层补全（8 层 56 个任务）
+  ## 已归档变更
+  align-sasspile（2026-08-22 归档）：自底向上逐层补全（8 层 59 个任务，sass-spec 5%→23%）
