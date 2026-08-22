@@ -1,0 +1,38 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Rust edition 2024, toolchain 1.97
+  Project: sasspile — 纯 Rust SCSS 编译器，函数式链式调用 + move 语义
+  All responses in Chinese; code, commands, filenames in English
+
+  ## 架构
+  入口 lib.rs 链式调用：Source::from_file(path)?.lex()?.parse()?.evaluate()?.serialize(style).into_string()
+  Stage 管线：Source → Lexed → Parsed → Evaluated → Serialized
+  Source/Lexed/Parsed 携带 base_path + load_paths，Parsed::evaluate() 内部构建 Env
+  Env 方法全部 self -> Self（链式），eval_xxx 接收 Env（move），返回 (Vec<CssNode>, Env)
+  只读辅助方法（call_function/bind_params/load_module）保持 &Env
+  禁止 env.clone()（除 @content 上下文快照），禁止 Rc::make_mut（字段已恢复为 HashMap）
+
+  ## 禁止项
+  1. 禁止 Python：不使用 python3/pip；脚本用 rust-script；测试用 #[test]
+  2. 禁止 println!/eprintln!：所有代码（含 src/ 和 tests/）一律用 tracing 宏（info!/warn!/error!/debug!）
+  3. 必须使用 tracing span：涉及跨函数/跨阶段的管道处理必须用 tracing::span!（info_span!/debug_span!/trace_span!）记录上下文与耗时，字段命名遵循 stage、module、id、elapsed_ms 等约定
+  4. 禁止内联测试：src/ 保持纯生产代码，所有测试放在 tests/ 目录
+  5. 单文件 ≤ 500 行：源码和测试分别计算，超出必须拆分
+  6. 使用 SSH 方式推送 GitHub
+
+  ## 调试协议（强制）
+  核心原则：禁止凭直觉猜测根因。所有 bug 修复必须基于 tracing trace 证据链。
+  4 步流程：SPAN 插桩 → TRACE 采集 → 根因定位（引用具体 span + 字段值）→ 修复验证
+
+  ## 代码查询
+  优先使用 CodeGraph CLI（callers/impact/explore/node）
+
+  ## Git 规范
+  推送：SSH 方式 git push origin main（remote 名为 origin，SSH 地址 git@github.com）
+  只提交不推送：commit 后必须等用户确认
+
+  ## 测试基线
+  compile_test 43 + stage_test 10 + ast_test 8 + common_test 5 + bs_spec 15 + ep_full 121 = 202/202
+  ep_full 耗时约 38 秒
+  sass-spec 全量 2828/5362 = 53%

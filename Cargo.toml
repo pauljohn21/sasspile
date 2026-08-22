@@ -1,0 +1,17 @@
+[package]
+name = "scss-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Pure Rust SCSS compiler"
+license = "MIT"
+
+[lints.rust]
+unsafe_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+[dependencies]
+# 零外部依赖——纯 std 实现
