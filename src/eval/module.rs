@@ -207,10 +207,10 @@ impl Evaluator {
                 let config_pairs: Vec<(String, Value)> = config
                     .iter()
                     .map(|c| {
-                        let val = Self::eval_value(&c.value, &env).unwrap_or(Value::Null);
-                        (c.name.clone(), val)
+                        let val = Self::eval_value(&c.value, &env)?;
+                        Ok::<(String, Value), SassError>((c.name.clone(), val))
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
                 Self::load_module(&path, &config_pairs, &env)?
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
@@ -250,6 +250,10 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_forward", url = url, has_prefix = prefix.is_some());
         let _enter = span.enter();
+        // 内建模块（sass:xxx）不能用 with 配置
+        if url.starts_with("sass:") && !config.is_empty() {
+            return Err(SassError::Eval("Built-in modules can't be configured.".into()));
+        }
         let base = env.base_path.clone();
         let load_paths = env.get_load_paths().to_vec();
         if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {

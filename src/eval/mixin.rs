@@ -218,6 +218,10 @@ impl Evaluator {
 
         let (children, has_body, new_env) = match body {
             Some(nodes) => {
+                // at-rule body 内允许声明（如 @font-face { font-family: ...; }）
+                let env = if env.current_selector.is_none() {
+                    env.with_selector(name.to_string())
+                } else { env };
                 let (css, e) = Self::eval_nodes(nodes, env)?;
                 (css, true, e)
             }

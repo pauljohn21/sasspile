@@ -211,19 +211,52 @@ impl<'src> Lexer<'src> {
         })
     }
 
-    /// 扫描 @规则。
+    /// 扫描 @规则（支持反斜杠转义，如 `@u\\73 e` → `@use`）。
     fn scan_at(&mut self) -> Token {
         self.next_char(); // 消费 @
-        let start = self.pos;
-        while let Some(c) = self.peek() {
+        let mut name = String::new();
+        loop {
+            let c = match self.peek() {
+                Some(c) => c,
+                None => break,
+            };
             if c.is_ascii_alphanumeric() || c == '-' {
+                name.push(c);
                 self.next_char();
+            } else if c == '\\' {
+                self.next_char(); // 消费 \
+                if let Some(next) = self.peek() {
+                    if next.is_ascii_hexdigit() {
+                        // 十六进制转义：\73 → 's'
+                        let mut hex = String::new();
+                        for _ in 0..6 {
+                            if let Some(h) = self.peek().filter(|c| c.is_ascii_hexdigit()) {
+                                hex.push(h);
+                                self.next_char();
+                            } else {
+                                break;
+                            }
+                        }
+                        // 跳过尾部一个空白字符
+                        if self.peek().is_some_and(|c| c == ' ' || c == '\t' || c == '\n') {
+                            self.next_char();
+                        }
+                        if let Ok(code) = u32::from_str_radix(&hex, 16)
+                            && let Some(ch) = char::from_u32(code)
+                        {
+                            name.push(ch);
+                        }
+                    } else {
+                        // 非十六进制转义：\X → X
+                        self.next_char();
+                        name.push(next);
+                    }
+                }
             } else {
                 break;
             }
         }
-        let name = &self.source[start..self.pos];
-        Token::AtRule(name.to_string())
+        Token::AtRule(name)
     }
 
     /// 扫描 $变量。

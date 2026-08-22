@@ -2,7 +2,26 @@ use super::*;
 use crate::css::node::CssNode;
 
 impl Evaluator {
-    pub(crate) fn apply_extends(nodes: &mut [CssNode], extends: &[(String, String)]) {
+    /// 收集 CSS 中所有选择器文本（用于 extend target 匹配检查）。
+    fn collect_selectors(nodes: &[CssNode], out: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                CssNode::Rule { selector, children, .. } => {
+                    out.push(selector.clone());
+                    Self::collect_selectors(children, out);
+                }
+                CssNode::AtRule { children, .. } => {
+                    Self::collect_selectors(children, out);
+                }
+                CssNode::AtRoot(kids) => {
+                    Self::collect_selectors(kids, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub(crate) fn apply_extends(nodes: &mut [CssNode], extends: &[(String, String, bool)]) {
         let span = crate::__tracing::info_span!("apply_extends", n_extends = extends.len());
         let _enter = span.enter();
         for node in nodes.iter_mut() {
@@ -16,7 +35,7 @@ impl Evaluator {
                         "processing rule for extends"
                     );
                     // 应用 extend
-                    for (extender, target) in extends {
+                    for (extender, target, _optional) in extends {
                         let target_trimmed = target.trim();
                         if selector.contains(target_trimmed) {
                             crate::__tracing::info!(
@@ -26,6 +45,19 @@ impl Evaluator {
                                 selector = %selector,
                                 "extend matched"
                             );
+                            // bogus 选择器检测：extender 末尾为组合器（+ > ~）时跳过
+                            let extender_trimmed = extender.trim();
+                            if extender_trimmed.ends_with('+')
+                                || extender_trimmed.ends_with('>')
+                                || extender_trimmed.ends_with('~')
+                            {
+                                crate::__tracing::debug!(
+                                    target: "sasspile::extend",
+                                    extender = %extender_trimmed,
+                                    "bogus combinator extender skipped"
+                                );
+                                continue;
+                            }
                             if target_trimmed.starts_with('%') {
                                 // 占位符：直接替换为目标
                                 *selector = selector.replace(target_trimmed, extender);
@@ -72,5 +104,33 @@ impl Evaluator {
                 _ => {}
             }
         }
+    }
+
+    /// 检查未匹配的 extend target——非 optional 的未匹配 target 报错。
+    pub(crate) fn check_extend_targets(
+        css: &[CssNode],
+        extends: &[(String, String, bool)],
+    ) -> Result<()> {
+        let span = crate::__tracing::debug_span!("check_extend_targets", n_extends = extends.len());
+        let _enter = span.enter();
+    let mut all_selectors = Vec::new();
+        Self::collect_selectors(css, &mut all_selectors);
+        for (_extender, target, optional) in extends {
+            if *optional {
+                continue;
+            }
+            let target_trimmed = target.trim();
+            // 占位符选择器不需要在 CSS 中存在
+            if target_trimmed.starts_with('%') {
+                continue;
+            }
+            let found = all_selectors.iter().any(|s| s.contains(target_trimmed));
+            if !found {
+                return Err(SassError::Eval(format!(
+                    "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
+                )));
+            }
+        }
+        Ok(())
     }
 }

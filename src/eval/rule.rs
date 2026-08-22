@@ -81,6 +81,26 @@ impl Evaluator {
                     if !current_decls.is_empty() {
                         result.push(CssNode::Rule { selector: selector.clone(), declarations: std::mem::take(&mut current_decls), children: vec![] });
                     }
+                    // AtRule 嵌套处理：将父选择器传播到 AtRule 内的 Rule 子节点
+                    let other = match other {
+                        CssNode::AtRule { name, params, children, has_body: true } => {
+                            let n = name.clone();
+                            let p = params.clone();
+                            let ch = if n == "keyframes" || n == "-webkit-keyframes" || n == "-moz-keyframes" {
+                                // @keyframes 不传播父选择器
+                                children
+                            } else {
+                                // 其他 AtRule：将父选择器传播到内部 Rule
+                                Self::nest_rule_in_children(&selector, children)
+                            };
+                            CssNode::AtRule { name: n, params: p, children: ch, has_body: true }
+                        }
+                        CssNode::AtRule { name, params, children: _, has_body: false } => {
+                            // 无 body 的 AtRule（如 @b c;）包裹在父选择器下
+                            CssNode::Rule { selector: selector.clone(), declarations: vec![], children: vec![CssNode::AtRule { name, params, children: vec![], has_body: false }] }
+                        }
+                        other => other,
+                    };
                     result.push(other);
                 }
             }
@@ -161,5 +181,56 @@ impl Evaluator {
             }
         }
         result.join(", ")
+    }
+
+    /// 将父选择器传播到 AtRule children 内的 Rule 子节点。
+    ///
+    /// 用于 `a {@import "other"}` 场景——被导入文件中的规则需要嵌套在父选择器 `a` 下。
+    fn nest_rule_in_children(parent: &str, children: Vec<CssNode>) -> Vec<CssNode> {
+        let mut result = Vec::new();
+        let mut current_decls = Vec::new();
+        for child in children {
+            match child {
+                CssNode::Declaration { .. } => current_decls.push(child),
+                CssNode::Rule { selector, declarations, children } => {
+                    if !current_decls.is_empty() {
+                        result.push(CssNode::Rule {
+                            selector: parent.to_string(),
+                            declarations: std::mem::take(&mut current_decls),
+                            children: vec![],
+                        });
+                    }
+                    let combined = Self::combine_selectors(parent, &selector);
+                    result.push(CssNode::Rule { selector: combined, declarations, children });
+                }
+                CssNode::AtRule { name, params, children, has_body: true } => {
+                    let n = name.clone();
+                    let ch = if n == "keyframes" || n == "-webkit-keyframes" || n == "-moz-keyframes" {
+                        children
+                    } else {
+                        Self::nest_rule_in_children(parent, children)
+                    };
+                    result.push(CssNode::AtRule { name, params, children: ch, has_body: true });
+                }
+                other => {
+                    if !current_decls.is_empty() {
+                        result.push(CssNode::Rule {
+                            selector: parent.to_string(),
+                            declarations: std::mem::take(&mut current_decls),
+                            children: vec![],
+                        });
+                    }
+                    result.push(other);
+                }
+            }
+        }
+        if !current_decls.is_empty() {
+            result.push(CssNode::Rule {
+                selector: parent.to_string(),
+                declarations: current_decls,
+                children: vec![],
+            });
+        }
+        result
     }
 }

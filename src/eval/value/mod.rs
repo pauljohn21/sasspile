@@ -271,10 +271,15 @@ pub(crate) fn eval_variable(
                 if let Some(dot) = name.find('.') {
                     let ns = &name[..dot];
                     let var_name = &name[dot + 1..];
-                    if let Some(module) = env.get_namespace(ns)
-                        && let Some(val) = module.all_vars().find(|(k, _)| *k == var_name).map(|(_, v)| v) {
+                    if let Some(module) = env.get_namespace(ns) {
+                        if let Some(val) = module.all_vars().find(|(k, _)| *k == var_name).map(|(_, v)| v) {
                             return Ok(val.clone());
                         }
+                    } else {
+                        return Err(SassError::Eval(format!(
+                            "There is no module with the namespace \"{ns}\"."
+                        )));
+                    }
                 }
                 env.lookup(name)
                     .cloned()

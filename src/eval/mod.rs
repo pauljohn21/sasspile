@@ -22,7 +22,7 @@ pub(crate) struct ModuleExports {
     pub(crate) forwarded_functions: HashMap<String, FunctionDef>,
     pub(crate) css: Vec<CssNode>,
     pub(crate) loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
-    pub(crate) extends: Rc<Vec<(String, String)>>,
+    pub(crate) extends: Rc<Vec<(String, String, bool)>>,
     pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
 }
 
@@ -60,7 +60,7 @@ pub struct Env {
     pub(crate) namespaces: HashMap<String, Rc<ModuleExports>>,
     base_path: Option<PathBuf>,
     depth: usize,
-    extends: Rc<Vec<(String, String)>>,
+    extends: Rc<Vec<(String, String, bool)>>,
     current_selector: Option<String>,
     load_paths: Vec<PathBuf>,
     plain_css: bool,
@@ -133,8 +133,8 @@ impl Env {
     pub(crate) fn get_namespace(&self, ns: &str) -> Option<&ModuleExports> { self.namespaces.get(ns).map(|rc| rc.as_ref()) }
 
     pub fn with_base_path(mut self, path: PathBuf) -> Self { self.base_path = Some(path); self }
-    pub fn add_extend(mut self, extender: String, target: String) -> Self { Rc::make_mut(&mut self.extends).push((extender, target)); self }
-    pub fn get_extends(&self) -> &[(String, String)] { &self.extends }
+    pub fn add_extend(mut self, extender: String, target: String, optional: bool) -> Self { Rc::make_mut(&mut self.extends).push((extender, target, optional)); self }
+    pub fn get_extends(&self) -> &[(String, String, bool)] { &self.extends }
     pub fn with_selector(mut self, sel: String) -> Self { self.current_selector = Some(sel); self }
     pub fn get_selector(&self) -> Option<&str> { self.current_selector.as_deref() }
     pub fn with_load_paths(mut self, paths: Vec<PathBuf>) -> Self { self.load_paths = paths; self }
@@ -152,18 +152,64 @@ impl Evaluator {
     pub fn evaluate(ast: &Ast) -> Result<Vec<CssNode>> {
         let (mut css, final_env) = Self::eval_nodes(&ast.nodes, Env::default())?;
         let extends = final_env.get_extends().to_vec();
-        if !extends.is_empty() { Self::apply_extends(&mut css, &extends); }
+        if !extends.is_empty() {
+            Self::apply_extends(&mut css, &extends);
+            Self::check_extend_targets(&css, &extends)?;
+        }
+        Self::hoist_css_imports(&mut css);
         Ok(css)
     }
 
     pub(crate) fn evaluate_with_env(ast: &Ast, env: Env) -> Result<Vec<CssNode>> {
         let (mut css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         let extends = final_env.get_extends().to_vec();
-        if !extends.is_empty() { Self::apply_extends(&mut css, &extends); }
+        if !extends.is_empty() {
+            Self::apply_extends(&mut css, &extends);
+            Self::check_extend_targets(&css, &extends)?;
+        }
+        Self::hoist_css_imports(&mut css);
         Ok(css)
     }
 
-    /// 求值节点列表——for 循环 + move（零 clone）。
+    /// CSS @import 提升策略——将所有 `@import` AtRule 提升到输出顶部。
+    ///
+    /// Sass 规范要求 CSS `@import`（`@import "file.css"`）出现在输出顶部，
+    /// 保持源码中的相对顺序。此函数递归扫描 CSS 树，提取 @import 节点。
+    fn hoist_css_imports(nodes: &mut Vec<CssNode>) {
+        let span = crate::__tracing::debug_span!("hoist_css_imports", n = nodes.len());
+        let _enter = span.enter();
+        let mut imports = Vec::new();
+        let mut rest = Vec::new();
+        for mut node in nodes.drain(..) {
+            // 先递归处理嵌套节点，再判断是否为 @import
+            match &mut node {
+                CssNode::AtRule { children, has_body: true, .. } => {
+                    Self::hoist_css_imports(children);
+                }
+                CssNode::AtRoot(kids) => {
+                    Self::hoist_css_imports(kids);
+                }
+                _ => {}
+            }
+            // 判断是否为 CSS @import（无 body 的 @import AtRule）
+            let is_css_import = matches!(
+                &node,
+                CssNode::AtRule { name, has_body: false, .. } if name == "import"
+            );
+            if is_css_import {
+                imports.push(node);
+            } else {
+                rest.push(node);
+            }
+        }
+        if !imports.is_empty() {
+            crate::__tracing::debug!(n_imports = imports.len(), "hoisted css imports");
+        }
+        nodes.extend(imports);
+        nodes.extend(rest);
+    }
+
+
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(nodes, env), fields(depth = env.depth, n = nodes.len())))]
     fn eval_nodes(nodes: &[Node], env: Env) -> Result<(Vec<CssNode>, Env)> {
         if env.depth > MAX_DEPTH {
@@ -199,6 +245,10 @@ impl Evaluator {
                     Self::check_plain_css_value(value)?;
                     if property.contains("#{") { return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into())); }
                 }
+                // 顶层声明检测：不在样式规则内的裸声明是非法的
+                if env.current_selector.is_none() {
+                    return Err(SassError::Eval("Declarations may only be used within style rules.".into()));
+                }
                 let val = Self::eval_value(value, &env)?;
                 if matches!(val, Value::Null) { return Ok((vec![], env)); }
                 let property = crate::eval::value::eval_property_name(property, &env);
@@ -219,7 +269,9 @@ impl Evaluator {
             Node::Include { name, args, content } => Self::eval_include(name, args, content, env),
             Node::Content => {
                 if let Some((content_nodes, content_env)) = env.get_content() {
-                    let content_env = content_env.clone();
+                    let mut content_env = content_env.clone();
+                    // @content 在 mixin body 内执行，继承当前 current_selector
+                    content_env.current_selector = env.current_selector.clone();
                     let content_nodes = content_nodes.to_vec();
                     Self::eval_nodes(&content_nodes, content_env)
                 } else { Ok((vec![], env)) }
@@ -235,9 +287,9 @@ impl Evaluator {
             Node::Use { url, namespace, star, config } => Self::eval_use(url, namespace, *star, config, env),
             Node::Forward { url, show, hide, prefix, config } => Self::eval_forward(url, prefix, config, env, show, hide),
             Node::Import { url, modifier } => Self::eval_import(url, modifier, env),
-            Node::Extend { selector, optional: _ } => {
+            Node::Extend { selector, optional } => {
                 if let Some(extender) = env.get_selector().map(|s| s.to_string()) {
-                    Ok((vec![], env.add_extend(extender, selector.clone())))
+                    Ok((vec![], env.add_extend(extender, selector.clone(), *optional)))
                 } else { Ok((vec![], env)) }
             }
             Node::AtRoot { query, body } => Self::eval_at_root(query, body, env),

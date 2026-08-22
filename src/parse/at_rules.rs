@@ -212,6 +212,42 @@ impl<'tok> Parser<'tok> {
     pub(crate) fn parse_function_def(&mut self) -> Result<Node> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
+        // 函数名验证——基于 Sass 官方规范
+        // 参考: https://sass-lang.com/documentation/breaking-changes/function-name/
+        // 参考: https://sass-lang.com/documentation/breaking-changes/type-function/
+        //
+        // 当前实现 Phase 1 行为（匹配 sass-spec）:
+        // 1. url/expression/element 全小写禁止（一直如此），大写/混合大小写允许（Phase 2 才禁止）
+        // 2. and/or/not 全小写禁止（Sass 运算符关键字），大写允许
+        // 3. type 任何大小写组合都禁止（CSS Values and Units 5 保留函数名）
+        // 4. Vendor prefix 放宽: -prefix-url/-expression/-and/-or/-not 允许
+        //    但 -prefix-element 仍然禁止（不在放宽列表中）
+
+        // type 大小写不敏感都禁止
+        if name.eq_ignore_ascii_case("type") {
+            return Err(SassError::Eval(
+                "This name is reserved for the plain-CSS function.".into(),
+            ));
+        }
+
+        // 全小写保留名检测
+        if name == name.to_ascii_lowercase() {
+            match name.as_str() {
+                "url" | "expression" | "element" | "and" | "or" | "not" => {
+                    return Err(SassError::Eval("Invalid function name.".into()));
+                }
+                _ => {}
+            }
+        }
+
+        // Vendor prefix 检查: -prefix-element 仍然禁止（全小写时）
+        // （-prefix-url/-expression/-and/-or/-not 已放宽，不报错）
+        if name == name.to_ascii_lowercase()
+            && name.starts_with('-')
+            && name.ends_with("-element")
+        {
+            return Err(SassError::Eval("Invalid function name.".into()));
+        }
         self.skip_ws();
         let params = if self.peek() == Some(&Token::LParen) {
             self.parse_params()?
@@ -374,11 +410,11 @@ impl<'tok> Parser<'tok> {
         }
         // 捕获 URL 后面的修饰符（CSS @import media query 等，到分号为止）
         self.skip_ws();
-        let modifier = if !matches!(self.peek(), Some(Token::Semicolon) | None) {
+        let modifier = if !matches!(self.peek(), Some(Token::Semicolon) | Some(Token::RBrace) | None) {
             let mut s = String::new();
             while let Some(t) = self.peek() {
                 match t {
-                    Token::Semicolon | Token::LBrace | Token::Eof => break,
+                    Token::Semicolon | Token::LBrace | Token::RBrace | Token::Eof => break,
                     Token::Comment(_, _) => { self.advance(); }
                     Token::Whitespace => { s.push(' '); self.advance(); }
                     _ => { s.push_str(&t.to_string()); self.advance(); }

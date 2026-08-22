@@ -67,11 +67,13 @@ impl<'tok> Parser<'tok> {
         matches!(self.tokens.get(i), None | Some(Token::Eof))
     }
     fn skip_ws(&mut self) {
-        while matches!(
-            self.peek(),
-            Some(Token::Whitespace) | Some(Token::Comment(_, _))
-        ) {
-            self.pos += 1;
+        while let Some(tok) = self.peek() {
+            match tok {
+                Token::Whitespace => self.pos += 1,
+                // 静默注释 (//) 在 skip_ws 中跳过；块注释 (/* */) 保留由 parse_node 处理
+                Token::Comment(_, true) => self.pos += 1,
+                _ => break,
+            }
         }
     }
 
