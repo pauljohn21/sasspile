@@ -381,6 +381,9 @@ hrx-auditor = { path = "../scss-rust" }
 ## OpenSpec 归档
 
 - 已归档变更存储在 `openspec/changes/archive/` 目录
+- **rc-env-perf**（2026-08-22 归档）：Rc COW 性能方案（已被 mut-env-refactor 取代）— Env 从 im::HashMap 改为 Rc<HashMap> COW，后因模仿 GC 模式被弃用
+- **mut-env-refactor**（2026-08-22 归档）：Env move 语义重构 + 函数式链式调用 — lib.rs 入口改链式 Source→Lexed→Parsed→Evaluated→Serialized，15 个 eval_xxx 改 Env（move），消除 env.clone() 和 Rc::make_mut()，stage 管线携带 base_path + load_paths — 202/202 全通过
+- **fix-top-level-declaration**（2026-08-22 归档）：顶层 CSS 声明检测 — eval_node 的 Node::Decl 分支增加 current_selector 检查
 - **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
 - **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
 - **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
