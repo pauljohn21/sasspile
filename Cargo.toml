@@ -14,4 +14,12 @@ all = "warn"
 pedantic = "warn"
 
 [dependencies]
-# 零外部依赖——纯 std 实现
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
+
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
+
+[dev-dependencies]
+hrx-auditor = { path = "../scss-rust" }

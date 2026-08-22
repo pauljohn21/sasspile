@@ -7,7 +7,7 @@
 //! ```
 //!
 //! 每个阶段是不可变类型，阶段转换是 `TryFrom` 实现。
-//! 所有内部类型 `pub(crate)`，仅公开 4 个编译入口函数。
+//! 所有内部类型 `pub(crate)`，仅公开编译入口函数。
 
 mod error;
 mod source;
@@ -20,6 +20,20 @@ use std::path::{Path, PathBuf};
 
 pub use error::{SassError, Result};
 pub use css::OutputStyle;
+
+/// 初始化 tracing 日志——测试和 CLI 入口调用。
+pub fn init_tracing() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            )
+            .init();
+    });
+}
 
 /// 编译字符串源码。
 pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
