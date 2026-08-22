@@ -373,7 +373,7 @@ hrx-auditor = { path = "../scss-rust" }
 
 | 规则 | 说明 |
 |------|------|
-| 推送方式 | SSH：`git push github main`（remote 名为 `github`，SSH 地址 git@github.com） |
+| 推送方式 | SSH：`git push origin main`（remote 名为 `origin`，SSH 地址 git@github.com） |
 | Commit 格式 | `feat: 描述 — 总计 N/M` |
 | 只提交不推送 | commit 后必须等用户确认再推送 |
 | 提交后同步 | 每次提交后必须 `codegraph sync`（确保代码导航索引与最新代码一致） |

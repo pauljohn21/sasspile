@@ -67,7 +67,6 @@ pub struct Env {
     loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
     pending_config: HashMap<String, Value>,
-    ast_cache: HashMap<PathBuf, Rc<Ast>>,
 }
 
 /// mixin 定义存储。

@@ -6,7 +6,7 @@ impl Evaluator {
     pub(crate) fn eval_if(
         branches: &[(Value, Vec<Node>)],
         else_body: &Option<Vec<Node>>,
-        mut env: Env,
+        env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         for (cond, body) in branches {
             let c = Self::eval_value(cond, &env)?;

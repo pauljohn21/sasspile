@@ -34,6 +34,7 @@ pub const SKIP_DIRS: &[&str] = &[
 ];
 
 /// 检查文件相对 spec_root 的路径是否在跳过列表中。
+#[allow(dead_code)]
 fn should_skip(rel_path: &str) -> bool {
     // 检查是否在跳过的顶层目录下
     SKIP_DIRS.iter().any(|skip| {
@@ -45,6 +46,7 @@ fn should_skip(rel_path: &str) -> bool {
 ///
 /// 参数：`dir` 要扫描的目录，`spec_root` spec 根目录（用于计算相对路径）。
 /// 返回 (files, skipped_count)。
+#[allow(dead_code)]
 pub fn collect_hrx_files(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) {
     let mut files = Vec::new();
     let mut skipped = 0;
@@ -52,6 +54,7 @@ pub fn collect_hrx_files(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) 
     (files, skipped)
 }
 
+#[allow(dead_code)]
 fn collect_recursive(
     dir: &Path,
     spec_root: &Path,

@@ -66,7 +66,7 @@ impl Evaluator {
         }
 
         // 求值模块名参数
-        let module_val = Self::eval_value(&args[0].value, &env)?;;
+        let module_val = Self::eval_value(&args[0].value, &env)?;
         let module_name = match &module_val {
             Value::String(s, _) => s.clone(),
             _ => {
@@ -79,7 +79,7 @@ impl Evaluator {
 
         // 求值 $with 配置参数（可选）
         let with_config: Vec<(String, Value)> = if args.len() > 1 {
-            let with_val = Self::eval_value(&args[1].value, &env)?;;
+            let with_val = Self::eval_value(&args[1].value, &env)?;
             match &with_val {
                 Value::Map(pairs) => pairs
                     .iter()

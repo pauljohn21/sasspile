@@ -43,18 +43,14 @@ fn test_eval_simple() {
 #[test]
 fn test_eval_variable() {
     let input = "$x: 10px; a { w: $x; }";
-    let css = Source::new(input.to_string())
-        .lex().unwrap()
-        .parse().unwrap()
-        .evaluate().unwrap()
-        .serialize(OutputStyle::Expanded)
-        .into_string();
-    // 验证变量求值结果
     let nodes = Source::new(input.to_string())
         .lex().unwrap()
         .parse().unwrap()
         .evaluate().unwrap();
-    if let Some(CssNode::Declaration { value, .. }) = nodes.nodes.first() {
-        assert_eq!(value, "10px");
+    // 验证变量求值结果——a 规则的第一个声明值应为 10px
+    if let Some(CssNode::Rule { declarations, .. }) = nodes.nodes.first() {
+        if let Some(CssNode::Declaration { value, .. }) = declarations.first() {
+            assert_eq!(value, "10px");
+        }
     }
 }
