@@ -104,7 +104,9 @@ impl<'tok> Parser<'tok> {
                         let next = self.tokens.get(self.pos + 1);
                         matches!(next, Some(Token::String(_, _)))
                     };
-                    if matches!(name.as_str(), "calc" | "clamp" | "env" | "var" | "url" | "css" | "attr")
+                    if (name.eq_ignore_ascii_case("calc") || name.eq_ignore_ascii_case("clamp")
+                        || name.eq_ignore_ascii_case("env") || name.eq_ignore_ascii_case("var")
+                        || name == "url" || name == "css" || name == "attr")
                         && !is_url_with_string
                     {
                         self.advance(); // 消费 (

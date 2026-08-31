@@ -507,8 +507,12 @@ pub(crate) fn eval_variable(
     /// `calc(1px + 2px)` → `Value::Number(3, "px")`（同单位简化）
     /// `calc(1px + 2%)` → `Value::Calc("calc(1px + 2%)")`（不同单位保留）
     fn simplify_calc(s: &str) -> Value {
-        // 尝试提取 calc(内容) 的内部表达式
-        let inner = s.strip_prefix("calc(").and_then(|s| s.strip_suffix(")"));
+        // 尝试提取 calc(内容) 的内部表达式——大小写不敏感
+        let inner = if s.len() >= 6 && s.get(..5).map_or(false, |p| p.eq_ignore_ascii_case("calc(")) && s.ends_with(')') {
+            Some(&s[5..s.len()-1])
+        } else {
+            None
+        };
         let inner = match inner {
             Some(i) => i.trim(),
             None => {
