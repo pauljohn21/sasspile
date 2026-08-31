@@ -2,6 +2,7 @@
 //!
 //! 包含 abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/
 //! atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable。
+//! CSS round/mod/rem 函数：css_round（1-3 参数+策略+单位转换）、css_mod（floored）、css_rem（truncated）。
 //!
 //! 支持命名参数（如 `math.abs($number: 3)`、`math.clamp($min: 0, $number: 1, $max: 2)`）。
 //! 辅助函数（参数名映射、合并、验证）在 `math_helpers` 模块中。

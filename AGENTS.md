@@ -424,7 +424,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：2902/5362 = 54%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录，chain-reaction 链式重构后 +74）
+**sass-spec 基线**：3068/5362 = 57%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录，calc 简化 + CSS round/mod/rem 函数 + 括号去除后 +166）
 **@directives 子目录**：forward 76%，import 32 FAIL（conflict 5/5 修复，pending_config 架构生效）
 **ep_full**：121/121 = 100%（file_resolver.rs 拆分 + module_helpers 统一后无回归）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
@@ -476,6 +476,7 @@ hrx-auditor = { path = "../scss-rust" }
 - **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
 - **directives-100**（进行中）：文件歧义检测增强（partial/extension/index/import-only 四种冲突）+ module_helpers 统一 + .sass 测试修复 — conflict 5/5 修复, import 37→32 FAIL
 - **chain-reaction**（2026-08-31 归档）：全面链式反应重构 — eval_nodes/eval_for/eval_each 用 try_fold，hoist_css_imports 用 partition，eval_rule 用 RuleBuilder+fold，flatten_nodes 用 flat_map+partition，merge_at_rules 用 fold，Evaluated::serialize 改为 self 消费 — 202/202 全通过，sass-spec 2828→2902 (+74)
+- **calc-simplification**（2026-09-01 归档）：calc 表达式简化 + CSS round/mod/rem 函数 — simplify_calc 支持纯数字/常量(pi/e)/同单位算术/科学计数法/嵌套 min/max 简化，strip_parens 去除多余括号，remove_unnecessary_parens 去除乘除法括号，CSS round() 四种策略(nearest/up/down/to-zero)+单位转换，CSS mod()/rem() floored/truncated modulo，calc 函数名大小写不敏感，math 函数 Calc 参数透传 — 2902→3068 (+166)，1 个 spec（`calc-simplification`）已同步到 `openspec/specs/`
 - **fix-default-config-validation**（2026-08-31 归档）：@forward 链 !default 配置验证 — eval_forward 回传 consumed_config 正确处理 as 前缀映射，config_pairs 仅传递 with 声明变量，load_module 区分 @use（验证）和 @forward（不验证）场景 — 1 个 spec（`use-with-validation`）已同步到 `openspec/specs/`
 - **fix-interp-eval**（2026-08-31 归档）：插值求值架构重构 — Value::Interp 从 String 改为 Vec<InterpSegment> 保留表达式与文本边界，parser parse_interp_adjacent 方法拼接相邻片段，eval_interp_segments 逐片段求值 — 1 个 spec（`interp-eval`）已同步到 `openspec/specs/`，15 个 interp_test 全通过
 

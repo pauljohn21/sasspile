@@ -698,7 +698,7 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 120 �
 
 # sass-spec 全量统计（约 70 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：2811/5362 = 52%（VFS + === 分组隔离，更准确）
+# 基线：3068/5362 = 57%（calc 简化 + CSS round/mod/rem 函数 + 括号去除）
 # @directives 子目录：337/605 = 56%
 # ep_full：121/121 = 100%（fix-forward-use-conflict 修复后全部通过）
 
