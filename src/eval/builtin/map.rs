@@ -14,7 +14,7 @@ impl Evaluator {
             Value::Map(pairs) => Ok(pairs.clone()),
             Value::Null => Ok(Vec::new()),
             Value::List(elements, _, _) if elements.is_empty() => Ok(Vec::new()),
-            _ => Err(SassError::Eval(format!("{} 不是 map", v))),
+            _ => Err(SassError::Eval(format!("{v} is not a map"))),
         }
     }
 

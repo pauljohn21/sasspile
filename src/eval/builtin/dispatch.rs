@@ -18,7 +18,7 @@ const MATH_NAMES: &[(&str, &str)] = &[
     ("math.tan", "tan"), ("math.log", "log"), ("math.hypot", "hypot"),
     ("math.atan2", "atan2"), ("math.asin", "asin"), ("math.acos", "acos"),
     ("math.atan", "atan"), ("math.random", "random"), ("math.clamp", "clamp"),
-    ("math.unit", "unit"), ("math.is-unitless", "is_unitless"),
+    ("math.unit", "unit"), ("math.is-unitless", "is-unitless"),
     ("math.compatible", "compatible"), ("math.comparable", "comparable"),
 ];
 

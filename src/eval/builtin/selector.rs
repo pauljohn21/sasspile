@@ -74,80 +74,150 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             }
             _ => Ok(Some(Value::Bool(false))),
         },
-        "selector-parse" => match args {
-            [Value::String(s, _)] => {
-                let parts: Vec<Value> = s
-                    .split(',')
-                    .map(|p| Value::String(p.trim().to_string(), false))
-                    .collect();
-                Ok(Some(Value::List(parts, Separator::Comma, false)))
+        "selector-parse" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $selector.".into()));
             }
-            _ => Err(SassError::Eval("selector-parse requires 1 argument".into())),
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::String(s, _) => {
+                    let parts: Vec<Value> = s
+                        .split(',')
+                        .map(|p| Value::String(p.trim().to_string(), false))
+                        .collect();
+                    Ok(Some(Value::List(parts, Separator::Comma, false)))
+                }
+                other => Err(SassError::Eval(format!(
+                    "$selector: {} is not a string.", other
+                ))),
+            }
         },
-        "selector-simple-selectors" => match args {
-            [Value::String(s, _)] => {
-                let (result, current) = s.chars().fold(
-                    (Vec::<Value>::new(), String::new()),
-                    |(mut result, mut current), c| {
-                        if c == '.' || c == '#' || c == ':' || c == '[' {
-                            if !current.is_empty() {
-                                result.push(Value::String(current, false));
+        "selector-simple-selectors" => {
+            if args.is_empty() {
+                return Err(SassError::Eval("Missing argument $selector.".into()));
+            }
+            if args.len() > 1 {
+                return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} {} passed.",
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match &args[0] {
+                Value::String(s, _) => {
+                    let (result, current) = s.chars().fold(
+                        (Vec::<Value>::new(), String::new()),
+                        |(mut result, mut current), c| {
+                            if c == '.' || c == '#' || c == ':' || c == '[' {
+                                if !current.is_empty() {
+                                    result.push(Value::String(current, false));
+                                }
+                                current = c.to_string();
+                            } else {
+                                current.push(c);
                             }
-                            current = c.to_string();
-                        } else {
-                            current.push(c);
-                        }
-                        (result, current)
-                    },
-                );
-                let mut result = result;
-                if !current.is_empty() {
-                    result.push(Value::String(current, false));
+                            (result, current)
+                        },
+                    );
+                    let mut result = result;
+                    if !current.is_empty() {
+                        result.push(Value::String(current, false));
+                    }
+                    Ok(Some(Value::List(result, Separator::Comma, false)))
                 }
-                Ok(Some(Value::List(result, Separator::Comma, false)))
+                other => Err(SassError::Eval(format!(
+                    "$selector: {} is not a string.", other
+                ))),
             }
-            _ => Err(SassError::Eval(
-                "selector-simple-selectors requires 1 argument".into(),
-            )),
         },
-        "selector-unify" => match args {
-            [Value::String(a, _), Value::String(b, _)] => {
-                if a.contains(b.as_str()) {
-                    Ok(Some(Value::String(a.clone(), false)))
-                } else if b.contains(a.as_str()) {
-                    Ok(Some(Value::String(b.clone(), false)))
-                } else {
-                    Ok(Some(Value::String(format!("{a}{b}"), false)))
+        "selector-unify" => {
+            let params = selector_param_names("selector-unify");
+            if args.len() < params.len() {
+                let missing = params[args.len()];
+                return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+            }
+            if args.len() > params.len() {
+                return Err(SassError::Eval(format!(
+                    "Only {} arguments allowed, but {} {} passed.",
+                    params.len(),
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match args {
+                [Value::String(a, _), Value::String(b, _)] => {
+                    if a.contains(b.as_str()) {
+                        Ok(Some(Value::String(a.clone(), false)))
+                    } else if b.contains(a.as_str()) {
+                        Ok(Some(Value::String(b.clone(), false)))
+                    } else {
+                        Ok(Some(Value::String(format!("{a}{b}"), false)))
+                    }
                 }
+                _ => Ok(Some(Value::Null)),
             }
-            _ => Ok(Some(Value::Null)),
         },
-        "selector-extend" => match args {
-            [
-                Value::String(selector, _),
-                Value::String(target, _),
-                Value::String(extender, _),
-            ] => {
-                let result = if selector.contains(target.as_str()) {
-                    format!("{selector}, {extender}")
-                } else {
-                    selector.clone()
-                };
-                Ok(Some(Value::String(result, false)))
+        "selector-extend" => {
+            let params = selector_param_names("selector-extend");
+            if args.len() < params.len() {
+                let missing = params[args.len()];
+                return Err(SassError::Eval(format!("Missing argument ${missing}.")));
             }
-            _ => Err(SassError::Eval("selector-extend requires 3 arguments".into())),
+            if args.len() > params.len() {
+                return Err(SassError::Eval(format!(
+                    "Only {} arguments allowed, but {} {} passed.",
+                    params.len(),
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match args {
+                [
+                    Value::String(selector, _),
+                    Value::String(target, _),
+                    Value::String(extender, _),
+                ] => {
+                    let result = if selector.contains(target.as_str()) {
+                        format!("{selector}, {extender}")
+                    } else {
+                        selector.clone()
+                    };
+                    Ok(Some(Value::String(result, false)))
+                }
+                _ => Err(SassError::Eval(format!("$selector: {} is not a string.", args[0])))
+            }
         },
-        "selector-replace" => match args {
-            [
-                Value::String(selector, _),
-                Value::String(original, _),
-                Value::String(replacement, _),
-            ] => {
-                // 简化实现：在整个选择器中替换 original 为 replacement
-                let result = selector.replace(original.as_str(), replacement.as_str());
-                Ok(Some(Value::String(result, false)))
+        "selector-replace" => {
+            let params = selector_param_names("selector-replace");
+            if args.len() < params.len() {
+                let missing = params[args.len()];
+                return Err(SassError::Eval(format!("Missing argument ${missing}.")));
             }
-            _ => Err(SassError::Eval("selector-replace requires 3 arguments".into())),
+            if args.len() > params.len() {
+                return Err(SassError::Eval(format!(
+                    "Only {} arguments allowed, but {} {} passed.",
+                    params.len(),
+                    args.len(),
+                    if args.len() == 1 { "was" } else { "were" }
+                )));
+            }
+            match args {
+                [
+                    Value::String(selector, _),
+                    Value::String(original, _),
+                    Value::String(replacement, _),
+                ] => {
+                    let result = selector.replace(original.as_str(), replacement.as_str());
+                    Ok(Some(Value::String(result, false)))
+                }
+                _ => Err(SassError::Eval(format!("$selector: {} is not a string.", args[0])))
+            }
         },
         _ => Ok(None),
     }

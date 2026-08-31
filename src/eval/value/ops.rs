@@ -134,7 +134,10 @@ pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
             if *b == 0.0 {
                 return Err(SassError::DivideByZero);
             }
-            Ok(Value::Number(a % b, u.clone()))
+            // Sass 使用 floored modulo: a - b * floor(a / b)
+            // 结果符号跟随除数 b，而非被除数 a
+            let result = a - (*b * (a / b).floor());
+            Ok(Value::Number(result, u.clone()))
         }
         // Null RHS — % 不是运算符，作为字符串保留
         (l, Value::Null) => Ok(Value::List(

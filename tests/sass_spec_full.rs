@@ -22,7 +22,8 @@ struct HrxCase {
 /// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
 ///
 /// 不同组之间完全隔离——即使有同名文件也不会冲突。
-fn parse_hrx_to_cases(content: &str) -> Vec<HrxCase> {
+fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
+    let _ = hrx_rel_path; // 保留参数接口，后续可用于路径前缀
     let archive = match parse_hrx(content) {
         Ok(a) => a,
         Err(_) => return Vec::new(),
@@ -124,7 +125,7 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
 
-    for (path, content) in &case.files {
+        for (path, content) in &case.files {
         let file_path = tmp_dir.join(path);
         if let Some(parent) = file_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -204,7 +205,8 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
     let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            for case in &parse_hrx_to_cases(&content) {
+            let rel_path = file.strip_prefix(spec_root).unwrap_or(file).to_string_lossy().to_string();
+            for case in &parse_hrx_to_cases(&content, &rel_path) {
                 cases += 1;
                 if case.expected_output.is_empty() && !case.expect_error {
                     skip += 1;
@@ -288,8 +290,9 @@ fn test_directives_subdirs() {
         let dir = spec_root.join(format!("directives/{hrx}.hrx"));
         if dir.exists() {
             if let Ok(content) = std::fs::read_to_string(&dir) {
+                let hrx_rel = format!("directives/{hrx}.hrx");
                 let (mut hp, mut hf, mut hs, mut hc) = (0, 0, 0, 0);
-                for case in &parse_hrx_to_cases(&content) {
+                for case in &parse_hrx_to_cases(&content, &hrx_rel) {
                     hc += 1;
                     if case.expected_output.is_empty() && !case.expect_error {
                         hs += 1;
