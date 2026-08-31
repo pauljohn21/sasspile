@@ -10,6 +10,7 @@ pub mod color_conv_ops;
 pub mod color_gamut;
 pub mod color_parse;
 pub mod color_space;
+pub mod dispatch;
 pub mod list;
 pub mod map;
 pub mod selector;
@@ -32,8 +33,8 @@ impl Evaluator {
         let span =
             crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
-        // ── 宏分派：math/string/map/list/color/selector 六组 ──
-        if let Some(result) = super::module_dispatch::dispatch_builtin_module(
+        // ── 模块分派：math/string/map/list/color/selector 六组 ──
+        if let Some(result) = super::builtin::dispatch::dispatch_builtin_module(
             &name,
             pos_args,
             kw_args,
@@ -45,7 +46,7 @@ impl Evaluator {
         match name.as_str() {
             // ── sass-spec 测试辅助函数 ──
             "sass" => {
-                if env.plain_css {
+                if env.is_plain_css() {
                     return Err(SassError::Eval(
                         "sass() conditions aren't allowed in plain CSS".into(),
                     ));
@@ -102,7 +103,7 @@ impl Evaluator {
             },
             "content-exists" => {
                 // 检查当前环境是否有 @content 内容块
-                Ok(Value::Bool(env.content.is_some()))
+                Ok(Value::Bool(env.get_content().is_some()))
             },
             "feature-exists" => match pos_args {
                 [Value::String(name, _)] => {
@@ -220,7 +221,7 @@ impl Evaluator {
     /// 检查函数名是否为已知的 Sass 内置函数。
     /// 用于区分"真正未定义的函数"（应 CSS 透传）和"已知但参数错误的函数"（应报错）。
     pub(crate) fn is_known_builtin(name: &str) -> bool {
-        super::module_dispatch::is_known_builtin(name)
+        super::builtin::dispatch::is_known_builtin(name)
             || matches!(name, "rgba" | "rgb" | "darken" | "lighten" | "mix")
     }
 

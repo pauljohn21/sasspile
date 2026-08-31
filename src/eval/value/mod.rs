@@ -22,7 +22,7 @@ pub(crate) fn eval_variable(
     name: &str,
     value: &Value,
     flags: &VarFlags,
-    mut env: Env,
+    env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
     // 命名空间变量赋值（namespace.$var）——更新模块变量
     if name.contains('.') {
@@ -33,16 +33,8 @@ pub(crate) fn eval_variable(
             let ns = parts[0];
             let var_name = parts[1];
             // 更新命名空间模块中的变量
-            if let Some(exports) = env.namespaces.get(&ns.to_string()) {
-                let mut new_exports = (**exports).clone();
-                // namespace 赋值优先修改 forwarded_vars（原始模块的变量引用），
-                // 只有当 forwarded 中没有该变量时才修改 local_vars
-                if new_exports.forwarded_vars.contains_key(var_name) {
-                    new_exports.forwarded_vars.insert(var_name.to_string(), val);
-                } else {
-                    new_exports.local_vars.insert(var_name.to_string(), val);
-                }
-                env.namespaces.insert(ns.to_string(), Rc::new(new_exports));
+            if env.get_namespace(ns).is_some() {
+                let env = env.with_namespace_var(ns, var_name, val);
                 return Ok((vec![], env));
             }
         }
@@ -53,8 +45,8 @@ pub(crate) fn eval_variable(
         // !default 赋值：先检查 pending_config（with 配置覆盖值）
         // Sass 中 - 和 _ 在变量名中等价
         let normalized = name.replace('-', "_");
-        let config_val = env.pending_config.get(&normalized)
-            .or_else(|| env.pending_config.get(name))
+        let config_val = env.get_pending_config().get(&normalized)
+            .or_else(|| env.get_pending_config().get(name))
             .cloned();
         if let Some(val) = config_val {
             let new_env = env.bind(name.to_string(), val);
@@ -69,9 +61,7 @@ pub(crate) fn eval_variable(
     let new_env = env.bind(name.to_string(), val.clone());
     // !global 变量同时写入 global_writes，供 eval_rule 传播到外层
     if flags.global {
-        let mut env = new_env;
-        env.global_writes.insert(name.to_string(), val);
-        Ok((vec![], env))
+        Ok((vec![], new_env.add_global_write(name.to_string(), val)))
     } else {
         Ok((vec![], new_env))
     }
@@ -185,7 +175,7 @@ pub(crate) fn eval_variable(
             }
             // sass() 函数——求值参数
             Value::Call(name, _args) if name == "sass" => {
-                if env.plain_css {
+                if env.is_plain_css() {
                     return Err(SassError::Eval("sass() conditions aren't allowed in plain CSS".into()));
                 }
                 let val = Self::eval_value(condition, env)?;
@@ -197,7 +187,7 @@ pub(crate) fn eval_variable(
             }
             // 插值——plain CSS 中不允许
             Value::Interp(s) => {
-                if env.plain_css {
+                if env.is_plain_css() {
                     return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into()));
                 }
                 // 用 eval_simple_expr 求值插值内容（正确处理字符串引号）
@@ -241,7 +231,7 @@ pub(crate) fn eval_variable(
     }
 
     /// 求值值表达式。
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(value, env), fields(depth = env.depth), level = "trace"))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(value, env), fields(depth = env.get_depth()), level = "trace"))]
     pub(crate) fn eval_value(value: &Value, env: &Env) -> Result<Value> {
         match value {
             Value::Number(..)

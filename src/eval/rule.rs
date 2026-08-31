@@ -1,7 +1,6 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::Result;
-use std::mem;
 
 impl Evaluator {
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。
@@ -19,18 +18,18 @@ impl Evaluator {
             selector.to_string()
         };
 
-        // 保存 local_vars（规则体局部作用域不传播）
-        let saved_local_vars = env.local_vars.clone();
-        let saved_local_mixins = env.local_mixins.clone();
-        let saved_local_functions = env.local_functions.clone();
-        let saved_forwarded_vars = env.forwarded_vars.clone();
-        let saved_forwarded_mixins = env.forwarded_mixins.clone();
-        let saved_forwarded_functions = env.forwarded_functions.clone();
+        // 保存 local 表（规则体局部作用域不传播）
+        let saved_local_vars = env.get_local_vars().clone();
+        let saved_local_mixins = env.get_local_mixins().clone();
+        let saved_local_functions = env.get_local_functions().clone();
+        let saved_forwarded_vars = env.get_forwarded_vars().clone();
+        let saved_forwarded_mixins = env.get_forwarded_mixins().clone();
+        let saved_forwarded_functions = env.get_forwarded_functions().clone();
 
         let (css, new_env) = Self::eval_nodes(body, env.with_selector(selector.clone()))?;
 
         // plain CSS 模式——不合并选择器，保留嵌套结构
-        if new_env.plain_css {
+        if new_env.is_plain_css() {
             let mut declarations = Vec::new();
             let mut children = Vec::new();
             let mut root_nodes = Vec::new();
@@ -114,52 +113,8 @@ impl Evaluator {
         result.extend(root_nodes);
 
         // 作用域传播：从 new_env 提取需要传播的字段，合并回 saved 状态
-        let mut return_env = new_env;
-
-        // 恢复 local_vars：保留命名空间变量（含 .）和 global_writes 传播
-        let rule_local_vars = mem::take(&mut return_env.local_vars);
-        let rule_global_writes = mem::take(&mut return_env.global_writes);
-        let rule_local_mixins = mem::take(&mut return_env.local_mixins);
-        let rule_local_functions = mem::take(&mut return_env.local_functions);
-        let rule_forwarded_mixins = mem::take(&mut return_env.forwarded_mixins);
-        let rule_forwarded_functions = mem::take(&mut return_env.forwarded_functions);
-        let rule_forwarded_vars = mem::take(&mut return_env.forwarded_vars);
-
-        // 恢复 saved 的 local 表
-        return_env.local_vars = saved_local_vars;
-        return_env.local_mixins = saved_local_mixins;
-        return_env.local_functions = saved_local_functions;
-        return_env.forwarded_vars = saved_forwarded_vars;
-        return_env.forwarded_mixins = saved_forwarded_mixins;
-        return_env.forwarded_functions = saved_forwarded_functions;
-
-        // 传播命名空间变量赋值（名字含 . 的）
-        for (name, val) in &rule_local_vars {
-            if name.contains('.') {
-                return_env.local_vars.insert(name.clone(), val.clone());
-            }
-        }
-        // 传播 !global 变量赋值
-        for (name, val) in &rule_global_writes {
-            return_env.local_vars.insert(name.clone(), val.clone());
-        }
-        // 传播新增 mixin/function（规则体内定义的）
-        for (name, def) in &rule_local_mixins {
-            return_env.local_mixins.entry(name.clone()).or_insert_with(|| def.clone());
-        }
-        for (name, def) in &rule_local_functions {
-            return_env.local_functions.entry(name.clone()).or_insert_with(|| def.clone());
-        }
-        // 传播新增 forwarded 成员
-        for (name, def) in &rule_forwarded_mixins {
-            return_env.forwarded_mixins.entry(name.clone()).or_insert_with(|| def.clone());
-        }
-        for (name, def) in &rule_forwarded_functions {
-            return_env.forwarded_functions.entry(name.clone()).or_insert_with(|| def.clone());
-        }
-        for (name, val) in &rule_forwarded_vars {
-            return_env.forwarded_vars.entry(name.clone()).or_insert_with(|| val.clone());
-        }
+        // 使用 exit_scope 方法替代手动 save/restore
+        let return_env = new_env.exit_scope(saved_local_vars, saved_local_mixins, saved_local_functions, saved_forwarded_vars, saved_forwarded_mixins, saved_forwarded_functions);
 
         Ok((result, return_env))
     }

@@ -154,18 +154,17 @@ pub(crate) fn bind_exports(
 }
 
 /// 合并模块缓存和 @extend 关系。
-pub(crate) fn merge_module_cache(mut env: Env, path: &Path, exports: &ModuleExports) -> Env {
-    let mut new_loaded = (*env.loaded_modules).clone();
+pub(crate) fn merge_module_cache(env: Env, path: &Path, exports: &ModuleExports) -> Env {
+    let mut new_loaded = (*env.get_loaded_modules()).clone();
     new_loaded.insert(path.to_path_buf());
     new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
-    let mut new_extends = (*env.extends).clone();
+    let mut new_extends = (*env.get_extends()).to_vec();
     new_extends.extend((*exports.extends).clone().iter().cloned());
-    let mut new_cache = (*env.module_cache).clone();
+    let mut new_cache = (*env.get_module_cache()).clone();
     for (k, v) in &*exports.module_cache {
         new_cache.insert(k.clone(), v.clone());
     }
-    env.loaded_modules = Rc::new(new_loaded);
-    env.extends = Rc::new(new_extends);
-    env.module_cache = Rc::new(new_cache);
-    env
+    env.with_loaded_modules(new_loaded)
+        .with_extends(new_extends)
+        .with_module_cache(new_cache)
 }

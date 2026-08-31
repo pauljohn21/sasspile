@@ -109,13 +109,13 @@ impl Evaluator {
         }
 
         // 解析文件路径
-        let base = env.base_path.clone();
+        let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
         let path = Self::resolve_file(base.as_ref(), &module_name, &load_paths)
             .ok_or_else(|| SassError::Module(format!("Can't find stylesheet to import: {module_name}")))?;
 
         // 检查是否已加载
-        if env.loaded_modules.contains(&path) {
+        if env.get_loaded_modules().contains(&path) {
             return Ok((vec![], env));
         }
 
@@ -134,7 +134,7 @@ impl Evaluator {
     ) -> HashMap<String, Rc<ModuleExports>> {
         let mut result = HashMap::new();
         for key in ns_keys {
-            if let Some(exports) = env.namespaces.get(key) {
+            if let Some(exports) = env.get_namespaces().get(key) {
                 result.insert(key.clone(), exports.clone());
             }
         }

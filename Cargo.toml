@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "sasspile-macros"]
+members = ["."]
 
 [package]
 name = "sasspile"
@@ -39,7 +39,6 @@ exclude = [
 thiserror = "2"
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
-sasspile-macros = { path = "sasspile-macros" }
 
 # 颜色处理 —— HSL/RGB/Lab/OKLab 等色彩空间转换
 color = { version = "0.3", default-features = false, features = ["std"] }

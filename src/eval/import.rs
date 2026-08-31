@@ -36,7 +36,7 @@ impl Evaluator {
             }
             return Ok((nodes, env));
         }
-        let base = env.base_path.as_ref();
+        let base = env.get_base_path();
         let load_paths = env.get_load_paths().to_vec();
         // @import 文件歧义检测
         Self::check_resolve_ambiguity(base, url, &load_paths)?;

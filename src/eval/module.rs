@@ -42,24 +42,24 @@ impl Evaluator {
         let mut env = Env::default()
             .with_base_path(path.to_path_buf())
             .with_load_paths(caller_env.get_load_paths().to_vec())
-            .with_module_cache((*caller_env.module_cache).clone());
-        env.depth = caller_env.depth + 1;
-        env.plain_css = is_plain_css;
+            .with_module_cache((*caller_env.module_cache).clone())
+            .with_depth(caller_env.get_depth() + 1)
+            .with_plain_css(is_plain_css);
         let mut loaded = (*caller_env.loaded_modules).clone();
         loaded.insert(path.to_path_buf());
-        env.loaded_modules = Rc::new(loaded);
+        env = env.with_loaded_modules(loaded);
         // 注入 with() 配置变量到 pending_config
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
             if !matches!(val, Value::Null) {
                 let key = name.replace('-', "_");
-                env.pending_config.insert(key, val);
+                env = env.add_pending_config(key, val);
             }
         }
         // 验证配置变量在上游模块中必须带 !default 声明
-        if !env.pending_config.is_empty() {
+        if !env.get_pending_config().is_empty() {
             let default_vars = crate::eval::module_validation::collect_default_vars(&ast.nodes);
-            for (name, _) in env.pending_config.iter() {
+            for (name, _) in env.get_pending_config().iter() {
                 if !default_vars.iter().any(|d| d.replace('-', "_") == *name) {
                     return Err(SassError::Eval(
                         "This variable was not declared with !default in the @used module.".into(),
@@ -74,18 +74,19 @@ impl Evaluator {
             module_css
         };
         let exports = ModuleExports {
-            local_vars: final_env.local_vars.clone(),
-            local_mixins: final_env.local_mixins.clone(),
-            local_functions: final_env.local_functions.clone(),
-            forwarded_vars: final_env.forwarded_vars.clone(),
-            forwarded_mixins: final_env.forwarded_mixins.clone(),
-            forwarded_functions: final_env.forwarded_functions.clone(),
+            local_vars: final_env.get_local_vars().clone(),
+            local_mixins: final_env.get_local_mixins().clone(),
+            local_functions: final_env.get_local_functions().clone(),
+            forwarded_vars: final_env.get_forwarded_vars().clone(),
+            forwarded_mixins: final_env.get_forwarded_mixins().clone(),
+            forwarded_functions: final_env.get_forwarded_functions().clone(),
             css,
-            loaded_modules: final_env.loaded_modules.clone(),
-            extends: final_env.extends.clone(),
-            module_cache: final_env.module_cache.clone(),
+            loaded_modules: final_env.get_loaded_modules_rc(),
+            extends: final_env.get_extends_rc(),
+            module_cache: final_env.get_module_cache_rc(),
         };
-        let mut updated_cache = (*exports.module_cache).clone();
+        let exports_cache = exports.module_cache.clone();
+        let mut updated_cache = (*exports_cache).clone();
         updated_cache.insert(path.to_path_buf(), ModuleExports { css: vec![], module_cache: exports.module_cache.clone(), ..exports.clone() });
         let exports = ModuleExports {
             module_cache: Rc::new(updated_cache),
@@ -119,29 +120,21 @@ impl Evaluator {
             .collect::<Result<Vec<_>>>()?;
         let ast = crate::parse::Parser::parse(&tokens)?;
         // 继承当前环境的所有成员
-        let mut env = caller_env;
-        let saved_base_path = env.base_path.clone();
-        let saved_depth = env.depth;
-        env.base_path = Some(path.to_path_buf());
-        env.depth += 1;
-        env.plain_css = is_plain_css;
-        let (css, mut final_env) = Self::eval_nodes(&ast.nodes, env)?;
+        let saved_base_path = caller_env.get_base_path().cloned();
+        let saved_depth = caller_env.get_depth();
+        let env = caller_env
+            .with_base_path(path.to_path_buf())
+            .with_depth(saved_depth + 1)
+            .with_plain_css(is_plain_css);
+        let (css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         // 恢复调用者的 base_path 和 depth
-        final_env.base_path = saved_base_path;
-        final_env.depth = saved_depth;
+        let final_env = if let Some(bp) = saved_base_path {
+            final_env.with_base_path(bp)
+        } else {
+            final_env
+        }.with_depth(saved_depth);
         // @import 内联语义：forwarded 成员合并到 local
-        for (k, v) in final_env.forwarded_vars.iter().map(|(k, v)| (k.clone(), v.clone())) {
-            final_env.local_vars.entry(k).or_insert(v);
-        }
-        for (k, v) in final_env.forwarded_mixins.iter().map(|(k, v)| (k.clone(), v.clone())) {
-            final_env.local_mixins.entry(k).or_insert(v);
-        }
-        for (k, v) in final_env.forwarded_functions.iter().map(|(k, v)| (k.clone(), v.clone())) {
-            final_env.local_functions.entry(k).or_insert(v);
-        }
-        final_env.forwarded_vars.clear();
-        final_env.forwarded_mixins.clear();
-        final_env.forwarded_functions.clear();
+        let final_env = final_env.merge_forwarded_to_local();
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(css)]
         } else {
@@ -171,7 +164,7 @@ impl Evaluator {
                 }
         }
         // 将模块限定名映射到内建函数
-        let builtin_name = super::module_dispatch::module_builtin_name(name);
+        let builtin_name = super::builtin::dispatch::module_builtin_name(name);
         Self::call_builtin(builtin_name, pos_args, kw_args, env)
     }
 }
@@ -189,10 +182,10 @@ impl Evaluator {
         if url.starts_with("sass:") {
             return Ok((vec![], env.add_module(url.to_string())));
         }
-        let base = env.base_path.clone();
+        let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
         if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
-            let already_loaded = env.loaded_modules.contains(&path);
+            let already_loaded = env.get_loaded_modules().contains(&path);
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
             }
@@ -254,7 +247,7 @@ impl Evaluator {
         if url.starts_with("sass:") && !config.is_empty() {
             return Err(SassError::Eval("Built-in modules can't be configured.".into()));
         }
-        let base = env.base_path.clone();
+        let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
         if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
             let config_pairs: Vec<(String, Value)> = {
@@ -270,7 +263,7 @@ impl Evaluator {
                     k.replace('-', "_")
                 };
                 let mut pairs: Vec<(String, Value)> = env
-                    .pending_config
+                    .get_pending_config()
                     .iter()
                     .map(|(k, v)| (strip_prefix(k), v.clone()))
                     .collect();
@@ -291,7 +284,7 @@ impl Evaluator {
                 }
                 pairs
             };
-            let already_loaded = env.loaded_modules.contains(&path);
+            let already_loaded = env.get_loaded_modules().contains(&path);
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
             }

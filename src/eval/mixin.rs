@@ -48,12 +48,12 @@ impl Evaluator {
         // 合并 mixin 定义时捕获的命名空间
         let mut mixin_env = mixin_env;
         for (ns, exports) in &mixin.captured_namespaces {
-            if !mixin_env.namespaces.contains_key(ns) {
-                mixin_env.namespaces.insert(ns.clone(), exports.clone());
+            if !mixin_env.get_namespace(ns).is_some() {
+                mixin_env = mixin_env.add_namespace(ns.clone(), (**exports).clone());
             }
             // 将命名空间模块中的函数注入到 mixin 环境，使 mixin 体可直接调用
             for (fname, fdef) in exports.all_functions() {
-                if !mixin_env.local_functions.contains_key(fname) {
+                if mixin_env.get_function(fname).is_none() {
                     mixin_env = mixin_env.define_local_function(fname.clone(), fdef.clone());
                 }
             }
@@ -132,7 +132,7 @@ impl Evaluator {
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // 在命名空间模块中查找同名函数
-        for (_, exports) in env.namespaces.iter() {
+        for (_, exports) in env.get_namespaces().iter() {
             if let Some(func) = exports.all_functions().find(|(k, _)| *k == name).map(|(_, f)| f) {
                 return Self::call_user_function(func, pos_args, kw_args, env);
             }
@@ -160,8 +160,8 @@ impl Evaluator {
         let mut func_env = env.clone().incr_depth();
         // 合并函数定义时捕获的命名空间
         for (ns, exports) in &func.captured_namespaces {
-            if !func_env.namespaces.contains_key(ns) {
-                func_env.namespaces.insert(ns.clone(), exports.clone());
+            if func_env.get_namespace(ns).is_none() {
+                func_env = func_env.add_namespace(ns.clone(), (**exports).clone());
             }
         }
         let mut pos_idx = 0;

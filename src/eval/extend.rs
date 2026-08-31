@@ -21,13 +21,13 @@ impl Evaluator {
         }
     }
 
-    pub(crate) fn apply_extends(nodes: &mut [CssNode], extends: &[(String, String, bool)]) {
+    pub(crate) fn apply_extends(nodes: Vec<CssNode>, extends: &[(String, String, bool)]) -> Vec<CssNode> {
         let span = crate::__tracing::info_span!("apply_extends", n_extends = extends.len());
         let _enter = span.enter();
-        for node in nodes.iter_mut() {
+        nodes.into_iter().map(|node| {
             match node {
                 CssNode::Rule {
-                    selector, children, ..
+                    mut selector, children, declarations
                 } => {
                     crate::__tracing::debug!(
                         target: "sasspile::extend",
@@ -60,7 +60,7 @@ impl Evaluator {
                             }
                             if target_trimmed.starts_with('%') {
                                 // 占位符：直接替换为目标
-                                *selector = selector.replace(target_trimmed, extender);
+                                selector = selector.replace(target_trimmed, extender);
                                 crate::__tracing::debug!(
                                     target: "sasspile::extend",
                                     new_selector = %selector,
@@ -69,41 +69,41 @@ impl Evaluator {
                             } else {
                                 // 普通选择器：添加继承者作为额外选择器
                                 let new_sel = selector.replace(target_trimmed, extender);
-                                if !new_sel.is_empty() && new_sel != *selector
+                                if !new_sel.is_empty() && new_sel != selector
                                     && !selector.contains(&new_sel) {
-                                        selector.push_str(", ");
-                                        selector.push_str(&new_sel);
-                                        crate::__tracing::debug!(
-                                            target: "sasspile::extend",
-                                            final_selector = %selector,
-                                            "extender appended"
-                                        );
-                                    }
+                                    selector.push_str(", ");
+                                    selector.push_str(&new_sel);
+                                    crate::__tracing::debug!(
+                                        target: "sasspile::extend",
+                                        final_selector = %selector,
+                                        "extender appended"
+                                    );
+                                }
                             }
                         }
                     }
                     // 递归处理子规则
-                    Self::apply_extends(children, extends);
+                    let children = Self::apply_extends(children, extends);
                     // 移除未被继承的占位符选择器部分
                     let parts: Vec<&str> = selector
                         .split(',')
                         .filter(|s| !s.trim().starts_with('%'))
                         .collect();
-                    *selector = parts.join(",").trim().to_string();
+                    selector = parts.join(",").trim().to_string();
+                    CssNode::Rule { selector, declarations, children }
                 }
                 CssNode::AtRule {
-                    has_body: true,
-                    children,
-                    ..
+                    name, params, children, has_body: true
                 } => {
-                    Self::apply_extends(children, extends);
+                    let children = Self::apply_extends(children, extends);
+                    CssNode::AtRule { name, params, children, has_body: true }
                 }
                 CssNode::AtRoot(kids) => {
-                    Self::apply_extends(kids, extends);
+                    CssNode::AtRoot(Self::apply_extends(kids, extends))
                 }
-                _ => {}
+                other => other,
             }
-        }
+        }).collect()
     }
 
     /// 检查未匹配的 extend target——非 optional 的未匹配 target 报错。
