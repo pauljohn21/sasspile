@@ -535,6 +535,10 @@ pub(crate) fn eval_variable(
         if let Some(v) = Self::try_simplify_same_unit_arith(inner) {
             return v;
         }
+        // 尝试简化嵌套 min()/max()：min(1px, 2px) → 2px, max(1px, 2px) → 2px
+        if let Some(v) = Self::try_simplify_min_max(inner) {
+            return v;
+        }
         // 常量替换：在表达式中将 pi/e 替换为数字值（不简化运算）
         let substituted = Self::replace_calc_constants(inner);
         if substituted != inner {
@@ -568,6 +572,44 @@ pub(crate) fn eval_variable(
             {
                 let result = v.clamp(*mn, *mx);
                 Some(Value::Number(result, mu.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    /// 尝试简化嵌套 min()/max()：min(1px, 2px) → 2px, max(1px, 2px) → 2px。
+    /// 只在所有参数都是同单位纯数字时简化。
+    fn try_simplify_min_max(s: &str) -> Option<Value> {
+        let s = s.trim();
+        let (func, inner) = if s.starts_with("min(") && s.ends_with(')') {
+            ("min", &s[4..s.len()-1])
+        } else if s.starts_with("max(") && s.ends_with(')') {
+            ("max", &s[4..s.len()-1])
+        } else {
+            return None;
+        };
+        let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+        if parts.len() < 2 {
+            return None;
+        }
+        let nums: Vec<Value> = parts.iter()
+            .map(|p| Self::parse_simple_number(p))
+            .collect::<Option<Vec<_>>>()?;
+        let all_same_unit = nums.windows(2).all(|w| match (&w[0], &w[1]) {
+            (Value::Number(_, u1), Value::Number(_, u2)) => u1 == u2,
+            _ => false,
+        });
+        if !all_same_unit {
+            return None;
+        }
+        match nums.first() {
+            Some(Value::Number(_, unit)) => {
+                let init = if func == "min" { f64::INFINITY } else { f64::NEG_INFINITY };
+                let result = nums.iter().try_fold(init, |acc, v| match v {
+                    Value::Number(n, _) => Some(if func == "min" { acc.min(*n) } else { acc.max(*n) }),
+                    _ => None,
+                })?;
+                Some(Value::Number(result, unit.clone()))
             }
             _ => None,
         }
