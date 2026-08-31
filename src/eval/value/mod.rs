@@ -525,6 +525,8 @@ pub(crate) fn eval_variable(
             "e" => return Value::Number(std::f64::consts::E, None),
             _ => inner,
         };
+        // 去除多余括号：((1px)) → (1px) → 1px
+        let inner = Self::strip_parens(inner);
         // 尝试解析为纯数字 + 可选单位
         if let Some(v) = Self::parse_simple_number(inner) {
             return v;
@@ -532,6 +534,19 @@ pub(crate) fn eval_variable(
         // 尝试解析同单位加减法：1px + 2px, 1px - 2px
         if let Some(v) = Self::try_simplify_same_unit_arith(inner) {
             return v;
+        }
+        // 常量替换：在表达式中将 pi/e 替换为数字值（不简化运算）
+        let substituted = Self::replace_calc_constants(inner);
+        if substituted != inner {
+            // 替换后重新尝试简化
+            if let Some(v) = Self::parse_simple_number(&substituted) {
+                return v;
+            }
+            if let Some(v) = Self::try_simplify_same_unit_arith(&substituted) {
+                return v;
+            }
+            // 无法完全简化——保留 calc() 但用替换后的值
+            return Value::Calc(format!("calc({substituted})"));
         }
         Value::Calc(s.to_string())
     }
@@ -617,6 +632,74 @@ pub(crate) fn eval_variable(
 
     /// 尝试将字符串解析为纯数字（含单位）。
     /// `1px` → `Value::Number(1, "px")`，`42` → `Value::Number(42, None)`
+    /// 去除字符串外层的多余括号：((1px)) → 1px，但 (var(--c)) 保留。
+    /// 只在括号内内容是纯数字/常量时去除括号。
+    fn strip_parens(s: &str) -> &str {
+        let s = s.trim();
+        // 去除多余空格后，如果以 ( 开头、以 ) 结尾
+        while s.starts_with('(') && s.ends_with(')') {
+            let inner = &s[1..s.len()-1];
+            // 检查括号是否匹配——不能中间断开
+            let mut depth = 0i32;
+            let mut ok = true;
+            for (i, c) in inner.char_indices() {
+                match c {
+                    '(' | '[' => depth += 1,
+                    ')' | ']' => {
+                        depth -= 1;
+                        if depth < 0 { ok = false; break; }
+                    }
+                    _ => {}
+                }
+                let _ = i;
+            }
+            if !ok || depth != 0 { break; }
+            // 检查去除后的内容是否为简单值（数字/常量/var/env）
+            let inner_trimmed = inner.trim();
+            // 如果是纯数字或常量，去除括号
+            if Self::parse_simple_number(inner_trimmed).is_some() {
+                return inner_trimmed;
+            }
+            // 如果是 var(...) 或 env(...)，保留括号
+            break;
+        }
+        s
+    }
+
+    /// 在 calc 表达式中替换独立常量 pi/e 为数字值。
+    /// 只替换作为独立标识符出现的 pi/e，不替换子串（如 epix 中的 pi）。
+    fn replace_calc_constants(s: &str) -> String {
+        let mut result = s.to_string();
+        // 用空格/括号/运算符边界分隔，替换独立 pi
+        for (word, val) in [("pi", "3.1415926536"), ("e", "2.7182818285")] {
+            let mut idx = 0;
+            loop {
+                if let Some(pos) = result[idx..].find(word) {
+                    let pos = idx + pos;
+                    let before = pos.checked_sub(1).and_then(|i| result[i..i+1].chars().next());
+                    let after = result.get(pos + word.len()..pos + word.len() + 1).and_then(|s| s.chars().next());
+                    let is_standalone_before = match before {
+                        None | Some(' ') | Some('(') | Some('[') => true,
+                        _ => false,
+                    };
+                    let is_standalone_after = match after {
+                        None | Some(' ') | Some(')') | Some(']') | Some('+') | Some('-') | Some('*') | Some('/') => true,
+                        _ => false,
+                    };
+                    if is_standalone_before && is_standalone_after {
+                        result = format!("{}{val}{}", &result[..pos], &result[pos + word.len()..]);
+                        idx = pos + val.len();
+                    } else {
+                        idx = pos + word.len();
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        result
+    }
+
     fn parse_simple_number(s: &str) -> Option<Value> {
         let s = s.trim();
         // CSS 常量
