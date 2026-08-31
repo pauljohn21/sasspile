@@ -81,7 +81,118 @@ mod tests { ... }
 
 理解实际生命周期关系，不要随意加 `'static`。
 
-### 7. 其他禁止事项
+### 7. 函数式 Rust 强制规则（第一公民）
+
+函数式风格是 sasspile 的核心设计哲学。以下规则**不可违反**。
+
+#### 7.1 所有权：move 优先，禁止 clone 满天飞
+
+| 禁止 | 替代 | 说明 |
+|------|------|------|
+| `env.clone()` | `env` move 进函数，返回 `(T, Env)` | 零拷贝传递 |
+| `&mut Env` 参数 | `Env`（move）→ `self -> Self` 链式 | 不可变借用 + 返回新值 |
+| `Rc<RefCell<T>>` | 按值传递 + 返回新值 | 避免 interior mutability |
+| `&self` + clone 返回 | `self` 消费 + `into_xxx()` | 类型状态机模式 |
+
+```rust
+// ❌ 禁止：clone + 修改
+fn eval_nodes(nodes: &[Node], env: &Env) -> Vec<CssNode> {
+    let mut env = env.clone();
+    env.bind("x", Value::Number(1.0, None));
+    // ...
+}
+
+// ✅ 正确：move + 返回新状态
+fn eval_nodes(nodes: &[Node], env: Env) -> (Vec<CssNode>, Env) {
+    let env = env.bind("x", Value::Number(1.0, None));
+    // ...
+}
+```
+
+#### 7.2 迭代器：禁止显式 for 循环处理集合变换
+
+| 禁止 | 替代 | 场景 |
+|------|------|------|
+| `for x in vec { result.push(f(x)) }` | `vec.into_iter().map(f).collect()` | map 变换 |
+| `for x in &vec { if pred(x) { ... } }` | `vec.into_iter().filter(pred)...` | filter 筛选 |
+| `for x in vec { match ... { Ok(v) => acc.push(v), Err(e) => return e } }` | `vec.into_iter().try_fold(acc, ...)` | 错误传播累积 |
+| `for x in vec { if pred(x) { left.push(x) } else { right.push(x) } }` | `vec.into_iter().partition(pred)` | 分流 |
+| 可变 `Vec` + push + extend | `flat_map` / `flatten` | 展平嵌套 |
+| `for (i, x) in vec.iter().enumerate()` | `vec.into_iter().enumerate()` | 带索引 |
+
+```rust
+// ❌ 禁止：命令式可变累积
+let mut result = Vec::new();
+for node in nodes {
+    if node.is_css() {
+        result.push(transform(node));
+    }
+}
+
+// ✅ 正确：函数式迭代器链
+nodes.into_iter()
+    .filter(|n| n.is_css())
+    .map(transform)
+    .collect::<Vec<_>>()
+
+// ✅ 更好：带错误传播
+nodes.into_iter()
+    .try_fold(Vec::new(), |mut acc, node| {
+        acc.push(transform(&node)?);
+        Ok::<_, SassError>(acc)
+    })
+```
+
+#### 7.3 模式匹配：禁止 if-else 链处理枚举
+
+```rust
+// ❌ 禁止：if-else 链
+if token == "{" { ... }
+else if token == "}" { ... }
+else if token == ";" { ... }
+else { ... }
+
+// ✅ 正确：match
+match token {
+    "{" => ...,
+    "}" => ...,
+    ";" => ...,
+    _ => ...,
+}
+```
+
+#### 7.4 副作用：禁止 &mut 参数
+
+| 禁止 | 替代 | 说明 |
+|------|------|------|
+| `fn f(buf: &mut String, x: &str)` | `fn f(x: &str) -> String` | 返回新值 |
+| `fn f(items: &mut Vec<T>, n: usize)` | `fn f(items: Vec<T>, n: usize) -> Vec<T>` | 消费 + 返回 |
+| `fn f(env: &mut Env, node: &Node)` | `fn f(env: Env, node: &Node) -> (Vec<CssNode>, Env)` | move 语义 |
+
+#### 7.5 函数签名的强制模式
+
+| 场景 | 签名模板 | 说明 |
+|------|----------|------|
+| 数据变换 | `fn transform(input: Input) -> Output` | 消费输入，返回新值 |
+| 带状态变换 | `fn step(state: State, input: Input) -> (Output, State)` | move 语义，返回新状态 |
+| 管线阶段 | `fn next_stage(self) -> Result<NextStage>` | `self` 消费，类型状态机 |
+| 链式构建 | `fn with_x(mut self, x: X) -> Self` | builder 模式 |
+| 只读查询 | `fn query(&self, key: &str) -> Option<&Value>` | 纯函数，不可变借用 |
+
+#### 7.6 错误处理：禁止 match Err 分支
+
+```rust
+// ❌ 禁止：显式 match Err
+let result = match parse(tokens) {
+    Ok(ast) => ast,
+    Err(e) => return Err(e),
+};
+
+// ✅ 正确：? 传播
+let ast = parse(tokens)?;
+```
+
+### 8. 其他禁止事项
 
 - **禁止跳过测试直接写实现** — 修改核心逻辑前，先添加对应测试用例
 - **禁止在未验证的情况下宣称修复成功** — 修复后必须运行测试确认
@@ -428,6 +539,11 @@ sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影�
 - 新增代码与现有枚举/trait 定义矛盾
 - 生成代码超过目标文件行数限制的 **80%**
 - AI 重复生成相同或相似的代码片段
+- 连续 **2 次**在同一个函数中添加 `clone()`
+- 把 `self -> Self` 改回 `&mut self`
+- 用 `for + push` 替换已有的 `map/collect`
+- 在纯函数中引入 `&mut` 参数
+- 用 `if-else` 链替换已有的 `match`
 
 ## 📝 编码规范速查
 
@@ -503,6 +619,7 @@ codegraph query <search>       # 搜索符号
 
 - **代码导航**：CodeGraph（动态查询，优先）/ `docs/CODE_INDEX.md`（静态参考）
 - **综合开发技能**：根目录 `skill.md`（编译管线 + 内建函数 + CSS 序列化 + 调试追踪）
+- **函数式 Rust**：`.claude/skills/functional-rust/SKILL.md`（优先级表 + 正反对比 + 反模式检测）
 - **调试技能**：`.claude/skills/tracing-debug/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
 - **源文件结构**：见 `docs/CODE_INDEX.md`
@@ -563,6 +680,13 @@ cargo tree                               # 依赖树
 - [ ] 无 `todo!()`/`unimplemented!()` 不标注 TODO
 - [ ] 公开 API 有 `///` 文档注释
 - [ ] 单文件 ≤ 500 行
+- [ ] 集合变换用 `map/filter/collect` 而非 `for + push`
+- [ ] 枚举分派用 `match` 而非 `if-else` 链
+- [ ] 错误传播用 `?` 而非 `match ... Err(e) => return`
+- [ ] 状态变更返回新值（`self -> Self`）而非 `&mut self`
+- [ ] 管线阶段消费 `self`（类型状态机）而非 `&self` + clone
+- [ ] 累积操作用 `try_fold` / `fold` 而非可变 `Vec` + push
+- [ ] 分流用 `partition` 而非两个 `Vec` + for + if
 - [ ] 调试遵循 4 步协议（如果是 bug 修复）
 - [ ] CodeGraph 用于代码查询
 - [ ] Commit 等用户确认后再推送
