@@ -66,7 +66,7 @@ pub(crate) fn validate_single_number(args: &[Value]) -> Result<()> {
         )));
     }
     match &args[0] {
-        Value::Number(..) => Ok(()),
+        Value::Number(..) | Value::Calc(..) => Ok(()),
         other => Err(SassError::Eval(format!(
             "$number: {} is not a number.", other
         ))),

@@ -22,6 +22,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, u) => Ok(Some(Value::Number(n.abs(), u.clone()))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("abs({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -29,6 +33,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, u) => Ok(Some(Value::Number(n.ceil(), u.clone()))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("ceil({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -36,6 +44,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, u) => Ok(Some(Value::Number(n.floor(), u.clone()))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("floor({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -43,6 +55,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, u) => Ok(Some(Value::Number(n.round(), u.clone()))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("round({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -169,6 +185,26 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     args.len()
                 )));
             }
+            // Calc 参数透传——返回 pow(arg1, arg2) 字符串
+            let a_is_calc = matches!(&args[0], Value::Calc(..));
+            let b_is_calc = matches!(&args[1], Value::Calc(..));
+            if a_is_calc || b_is_calc {
+                let a_str = match &args[0] {
+                    Value::Number(n, u) => format!("{n}{}", u.as_deref().unwrap_or("")),
+                    Value::Calc(c) => c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string(),
+                    other => return Err(SassError::Eval(format!(
+                        "$base: {} is not a number.", other
+                    ))),
+                };
+                let b_str = match &args[1] {
+                    Value::Number(n, u) => format!("{n}{}", u.as_deref().unwrap_or("")),
+                    Value::Calc(c) => c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string(),
+                    other => return Err(SassError::Eval(format!(
+                        "$exponent: {} is not a number.", other
+                    ))),
+                };
+                return Ok(Some(Value::String(format!("pow({a_str}, {b_str})"), false)));
+            }
             let (a, ua) = match &args[0] {
                 Value::Number(n, u) => (*n, u.clone()),
                 other => return Err(SassError::Eval(format!(
@@ -201,6 +237,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, _) => Ok(Some(Value::Number(n.sqrt(), None))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("sqrt({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -208,6 +248,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, _) => Ok(Some(Value::Number(n.sin(), None))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("sin({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -215,6 +259,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, _) => Ok(Some(Value::Number(n.cos(), None))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("cos({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -222,6 +270,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, _) => Ok(Some(Value::Number(n.tan(), None))),
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("tan({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -237,6 +289,26 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     "Only 2 arguments allowed, but {} were passed.",
                     args.len()
                 )));
+            }
+            // Calc 参数透传
+            let y_is_calc = matches!(&args[0], Value::Calc(..));
+            let x_is_calc = matches!(&args[1], Value::Calc(..));
+            if y_is_calc || x_is_calc {
+                let y_str = match &args[0] {
+                    Value::Number(n, u) => format!("{n}{}", u.as_deref().unwrap_or("")),
+                    Value::Calc(c) => c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string(),
+                    other => return Err(SassError::Eval(format!(
+                        "$y: {} is not a number.", other
+                    ))),
+                };
+                let x_str = match &args[1] {
+                    Value::Number(n, u) => format!("{n}{}", u.as_deref().unwrap_or("")),
+                    Value::Calc(c) => c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string(),
+                    other => return Err(SassError::Eval(format!(
+                        "$x: {} is not a number.", other
+                    ))),
+                };
+                return Ok(Some(Value::String(format!("atan2({y_str}, {x_str})"), false)));
             }
             let (y, uy) = match &args[0] {
                 Value::Number(n, u) => (*n, u.clone()),
@@ -276,6 +348,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     let result = n.asin().to_degrees();
                     Ok(Some(Value::Number(result, Some("deg".to_string()))))
                 }
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("asin({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
@@ -285,6 +361,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 Value::Number(n, _) => {
                     let result = n.acos().to_degrees();
                     Ok(Some(Value::Number(result, Some("deg".to_string()))))
+                }
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("acos({inner})"), false)))
                 }
                 _ => unreachable!(),
             }
@@ -296,12 +376,27 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     let result = n.atan().to_degrees();
                     Ok(Some(Value::Number(result, Some("deg".to_string()))))
                 }
+                Value::Calc(c) => {
+                    let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+                    Ok(Some(Value::String(format!("atan({inner})"), false)))
+                }
                 _ => unreachable!(),
             }
         }
         "hypot" => {
             if args.is_empty() {
                 return Err(SassError::Eval("Missing argument $numbers.".into()));
+            }
+            // Calc 参数透传
+            let any_calc = args.iter().any(|a| matches!(a, Value::Calc(..)));
+            if any_calc {
+                let strs: Result<Vec<String>> = args.iter().map(|a| match a {
+                    Value::Number(n, u) => Ok(format!("{n}{}", u.as_deref().unwrap_or(""))),
+                    Value::Calc(c) => Ok(c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string()),
+                    other => Err(SassError::Eval(format!("{} is not a number.", other))),
+                }).collect();
+                let strs = strs?;
+                return Ok(Some(Value::String(format!("hypot({})", strs.join(", ")), false)));
             }
             // 验证所有参数都是数字，并收集值和单位
             let mut nums: Vec<(f64, Option<String>)> = Vec::new();
@@ -336,6 +431,29 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     "Only 2 arguments allowed, but {} were passed.",
                     args.len()
                 )));
+            }
+            // Calc 参数透传
+            let n_is_calc = matches!(&args[0], Value::Calc(..));
+            let b_is_calc = args.len() == 2 && matches!(&args[1], Value::Calc(..));
+            if n_is_calc || b_is_calc {
+                let n_str = match &args[0] {
+                    Value::Number(n, u) => format!("{n}{}", u.as_deref().unwrap_or("")),
+                    Value::Calc(c) => c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string(),
+                    other => return Err(SassError::Eval(format!(
+                        "$number: {} is not a number.", other
+                    ))),
+                };
+                if args.len() == 2 && !matches!(&args[1], Value::Null) {
+                    let b_str = match &args[1] {
+                        Value::Number(n, u) => format!("{n}{}", u.as_deref().unwrap_or("")),
+                        Value::Calc(c) => c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string(),
+                        other => return Err(SassError::Eval(format!(
+                            "$base: {} is not a number.", other
+                        ))),
+                    };
+                    return Ok(Some(Value::String(format!("log({n_str}, {b_str})"), false)));
+                }
+                return Ok(Some(Value::String(format!("log({n_str})"), false)));
             }
             let n = match &args[0] {
                 Value::Number(n, u) => {

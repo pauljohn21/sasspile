@@ -34,6 +34,17 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
         (Value::String(a, qa), Value::Calc(c)) => Ok(Value::String(format!("{a}{c}"), qa)),
         (Value::Calc(c), Value::String(b, qb)) => Ok(Value::String(format!("{c}{b}"), qb)),
         (Value::Calc(a), Value::Calc(b)) => Ok(Value::String(format!("{a}{b}"), false)),
+        // Number + Calc / Calc + Number — 作为 calc 表达式拼接
+        (Value::Number(n, u), Value::Calc(c)) => {
+            let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
+            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({n_str} + {c_inner})")))
+        }
+        (Value::Calc(c), Value::Number(n, u)) => {
+            let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
+            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({c_inner} + {n_str})")))
+        }
         // String + Bool / Bool + String
         (Value::String(a, qa), Value::Bool(b)) => Ok(Value::String(format!("{a}{b}"), qa)),
         (Value::Bool(a), Value::String(b, qb)) => Ok(Value::String(format!("{a}{b}"), qb)),
@@ -83,6 +94,17 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             format!("#{:02x}{:02x}{:02x}-{b}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
             qb,
         )),
+        // Number - Calc / Calc - Number — 作为 calc 表达式
+        (Value::Number(n, u), Value::Calc(c)) => {
+            let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
+            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({n_str} - {c_inner})")))
+        }
+        (Value::Calc(c), Value::Number(n, u)) => {
+            let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
+            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({c_inner} - {n_str})")))
+        }
         _ => Err(SassError::Eval("Unsupported - operation".into())),
     }
 }

@@ -245,8 +245,8 @@ pub(crate) fn eval_variable(
             | Value::Color(..)
             | Value::Bool(..)
             | Value::Null
-            | Value::Calc(..)
             | Value::MixinRef(..) => Ok(value.clone()),
+            Value::Calc(s) => Ok(Self::simplify_calc(s)),
             Value::Paren(inner) => Self::eval_value(inner, env),
             Value::String(s, quoted) => {
                 // 处理插值在字符串中
@@ -499,5 +499,54 @@ pub(crate) fn eval_variable(
             );
         }
         result
+    }
+
+    /// 简化 calc() 表达式——纯数字时去掉 calc() 包装。
+    ///
+    /// `calc(1px)` → `Value::Number(1, "px")`
+    /// `calc(1px + 2px)` → `Value::Calc("calc(1px + 2px)")`（保留）
+    /// `calc(var(--c))` → `Value::Calc("calc(var(--c))")`（保留）
+    fn simplify_calc(s: &str) -> Value {
+        // 尝试提取 calc(内容) 的内部表达式
+        let inner = s.strip_prefix("calc(").and_then(|s| s.strip_suffix(")"));
+        let inner = match inner {
+            Some(i) => i.trim(),
+            None => return Value::Calc(s.to_string()),
+        };
+        // 尝试解析为纯数字 + 可选单位
+        if let Some(v) = Self::parse_simple_number(inner) {
+            return v;
+        }
+        Value::Calc(s.to_string())
+    }
+
+    /// 尝试将字符串解析为纯数字（含单位）。
+    /// `1px` → `Value::Number(1, "px")`，`42` → `Value::Number(42, None)`
+    fn parse_simple_number(s: &str) -> Option<Value> {
+        let s = s.trim();
+        // 去掉前导 +
+        let s = s.strip_prefix('+').unwrap_or(s);
+        // 找到数字部分的结尾
+        let split = s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-');
+        match split {
+            None => {
+                // 纯数字
+                s.parse::<f64>().ok().map(|n| Value::Number(n, None))
+            }
+            Some(idx) if idx > 0 => {
+                let (num_str, unit) = s.split_at(idx);
+                let n = num_str.parse::<f64>().ok()?;
+                let unit = unit.trim();
+                // 单位必须是纯字母标识符（不含空格、运算符等）
+                if unit.is_empty() {
+                    return Some(Value::Number(n, None));
+                }
+                if !unit.chars().all(|c| c.is_ascii_alphabetic()) {
+                    return None;
+                }
+                Some(Value::Number(n, Some(unit.to_string())))
+            }
+            _ => None,
+        }
     }
 }
