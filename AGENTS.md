@@ -337,7 +337,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 121/121
-**sass-spec 基线**：2828/5362 = 53%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录）
+**sass-spec 基线**：2902/5362 = 54%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录，chain-reaction 链式重构后 +74）
 **@directives 子目录**：forward 76%，import 32 FAIL（conflict 5/5 修复，pending_config 架构生效）
 **ep_full**：121/121 = 100%（file_resolver.rs 拆分 + module_helpers 统一后无回归）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
@@ -388,6 +388,7 @@ hrx-auditor = { path = "../scss-rust" }
 - **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
 - **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
 - **directives-100**（进行中）：文件歧义检测增强（partial/extension/index/import-only 四种冲突）+ module_helpers 统一 + .sass 测试修复 — conflict 5/5 修复, import 37→32 FAIL
+- **chain-reaction**（2026-08-31 归档）：全面链式反应重构 — eval_nodes/eval_for/eval_each 用 try_fold，hoist_css_imports 用 partition，eval_rule 用 RuleBuilder+fold，flatten_nodes 用 flat_map+partition，merge_at_rules 用 fold，Evaluated::serialize 改为 self 消费 — 202/202 全通过，sass-spec 2828→2902 (+74)
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 

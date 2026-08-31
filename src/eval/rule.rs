@@ -2,6 +2,101 @@ use super::*;
 use crate::css::node::CssNode;
 use crate::error::Result;
 
+/// 规则构建器——封装 eval_rule 的 3 个累积器状态。
+///
+/// `result` 是最终输出节点列表，`current_decls` 是当前累积的声明，
+/// `root_nodes` 是 @at-root 提升的节点。
+struct RuleBuilder {
+    selector: String,
+    result: Vec<CssNode>,
+    current_decls: Vec<CssNode>,
+    root_nodes: Vec<CssNode>,
+}
+
+impl RuleBuilder {
+    fn new(selector: String) -> Self {
+        Self {
+            selector,
+            result: Vec::new(),
+            current_decls: Vec::new(),
+            root_nodes: Vec::new(),
+        }
+    }
+
+    /// flush 当前累积的声明为一条 Rule 节点。
+    fn flush_decls(&mut self) {
+        if !self.current_decls.is_empty() {
+            let decls = std::mem::take(&mut self.current_decls);
+            self.result.push(CssNode::Rule {
+                selector: self.selector.clone(),
+                declarations: decls,
+                children: vec![],
+            });
+        }
+    }
+
+    /// push 一个 CSS 节点到构建器。
+    fn push(mut self, node: CssNode) -> Self {
+        match node {
+            CssNode::Declaration { .. } => {
+                self.current_decls.push(node);
+            }
+            CssNode::AtRoot(nodes) => {
+                self.root_nodes.extend(nodes);
+            }
+            CssNode::Rule { selector: child_sel, declarations: child_decls, children: child_kids } => {
+                self.flush_decls();
+                let combined = Evaluator::combine_selectors(&self.selector, &child_sel);
+                if !child_decls.is_empty() {
+                    self.result.push(CssNode::Rule { selector: combined.clone(), declarations: child_decls, children: vec![] });
+                }
+                for kid in child_kids {
+                    if let CssNode::Rule { selector: kid_sel, declarations: kid_decls, .. } = kid {
+                        let kid_combined = Evaluator::combine_selectors(&combined, &kid_sel);
+                        if !kid_decls.is_empty() {
+                            self.result.push(CssNode::Rule { selector: kid_combined, declarations: kid_decls, children: vec![] });
+                        }
+                    } else {
+                        self.result.push(kid);
+                    }
+                }
+            }
+            other => {
+                self.flush_decls();
+                let other = match other {
+                    CssNode::AtRule { name, params, children, has_body: true } => {
+                        let n = name.clone();
+                        let p = params.clone();
+                        let ch = if n == "keyframes" || n == "-webkit-keyframes" || n == "-moz-keyframes" {
+                            children
+                        } else {
+                            Evaluator::nest_rule_in_children(&self.selector, children)
+                        };
+                        CssNode::AtRule { name: n, params: p, children: ch, has_body: true }
+                    }
+                    CssNode::AtRule { name, params, children: _, has_body: false } => {
+                        CssNode::Rule { selector: self.selector.clone(), declarations: vec![], children: vec![CssNode::AtRule { name, params, children: vec![], has_body: false }] }
+                    }
+                    other => other,
+                };
+                self.result.push(other);
+            }
+        }
+        self
+    }
+
+    /// 消费构建器，返回最终节点列表。
+    fn build(mut self) -> Vec<CssNode> {
+        self.flush_decls();
+        if self.result.is_empty() && self.root_nodes.is_empty() {
+            self.result.push(CssNode::Rule { selector: self.selector, declarations: vec![], children: vec![] });
+        } else {
+            self.result.extend(self.root_nodes);
+        }
+        self.result
+    }
+}
+
 impl Evaluator {
     /// 求值规则——按顺序穿插输出声明组和嵌套规则。
     pub(crate) fn eval_rule(
@@ -30,17 +125,18 @@ impl Evaluator {
 
         // plain CSS 模式——不合并选择器，保留嵌套结构
         if new_env.is_plain_css() {
-            let mut declarations = Vec::new();
-            let mut children = Vec::new();
-            let mut root_nodes = Vec::new();
-            for node in css {
-                match &node {
-                    CssNode::Declaration { .. } => declarations.push(node.clone()),
-                    CssNode::AtRoot(nodes) => root_nodes.extend(nodes.clone()),
-                    CssNode::AtRule { name, .. } if matches!(name.as_str(), "media" | "supports" | "container") => root_nodes.push(node.clone()),
-                    other => children.push(other.clone()),
-                }
-            }
+            let (declarations, children, root_nodes) = css.into_iter().fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut decls, mut kids, mut root), node| {
+                    match node {
+                        decl @ CssNode::Declaration { .. } => decls.push(decl),
+                        CssNode::AtRoot(nodes) => root.extend(nodes),
+                        CssNode::AtRule { name, params, children, has_body } if matches!(name.as_str(), "media" | "supports" | "container") => root.push(CssNode::AtRule { name, params, children, has_body }),
+                        other => kids.push(other),
+                    }
+                    (decls, kids, root)
+                },
+            );
             let mut result = Vec::new();
             if !declarations.is_empty() || !children.is_empty() {
                 result.push(CssNode::Rule { selector: selector.clone(), declarations, children });
@@ -49,71 +145,10 @@ impl Evaluator {
             return Ok((result, new_env));
         }
 
-        let mut result = Vec::new();
-        let mut current_decls = Vec::new();
-        let mut root_nodes = Vec::new();
-
-        for node in css {
-            match node {
-                CssNode::Declaration { .. } => current_decls.push(node),
-                CssNode::AtRoot(nodes) => root_nodes.extend(nodes),
-                CssNode::Rule { selector: child_sel, declarations: child_decls, children: child_kids } => {
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule { selector: selector.clone(), declarations: std::mem::take(&mut current_decls), children: vec![] });
-                    }
-                    let combined = Self::combine_selectors(&selector, &child_sel);
-                    if !child_decls.is_empty() {
-                        result.push(CssNode::Rule { selector: combined.clone(), declarations: child_decls, children: vec![] });
-                    }
-                    for kid in child_kids {
-                        if let CssNode::Rule { selector: kid_sel, declarations: kid_decls, .. } = kid {
-                            let kid_combined = Self::combine_selectors(&combined, &kid_sel);
-                            if !kid_decls.is_empty() {
-                                result.push(CssNode::Rule { selector: kid_combined, declarations: kid_decls, children: vec![] });
-                            }
-                        } else {
-                            result.push(kid);
-                        }
-                    }
-                }
-                other => {
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule { selector: selector.clone(), declarations: std::mem::take(&mut current_decls), children: vec![] });
-                    }
-                    // AtRule 嵌套处理：将父选择器传播到 AtRule 内的 Rule 子节点
-                    let other = match other {
-                        CssNode::AtRule { name, params, children, has_body: true } => {
-                            let n = name.clone();
-                            let p = params.clone();
-                            let ch = if n == "keyframes" || n == "-webkit-keyframes" || n == "-moz-keyframes" {
-                                // @keyframes 不传播父选择器
-                                children
-                            } else {
-                                // 其他 AtRule：将父选择器传播到内部 Rule
-                                Self::nest_rule_in_children(&selector, children)
-                            };
-                            CssNode::AtRule { name: n, params: p, children: ch, has_body: true }
-                        }
-                        CssNode::AtRule { name, params, children: _, has_body: false } => {
-                            // 无 body 的 AtRule（如 @b c;）包裹在父选择器下
-                            CssNode::Rule { selector: selector.clone(), declarations: vec![], children: vec![CssNode::AtRule { name, params, children: vec![], has_body: false }] }
-                        }
-                        other => other,
-                    };
-                    result.push(other);
-                }
-            }
-        }
-        if !current_decls.is_empty() {
-            result.push(CssNode::Rule { selector: selector.clone(), declarations: current_decls, children: vec![] });
-        }
-        if result.is_empty() && root_nodes.is_empty() {
-            result.push(CssNode::Rule { selector, declarations: vec![], children: vec![] });
-        }
-        result.extend(root_nodes);
+        // 使用 RuleBuilder + fold 处理嵌套规则
+        let result = css.into_iter().fold(RuleBuilder::new(selector), RuleBuilder::push).build();
 
         // 作用域传播：从 new_env 提取需要传播的字段，合并回 saved 状态
-        // 使用 exit_scope 方法替代手动 save/restore
         let return_env = new_env.exit_scope(saved_local_vars, saved_local_mixins, saved_local_functions, saved_forwarded_vars, saved_forwarded_mixins, saved_forwarded_functions);
 
         Ok((result, return_env))

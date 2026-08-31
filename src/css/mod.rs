@@ -33,8 +33,7 @@ impl Serializer {
 
     /// 合并相邻的 @media/@supports 块（相同 query）。
     fn merge_at_rules(nodes: Vec<CssNode>) -> Vec<CssNode> {
-        let mut result: Vec<CssNode> = Vec::new();
-        for node in nodes {
+        nodes.into_iter().fold(Vec::new(), |mut result, node| {
             match &node {
                 CssNode::AtRule {
                     name,
@@ -43,39 +42,36 @@ impl Serializer {
                     has_body: true,
                 } => {
                     // 检查是否与 result 中最后一个节点同名同 query
-                    if let Some(last) = result.last()
-                        && let CssNode::AtRule {
-                            name: last_name,
-                            params: last_params,
-                            children: last_children,
-                            has_body: true,
-                        } = last
-                            && last_name == name && last_params == params {
-                                // 合并 children
-                                let mut merged = last_children.clone();
-                                merged.extend(children.clone());
-                                if let Some(last_mut) = result.last_mut() {
-                                    *last_mut = CssNode::AtRule {
-                                        name: name.clone(),
-                                        params: params.clone(),
-                                        children: merged,
-                                        has_body: true,
-                                    };
-                                }
-                                continue;
+                    let should_merge = result.last().is_some_and(|last| {
+                        matches!(last, CssNode::AtRule { name: last_name, params: last_params, has_body: true, .. } if last_name == name && last_params == params)
+                    });
+                    if should_merge {
+                        if let Some(CssNode::AtRule { children: last_children, .. }) = result.last() {
+                            let mut merged = last_children.clone();
+                            merged.extend(children.clone());
+                            if let Some(last_mut) = result.last_mut() {
+                                *last_mut = CssNode::AtRule {
+                                    name: name.clone(),
+                                    params: params.clone(),
+                                    children: merged,
+                                    has_body: true,
+                                };
                             }
-                    result.push(node);
+                        }
+                    } else {
+                        result.push(node);
+                    }
                 }
                 _ => result.push(node),
             }
-        }
-        result
+            result
+        })
     }
 
     /// 展平嵌套规则。
     fn flatten_nodes(nodes: &[CssNode]) -> Vec<CssNode> {
-        let mut result = Vec::new();
-        for node in nodes {
+        nodes.iter().flat_map(|node| {
+            let mut result = Vec::new();
             match node {
                 CssNode::Rule {
                     selector,
@@ -94,14 +90,7 @@ impl Serializer {
                     if has_non_rule_children {
                         let flat = Self::flatten_children(selector, children);
                         // 分离 Rule 子节点和非 Rule 子节点
-                        let mut rule_kids = Vec::new();
-                        let mut other_kids = Vec::new();
-                        for kid in flat {
-                            match &kid {
-                                CssNode::Rule { .. } => rule_kids.push(kid),
-                                _ => other_kids.push(kid),
-                            }
-                        }
+                        let (rule_kids, other_kids): (Vec<CssNode>, Vec<CssNode>) = flat.into_iter().partition(|k| matches!(k, CssNode::Rule { .. }));
                         result.extend(rule_kids);
                         if !other_kids.is_empty() {
                             result.push(CssNode::Rule {
@@ -116,8 +105,8 @@ impl Serializer {
                 }
                 other => result.push(other.clone()),
             }
-        }
-        result
+            result
+        }).collect()
     }
 
     fn flatten_children(_parent: &str, children: &[CssNode]) -> Vec<CssNode> {

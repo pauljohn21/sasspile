@@ -38,7 +38,7 @@ impl Evaluated {
     ///
     /// # 返回
     /// 返回包含 CSS 字符串的 `Serialized` 实例。
-    pub fn serialize(&self, style: OutputStyle) -> Serialized {
+    pub fn serialize(self, style: OutputStyle) -> Serialized {
         use crate::css::Serializer;
 
         let css = Serializer::serialize(&self.nodes, style);

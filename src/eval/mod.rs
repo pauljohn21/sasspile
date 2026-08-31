@@ -297,16 +297,17 @@ impl Evaluator {
             warn!(depth = env.get_depth(), "recursion limit exceeded");
             return Err(SassError::Eval("Recursion depth limit exceeded (possible infinite loop)".into()));
         }
-        let mut css = Vec::new();
-        let mut env = env;
-        for node in nodes {
-            let (mut out, new_env) = Self::eval_node(node, env).map_err(|e| {
-                crate::__tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
-                e
-            })?;
-            css.append(&mut out);
-            env = new_env;
-        }
+        let (css, env) = nodes.iter().try_fold(
+            (Vec::new(), env),
+            |(mut css, env), node| -> Result<(Vec<CssNode>, Env)> {
+                let (out, new_env) = Self::eval_node(node, env).map_err(|e| {
+                    crate::__tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
+                    e
+                })?;
+                css.extend(out);
+                Ok((css, new_env))
+            },
+        )?;
         Ok((css, env))
     }
 
@@ -429,31 +430,17 @@ fn eval_error_node(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 fn hoist_css_imports(nodes: Vec<CssNode>) -> Vec<CssNode> {
     let span = crate::__tracing::debug_span!("hoist_css_imports", n = nodes.len());
     let _enter = span.enter();
-    let mut imports = Vec::new();
-    let mut rest = Vec::new();
-    for node in nodes {
-        // 先递归处理嵌套节点，再判断是否为 @import
-        let node = match node {
-            CssNode::AtRule { name, params, children, has_body: true } => {
-                let children = hoist_css_imports(children);
-                CssNode::AtRule { name, params, children, has_body: true }
-            }
-            CssNode::AtRoot(kids) => {
-                CssNode::AtRoot(hoist_css_imports(kids))
-            }
-            other => other,
-        };
-        // 判断是否为 CSS @import（无 body 的 @import AtRule）
-        let is_css_import = matches!(
-            &node,
-            CssNode::AtRule { name, has_body: false, .. } if name == "import"
-        );
-        if is_css_import {
-            imports.push(node);
-        } else {
-            rest.push(node);
+    // 先递归处理嵌套节点，再按 @import 分流
+    let processed: Vec<CssNode> = nodes.into_iter().map(|node| match node {
+        CssNode::AtRule { name, params, children, has_body: true } => {
+            CssNode::AtRule { name, params, children: hoist_css_imports(children), has_body: true }
         }
-    }
+        CssNode::AtRoot(kids) => CssNode::AtRoot(hoist_css_imports(kids)),
+        other => other,
+    }).collect();
+    let (imports, rest): (Vec<CssNode>, Vec<CssNode>) = processed.into_iter().partition(|node| {
+        matches!(node, CssNode::AtRule { name, has_body: false, .. } if name == "import")
+    });
     if !imports.is_empty() {
         crate::__tracing::debug!(n_imports = imports.len(), "hoisted css imports");
     }
