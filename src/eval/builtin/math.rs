@@ -84,6 +84,24 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 )))
             }
         }
+        "mod" => {
+            // CSS mod(number, step) — floored modulo
+            if args.len() != 2 {
+                return Err(SassError::Eval(format!(
+                    "mod() expects 2 arguments, got {}.", args.len()
+                )));
+            }
+            css_mod(&args[0], &args[1])
+        }
+        "rem" => {
+            // CSS rem(number, step) — truncated modulo
+            if args.len() != 2 {
+                return Err(SassError::Eval(format!(
+                    "rem() expects 2 arguments, got {}.", args.len()
+                )));
+            }
+            css_rem(&args[0], &args[1])
+        }
         "min" => {
             if args.is_empty() {
                 return Err(SassError::Eval("min requires at least 1 argument".into()));
@@ -732,4 +750,70 @@ fn unit_conversion_factor(from: &str, to: &str) -> f64 {
         }
     }
     1.0 // 不兼容——不转换
+}
+
+/// CSS mod(number, step) — floored modulo。
+/// 结果符号跟随 step 的符号（Sass `%` 语义一致）。
+#[allow(clippy::pedantic)]
+fn css_mod(number: &Value, step: &Value) -> Result<Option<Value>> {
+    let (n, n_unit) = match number {
+        Value::Number(n, u) => (*n, u.clone()),
+        _ => return Err(SassError::Eval(format!("$number: {number} is not a number."))),
+    };
+    let (s, s_unit) = match step {
+        Value::Number(s, u) => (*s, u.clone()),
+        _ => return Err(SassError::Eval(format!("$step: {step} is not a number."))),
+    };
+    if s == 0.0 {
+        return Err(SassError::Eval("mod() step cannot be zero.".into()));
+    }
+    let compatible = crate::eval::value::units_compatible(n_unit.as_deref(), s_unit.as_deref());
+    if !compatible {
+        let n_str = match &n_unit { Some(u) => format!("{n}{u}"), None => n.to_string() };
+        let s_str = match &s_unit { Some(u) => format!("{s}{u}"), None => s.to_string() };
+        return Ok(Some(Value::String(format!("mod({n_str}, {s_str})"), false)));
+    }
+    let (s_converted, out_unit) = match (&n_unit, &s_unit) {
+        (None, None) => (s, None),
+        (Some(u), None) => (s, Some(u.clone())),
+        (None, Some(u)) => (s, Some(u.clone())),
+        (Some(nu), Some(su)) if nu == su => (s, Some(nu.clone())),
+        (Some(nu), Some(su)) => (s * unit_conversion_factor(su, nu), Some(nu.clone())),
+    };
+    // floored modulo: n - s * floor(n / s)
+    let result = n - s_converted * (n / s_converted).floor();
+    Ok(Some(Value::Number(result, out_unit)))
+}
+
+/// CSS rem(number, step) — truncated modulo。
+/// 结果符号跟随 number 的符号。
+#[allow(clippy::pedantic)]
+fn css_rem(number: &Value, step: &Value) -> Result<Option<Value>> {
+    let (n, n_unit) = match number {
+        Value::Number(n, u) => (*n, u.clone()),
+        _ => return Err(SassError::Eval(format!("$number: {number} is not a number."))),
+    };
+    let (s, s_unit) = match step {
+        Value::Number(s, u) => (*s, u.clone()),
+        _ => return Err(SassError::Eval(format!("$step: {step} is not a number."))),
+    };
+    if s == 0.0 {
+        return Err(SassError::Eval("rem() step cannot be zero.".into()));
+    }
+    let compatible = crate::eval::value::units_compatible(n_unit.as_deref(), s_unit.as_deref());
+    if !compatible {
+        let n_str = match &n_unit { Some(u) => format!("{n}{u}"), None => n.to_string() };
+        let s_str = match &s_unit { Some(u) => format!("{s}{u}"), None => s.to_string() };
+        return Ok(Some(Value::String(format!("rem({n_str}, {s_str})"), false)));
+    }
+    let (s_converted, out_unit) = match (&n_unit, &s_unit) {
+        (None, None) => (s, None),
+        (Some(u), None) => (s, Some(u.clone())),
+        (None, Some(u)) => (s, Some(u.clone())),
+        (Some(nu), Some(su)) if nu == su => (s, Some(nu.clone())),
+        (Some(nu), Some(su)) => (s * unit_conversion_factor(su, nu), Some(nu.clone())),
+    };
+    // truncated modulo: n - s * trunc(n / s)
+    let result = n - s_converted * (n / s_converted).trunc();
+    Ok(Some(Value::Number(result, out_unit)))
 }

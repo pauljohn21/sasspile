@@ -20,6 +20,7 @@ const MATH_NAMES: &[(&str, &str)] = &[
     ("math.atan", "atan"), ("math.random", "random"), ("math.clamp", "clamp"),
     ("math.unit", "unit"), ("math.is-unitless", "is-unitless"),
     ("math.compatible", "compatible"), ("math.comparable", "comparable"),
+    ("math.mod", "mod"), ("math.rem", "rem"),
 ];
 
 const STRING_NAMES: &[(&str, &str)] = &[
