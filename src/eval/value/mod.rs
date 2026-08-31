@@ -556,6 +556,11 @@ pub(crate) fn eval_variable(
             // 无法完全简化——保留 calc() 但用替换后的值
             return Value::Calc(format!("calc({substituted})"));
         }
+        // 去除多余的乘除法括号：calc(1px + (2% * var(--c))) → calc(1px + 2% * var(--c))
+        let simplified = Self::remove_unnecessary_parens(inner);
+        if simplified != inner {
+            return Value::Calc(format!("calc({simplified})"));
+        }
         Value::Calc(s.to_string())
     }
 
@@ -744,6 +749,92 @@ pub(crate) fn eval_variable(
             }
         }
         result
+    }
+
+    /// 去除 calc 表达式中多余的括号。
+    /// `(2% * var(--c))` → `2% * var(--c)`（在加减法上下文中乘除法不需要括号）
+    fn remove_unnecessary_parens(s: &str) -> String {
+        let mut result = s.to_string();
+        // 反复处理——可能有多个括号组
+        loop {
+            let new = Self::strip_one_unnecessary_paren(&result);
+            if new == result {
+                break;
+            }
+            result = new;
+        }
+        result
+    }
+
+    /// 去除一个多余的乘除法括号。
+    /// 查找 `(A * B)` 或 `(A / B)` 在加减法上下文中的位置。
+    fn strip_one_unnecessary_paren(s: &str) -> String {
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i < s.len() {
+            if bytes[i] == b'(' {
+                // 找到匹配的右括号
+                let mut depth = 1i32;
+                let mut j = i + 1;
+                while j < s.len() && depth > 0 {
+                    match bytes[j] {
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                    if depth > 0 {
+                        j += 1;
+                    }
+                }
+                if depth == 0 && j < s.len() {
+                    let inner = &s[i+1..j];
+                    // 检查括号内是否是简单的乘除法表达式（只有一个 * 或 / 运算符）
+                    if Self::is_simple_mul_div(inner) {
+                        // 检查括号前后的上下文——是否在加减法中
+                        let before = if i > 0 { &s[..i] } else { "" };
+                        let after = if j + 1 < s.len() { &s[j+1..] } else { "" };
+                        // 如果前面以 + 或 - 结尾（带空格），且后面以 + 或 - 开头（带空格）或结尾
+                        let is_in_addsub = before.ends_with(" + ")
+                            || before.ends_with(" - ")
+                            || before.ends_with("(")
+                            || before.is_empty()
+                            || after.starts_with(" + ")
+                            || after.starts_with(" - ")
+                            || after.is_empty();
+                        if is_in_addsub {
+                            // 去除括号
+                            return format!("{}{}{}", before, inner, after);
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+        s.to_string()
+    }
+
+    /// 检查字符串是否是简单的乘除法表达式（`A * B` 或 `A / B`）。
+    /// 不处理嵌套括号。
+    fn is_simple_mul_div(s: &str) -> bool {
+        let s = s.trim();
+        // 查找顶层的 * 或 /
+        let mut depth = 0i32;
+        let mut found = false;
+        for c in s.chars() {
+            match c {
+                '(' | '[' => depth += 1,
+                ')' | ']' => depth -= 1,
+                '*' | '/' if depth == 0 => {
+                    if found {
+                        // 多个运算符——不是简单的
+                        return false;
+                    }
+                    found = true;
+                }
+                _ => {}
+            }
+        }
+        found
     }
 
     fn parse_simple_number(s: &str) -> Option<Value> {
