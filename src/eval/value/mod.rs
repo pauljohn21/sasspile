@@ -710,11 +710,13 @@ pub(crate) fn eval_variable(
         }
         // 去掉前导 +
         let s = s.strip_prefix('+').unwrap_or(s);
-        // 找到数字部分的结尾
-        let split = s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-');
+        // 找到数字部分的结尾——支持科学计数法（e/E+数字）
+        let split = s.find(|c: char| {
+            !c.is_ascii_digit() && c != '.' && c != '-' && c != 'e' && c != 'E' && c != '+'
+        });
         match split {
             None => {
-                // 纯数字
+                // 纯数字（可能含科学计数法）
                 s.parse::<f64>().ok().map(|n| Value::Number(n, None))
             }
             Some(idx) if idx > 0 => {
