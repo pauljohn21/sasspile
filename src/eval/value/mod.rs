@@ -511,7 +511,13 @@ pub(crate) fn eval_variable(
         let inner = s.strip_prefix("calc(").and_then(|s| s.strip_suffix(")"));
         let inner = match inner {
             Some(i) => i.trim(),
-            None => return Value::Calc(s.to_string()),
+            None => {
+                // 尝试 clamp() 简化
+                if let Some(v) = Self::try_simplify_clamp(s) {
+                    return v;
+                }
+                return Value::Calc(s.to_string());
+            }
         };
         // CSS 常量替换：pi → 3.1415926536, e → 2.7182818285
         let inner = match inner {
@@ -528,6 +534,28 @@ pub(crate) fn eval_variable(
             return v;
         }
         Value::Calc(s.to_string())
+    }
+
+    /// 尝试简化 clamp()：3 个同单位数字 → 实际计算 clamp 值。
+    /// `clamp(1px, 2.5px, 3px)` → `2.5px`
+    fn try_simplify_clamp(s: &str) -> Option<Value> {
+        let inner = s.strip_prefix("clamp(").and_then(|s| s.strip_suffix(")"))?;
+        let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+        if parts.len() != 3 {
+            return None;
+        }
+        let min = Self::parse_simple_number(parts[0])?;
+        let val = Self::parse_simple_number(parts[1])?;
+        let max = Self::parse_simple_number(parts[2])?;
+        match (&min, &val, &max) {
+            (Value::Number(mn, mu), Value::Number(v, vu), Value::Number(mx, xu))
+                if mu == vu && vu == xu =>
+            {
+                let result = v.clamp(*mn, *mx);
+                Some(Value::Number(result, mu.clone()))
+            }
+            _ => None,
+        }
     }
 
     /// 尝试简化同单位加减法：`1px + 2px` → `3px`，`1px - 2px` → `-1px`。
