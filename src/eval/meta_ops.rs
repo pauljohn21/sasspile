@@ -4,6 +4,7 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
+use crate::eval::error_msgs::{err_not_a_string, err_missing_arg, err_no_mixin, err_no_module};
 use crate::parse::ast::{MixinRefData, Node};
 
 impl Evaluator {
@@ -20,7 +21,7 @@ impl Evaluator {
         let _enter = span.enter();
 
         if args.is_empty() {
-            return Err(SassError::Eval("Missing argument $mixin.".into()));
+            return Err(err_missing_arg("mixin"));
         }
 
         // 求值第一个参数（mixin 引用）
@@ -62,7 +63,7 @@ impl Evaluator {
         let _enter = span.enter();
 
         if args.is_empty() {
-            return Err(SassError::Eval("Missing argument $module.".into()));
+            return Err(err_missing_arg("module"));
         }
 
         // 求值模块名参数
@@ -70,10 +71,7 @@ impl Evaluator {
         let module_name = match &module_val {
             Value::String(s, _) => s.clone(),
             _ => {
-                return Err(SassError::Eval(format!(
-                    "$module: {} is not a string.",
-                    module_val
-                )));
+                return Err(err_not_a_string("module", &module_val));
             }
         };
 
@@ -158,13 +156,13 @@ impl Evaluator {
             .or_else(|| kw_args.get("$module"));
         let name = match name_arg {
             Some(Value::String(s, _)) => s.clone(),
-            Some(v) => return Err(SassError::Eval(format!("$name: {v} is not a string."))),
-            None => return Err(SassError::Eval("Missing argument $name.".into())),
+            Some(v) => return Err(err_not_a_string("name", v)),
+            None => return Err(err_missing_arg("name")),
         };
         let module_ns: Option<String> = match module_arg {
             Some(Value::String(s, _)) => Some(s.clone()),
             Some(Value::Null) | None => None,
-            Some(v) => return Err(SassError::Eval(format!("$module: {v} is not a string."))),
+            Some(v) => return Err(err_not_a_string("module", v)),
         };
         // dash-insensitive 查找：- 和 _ 等价
         let lookup_name = name.replace('-', "_");
@@ -199,7 +197,7 @@ impl Evaluator {
                 )));
             }
         }
-        Err(SassError::Eval(format!("There is no mixin named \"{name}\"")))
+        Err(err_no_mixin(&name))
     }
 
     /// `meta.module-functions($module)` 函数——返回模块函数 map。
@@ -213,7 +211,7 @@ impl Evaluator {
 
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
         let module = env.get_namespace(&ns_name)
-            .ok_or_else(|| SassError::Eval(format!("There is no module with namespace \"{ns_name}\".")))?;
+            .ok_or_else(|| err_no_module(&ns_name))?;
         let pairs: Vec<(Value, Value)> = module.all_functions()
             .map(|(name, _)| {
                 (Value::String(name.clone(), true), Value::String(name.clone(), false))
@@ -233,7 +231,7 @@ impl Evaluator {
 
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
         let module = env.get_namespace(&ns_name)
-            .ok_or_else(|| SassError::Eval(format!("There is no module with namespace \"{ns_name}\".")))?;
+            .ok_or_else(|| err_no_module(&ns_name))?;
         let pairs: Vec<(Value, Value)> = module.all_mixins()
             .map(|(name, mixin)| {
                 let ns_keys: Vec<String> = mixin.captured_namespaces.keys().cloned().collect();
@@ -261,7 +259,7 @@ impl Evaluator {
 
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
         let module = env.get_namespace(&ns_name)
-            .ok_or_else(|| SassError::Eval(format!("There is no module with namespace \"{ns_name}\".")))?;
+            .ok_or_else(|| err_no_module(&ns_name))?;
         let pairs: Vec<(Value, Value)> = module.all_vars()
             .filter(|(name, _)| !name.starts_with('_'))
             .map(|(name, val)| (Value::String(name.clone(), true), val.clone()))
@@ -288,7 +286,7 @@ impl Evaluator {
             Some(v) => return Err(SassError::Eval(format!(
                 "$mixin: {v} is not a mixin reference."
             ))),
-            None => return Err(SassError::Eval("Missing argument $mixin.".into())),
+            None => return Err(err_missing_arg("mixin")),
         };
 
         // 检查 mixin body 中是否包含 Node::Content
@@ -306,8 +304,8 @@ impl Evaluator {
             .or_else(|| kw_args.get("$module"));
         match module_arg {
             Some(Value::String(s, _)) => Ok(s.clone()),
-            Some(v) => Err(SassError::Eval(format!("$module: {v} is not a string."))),
-            None => Err(SassError::Eval("Missing argument $module.".into())),
+            Some(v) => Err(err_not_a_string("module", v)),
+            None => Err(err_missing_arg("module")),
         }
     }
 }

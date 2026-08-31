@@ -17,7 +17,7 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             qa,
         )),
         (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
-            format!("{a}#{:02x}{:02x}{:02x}", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8),
+            format!("{a}#{:02x}{:02x}{:02x}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
             qa,
         )),
         (Value::String(a, qa), Value::Null) => Ok(Value::String(a, qa)),
@@ -26,7 +26,7 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             qb,
         )),
         (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
-            format!("#{:02x}{:02x}{:02x}{b}", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8),
+            format!("#{:02x}{:02x}{:02x}{b}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
             qb,
         )),
         (Value::Null, Value::String(b, qb)) => Ok(Value::String(b, qb)),
@@ -72,7 +72,7 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             qa,
         )),
         (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
-            format!("{a}-#{:02x}{:02x}{:02x}", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8),
+            format!("{a}-#{:02x}{:02x}{:02x}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
             qa,
         )),
         (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(
@@ -80,7 +80,7 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             qb,
         )),
         (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
-            format!("#{:02x}{:02x}{:02x}-{b}", c.r.round() as u8, c.g.round() as u8, c.b.round() as u8),
+            format!("#{:02x}{:02x}{:02x}-{b}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
             qb,
         )),
         _ => Err(SassError::Eval("Unsupported - operation".into())),

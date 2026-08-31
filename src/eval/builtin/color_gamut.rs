@@ -8,20 +8,19 @@
 //! 参考: CSS Color 4 规范 §12.3 Gamut Mapping
 
 use crate::error::{Result, SassError};
-use crate::parse::ast::{Color, ColorFormat, Value};
+use crate::eval::error_msgs::{err_not_a_color, err_not_a_string, err_missing_arg, err_wrong_arg_count_plural, err_expected_unquoted_str_display, err_unknown_color_space_quoted, err_expected_exactly};
+use crate::parse::ast::{Color, ColorSpace, Value};
 use std::collections::HashMap;
 
 use super::color_conv;
-use super::color_conv_ops::{is_same_space, format_to_srgb_f64};
+use super::color_conv_ops::{is_same_space, space_to_srgb_f64};
 
 /// `color.to-gamut($color, $space: null, $method: null)`
 pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     let pos_count = args.len();
     let kw_count = kw_args.len();
     if pos_count + kw_count > 3 {
-        return Err(SassError::Eval(format!(
-            "Only 3 arguments allowed, but {} were passed.", pos_count + kw_count
-        )));
+        return Err(err_wrong_arg_count_plural(3, pos_count + kw_count));
     }
 
     let color_arg = args.first().or_else(|| kw_args.get("color").or_else(|| kw_args.get("$color")));
@@ -30,22 +29,20 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
 
     let c = match color_arg {
         Some(Value::Color(c)) => c.clone(),
-        Some(v) => return Err(SassError::Eval(format!("$color: {} is not a color.", v))),
-        None => return Err(SassError::Eval("Missing argument $color.".into())),
+        Some(v) => return Err(err_not_a_color("color", v)),
+        None => return Err(err_missing_arg("color")),
     };
 
     // 解析 $space
     let target_space: Option<String> = match space_arg {
         Some(Value::String(s, quoted)) => {
             if *quoted {
-                return Err(SassError::Eval(format!(
-                    "$space: Expected \"{}\" to be an unquoted string.", s
-                )));
+                return Err(err_expected_unquoted_str_display("space", s));
             }
             Some(s.clone())
         }
         Some(Value::Null) => None,
-        Some(v) => return Err(SassError::Eval(format!("$space: {} is not a string.", v))),
+        Some(v) => return Err(err_not_a_string("space", v)),
         None => None,
     };
 
@@ -53,57 +50,35 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     let method: String = match method_arg {
         Some(Value::String(s, quoted)) => {
             if *quoted {
-                return Err(SassError::Eval(format!(
-                    "$method: Expected \"{}\" to be an unquoted string.", s
-                )));
+                return Err(err_expected_unquoted_str_display("method", s));
             }
             s.clone()
         }
         Some(Value::Null) => "local-minde".to_string(),
-        Some(v) => return Err(SassError::Eval(format!("$method: {} is not a string.", v))),
+        Some(v) => return Err(err_not_a_string("method", v)),
         None => "local-minde".to_string(),
     };
 
     // 验证 method
     if method != "clip" && method != "local-minde" {
-        return Err(SassError::Eval(format!(
-            "$method: Expected {} to be exactly \"clip\" or \"local-minde\".", method
-        )));
+        return Err(err_expected_exactly("method", &method, &["clip", "local-minde"]));
     }
 
     // 如果指定了 $space，验证是否已知
     if let Some(ref sp) = target_space {
         if !is_known_space(sp) {
-            return Err(SassError::Eval(format!(
-                "$space: Unknown color space \"{}\".", sp
-            )));
+            return Err(err_unknown_color_space_quoted(sp));
         }
     }
 
     // 确定实际目标空间
     let effective_space = target_space.clone().unwrap_or_else(|| {
         // 默认为颜色自身的空间
-        match c.format {
-            ColorFormat::Hsl(_, _, _) => "hsl",
-            ColorFormat::Hwb(_, _, _) => "hwb",
-            ColorFormat::Lab(_, _, _) => "lab",
-            ColorFormat::Lch(_, _, _) => "lch",
-            ColorFormat::Oklab(_, _, _) => "oklab",
-            ColorFormat::Oklch(_, _, _) => "oklch",
-            ColorFormat::DisplayP3(_, _, _) => "display-p3",
-            ColorFormat::Srgb(_, _, _) => "srgb",
-            ColorFormat::SrgbLinear(_, _, _) => "srgb-linear",
-            ColorFormat::A98Rgb(_, _, _) => "a98-rgb",
-            ColorFormat::ProphotoRgb(_, _, _) => "prophoto-rgb",
-            ColorFormat::Rec2020(_, _, _) => "rec2020",
-            ColorFormat::XyzD65(_, _, _) => "xyz",
-            ColorFormat::XyzD50(_, _, _) => "xyz-d50",
-            _ => "rgb",
-        }.to_string()
+        c.space.as_str().to_string()
     });
 
     // 如果颜色已在目标空间中且在色域内，直接返回
-    if target_space.is_none() || is_same_space(&c.format, &effective_space) {
+    if target_space.is_none() || is_same_space(c.space, &effective_space) {
         // 检查是否在色域内
         if is_in_gamut(&c, &effective_space) {
             return Ok(Some(Value::Color(c.clone())));
@@ -111,7 +86,7 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     }
 
     // 如果指定了空间且与颜色空间不同，需要先转换
-    let working_color = if target_space.is_some() && !is_same_space(&c.format, &effective_space) {
+    let working_color = if target_space.is_some() && !is_same_space(c.space, &effective_space) {
         convert_to_space(&c, &effective_space)?
     } else {
         c.clone()
@@ -149,18 +124,20 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
             r >= 0.0 && g >= 0.0 && b >= 0.0
         }
         "hsl" => {
-            let (_h, s, l) = match c.format {
-                ColorFormat::Hsl(h, s, l) => (h, s, l),
-                _ => return true, // legacy 颜色始终在色域内
-            };
-            s >= 0.0 && s <= 1.0 && l >= 0.0 && l <= 1.0
+            if c.space == ColorSpace::Hsl {
+                let (_, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
+                s >= 0.0 && s <= 1.0 && l >= 0.0 && l <= 1.0
+            } else {
+                true // legacy 颜色始终在色域内
+            }
         }
         "hwb" => {
-            let (_h, w, b) = match c.format {
-                ColorFormat::Hwb(h, w, b) => (h, w, b),
-                _ => return true,
-            };
-            w >= 0.0 && w <= 1.0 && b >= 0.0 && b <= 1.0 && (w + b) <= 1.0
+            if c.space == ColorSpace::Hwb {
+                let (_, w, b) = (c.channels[0], c.channels[1], c.channels[2]);
+                w >= 0.0 && w <= 1.0 && b >= 0.0 && b <= 1.0 && (w + b) <= 1.0
+            } else {
+                true
+            }
         }
         "lab" | "oklab" | "lch" | "oklch" | "xyz" | "xyz-d65" | "xyz-d50" => {
             // 这些空间没有明确色域限制
@@ -172,17 +149,20 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
 
 /// 获取 RGB 通道值。
 fn get_rgb_channels(c: &Color, space: &str) -> (f64, f64, f64) {
-    match c.format {
-        ColorFormat::Srgb(r, g, b) | ColorFormat::DisplayP3(r, g, b)
-        | ColorFormat::A98Rgb(r, g, b) | ColorFormat::ProphotoRgb(r, g, b)
-        | ColorFormat::Rec2020(r, g, b) => (r, g, b),
-        ColorFormat::SrgbLinear(r, g, b) | ColorFormat::DisplayP3Linear(r, g, b) => (r, g, b),
+    match c.space {
+        ColorSpace::Srgb | ColorSpace::DisplayP3
+        | ColorSpace::A98Rgb | ColorSpace::ProphotoRgb | ColorSpace::Rec2020 => {
+            (c.channels[0], c.channels[1], c.channels[2])
+        }
+        ColorSpace::SrgbLinear | ColorSpace::DisplayP3Linear => {
+            (c.channels[0], c.channels[1], c.channels[2])
+        }
         _ => {
             // Legacy RGB → 0-1
             if space == "rgb" || space == "srgb" {
-                (c.r / 255.0, c.g / 255.0, c.b / 255.0)
+                (c.legacy_rgb[0] / 255.0, c.legacy_rgb[1] / 255.0, c.legacy_rgb[2] / 255.0)
             } else {
-                format_to_srgb_f64(&c.format, c.r, c.g, c.b)
+                space_to_srgb_f64(c.space, c.channels, c.legacy_rgb)
             }
         }
     }
@@ -194,31 +174,31 @@ fn clip_to_gamut(c: &Color, space: &str) -> Value {
         "rgb" | "srgb" | "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" => {
             let (r, g, b) = get_rgb_channels(c, space);
             let (r, g, b) = (r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0));
-            let fmt = c.format.clone_with(r, g, b);
-            Value::Color(Color::rgba_fmt(c.r, c.g, c.b, c.a, fmt))
+            Value::Color(c.clone_with_rgb(r, g, b))
         }
         "hsl" => {
-            let (h, s, l) = match c.format {
-                ColorFormat::Hsl(h, s, l) => (h, s.clamp(0.0, 1.0), l.clamp(0.0, 1.0)),
-                _ => (0.0, 0.0, 0.0),
+            let (h, s, l) = if c.space == ColorSpace::Hsl {
+                (c.channels[0], c.channels[1].clamp(0.0, 1.0), c.channels[2].clamp(0.0, 1.0))
+            } else {
+                (0.0, 0.0, 0.0)
             };
-            Value::Color(Color::rgba_fmt(c.r, c.g, c.b, c.a, ColorFormat::Hsl(h, s, l)))
+            Value::Color(Color::with_hsl(h, s, l, c.a, c.output, c.legacy_rgb))
         }
         "hwb" => {
-            let (h, w, b) = match c.format {
-                ColorFormat::Hwb(h, w, b) => {
-                    let w = w.clamp(0.0, 1.0);
-                    let b = b.clamp(0.0, 1.0);
-                    let sum = w + b;
-                    if sum > 1.0 {
-                        (h, w / sum, b / sum)
-                    } else {
-                        (h, w, b)
-                    }
+            let (h, w, b) = if c.space == ColorSpace::Hwb {
+                let (h, w, b) = (c.channels[0], c.channels[1], c.channels[2]);
+                let w = w.clamp(0.0, 1.0);
+                let b = b.clamp(0.0, 1.0);
+                let sum = w + b;
+                if sum > 1.0 {
+                    (h, w / sum, b / sum)
+                } else {
+                    (h, w, b)
                 }
-                _ => (0.0, 0.0, 0.0),
+            } else {
+                (0.0, 0.0, 0.0)
             };
-            Value::Color(Color::rgba_fmt(c.r, c.g, c.b, c.a, ColorFormat::Hwb(h, w, b)))
+            Value::Color(Color::with_hwb(h, w, b, c.a, c.legacy_rgb))
         }
         _ => Value::Color(c.clone()),
     }
@@ -279,8 +259,7 @@ fn local_minde_rgb(c: &Color, space: &str) -> Value {
         b_new.clamp(0.0, 1.0),
     );
 
-    let fmt = c.format.clone_with(r_new, g_new, b_new);
-    Value::Color(Color::rgba_fmt(c.r, c.g, c.b, c.a, fmt))
+    Value::Color(c.clone_with_rgb(r_new, g_new, b_new))
 }
 
 /// 转换颜色到目标空间。

@@ -7,53 +7,101 @@ use crate::eval::Env;
 use crate::parse::ast::Value;
 use std::collections::HashMap;
 
+/// 内建函数映射条目：`(模块限定名, 全局名)`。
+///
+/// 每个模块的 const 数组集中管理，消除 `builtin_name` / `is_known` / `dispatch` 三处重复。
+const MATH_NAMES: &[(&str, &str)] = &[
+    ("math.abs", "abs"), ("math.div", "div"), ("math.ceil", "ceil"),
+    ("math.floor", "floor"), ("math.round", "round"), ("math.max", "max"),
+    ("math.min", "min"), ("math.percentage", "percentage"), ("math.pow", "pow"),
+    ("math.sqrt", "sqrt"), ("math.sin", "sin"), ("math.cos", "cos"),
+    ("math.tan", "tan"), ("math.log", "log"), ("math.hypot", "hypot"),
+    ("math.atan2", "atan2"), ("math.asin", "asin"), ("math.acos", "acos"),
+    ("math.atan", "atan"), ("math.random", "random"), ("math.clamp", "clamp"),
+    ("math.unit", "unit"), ("math.is-unitless", "is_unitless"),
+    ("math.compatible", "compatible"), ("math.comparable", "comparable"),
+];
+
+const STRING_NAMES: &[(&str, &str)] = &[
+    ("string.length", "str-length"), ("string.index", "str-index"),
+    ("string.slice", "str-slice"), ("string.to-upper-case", "to-upper-case"),
+    ("string.to-lower-case", "to-lower-case"), ("string.insert", "str-insert"),
+    ("string.quote", "quote"), ("string.unquote", "unquote"),
+    ("string.split", "str-split"), ("string.unique-id", "unique-id"),
+];
+
+const MAP_NAMES: &[(&str, &str)] = &[
+    ("map.get", "map-get"), ("map.merge", "map-merge"), ("map.remove", "map-remove"),
+    ("map.keys", "map-keys"), ("map.values", "map-values"),
+    ("map.has-key", "map-has-key"), ("map.deep-remove", "map-deep-remove"),
+    ("map.deep-merge", "map-deep-merge"), ("map.set", "map-set"),
+];
+
+const LIST_NAMES: &[(&str, &str)] = &[
+    ("list.length", "length"), ("list.nth", "nth"), ("list.append", "append"),
+    ("list.join", "join"), ("list.index", "index"), ("list.separator", "list-separator"),
+    ("list.set-nth", "set-nth"), ("list.is-bracketed", "is-bracketed"),
+    ("list.slash", "list-slash"), ("list.zip", "zip"),
+];
+
+const COLOR_NAMES: &[(&str, &str)] = &[
+    ("color.adjust", "adjust-color"), ("color.adjust-color", "adjust-color"),
+    ("color.change", "change-color"), ("color.change-color", "change-color"),
+    ("color.scale", "scale-color"), ("color.scale-color", "scale-color"),
+    ("color.ie-hex-str", "ie-hex-str"), ("color.invert", "invert"),
+    ("color.grayscale", "grayscale"), ("color.complement", "complement"),
+    ("color.adjust-hue", "adjust-hue"), ("color.saturate", "saturate"),
+    ("color.desaturate", "desaturate"), ("color.transparentize", "transparentize"),
+    ("color.fade-out", "fade-out"), ("color.opacify", "opacify"),
+    ("color.fade-in", "fade-in"), ("color.alpha", "alpha"),
+    ("color.opacity", "opacity"), ("color.red", "red"), ("color.green", "green"),
+    ("color.blue", "blue"), ("color.hue", "hue"), ("color.saturation", "saturation"),
+    ("color.lightness", "lightness"), ("color.whiteness", "whiteness"),
+    ("color.blackness", "blackness"), ("color.is-powerless", "is-powerless"),
+    ("color.is-missing", "is-missing"), ("color.is-in-gamut", "is-in-gamut"),
+    ("color.is-legacy", "is-legacy"), ("color.channel", "channel"),
+    ("color.to-space", "to-space"), ("color.to-gamut", "to-gamut"),
+    ("color.space", "space"), ("color.same", "same"), ("color.hwb", "hwb"),
+    ("color.hsl", "hsl"), ("color.hsla", "hsla"), ("color.rgba", "rgba"),
+    ("color.rgb", "rgb"), ("color.darken", "darken"), ("color.lighten", "lighten"),
+    ("color.mix", "mix"),
+];
+
+const SELECTOR_NAMES: &[(&str, &str)] = &[
+    ("selector.append", "selector-append"), ("selector.nest", "selector-nest"),
+    ("selector.is-superselector", "selector-is-superselector"),
+    ("selector.parse", "selector-parse"),
+    ("selector.simple-selectors", "selector-simple-selectors"),
+    ("selector.unify", "selector-unify"), ("selector.extend", "selector-extend"),
+    ("selector.replace", "selector-replace"),
+];
+
+const META_NAMES: &[(&str, &str)] = &[
+    ("meta.type-of", "type-of"), ("meta.inspect", "inspect"),
+    ("meta.keywords", "keywords"), ("meta.get-function", "get-function"),
+    ("meta.call", "call"), ("meta.feature-exists", "feature-exists"),
+    ("meta.content-exists", "content-exists"), ("meta.mixin-exists", "mixin-exists"),
+    ("meta.function-exists", "function-exists"),
+    ("meta.global-variable-exists", "global-variable-exists"),
+    ("meta.variable-exists", "variable-exists"), ("meta.calc-args", "calc-args"),
+    ("meta.calc-name", "calc-name"), ("meta.get-mixin", "get-mixin"),
+    ("meta.module-functions", "module-functions"),
+    ("meta.module-mixins", "module-mixins"),
+    ("meta.module-variables", "module-variables"),
+    ("meta.accepts-content", "accepts-content"),
+];
+
+/// CSS 通用函数名（无模块前缀变体）。
+const CSS_FUNC_NAMES: &[&str] = &["calc", "env", "var"];
+
 // ─── math ─────────────────────────────────────────────────
 
-/// math 模块限定名 → 全局名。
 pub(crate) fn math_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "math.abs" => Some("abs"),
-        "math.div" => Some("div"),
-        "math.ceil" => Some("ceil"),
-        "math.floor" => Some("floor"),
-        "math.round" => Some("round"),
-        "math.max" => Some("max"),
-        "math.min" => Some("min"),
-        "math.percentage" => Some("percentage"),
-        "math.pow" => Some("pow"),
-        "math.sqrt" => Some("sqrt"),
-        "math.sin" => Some("sin"),
-        "math.cos" => Some("cos"),
-        "math.tan" => Some("tan"),
-        "math.log" => Some("log"),
-        "math.hypot" => Some("hypot"),
-        "math.atan2" => Some("atan2"),
-        "math.asin" => Some("asin"),
-        "math.acos" => Some("acos"),
-        "math.atan" => Some("atan"),
-        "math.random" => Some("random"),
-        "math.clamp" => Some("clamp"),
-        "math.unit" => Some("unit"),
-        "math.is-unitless" => Some("is_unitless"),
-        "math.compatible" => Some("compatible"),
-        "math.comparable" => Some("comparable"),
-        _ => None,
-    }
+    MATH_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 pub(crate) fn math_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "abs" | "div" | "ceil" | "floor" | "round" | "max" | "min"
-        | "percentage" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
-        | "hypot" | "atan2" | "asin" | "acos" | "atan" | "random"
-        | "clamp" | "unit" | "is_unitless" | "is-unitless" | "compatible" | "comparable"
-        | "math.abs" | "math.div" | "math.ceil" | "math.floor" | "math.round"
-        | "math.max" | "math.min" | "math.percentage" | "math.pow" | "math.sqrt"
-        | "math.sin" | "math.cos" | "math.tan" | "math.log" | "math.hypot"
-        | "math.atan2" | "math.asin" | "math.acos" | "math.atan" | "math.random"
-        | "math.clamp" | "math.unit" | "math.is-unitless" | "math.compatible" | "math.comparable"
-    )
+    MATH_NAMES.iter().any(|(k, v)| *k == name || *v == name)
 }
 
 pub(crate) fn math_dispatch(
@@ -62,47 +110,25 @@ pub(crate) fn math_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    match name {
-        "abs" | "div" | "ceil" | "floor" | "round" | "max" | "min"
-        | "percentage" | "pow" | "sqrt" | "sin" | "cos" | "tan" | "log"
-        | "hypot" | "atan2" | "asin" | "acos" | "atan" | "random"
-        | "clamp" | "unit" | "is_unitless" | "is-unitless" | "compatible" | "comparable"
-        => match super::math::call(name, pos_args, kw_args) {
+    if math_is_known(name) {
+        match super::math::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        },
-        _ => None,
+        }
+    } else {
+        None
     }
 }
 
 // ─── string ───────────────────────────────────────────────
 
 pub(crate) fn string_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "string.length" => Some("str-length"),
-        "string.index" => Some("str-index"),
-        "string.slice" => Some("str-slice"),
-        "string.to-upper-case" => Some("to-upper-case"),
-        "string.to-lower-case" => Some("to-lower-case"),
-        "string.insert" => Some("str-insert"),
-        "string.quote" => Some("quote"),
-        "string.unquote" => Some("unquote"),
-        "string.split" => Some("str-split"),
-        "string.unique-id" => Some("unique-id"),
-        _ => None,
-    }
+    STRING_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 pub(crate) fn string_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "str-length" | "str-index" | "str-slice" | "to-upper-case" | "to-lower-case"
-        | "str-insert" | "quote" | "unquote" | "str-split" | "unique-id"
-        | "string.length" | "string.index" | "string.slice" | "string.to-upper-case"
-        | "string.to-lower-case" | "string.insert" | "string.quote" | "string.unquote"
-        | "string.split" | "string.unique-id"
-    )
+    STRING_NAMES.iter().any(|(k, v)| *k == name || *v == name)
 }
 
 pub(crate) fn string_dispatch(
@@ -111,43 +137,25 @@ pub(crate) fn string_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    match name {
-        "str-length" | "str-index" | "str-slice" | "to-upper-case" | "to-lower-case"
-        | "str-insert" | "quote" | "unquote" | "str-split" | "unique-id"
-        => match super::Evaluator::call_string_builtin(name, pos_args, kw_args) {
+    if string_is_known(name) {
+        match super::Evaluator::call_string_builtin(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        },
-        _ => None,
+        }
+    } else {
+        None
     }
 }
 
 // ─── map ──────────────────────────────────────────────────
 
 pub(crate) fn map_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "map.get" => Some("map-get"),
-        "map.merge" => Some("map-merge"),
-        "map.remove" => Some("map-remove"),
-        "map.keys" => Some("map-keys"),
-        "map.values" => Some("map-values"),
-        "map.has-key" => Some("map-has-key"),
-        "map.deep-remove" => Some("map-deep-remove"),
-        "map.deep-merge" => Some("map-deep-merge"),
-        "map.set" => Some("map-set"),
-        _ => None,
-    }
+    MAP_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 pub(crate) fn map_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "map-get" | "map-merge" | "map-remove" | "map-keys" | "map-values"
-        | "map-has-key" | "map-deep-remove" | "map-deep-merge" | "map-set"
-        | "map.get" | "map.merge" | "map.remove" | "map.keys" | "map.values"
-        | "map.has-key" | "map.deep-remove" | "map.deep-merge" | "map.set"
-    )
+    MAP_NAMES.iter().any(|(k, v)| *k == name || *v == name)
 }
 
 pub(crate) fn map_dispatch(
@@ -156,48 +164,26 @@ pub(crate) fn map_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    match name {
-        "map-get" | "map-merge" | "map-remove" | "map-keys" | "map-values"
-        | "map-has-key" | "map-deep-remove" | "map-deep-merge" | "map-set"
-        => {
-            let combined = super::merge_map_args(pos_args, kw_args, name);
-            match super::Evaluator::call_map_builtin(name, &combined, _env) {
-                Ok(Some(v)) => Some(Ok(v)),
-                Ok(None) => None,
-                Err(e) => Some(Err(e)),
-            }
+    if map_is_known(name) {
+        let combined = super::merge_map_args(pos_args, kw_args, name);
+        match super::Evaluator::call_map_builtin(name, &combined, _env) {
+            Ok(Some(v)) => Some(Ok(v)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
         }
-        _ => None,
+    } else {
+        None
     }
 }
 
 // ─── list ─────────────────────────────────────────────────
 
 pub(crate) fn list_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "list.length" => Some("length"),
-        "list.nth" => Some("nth"),
-        "list.append" => Some("append"),
-        "list.join" => Some("join"),
-        "list.index" => Some("index"),
-        "list.separator" => Some("list-separator"),
-        "list.set-nth" => Some("set-nth"),
-        "list.is-bracketed" => Some("is-bracketed"),
-        "list.slash" => Some("list-slash"),
-        "list.zip" => Some("zip"),
-        _ => None,
-    }
+    LIST_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 pub(crate) fn list_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "length" | "list-length" | "nth" | "append" | "join" | "index"
-        | "list-separator" | "separator" | "set-nth" | "is-bracketed"
-        | "list-slash" | "zip"
-        | "list.length" | "list.nth" | "list.append" | "list.join" | "list.index"
-        | "list.separator" | "list.set-nth" | "list.is-bracketed" | "list.slash" | "list.zip"
-    )
+    LIST_NAMES.iter().any(|(k, v)| *k == name || *v == name)
 }
 
 pub(crate) fn list_dispatch(
@@ -206,91 +192,26 @@ pub(crate) fn list_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    match name {
-        "length" | "list-length" | "nth" | "append" | "join" | "index"
-        | "list-separator" | "separator" | "set-nth" | "is-bracketed"
-        | "list-slash" | "zip"
-        => match super::list::call(name, pos_args, kw_args) {
+    if list_is_known(name) {
+        match super::list::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        },
-        _ => None,
+        }
+    } else {
+        None
     }
 }
 
 // ─── color ────────────────────────────────────────────────
 
 pub(crate) fn color_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "color.adjust" | "color.adjust-color" => Some("adjust-color"),
-        "color.change" | "color.change-color" => Some("change-color"),
-        "color.scale" | "color.scale-color" => Some("scale-color"),
-        "color.ie-hex-str" => Some("ie-hex-str"),
-        "color.invert" => Some("invert"),
-        "color.grayscale" => Some("grayscale"),
-        "color.complement" => Some("complement"),
-        "color.adjust-hue" => Some("adjust-hue"),
-        "color.saturate" => Some("saturate"),
-        "color.desaturate" => Some("desaturate"),
-        "color.transparentize" => Some("transparentize"),
-        "color.fade-out" => Some("fade-out"),
-        "color.opacify" => Some("opacify"),
-        "color.fade-in" => Some("fade-in"),
-        "color.alpha" => Some("alpha"),
-        "color.opacity" => Some("opacity"),
-        "color.red" => Some("red"),
-        "color.green" => Some("green"),
-        "color.blue" => Some("blue"),
-        "color.hue" => Some("hue"),
-        "color.saturation" => Some("saturation"),
-        "color.lightness" => Some("lightness"),
-        "color.whiteness" => Some("whiteness"),
-        "color.blackness" => Some("blackness"),
-        "color.is-powerless" => Some("is-powerless"),
-        "color.is-missing" => Some("is-missing"),
-        "color.is-in-gamut" => Some("is-in-gamut"),
-        "color.is-legacy" => Some("is-legacy"),
-        "color.channel" => Some("channel"),
-        "color.to-space" => Some("to-space"),
-        "color.to-gamut" => Some("to-gamut"),
-        "color.space" => Some("space"),
-        "color.same" => Some("same"),
-        "color.hwb" => Some("hwb"),
-        "color.hsl" => Some("hsl"),
-        "color.hsla" => Some("hsla"),
-        "color.rgba" => Some("rgba"),
-        "color.rgb" => Some("rgb"),
-        "color.darken" => Some("darken"),
-        "color.lighten" => Some("lighten"),
-        "color.mix" => Some("mix"),
-        _ => None,
-    }
+    COLOR_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 pub(crate) fn color_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "adjust-color" | "change-color" | "scale-color" | "ie-hex-str"
-        | "invert" | "grayscale" | "complement" | "adjust-hue"
-        | "saturate" | "desaturate" | "transparentize" | "fade-out"
-        | "opacify" | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
-        | "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
-        | "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy" | "channel"
-        | "to-space" | "to-gamut" | "space" | "same" | "hwb" | "hsl" | "hsla"
-        | "color_channel"
-        | "rgba" | "rgb" | "darken" | "lighten" | "mix"
-        | "color.adjust" | "color.adjust-color" | "color.change" | "color.change-color"
-        | "color.scale" | "color.scale-color" | "color.ie-hex-str" | "color.invert"
-        | "color.grayscale" | "color.complement" | "color.adjust-hue" | "color.saturate"
-        | "color.desaturate" | "color.transparentize" | "color.fade-out" | "color.opacify"
-        | "color.fade-in" | "color.alpha" | "color.opacity" | "color.red" | "color.green"
-        | "color.blue" | "color.hue" | "color.saturation" | "color.lightness" | "color.whiteness"
-        | "color.blackness" | "color.is-powerless" | "color.is-missing" | "color.is-in-gamut"
-        | "color.is-legacy" | "color.channel" | "color.to-space" | "color.to-gamut"
-        | "color.space" | "color.same" | "color.hwb" | "color.hsl" | "color.hsla"
-        | "color.rgba" | "color.rgb" | "color.darken" | "color.lighten" | "color.mix"
-    )
+    COLOR_NAMES.iter().any(|(k, v)| *k == name || *v == name)
+        || name == "color_channel"
 }
 
 pub(crate) fn color_dispatch(
@@ -299,49 +220,25 @@ pub(crate) fn color_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    match name {
-        "adjust-color" | "change-color" | "scale-color" | "ie-hex-str"
-        | "invert" | "grayscale" | "complement" | "adjust-hue"
-        | "saturate" | "desaturate" | "transparentize" | "fade-out"
-        | "opacify" | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
-        | "hue" | "saturation" | "lightness" | "whiteness" | "blackness"
-        | "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy" | "channel"
-        | "to-space" | "to-gamut" | "space" | "same" | "hwb" | "hsl" | "hsla" | "color_channel"
-        => match super::color::call(name, pos_args, kw_args) {
+    if color_is_known(name) {
+        match super::color::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        },
-        _ => None,
+        }
+    } else {
+        None
     }
 }
 
 // ─── selector ─────────────────────────────────────────────
 
 pub(crate) fn selector_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "selector.append" => Some("selector-append"),
-        "selector.nest" => Some("selector-nest"),
-        "selector.is-superselector" => Some("selector-is-superselector"),
-        "selector.parse" => Some("selector-parse"),
-        "selector.simple-selectors" => Some("selector-simple-selectors"),
-        "selector.unify" => Some("selector-unify"),
-        "selector.extend" => Some("selector-extend"),
-        "selector.replace" => Some("selector-replace"),
-        _ => None,
-    }
+    SELECTOR_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 pub(crate) fn selector_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "selector-append" | "selector-is-super" | "selector-nest"
-        | "selector-is-superselector" | "selector-parse" | "selector-simple-selectors"
-        | "selector-unify" | "selector-extend" | "selector-replace"
-        | "selector.append" | "selector.nest" | "selector.is-superselector"
-        | "selector.parse" | "selector.simple-selectors" | "selector.unify"
-        | "selector.extend" | "selector.replace"
-    )
+    SELECTOR_NAMES.iter().any(|(k, v)| *k == name || *v == name)
 }
 
 pub(crate) fn selector_dispatch(
@@ -350,16 +247,14 @@ pub(crate) fn selector_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    match name {
-        "selector-append" | "selector-is-super" | "selector-nest"
-        | "selector-is-superselector" | "selector-parse" | "selector-simple-selectors"
-        | "selector-unify" | "selector-extend" | "selector-replace"
-        => match super::selector::call(name, pos_args, kw_args) {
+    if selector_is_known(name) {
+        match super::selector::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        },
-        _ => None,
+        }
+    } else {
+        None
     }
 }
 
@@ -380,27 +275,7 @@ pub(crate) fn module_builtin_name(name: &str) -> &str {
 
 /// meta 模块限定名 → 全局名（dispatch = "none"：只参与名称映射）。
 fn meta_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "meta.type-of" => Some("type-of"),
-        "meta.inspect" => Some("inspect"),
-        "meta.keywords" => Some("keywords"),
-        "meta.get-function" => Some("get-function"),
-        "meta.call" => Some("call"),
-        "meta.feature-exists" => Some("feature-exists"),
-        "meta.content-exists" => Some("content-exists"),
-        "meta.mixin-exists" => Some("mixin-exists"),
-        "meta.function-exists" => Some("function-exists"),
-        "meta.global-variable-exists" => Some("global-variable-exists"),
-        "meta.variable-exists" => Some("variable-exists"),
-        "meta.calc-args" => Some("calc-args"),
-        "meta.calc-name" => Some("calc-name"),
-        "meta.get-mixin" => Some("get-mixin"),
-        "meta.module-functions" => Some("module-functions"),
-        "meta.module-mixins" => Some("module-mixins"),
-        "meta.module-variables" => Some("module-variables"),
-        "meta.accepts-content" => Some("accepts-content"),
-        _ => None,
-    }
+    META_NAMES.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
 }
 
 /// 检查函数名是否为已知的 Sass 内置函数。
@@ -412,35 +287,15 @@ pub(crate) fn is_known_builtin(name: &str) -> bool {
         || color_is_known(name)
         || selector_is_known(name)
         || meta_is_known(name)
-        || matches!(name, "calc" | "env" | "var")
+        || CSS_FUNC_NAMES.contains(&name)
 }
 
 /// meta 模块函数名检查（dispatch = "none"：只参与名称映射，不分派）。
 fn meta_is_known(name: &str) -> bool {
-    matches!(
-        name,
-        "type-of" | "type_of" | "inspect" | "keywords"
-        | "get-function" | "get_function" | "call"
-        | "feature-exists" | "feature_exists"
-        | "content-exists" | "content_exists"
-        | "mixin-exists" | "mixin_exists"
-        | "function-exists" | "function_exists"
-        | "global-variable-exists" | "global_variable_exists"
-        | "variable-exists" | "variable_exists"
-        | "calc-args" | "calc_args" | "calc-name" | "calc_name"
-        | "get-mixin" | "get_mixin"
-        | "module-functions" | "module_functions"
-        | "module-mixins" | "module_mixins"
-        | "module-variables" | "module_variables"
-        | "accepts-content" | "accepts_content"
-        | "meta.type-of" | "meta.inspect" | "meta.keywords"
-        | "meta.get-function" | "meta.call" | "meta.feature-exists"
-        | "meta.content-exists" | "meta.mixin-exists" | "meta.function-exists"
-        | "meta.global-variable-exists" | "meta.variable-exists"
-        | "meta.calc-args" | "meta.calc-name" | "meta.get-mixin"
-        | "meta.module-functions" | "meta.module-mixins" | "meta.module-variables"
-        | "meta.accepts-content"
-    )
+    META_NAMES.iter().any(|(k, v)| *k == name || *v == name)
+        || META_NAMES.iter().any(|(_, v)| {
+            v.replace('-', "_") == name
+        })
 }
 
 /// 按模块路由到子模块 call 函数。

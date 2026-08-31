@@ -119,6 +119,7 @@ pub(crate) mod __tracing {
     pub use crate::__noop_log as warn;
 }
 
+pub mod consts;
 pub mod css;
 pub mod error;
 pub mod eval;

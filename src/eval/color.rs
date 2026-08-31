@@ -1,5 +1,6 @@
 use super::*;
 use crate::error::Result;
+use crate::parse::ast::{ColorOutput, ColorSpace};
 
 impl Evaluator {
     /// CSS 命名颜色查找——将 "white" / "black" 等名称转为 Color。
@@ -308,7 +309,7 @@ impl Evaluator {
             (154.0, 205.0, 50.0, "yellowgreen"),
         ];
         for &(r, g, b, name) in NAMED_COLORS {
-            if (c.r - r).abs() < 0.5 && (c.g - g).abs() < 0.5 && (c.b - b).abs() < 0.5 {
+            if (c.legacy_rgb[0] - r).abs() < 0.5 && (c.legacy_rgb[1] - g).abs() < 0.5 && (c.legacy_rgb[2] - b).abs() < 0.5 {
                 return Some(name);
             }
         }
@@ -347,7 +348,7 @@ impl Evaluator {
         crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "hsl_to_rgb",
-            r = result.r, g = result.g, b = result.b,
+            r = result.legacy_rgb[0], g = result.legacy_rgb[1], b = result.legacy_rgb[2],
             "HSL to RGB result"
         );
         result
@@ -507,7 +508,7 @@ impl Evaluator {
                     r = *r, g = *g, b = *b,
                     "rgba 3-arg input"
                 );
-                Ok(Value::Color(Color::rgba_fmt(r_val, g_val, b_val, 1.0, ColorFormat::Rgb)))
+                Ok(Value::Color(Color::with_rgb(r_val, g_val, b_val, 1.0, ColorSpace::Rgb, ColorOutput::RgbExplicit)))
             }
             [
                 Value::Number(r, ru),
@@ -529,13 +530,13 @@ impl Evaluator {
                     r = *r, g = *g, b = *b, a = *a,
                     "rgba 4-arg input"
                 );
-                Ok(Value::Color(Color::rgba_fmt(
-                    r_val, g_val, b_val, alpha, ColorFormat::Rgb,
+                Ok(Value::Color(Color::with_rgb(
+                    r_val, g_val, b_val, alpha, ColorSpace::Rgb, ColorOutput::RgbExplicit,
                 )))
             }
             // rgba($color, $alpha) — 修改颜色的 alpha 通道
             [Value::Color(c), Value::Number(a, _)] => {
-                Ok(Value::Color(Color::rgba_fmt(c.r, c.g, c.b, *a, c.format.clone())))
+                Ok(Value::Color(Color::with_rgb(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2], *a, c.space, c.output)))
             }
             // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
             _ if has_none || args.iter().any(|a| {
@@ -570,15 +571,15 @@ impl Evaluator {
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "darken",
-                    input_r = c.r, input_g = c.g, input_b = c.b, input_a = c.a,
+                    input_r = c.legacy_rgb[0], input_g = c.legacy_rgb[1], input_b = c.legacy_rgb[2], input_a = c.a,
                     amount = *amount,
                     "darken input"
                 );
                 // Sass darken = HSL lightness 减少
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                let (h, s, l) = Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                 let new_l = (l - *amount / 100.0).max(0.0);
                 let new_c = Evaluator::hsl_to_rgb(h, s, new_l);
-                let result = Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, s, new_l)));
+                let result = Value::Color(Color::with_hsl(h, s, new_l, c.a, ColorOutput::RgbPercent, new_c.legacy_rgb));
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "darken",
@@ -597,15 +598,15 @@ impl Evaluator {
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "lighten",
-                    input_r = c.r, input_g = c.g, input_b = c.b, input_a = c.a,
+                    input_r = c.legacy_rgb[0], input_g = c.legacy_rgb[1], input_b = c.legacy_rgb[2], input_a = c.a,
                     amount = *amount,
                     "lighten input"
                 );
                 // Sass lighten = HSL lightness 增加
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.r, c.g, c.b);
+                let (h, s, l) = Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                 let new_l = (l + *amount / 100.0).min(1.0);
                 let new_c = Evaluator::hsl_to_rgb(h, s, new_l);
-                let result = Value::Color(Color::rgba_fmt(new_c.r, new_c.g, new_c.b, c.a, ColorFormat::RgbPercent(h, s, new_l)));
+                let result = Value::Color(Color::with_hsl(h, s, new_l, c.a, ColorOutput::RgbPercent, new_c.legacy_rgb));
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "lighten",
@@ -628,9 +629,9 @@ impl Evaluator {
                     "mix 2-arg input"
                 );
                 Ok(Value::Color(Color::rgba(
-                    (a.r + b.r) / 2.0,
-                    (a.g + b.g) / 2.0,
-                    (a.b + b.b) / 2.0,
+                    (a.legacy_rgb[0] + b.legacy_rgb[0]) / 2.0,
+                    (a.legacy_rgb[1] + b.legacy_rgb[1]) / 2.0,
+                    (a.legacy_rgb[2] + b.legacy_rgb[2]) / 2.0,
                     (a.a + b.a) / 2.0,
                 )))
             }
@@ -643,9 +644,9 @@ impl Evaluator {
                 );
                 let weight = *w / 100.0;
                 Ok(Value::Color(Color::rgba(
-                    a.r * (1.0 - weight) + b.r * weight,
-                    a.g * (1.0 - weight) + b.g * weight,
-                    a.b * (1.0 - weight) + b.b * weight,
+                    a.legacy_rgb[0] * (1.0 - weight) + b.legacy_rgb[0] * weight,
+                    a.legacy_rgb[1] * (1.0 - weight) + b.legacy_rgb[1] * weight,
+                    a.legacy_rgb[2] * (1.0 - weight) + b.legacy_rgb[2] * weight,
                     a.a * (1.0 - weight) + b.a * weight,
                 )))
             }

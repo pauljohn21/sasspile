@@ -20,7 +20,7 @@ impl Serializer {
             OutputStyle::Expanded => Self::serialize_expanded(&merged, 0),
             OutputStyle::Compressed => Self::serialize_compressed(&merged),
         };
-        // 当输出包含非 ASCII 字符时，Dart Sass 在 expanded 模式下添加 @charset 前缀
+        // 当输出包含非 ASCII 字符时，SCSS 规范要求 expanded 模式下添加 @charset 前缀
         if !css.is_ascii() {
             match style {
                 OutputStyle::Expanded => format!("@charset \"UTF-8\";\n{css}"),
@@ -151,7 +151,7 @@ impl Serializer {
         for (i, n) in nodes.iter().enumerate() {
             if i > 0 {
                 result.push('\n');
-                // 顶层规则之间添加空行（Dart Sass expanded 模式）
+                // 顶层规则之间添加空行（SCSS expanded 模式）
                 // 但以下情况不加空行：
                 // - @import 等无 body 的 @规则之间
                 // - 连续注释之间

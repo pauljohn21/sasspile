@@ -68,9 +68,9 @@ fn test_bool_null_display() {
 #[test]
 fn test_color_rgb() {
     let c = Color::rgb(255.0, 128.0, 0.0);
-    assert_eq!(c.r, 255.0);
-    assert_eq!(c.g, 128.0);
-    assert_eq!(c.b, 0.0);
+    assert_eq!(c.r(), 255.0);
+    assert_eq!(c.g(), 128.0);
+    assert_eq!(c.b(), 0.0);
     assert!((c.a - 1.0).abs() < f64::EPSILON);
 }
 

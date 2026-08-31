@@ -6,36 +6,37 @@ use super::Parser;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
+use crate::parse::at_rule_kinds::AtRuleKind;
 
 impl<'tok> Parser<'tok> {
     // —— @规则解析 ——
     pub(crate) fn parse_at_rule(&mut self, name: String) -> Result<Node> {
         self.advance(); // 消费 @rule
-        match name.as_str() {
-            "if" => self.parse_if(),
-            "for" => self.parse_for(),
-            "each" => self.parse_each(),
-            "while" => self.parse_while(),
-            "mixin" => self.parse_mixin_def(),
-            "include" => self.parse_include(),
-            "content" => {
+        match AtRuleKind::from_str(&name) {
+            AtRuleKind::If => self.parse_if(),
+            AtRuleKind::For => self.parse_for(),
+            AtRuleKind::Each => self.parse_each(),
+            AtRuleKind::While => self.parse_while(),
+            AtRuleKind::Mixin => self.parse_mixin_def(),
+            AtRuleKind::Include => self.parse_include(),
+            AtRuleKind::Content => {
                 self.skip_ws();
                 if self.peek() == Some(&Token::Semicolon) {
                     self.advance();
                 }
                 Ok(Node::Content)
             }
-            "function" => self.parse_function_def(),
-            "return" => self.parse_return(),
-            "use" => self.parse_use(),
-            "forward" => self.parse_forward(),
-            "import" => self.parse_import(),
-            "extend" => self.parse_extend(),
-            "at-root" => self.parse_at_root(),
-            "warn" => self.parse_warn(),
-            "debug" => self.parse_debug(),
-            "error" => self.parse_error(),
-            _ => self.parse_generic_at_rule(name),
+            AtRuleKind::Function => self.parse_function_def(),
+            AtRuleKind::Return => self.parse_return(),
+            AtRuleKind::Use => self.parse_use(),
+            AtRuleKind::Forward => self.parse_forward(),
+            AtRuleKind::Import => self.parse_import(),
+            AtRuleKind::Extend => self.parse_extend(),
+            AtRuleKind::AtRoot => self.parse_at_root(),
+            AtRuleKind::Warn => self.parse_warn(),
+            AtRuleKind::Debug => self.parse_debug(),
+            AtRuleKind::Error => self.parse_error(),
+            AtRuleKind::Other(n) => self.parse_generic_at_rule(n),
         }
     }
 

@@ -159,8 +159,8 @@ impl Evaluator {
                     result.push(CssNode::Rule { selector: combined, declarations, children });
                 }
                 CssNode::AtRule { name, params, children, has_body: true } => {
-                    let n = name.clone();
-                    let ch = if n == "keyframes" || n == "-webkit-keyframes" || n == "-moz-keyframes" {
+                    use crate::parse::at_rule_kinds::CssAtRule;
+                    let ch = if CssAtRule::is_keyframes(&name) {
                         children
                     } else {
                         Self::nest_rule_in_children(parent, children)

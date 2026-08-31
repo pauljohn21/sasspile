@@ -1,6 +1,7 @@
 //! 语法分析器——递归下降 + Pratt 表达式解析。
 
 pub mod ast;
+pub mod at_rule_kinds;
 mod ast_impl;
 
 use crate::error::{Result, SassError};

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// 跳过的 spec 目录（已弃用/非标准/颜色）。
 ///
-/// - `libsass` 系列：LibSass 实现的旧测试，Dart Sass 已弃用
+/// - `libsass` 系列：LibSass 实现的旧测试，已被 SCSS 规范弃用
 /// - `non_conformant`：不符合规范的旧测试
 /// - `core_functions/color`：颜色函数（adjust/change/scale/channel/mix/hsl/hwb/rgb/invert/
 ///   is_powerless/lab/lch/oklab/oklch/color/to_space/to_gamut + adjust_color/adjust_hue 等）

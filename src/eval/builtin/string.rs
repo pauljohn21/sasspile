@@ -94,7 +94,7 @@ impl Evaluator {
                 }
                 match &args[0] {
                     Value::String(s, q) => {
-                        // Dart Sass 只转换 ASCII a-z → A-Z
+                        // SCSS 规范只转换 ASCII a-z → A-Z
                         let uppered: String = s
                             .chars()
                             .map(|c| {
@@ -125,7 +125,7 @@ impl Evaluator {
                 }
                 match &args[0] {
                     Value::String(s, q) => {
-                        // Dart Sass 只转换 ASCII A-Z → a-z
+                        // SCSS 规范只转换 ASCII A-Z → a-z
                         let lowered: String = s
                             .chars()
                             .map(|c| {

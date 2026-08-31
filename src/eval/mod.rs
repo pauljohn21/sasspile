@@ -466,6 +466,7 @@ mod at_params;
 mod builtin;
 mod color;
 mod control_flow;
+pub(crate) mod error_msgs;
 mod extend;
 mod file_resolver;
 mod import;

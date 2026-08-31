@@ -4,6 +4,7 @@
 //! 此时禁止 Sass 特有的表达式和语句。
 
 use crate::error::{Result, SassError};
+use crate::eval::error_msgs::{err_plain_css_at_rule, err_plain_css_silent_comment, err_plain_css_sass_var};
 use crate::parse::ast::{BinOpKind, Node, Value};
 
 impl super::Evaluator {
@@ -134,55 +135,30 @@ impl super::Evaluator {
             // 允许的节点
             Node::Rule { .. } | Node::Decl { .. } | Node::Comment(_, false) => Ok(()),
             Node::AtRule { name, .. } => {
-                // 允许的 CSS at-rules
-                const CSS_AT_RULES: &[&str] = &[
-                    "media", "supports", "container", "import", "charset",
-                    "page", "font-face", "font-feature-values", "keyframes",
-                    "layer", "scope", "starting-style", "position-try",
-                    "property", "namespace", "document",
-                ];
-                let lower = name.to_lowercase();
-                if CSS_AT_RULES.contains(&lower.as_str()) {
+                use crate::parse::at_rule_kinds::CssAtRule;
+                if CssAtRule::from_str(name).is_valid() {
                     Ok(())
                 } else {
-                    Err(SassError::Eval(
-                        "This at-rule isn't allowed in plain CSS.".into(),
-                    ))
+                    Err(err_plain_css_at_rule())
                 }
             }
             // 静默注释 — 禁止
-            Node::Comment(_, true) => Err(SassError::Eval(
-                "Silent comments aren't allowed in plain CSS.".into(),
-            )),
+            Node::Comment(_, true) => Err(err_plain_css_silent_comment()),
             // Sass 特有的 at-rules — 全部禁止
-            Node::Variable { .. } => Err(SassError::Eval(
-                "Sass variables aren't allowed in plain CSS.".into(),
-            )),
+            Node::Variable { .. } => Err(err_plain_css_sass_var()),
             Node::If { .. } | Node::For { .. } | Node::Each { .. } | Node::While { .. } => {
-                Err(SassError::Eval(
-                    "This at-rule isn't allowed in plain CSS.".into(),
-                ))
+                Err(err_plain_css_at_rule())
             }
             Node::MixinDef { .. } | Node::Include { .. } | Node::Content => {
-                Err(SassError::Eval(
-                    "This at-rule isn't allowed in plain CSS.".into(),
-                ))
+                Err(err_plain_css_at_rule())
             }
             Node::FunctionDef { .. } | Node::Return(_) => {
-                Err(SassError::Eval(
-                    "This at-rule isn't allowed in plain CSS.".into(),
-                ))
+                Err(err_plain_css_at_rule())
             }
-            Node::Extend { .. } => Err(SassError::Eval(
-                "This at-rule isn't allowed in plain CSS.".into(),
-            )),
-            Node::AtRoot { .. } => Err(SassError::Eval(
-                "This at-rule isn't allowed in plain CSS.".into(),
-            )),
+            Node::Extend { .. } => Err(err_plain_css_at_rule()),
+            Node::AtRoot { .. } => Err(err_plain_css_at_rule()),
             Node::Warn(_) | Node::Debug(_) | Node::Error(_) => {
-                Err(SassError::Eval(
-                    "This at-rule isn't allowed in plain CSS.".into(),
-                ))
+                Err(err_plain_css_at_rule())
             }
             // Use/Forward/Import — 由模块系统处理，不拦截
             Node::Use { .. } | Node::Forward { .. } | Node::Import { .. } => Ok(()),

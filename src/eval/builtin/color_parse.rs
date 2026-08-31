@@ -3,7 +3,8 @@
 //! 从 Sass 值参数解析为 `Value::Color`，sRGB 近似值用 color crate 计算。
 
 use crate::error::{Result, SassError};
-use crate::parse::ast::{ColorFormat, Value, Separator};
+use crate::eval::error_msgs::{err_not_a_number, err_requires_args};
+use crate::parse::ast::{ColorSpace, ColorOutput, Value, Separator};
 use std::collections::HashMap;
 
 use super::color_conv_ops::make_color;
@@ -52,7 +53,7 @@ fn extract_num(v: &Value, scale_pct: bool) -> Result<f64> {
     match v {
         Value::Number(n, Some(u)) if u == "%" && scale_pct => Ok(*n / 100.0),
         Value::Number(n, _) => Ok(*n),
-        _ => Err(SassError::Eval(format!("$value: {} is not a number.", v))),
+        _ => Err(err_not_a_number("value", v)),
     }
 }
 
@@ -62,7 +63,7 @@ fn extract_pct_value(v: &Value) -> Result<f64> {
     match v {
         Value::Number(n, Some(u)) if u == "%" => Ok(*n),
         Value::Number(n, _) => Ok(*n),
-        _ => Err(SassError::Eval(format!("$value: {} is not a number.", v))),
+        _ => Err(err_not_a_number("value", v)),
     }
 }
 
@@ -71,7 +72,7 @@ fn extract_hue(v: &Value) -> Result<f64> {
     match v {
         Value::Number(n, Some(u)) if u == "deg" => Ok(*n),
         Value::Number(n, _) => Ok(*n),
-        _ => Err(SassError::Eval(format!("$value: {} is not a number.", v))),
+        _ => Err(err_not_a_number("value", v)),
     }
 }
 
@@ -79,55 +80,55 @@ fn extract_hue(v: &Value) -> Result<f64> {
 fn parse_lab(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
     if nums.len() < 3 {
-        return Err(SassError::Eval(format!("lab() requires 3 arguments, got {}", nums.len())));
+        return Err(err_requires_args("lab", 3, nums.len()));
     }
     let l = extract_pct_value(&nums[0])?;  // L% → 0-100
     let a = extract_num(&nums[1], false)?;
     let b = extract_num(&nums[2], false)?;
-    Ok(make_color(ColorFormat::Lab(l, a, b), alpha))
+    Ok(make_color(ColorSpace::Lab, [l, a, b], alpha, ColorOutput::Auto))
 }
 
 /// lch(L% C Hdeg [/ alpha])
 fn parse_lch(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
     if nums.len() < 3 {
-        return Err(SassError::Eval(format!("lch() requires 3 arguments, got {}", nums.len())));
+        return Err(err_requires_args("lch", 3, nums.len()));
     }
     let l = extract_pct_value(&nums[0])?;
     let c = extract_num(&nums[1], false)?;
     let h = extract_hue(&nums[2])?;
-    Ok(make_color(ColorFormat::Lch(l, c, h), alpha))
+    Ok(make_color(ColorSpace::Lch, [l, c, h], alpha, ColorOutput::Auto))
 }
 
 /// oklab(L% a b [/ alpha])
 fn parse_oklab(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
     if nums.len() < 3 {
-        return Err(SassError::Eval(format!("oklab() requires 3 arguments, got {}", nums.len())));
+        return Err(err_requires_args("oklab", 3, nums.len()));
     }
     let l = extract_num(&nums[0], true)?;  // L% → 0-1
     let a = extract_num(&nums[1], false)?;
     let b = extract_num(&nums[2], false)?;
-    Ok(make_color(ColorFormat::Oklab(l, a, b), alpha))
+    Ok(make_color(ColorSpace::Oklab, [l, a, b], alpha, ColorOutput::Auto))
 }
 
 /// oklch(L% C Hdeg [/ alpha])
 fn parse_oklch(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
     if nums.len() < 3 {
-        return Err(SassError::Eval(format!("oklch() requires 3 arguments, got {}", nums.len())));
+        return Err(err_requires_args("oklch", 3, nums.len()));
     }
     let l = extract_num(&nums[0], true)?;
     let c = extract_num(&nums[1], false)?;
     let h = extract_hue(&nums[2])?;
-    Ok(make_color(ColorFormat::Oklch(l, c, h), alpha))
+    Ok(make_color(ColorSpace::Oklch, [l, c, h], alpha, ColorOutput::Auto))
 }
 
 /// color(space r g b [/ alpha])
 fn parse_color_space(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
     if nums.len() < 4 {
-        return Err(SassError::Eval(format!("color() requires 4 arguments (space + 3 channels), got {}", nums.len())));
+        return Err(err_requires_args("color", 4, nums.len()));
     }
     let space = match &nums[0] {
         Value::String(s, _) => s.clone(),
@@ -136,19 +137,9 @@ fn parse_color_space(args: &[Value]) -> Result<Value> {
     let r = extract_num(&nums[1], false)?;
     let g = extract_num(&nums[2], false)?;
     let b = extract_num(&nums[3], false)?;
-    let fmt = match space.as_str() {
-        "display-p3" => ColorFormat::DisplayP3(r, g, b),
-        "display-p3-linear" => ColorFormat::DisplayP3Linear(r, g, b),
-        "srgb" => ColorFormat::Srgb(r, g, b),
-        "srgb-linear" => ColorFormat::SrgbLinear(r, g, b),
-        "a98-rgb" => ColorFormat::A98Rgb(r, g, b),
-        "prophoto-rgb" => ColorFormat::ProphotoRgb(r, g, b),
-        "rec2020" => ColorFormat::Rec2020(r, g, b),
-        "xyz" | "xyz-d65" => ColorFormat::XyzD65(r, g, b),
-        "xyz-d50" => ColorFormat::XyzD50(r, g, b),
-        _ => return Err(SassError::Eval(format!("Unknown color space: {space}"))),
-    };
-    Ok(make_color(fmt, alpha))
+    let cs = ColorSpace::from_str(&space)
+        .ok_or_else(|| SassError::Eval(format!("Unknown color space: {space}")))?;
+    Ok(make_color(cs, [r, g, b], alpha, ColorOutput::Auto))
 }
 
 /// 分离 alpha 分量：参数末尾可能有 / alpha。
