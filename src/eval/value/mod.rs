@@ -504,8 +504,8 @@ pub(crate) fn eval_variable(
     /// 简化 calc() 表达式——纯数字时去掉 calc() 包装。
     ///
     /// `calc(1px)` → `Value::Number(1, "px")`
-    /// `calc(1px + 2px)` → `Value::Calc("calc(1px + 2px)")`（保留）
-    /// `calc(var(--c))` → `Value::Calc("calc(var(--c))")`（保留）
+    /// `calc(1px + 2px)` → `Value::Number(3, "px")`（同单位简化）
+    /// `calc(1px + 2%)` → `Value::Calc("calc(1px + 2%)")`（不同单位保留）
     fn simplify_calc(s: &str) -> Value {
         // 尝试提取 calc(内容) 的内部表达式
         let inner = s.strip_prefix("calc(").and_then(|s| s.strip_suffix(")"));
@@ -513,17 +513,90 @@ pub(crate) fn eval_variable(
             Some(i) => i.trim(),
             None => return Value::Calc(s.to_string()),
         };
+        // CSS 常量替换：pi → 3.1415926536, e → 2.7182818285
+        let inner = match inner {
+            "pi" => return Value::Number(std::f64::consts::PI, None),
+            "e" => return Value::Number(std::f64::consts::E, None),
+            _ => inner,
+        };
         // 尝试解析为纯数字 + 可选单位
         if let Some(v) = Self::parse_simple_number(inner) {
             return v;
         }
+        // 尝试解析同单位加减法：1px + 2px, 1px - 2px
+        if let Some(v) = Self::try_simplify_same_unit_arith(inner) {
+            return v;
+        }
         Value::Calc(s.to_string())
+    }
+
+    /// 尝试简化同单位加减法：`1px + 2px` → `3px`，`1px - 2px` → `-1px`。
+    /// 只处理简单的 `数字单位 op 数字单位` 形式。
+    fn try_simplify_same_unit_arith(s: &str) -> Option<Value> {
+        let s = s.trim();
+        // 查找 + 或 - 作为运算符（前后有空格的）
+        // 注意：- 也可能是负号，所以只匹配 " + " 和 " - "
+        let op_idx = Self::find_calc_operator(s)?;
+        let op_str: &str = s[op_idx..op_idx + 3].trim();
+        let left = s[..op_idx].trim();
+        let right = s[op_idx + 3..].trim();
+        let left_val = Self::parse_simple_number(left)?;
+        let right_val = Self::parse_simple_number(right)?;
+        match (&left_val, &right_val) {
+            // 乘法：数字 * 无单位数字 → 保留单位
+            (Value::Number(a, ua), Value::Number(b, None)) if op_str == "*" => {
+                Some(Value::Number(a * b, ua.clone()))
+            }
+            (Value::Number(a, None), Value::Number(b, ub)) if op_str == "*" => {
+                Some(Value::Number(a * b, ub.clone()))
+            }
+            // 除法：数字 / 无单位数字 → 保留单位
+            (Value::Number(a, ua), Value::Number(b, None)) if op_str == "/" && *b != 0.0 => {
+                Some(Value::Number(a / b, ua.clone()))
+            }
+            // 同单位加减法
+            (Value::Number(a, ua), Value::Number(b, ub)) if ua == ub => {
+                match op_str {
+                    "+" => Some(Value::Number(a + b, ua.clone())),
+                    "-" => Some(Value::Number(a - b, ua.clone())),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// 查找 calc 表达式中的运算符位置（" + ", " - ", " * ", " / "）。
+    /// 返回运算符前空格的索引位置。
+    fn find_calc_operator(s: &str) -> Option<usize> {
+        let mut depth = 0i32;
+        for (i, c) in s.char_indices() {
+            match c {
+                '(' | '[' => depth += 1,
+                ')' | ']' => depth -= 1,
+                ' ' if depth == 0 => {
+                    let rest = &s[i..];
+                    if rest.starts_with(" + ") || rest.starts_with(" - ")
+                        || rest.starts_with(" * ") || rest.starts_with(" / ") {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// 尝试将字符串解析为纯数字（含单位）。
     /// `1px` → `Value::Number(1, "px")`，`42` → `Value::Number(42, None)`
     fn parse_simple_number(s: &str) -> Option<Value> {
         let s = s.trim();
+        // CSS 常量
+        match s {
+            "pi" => return Some(Value::Number(std::f64::consts::PI, None)),
+            "e" => return Some(Value::Number(std::f64::consts::E, None)),
+            _ => {}
+        }
         // 去掉前导 +
         let s = s.strip_prefix('+').unwrap_or(s);
         // 找到数字部分的结尾
