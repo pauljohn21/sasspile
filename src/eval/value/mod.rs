@@ -519,8 +519,8 @@ pub(crate) fn eval_variable(
                 return Value::Calc(s.to_string());
             }
         };
-        // CSS 常量替换：pi → 3.1415926536, e → 2.7182818285
-        let inner = match inner {
+        // CSS 常量替换：pi/PI/pI → 3.1415926536, e/E → 2.7182818285
+        let inner = match inner.to_lowercase().as_str() {
             "pi" => return Value::Number(std::f64::consts::PI, None),
             "e" => return Value::Number(std::f64::consts::E, None),
             _ => inner,
@@ -667,15 +667,15 @@ pub(crate) fn eval_variable(
     }
 
     /// 在 calc 表达式中替换独立常量 pi/e 为数字值。
-    /// 只替换作为独立标识符出现的 pi/e，不替换子串（如 epix 中的 pi）。
+    /// 只替换作为独立标识符出现的 pi/e（大小写不敏感），不替换子串（如 epix 中的 pi）。
     fn replace_calc_constants(s: &str) -> String {
         let mut result = s.to_string();
-        // 用空格/括号/运算符边界分隔，替换独立 pi
         for (word, val) in [("pi", "3.1415926536"), ("e", "2.7182818285")] {
             let mut idx = 0;
             loop {
-                if let Some(pos) = result[idx..].find(word) {
-                    let pos = idx + pos;
+                let lower = result[idx..].to_lowercase();
+                if let Some(pos_rel) = lower.find(word) {
+                    let pos = idx + pos_rel;
                     let before = pos.checked_sub(1).and_then(|i| result[i..i+1].chars().next());
                     let after = result.get(pos + word.len()..pos + word.len() + 1).and_then(|s| s.chars().next());
                     let is_standalone_before = match before {
