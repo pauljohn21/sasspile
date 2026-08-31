@@ -110,8 +110,8 @@ impl Serializer {
     }
 
     fn flatten_children(_parent: &str, children: &[CssNode]) -> Vec<CssNode> {
-        let mut result = Vec::new();
-        for child in children {
+        children.iter().flat_map(|child| {
+            let mut result = Vec::new();
             match child {
                 CssNode::Rule {
                     selector,
@@ -130,16 +130,15 @@ impl Serializer {
                 }
                 other => result.push(other.clone()),
             }
-        }
-        result
+            result
+        }).collect()
     }
 
     fn serialize_expanded(nodes: &[CssNode], depth: usize) -> String {
         let indent = "  ".repeat(depth);
-        let mut result = String::new();
-        for (i, n) in nodes.iter().enumerate() {
+        let mut result = nodes.iter().enumerate().fold(String::new(), |mut acc, (i, n)| {
             if i > 0 {
-                result.push('\n');
+                acc.push('\n');
                 // 顶层规则之间添加空行（SCSS expanded 模式）
                 // 但以下情况不加空行：
                 // - @import 等无 body 的 @规则之间
@@ -152,12 +151,13 @@ impl Serializer {
                     if !(prev_is_import || curr_is_import)
                         && !(prev_is_comment && curr_is_comment)
                     {
-                        result.push('\n');
+                        acc.push('\n');
                     }
                 }
             }
-            Self::write_node_expanded(&mut result, n, &indent, depth);
-        }
+            Self::write_node_expanded(&mut acc, n, &indent, depth);
+            acc
+        });
         if depth == 0 {
             result.push('\n');
         }
@@ -165,11 +165,10 @@ impl Serializer {
     }
 
     fn serialize_compressed(nodes: &[CssNode]) -> String {
-        let mut result = String::new();
-        for n in nodes {
-            Self::write_node_compressed(&mut result, n);
-        }
-        result
+        nodes.iter().fold(String::new(), |mut acc, n| {
+            Self::write_node_compressed(&mut acc, n);
+            acc
+        })
     }
 
     /// 直接写入 String 缓冲区——避免 format! + collect + join 的多重分配。

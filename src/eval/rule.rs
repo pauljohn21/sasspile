@@ -177,50 +177,67 @@ impl Evaluator {
     ///
     /// 用于 `a {@import "other"}` 场景——被导入文件中的规则需要嵌套在父选择器 `a` 下。
     fn nest_rule_in_children(parent: &str, children: Vec<CssNode>) -> Vec<CssNode> {
-        let mut result = Vec::new();
-        let mut current_decls = Vec::new();
-        for child in children {
-            match child {
-                CssNode::Declaration { .. } => current_decls.push(child),
-                CssNode::Rule { selector, declarations, children } => {
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule {
-                            selector: parent.to_string(),
-                            declarations: std::mem::take(&mut current_decls),
-                            children: vec![],
-                        });
+        let (result, current_decls) = children.into_iter().fold(
+            (Vec::<CssNode>::new(), Vec::<CssNode>::new()),
+            |(mut result, mut current_decls), child| {
+                match child {
+                    CssNode::Declaration { .. } => {
+                        current_decls.push(child);
+                        (result, current_decls)
                     }
-                    let combined = Self::combine_selectors(parent, &selector);
-                    result.push(CssNode::Rule { selector: combined, declarations, children });
-                }
-                CssNode::AtRule { name, params, children, has_body: true } => {
-                    use crate::parse::at_rule_kinds::CssAtRule;
-                    let ch = if CssAtRule::is_keyframes(&name) {
-                        children
-                    } else {
-                        Self::nest_rule_in_children(parent, children)
-                    };
-                    result.push(CssNode::AtRule { name, params, children: ch, has_body: true });
-                }
-                other => {
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule {
-                            selector: parent.to_string(),
-                            declarations: std::mem::take(&mut current_decls),
-                            children: vec![],
-                        });
+                    CssNode::Rule { selector, declarations, children } => {
+                        if !current_decls.is_empty() {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        let combined = Self::combine_selectors(parent, &selector);
+                        result.push(CssNode::Rule { selector: combined, declarations, children });
+                        (result, current_decls)
                     }
-                    result.push(other);
+                    CssNode::AtRule { name, params, children, has_body: true } => {
+                        use crate::parse::at_rule_kinds::CssAtRule;
+                        if !current_decls.is_empty() {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        let ch = if CssAtRule::is_keyframes(&name) {
+                            children.clone()
+                        } else {
+                            Self::nest_rule_in_children(parent, children)
+                        };
+                        result.push(CssNode::AtRule { name, params, children: ch, has_body: true });
+                        (result, current_decls)
+                    }
+                    other => {
+                        if !current_decls.is_empty() {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        result.push(other);
+                        (result, current_decls)
+                    }
                 }
-            }
-        }
+            },
+        );
         if !current_decls.is_empty() {
+            let mut result = result;
             result.push(CssNode::Rule {
                 selector: parent.to_string(),
                 declarations: current_decls,
                 children: vec![],
             });
+            result
+        } else {
+            result
         }
-        result
     }
 }

@@ -25,53 +25,58 @@ impl Evaluator {
         map2: &[(Value, Value)],
     ) -> Result<Vec<(Value, Value)>> {
         if keys.is_empty() {
-            let mut result = map.to_vec();
-            for (k, v) in map2 {
-                if let Some(entry) = result.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
+            let result = map2.iter().fold(map.to_vec(), |mut acc, (k, v)| {
+                if let Some(entry) = acc.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
                     entry.1 = v.clone();
                 } else {
-                    result.push((k.clone(), v.clone()));
+                    acc.push((k.clone(), v.clone()));
                 }
-            }
+                acc
+            });
             return Ok(result);
         }
         let key = &keys[0];
         let remaining = &keys[1..];
-        let mut result = Vec::new();
-        let mut found = false;
-        for (k, v) in map {
-            if crate::eval::value::values_eq(k, key) {
-                found = true;
-                let inner_map = Self::value_to_map(v).unwrap_or_default();
-                let new_inner = if remaining.is_empty() {
-                    let mut merged = inner_map;
-                    for (mk, mv) in map2 {
-                        if let Some(entry) =
-                            merged.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, mk))
-                        {
-                            entry.1 = mv.clone();
-                        } else {
-                            merged.push((mk.clone(), mv.clone()));
-                        }
-                    }
-                    merged
+        // try_fold 处理错误传播（嵌套递归可能返回 Err）
+        let (result, found) = map.iter().try_fold(
+            (Vec::<(Value, Value)>::new(), false),
+            |(mut acc, _found), (k, v)| -> Result<(Vec<(Value, Value)>, bool)> {
+                if crate::eval::value::values_eq(k, key) {
+                    let inner_map = Self::value_to_map(v).unwrap_or_default();
+                    let new_inner = if remaining.is_empty() {
+                        map2.iter().fold(inner_map, |mut merged, (mk, mv)| {
+                            if let Some(entry) =
+                                merged.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, mk))
+                            {
+                                entry.1 = mv.clone();
+                            } else {
+                                merged.push((mk.clone(), mv.clone()));
+                            }
+                            merged
+                        })
+                    } else {
+                        Self::nested_map_merge(&inner_map, remaining, map2)?
+                    };
+                    acc.push((k.clone(), Value::Map(new_inner)));
+                    Ok((acc, true))
                 } else {
-                    Self::nested_map_merge(&inner_map, remaining, map2)?
-                };
-                result.push((k.clone(), Value::Map(new_inner)));
-            } else {
-                result.push((k.clone(), v.clone()));
-            }
-        }
+                    acc.push((k.clone(), v.clone()));
+                    Ok((acc, false))
+                }
+            },
+        )?;
         if !found {
             let inner = if remaining.is_empty() {
                 map2.to_vec()
             } else {
                 Self::nested_map_merge(&[], remaining, map2)?
             };
+            let mut result = result;
             result.push((key.clone(), Value::Map(inner)));
+            Ok(result)
+        } else {
+            Ok(result)
         }
-        Ok(result)
     }
 
     /// 嵌套 map.set: map.set(map, k1, k2, ..., value) — 在 map[k1][k2] 设置 value。
@@ -95,18 +100,20 @@ impl Evaluator {
         }
         let key = &keys[0];
         let remaining = &keys[1..];
-        let mut result = Vec::new();
-        let mut found = false;
-        for (k, v) in map {
-            if crate::eval::value::values_eq(k, key) {
-                found = true;
-                let inner_map = Self::value_to_map(v).unwrap_or_default();
-                let new_inner = Self::nested_map_set(&inner_map, remaining, value.clone())?;
-                result.push((k.clone(), Value::Map(new_inner)));
-            } else {
-                result.push((k.clone(), v.clone()));
-            }
-        }
+        let (mut result, found) = map.iter().try_fold(
+            (Vec::<(Value, Value)>::new(), false),
+            |(mut acc, _found), (k, v)| -> Result<(Vec<(Value, Value)>, bool)> {
+                if crate::eval::value::values_eq(k, key) {
+                    let inner_map = Self::value_to_map(v).unwrap_or_default();
+                    let new_inner = Self::nested_map_set(&inner_map, remaining, value.clone())?;
+                    acc.push((k.clone(), Value::Map(new_inner)));
+                    Ok((acc, true))
+                } else {
+                    acc.push((k.clone(), v.clone()));
+                    Ok((acc, false))
+                }
+            },
+        )?;
         if !found {
             let inner = Self::nested_map_set(&[], remaining, value)?;
             result.push((key.clone(), Value::Map(inner)));
@@ -121,15 +128,13 @@ impl Evaluator {
                 if args.len() < 2 {
                     return Err(SassError::Eval("map-get requires (map, key) arguments".into()));
                 }
-                let mut current = args[0].clone();
-                for key in &args[1..] {
+                args[1..].iter().try_fold(args[0].clone(), |current, key| -> Result<Value> {
                     let pairs = Self::value_to_map(&current)?;
                     match pairs.iter().find(|(k, _)| crate::eval::value::values_eq(k, key)) {
-                        Some((_, v)) => current = v.clone(),
-                        None => return Ok(Some(Value::Null)),
+                        Some((_, v)) => Ok(v.clone()),
+                        None => Ok(Value::Null),
                     }
-                }
-                current
+                })?
             }
             "map-keys" => {
                 if args.len() != 1 {
@@ -189,14 +194,14 @@ impl Evaluator {
                     return Ok(Some(Value::Map(result)));
                 }
                 let map2 = Self::value_to_map(&args[1])?;
-                let mut merged = map1;
-                for (k, v) in &map2 {
-                    if let Some(entry) = merged.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
+                let merged = map2.iter().fold(map1, |mut acc, (k, v)| {
+                    if let Some(entry) = acc.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
                         entry.1 = v.clone();
                     } else {
-                        merged.push((k.clone(), v.clone()));
+                        acc.push((k.clone(), v.clone()));
                     }
-                }
+                    acc
+                });
                 Value::Map(merged)
             }
             "map-remove" => {
@@ -247,9 +252,8 @@ impl Evaluator {
         map1: &[(Value, Value)],
         map2: &[(Value, Value)],
     ) -> Vec<(Value, Value)> {
-        let mut result = map1.to_vec();
-        for (k2, v2) in map2 {
-            if let Some(entry) = result.iter_mut().find(|(k1, _)| crate::eval::value::values_eq(k1, k2)) {
+        map2.iter().fold(map1.to_vec(), |mut acc, (k2, v2)| {
+            if let Some(entry) = acc.iter_mut().find(|(k1, _)| crate::eval::value::values_eq(k1, k2)) {
                 // 两个值都是 map → 递归合并
                 if let (Value::Map(inner1), Value::Map(inner2)) = (&entry.1, v2) {
                     entry.1 = Value::Map(Self::deep_merge_maps(inner1, inner2));
@@ -257,10 +261,10 @@ impl Evaluator {
                     entry.1 = v2.clone();
                 }
             } else {
-                result.push((k2.clone(), v2.clone()));
+                acc.push((k2.clone(), v2.clone()));
             }
-        }
-        result
+            acc
+        })
     }
 
     /// map-deep-remove 递归实现。
@@ -273,26 +277,33 @@ impl Evaluator {
                 }
                 let target_key = keys[0];
                 let remaining_keys = &keys[1..];
-                let mut result: Vec<(Value, Value)> = Vec::new();
-                for (k, v) in pairs.iter() {
-                    if crate::eval::value::values_eq(k, target_key) {
-                        if remaining_keys.is_empty() {
-                            continue;
-                        } else if let Value::Map(inner) = v {
-                            let new_inner = Self::call_builtin(
-                                "map-deep-remove",
-                                &[Value::Map(inner.clone()), remaining_keys[0].clone()],
-                                &std::collections::HashMap::new(),
-                                env,
-                            )?;
-                            result.push((k.clone(), new_inner));
+                let result: Vec<(Value, Value)> = pairs.iter().filter(|(k, _)| !crate::eval::value::values_eq(k, target_key)).map(|(k, v)| (k.clone(), v.clone())).collect();
+                // For matching keys, we need to handle the recursive case
+                let (result, _) = pairs.iter().try_fold(
+                    (result, false),
+                    |(mut acc, _found), (k, v)| -> Result<(Vec<(Value, Value)>, bool)> {
+                        if crate::eval::value::values_eq(k, target_key) {
+                            if remaining_keys.is_empty() {
+                                // skip this key — already filtered out above
+                                Ok((acc, true))
+                            } else if let Value::Map(inner) = v {
+                                let new_inner = Self::call_builtin(
+                                    "map-deep-remove",
+                                    &[Value::Map(inner.clone()), remaining_keys[0].clone()],
+                                    &std::collections::HashMap::new(),
+                                    env,
+                                )?;
+                                acc.push((k.clone(), new_inner));
+                                Ok((acc, true))
+                            } else {
+                                acc.push((k.clone(), v.clone()));
+                                Ok((acc, true))
+                            }
                         } else {
-                            result.push((k.clone(), v.clone()));
+                            Ok((acc, false))
                         }
-                    } else {
-                        result.push((k.clone(), v.clone()));
-                    }
-                }
+                    },
+                )?;
                 Ok(Value::Map(result))
             }
             [other, ..] => Ok(other.clone()),

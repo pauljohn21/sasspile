@@ -19,21 +19,20 @@ impl Evaluator {
             || url.split("\", \"").any(|u| u.trim_matches('"').ends_with(".css"));
         if is_css {
             let urls: Vec<&str> = url.split("\", \"").collect();
-            let mut nodes = Vec::new();
-            for u in &urls {
+            let nodes: Vec<CssNode> = urls.iter().map(|u| {
                 let u = u.trim_matches('"');
                 let params = if modifier.is_empty() {
                     format!("\"{u}\"")
                 } else {
                     format!("\"{u}\" {modifier}")
                 };
-                nodes.push(CssNode::AtRule {
+                CssNode::AtRule {
                     name: "import".to_string(),
                     params: Some(params),
                     children: vec![],
                     has_body: false,
-                });
-            }
+                }
+            }).collect();
             return Ok((nodes, env));
         }
         let base = env.get_base_path();

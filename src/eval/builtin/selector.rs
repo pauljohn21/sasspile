@@ -86,18 +86,21 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
         },
         "selector-simple-selectors" => match args {
             [Value::String(s, _)] => {
-                let mut result = Vec::new();
-                let mut current = String::new();
-                for c in s.chars() {
-                    if c == '.' || c == '#' || c == ':' || c == '[' {
-                        if !current.is_empty() {
-                            result.push(Value::String(current.clone(), false));
+                let (result, current) = s.chars().fold(
+                    (Vec::<Value>::new(), String::new()),
+                    |(mut result, mut current), c| {
+                        if c == '.' || c == '#' || c == ':' || c == '[' {
+                            if !current.is_empty() {
+                                result.push(Value::String(current, false));
+                            }
+                            current = c.to_string();
+                        } else {
+                            current.push(c);
                         }
-                        current = c.to_string();
-                    } else {
-                        current.push(c);
-                    }
-                }
+                        (result, current)
+                    },
+                );
+                let mut result = result;
                 if !current.is_empty() {
                     result.push(Value::String(current, false));
                 }

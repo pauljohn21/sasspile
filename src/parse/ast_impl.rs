@@ -49,19 +49,19 @@ impl Node {
                 branches,
                 else_body,
             } => {
-                let mut s = String::new();
-                for (i, (cond, body)) in branches.iter().enumerate() {
+                let mut s = branches.iter().enumerate().fold(String::new(), |mut acc, (i, (cond, body))| {
                     let kw = if i == 0 { "@if" } else { "@else if" };
                     let body_s: String = body
                         .iter()
                         .map(|n| n.to_scss(indent + 1))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    s.push_str(&format!("{pad}{kw} {cond} {{\n{body_s}\n{pad}}}"));
+                    acc.push_str(&format!("{pad}{kw} {cond} {{\n{body_s}\n{pad}}}"));
                     if i < branches.len() - 1 || else_body.is_some() {
-                        s.push('\n');
+                        acc.push('\n');
                     }
-                }
+                    acc
+                });
                 if let Some(eb) = else_body {
                     let body_s: String = eb
                         .iter()

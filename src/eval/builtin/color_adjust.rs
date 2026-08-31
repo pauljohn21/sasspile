@@ -33,6 +33,22 @@ fn get_pct_or_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<
     }
 }
 
+/// 统一处理关键字参数应用——消除 `let mut x = ...; if let Some(v) = ... { x = f(x, v) }` 重复模式。
+fn apply_kw(initial: f64, kw: &HashMap<String, Value>, key: &str, f: impl Fn(f64, f64) -> f64) -> Result<f64> {
+    Ok(match get_num(kw, key)? {
+        Some(v) => f(initial, v),
+        None => initial,
+    })
+}
+
+/// 同上，但使用 `get_pct_or_num` 提取百分比参数。
+fn apply_pct_kw(initial: f64, kw: &HashMap<String, Value>, key: &str, f: impl Fn(f64, f64) -> f64) -> Result<f64> {
+    Ok(match get_pct_or_num(kw, key)? {
+        Some(v) => f(initial, v),
+        None => initial,
+    })
+}
+
 /// `color.adjust($color, $kwargs)` — 调整颜色通道（增量）。
 pub fn adjust_color(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Value> {
     let c = match args.first().or_else(|| kw_args.get("$color")) {
@@ -107,40 +123,26 @@ pub fn scale_color(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<V
 
 fn adjust_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut ch = ch;
-    let mut h = h;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = (l + v).clamp(0.0, 1.0); }
-    if let Some(v) = get_num(kw_args, "chroma")? { ch = (ch + v).max(0.0); }
-    if let Some(v) = get_num(kw_args, "hue")? { h = (h + v).rem_euclid(360.0); }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = (a + v).clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |v, d| (v + d).clamp(0.0, 1.0))?;
+    let ch = apply_kw(ch, kw_args, "chroma", |v, d| (v + d).max(0.0))?;
+    let h = apply_kw(h, kw_args, "hue", |v, d| (v + d).rem_euclid(360.0))?;
+    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Oklch, [l, ch, h], a, c.output, c.legacy_rgb)))
 }
 
 fn change_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut ch = ch;
-    let mut h = h;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = v.clamp(0.0, 1.0); }
-    if let Some(v) = get_num(kw_args, "chroma")? { ch = v.max(0.0); }
-    if let Some(v) = get_num(kw_args, "hue")? { h = v.rem_euclid(360.0); }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = v.clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |_v, d| d.clamp(0.0, 1.0))?;
+    let ch = apply_kw(ch, kw_args, "chroma", |_v, d| d.max(0.0))?;
+    let h = apply_kw(h, kw_args, "hue", |_v, d| d.rem_euclid(360.0))?;
+    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Oklch, [l, ch, h], a, c.output, c.legacy_rgb)))
 }
 
 fn scale_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut ch = ch;
-    let mut a = c.a;
-
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
         if let Some(Value::Number(n, _)) = kw_args.get(key) {
             let pct = *n / 100.0;
@@ -148,9 +150,9 @@ fn scale_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             else { Ok(val + val * pct) }
         } else { Ok(val) }
     };
-    l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
-    ch = scale_val(ch, f64::MAX, "chroma")?.max(0.0);
-    a = scale_val(a, 1.0, "alpha")?.clamp(0.0, 1.0);
+    let l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
+    let ch = scale_val(ch, f64::MAX, "chroma")?.max(0.0);
+    let a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(ColorSpace::Oklch, [l, ch, h], a, c.output, c.legacy_rgb)))
 }
@@ -159,41 +161,26 @@ fn scale_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 
 fn adjust_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut a_v = a_v;
-    let mut b_v = b_v;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = (l + v).clamp(0.0, 1.0); }
-    if let Some(v) = get_num(kw_args, "a")? { a_v += v; }
-    if let Some(v) = get_num(kw_args, "b")? { b_v += v; }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = (a + v).clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |v, d| (v + d).clamp(0.0, 1.0))?;
+    let a_v = apply_kw(a_v, kw_args, "a", |v, d| v + d)?;
+    let b_v = apply_kw(b_v, kw_args, "b", |v, d| v + d)?;
+    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Oklab, [l, a_v, b_v], a, c.output, c.legacy_rgb)))
 }
 
 fn change_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut a_v = a_v;
-    let mut b_v = b_v;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = v.clamp(0.0, 1.0); }
-    if let Some(v) = get_num(kw_args, "a")? { a_v = v; }
-    if let Some(v) = get_num(kw_args, "b")? { b_v = v; }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = v.clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |_v, d| d.clamp(0.0, 1.0))?;
+    let a_v = apply_kw(a_v, kw_args, "a", |_v, d| d)?;
+    let b_v = apply_kw(b_v, kw_args, "b", |_v, d| d)?;
+    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Oklab, [l, a_v, b_v], a, c.output, c.legacy_rgb)))
 }
 
 fn scale_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut a_v = a_v;
-    let mut b_v = b_v;
-    let mut a = c.a;
-
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
         if let Some(Value::Number(n, _)) = kw_args.get(key) {
             let pct = *n / 100.0;
@@ -201,10 +188,10 @@ fn scale_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             else { Ok(val + val * pct) }
         } else { Ok(val) }
     };
-    l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
-    a_v = scale_val(a_v, if a_v >= 0.0 { 0.5 } else { -0.5 }, "a")?;
-    b_v = scale_val(b_v, if b_v >= 0.0 { 0.5 } else { -0.5 }, "b")?;
-    a = scale_val(a, 1.0, "alpha")?.clamp(0.0, 1.0);
+    let l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
+    let a_v = scale_val(a_v, if a_v >= 0.0 { 0.5 } else { -0.5 }, "a")?;
+    let b_v = scale_val(b_v, if b_v >= 0.0 { 0.5 } else { -0.5 }, "b")?;
+    let a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(ColorSpace::Oklab, [l, a_v, b_v], a, c.output, c.legacy_rgb)))
 }
@@ -213,40 +200,26 @@ fn scale_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 
 fn adjust_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut ch = ch;
-    let mut h = h;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = (l + v * 100.0).clamp(0.0, 100.0); }
-    if let Some(v) = get_num(kw_args, "chroma")? { ch = (ch + v).max(0.0); }
-    if let Some(v) = get_num(kw_args, "hue")? { h = (h + v).rem_euclid(360.0); }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = (a + v).clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |v, d| (v + d * 100.0).clamp(0.0, 100.0))?;
+    let ch = apply_kw(ch, kw_args, "chroma", |v, d| (v + d).max(0.0))?;
+    let h = apply_kw(h, kw_args, "hue", |v, d| (v + d).rem_euclid(360.0))?;
+    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Lch, [l, ch, h], a, c.output, c.legacy_rgb)))
 }
 
 fn change_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut ch = ch;
-    let mut h = h;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = (v * 100.0).clamp(0.0, 100.0); }
-    if let Some(v) = get_num(kw_args, "chroma")? { ch = v.max(0.0); }
-    if let Some(v) = get_num(kw_args, "hue")? { h = v.rem_euclid(360.0); }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = v.clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |_v, d| (d * 100.0).clamp(0.0, 100.0))?;
+    let ch = apply_kw(ch, kw_args, "chroma", |_v, d| d.max(0.0))?;
+    let h = apply_kw(h, kw_args, "hue", |_v, d| d.rem_euclid(360.0))?;
+    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Lch, [l, ch, h], a, c.output, c.legacy_rgb)))
 }
 
 fn scale_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut ch = ch;
-    let mut a = c.a;
-
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
         if let Some(Value::Number(n, _)) = kw_args.get(key) {
             let pct = *n / 100.0;
@@ -254,9 +227,9 @@ fn scale_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             else { Ok(val + val * pct) }
         } else { Ok(val) }
     };
-    l = scale_val(l, 100.0, "lightness")?.clamp(0.0, 100.0);
-    ch = scale_val(ch, f64::MAX, "chroma")?.max(0.0);
-    a = scale_val(a, 1.0, "alpha")?.clamp(0.0, 1.0);
+    let l = scale_val(l, 100.0, "lightness")?.clamp(0.0, 100.0);
+    let ch = scale_val(ch, f64::MAX, "chroma")?.max(0.0);
+    let a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(ColorSpace::Lch, [l, ch, h], a, c.output, c.legacy_rgb)))
 }
@@ -265,41 +238,26 @@ fn scale_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 
 fn adjust_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut a_v = a_v;
-    let mut b_v = b_v;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = (l + v * 100.0).clamp(0.0, 100.0); }
-    if let Some(v) = get_num(kw_args, "a")? { a_v += v; }
-    if let Some(v) = get_num(kw_args, "b")? { b_v += v; }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = (a + v).clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |v, d| (v + d * 100.0).clamp(0.0, 100.0))?;
+    let a_v = apply_kw(a_v, kw_args, "a", |v, d| v + d)?;
+    let b_v = apply_kw(b_v, kw_args, "b", |v, d| v + d)?;
+    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Lab, [l, a_v, b_v], a, c.output, c.legacy_rgb)))
 }
 
 fn change_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut a_v = a_v;
-    let mut b_v = b_v;
-    let mut a = c.a;
-
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? { l = (v * 100.0).clamp(0.0, 100.0); }
-    if let Some(v) = get_num(kw_args, "a")? { a_v = v; }
-    if let Some(v) = get_num(kw_args, "b")? { b_v = v; }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = v.clamp(0.0, 1.0); }
+    let l = apply_pct_kw(l, kw_args, "lightness", |_v, d| (d * 100.0).clamp(0.0, 100.0))?;
+    let a_v = apply_kw(a_v, kw_args, "a", |_v, d| d)?;
+    let b_v = apply_kw(b_v, kw_args, "b", |_v, d| d)?;
+    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
 
     Ok(Value::Color(Color::with_space(ColorSpace::Lab, [l, a_v, b_v], a, c.output, c.legacy_rgb)))
 }
 
 fn scale_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
-    let mut l = l;
-    let mut a_v = a_v;
-    let mut b_v = b_v;
-    let mut a = c.a;
-
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
         if let Some(Value::Number(n, _)) = kw_args.get(key) {
             let pct = *n / 100.0;
@@ -307,10 +265,10 @@ fn scale_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             else { Ok(val + val * pct) }
         } else { Ok(val) }
     };
-    l = scale_val(l, 100.0, "lightness")?.clamp(0.0, 100.0);
-    a_v = scale_val(a_v, if a_v >= 0.0 { 125.0 } else { -125.0 }, "a")?;
-    b_v = scale_val(b_v, if b_v >= 0.0 { 125.0 } else { -125.0 }, "b")?;
-    a = scale_val(a, 1.0, "alpha")?.clamp(0.0, 1.0);
+    let l = scale_val(l, 100.0, "lightness")?.clamp(0.0, 100.0);
+    let a_v = scale_val(a_v, if a_v >= 0.0 { 125.0 } else { -125.0 }, "a")?;
+    let b_v = scale_val(b_v, if b_v >= 0.0 { 125.0 } else { -125.0 }, "b")?;
+    let a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(ColorSpace::Lab, [l, a_v, b_v], a, c.output, c.legacy_rgb)))
 }
@@ -322,33 +280,27 @@ fn get_rgb_channels(c: &Color) -> (f64, f64, f64) {
 }
 
 fn adjust_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let (mut r, mut g, mut b) = get_rgb_channels(c);
-    let mut a = c.a;
-
-    if let Some(v) = get_num(kw_args, "red")? { r += v; }
-    if let Some(v) = get_num(kw_args, "green")? { g += v; }
-    if let Some(v) = get_num(kw_args, "blue")? { b += v; }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = (a + v).clamp(0.0, 1.0); }
+    let (r, g, b) = get_rgb_channels(c);
+    let r = apply_kw(r, kw_args, "red", |v, d| v + d)?;
+    let g = apply_kw(g, kw_args, "green", |v, d| v + d)?;
+    let b = apply_kw(b, kw_args, "blue", |v, d| v + d)?;
+    let _a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
 
     Ok(Value::Color(c.clone_with_rgb(r, g, b)))
 }
 
 fn change_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let (mut r, mut g, mut b) = get_rgb_channels(c);
-    let mut a = c.a;
-
-    if let Some(v) = get_num(kw_args, "red")? { r = v; }
-    if let Some(v) = get_num(kw_args, "green")? { g = v; }
-    if let Some(v) = get_num(kw_args, "blue")? { b = v; }
-    if let Some(v) = get_num(kw_args, "alpha")? { a = v.clamp(0.0, 1.0); }
+    let (r, g, b) = get_rgb_channels(c);
+    let r = apply_kw(r, kw_args, "red", |_v, d| d)?;
+    let g = apply_kw(g, kw_args, "green", |_v, d| d)?;
+    let b = apply_kw(b, kw_args, "blue", |_v, d| d)?;
+    let _a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
 
     Ok(Value::Color(c.clone_with_rgb(r, g, b)))
 }
 
 fn scale_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let (mut r, mut g, mut b) = get_rgb_channels(c);
-    let mut a = c.a;
-
+    let (r, g, b) = get_rgb_channels(c);
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
         if let Some(Value::Number(n, _)) = kw_args.get(key) {
             let pct = *n / 100.0;
@@ -356,10 +308,10 @@ fn scale_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result
             else { Ok(val + val * pct) }
         } else { Ok(val) }
     };
-    r = scale_val(r, 1.0, "red")?;
-    g = scale_val(g, 1.0, "green")?;
-    b = scale_val(b, 1.0, "blue")?;
-    a = scale_val(a, 1.0, "alpha")?.clamp(0.0, 1.0);
+    let r = scale_val(r, 1.0, "red")?;
+    let g = scale_val(g, 1.0, "green")?;
+    let b = scale_val(b, 1.0, "blue")?;
+    let _a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(c.clone_with_rgb(r, g, b)))
 }
