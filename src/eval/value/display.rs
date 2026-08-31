@@ -224,14 +224,13 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
         return s.to_string();
     }
     // 不含 #{ 嵌套但含 $ → 尝试整体求值（纯变量 $a、表达式 1+2 等）
-    if !s.contains("#{") {
-        if let Ok(val) = super::eval_simple_expr(s, env) {
+    if !s.contains("#{")
+        && let Ok(val) = super::eval_simple_expr(s, env) {
             return match &val {
                 Value::String(inner, _) => inner.clone(),
                 _ => val.to_string(),
             };
         }
-    }
     // 回退：逐字符扫描 #{} 嵌套 + $var 变量引用
     let mut result = String::new();
     let mut chars = s.chars().peekable();

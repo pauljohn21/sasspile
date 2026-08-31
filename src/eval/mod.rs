@@ -148,16 +148,12 @@ impl Env {
     pub(crate) fn with_depth(mut self, depth: usize) -> Self { self.depth = depth; self }
     pub(crate) fn with_loaded_modules(mut self, loaded: std::collections::HashSet<PathBuf>) -> Self { self.loaded_modules = Rc::new(loaded); self }
     pub(crate) fn with_extends(mut self, extends: Vec<(String, String, bool)>) -> Self { self.extends = Rc::new(extends); self }
-    pub(crate) fn with_namespaces(mut self, ns: HashMap<String, Rc<ModuleExports>>) -> Self { self.namespaces = ns; self }
-    pub(crate) fn with_pending_config(mut self, config: HashMap<String, Value>) -> Self { self.pending_config = config; self }
     pub(crate) fn add_pending_config(mut self, key: String, val: Value) -> Self { self.pending_config.insert(key, val); self }
     pub(crate) fn get_pending_config(&self) -> &HashMap<String, Value> { &self.pending_config }
     pub(crate) fn add_consumed_config(mut self, key: String) -> Self { self.consumed_config.insert(key); self }
     pub(crate) fn get_consumed_config(&self) -> &HashSet<String> { &self.consumed_config }
     pub(crate) fn with_consumed_config(mut self, config: HashSet<String>) -> Self { self.consumed_config = config; self }
     pub(crate) fn add_global_write(mut self, name: String, val: Value) -> Self { self.global_writes.insert(name, val); self }
-    pub(crate) fn get_global_writes(&self) -> &HashMap<String, Value> { &self.global_writes }
-    pub(crate) fn take_global_writes(&mut self) -> HashMap<String, Value> { std::mem::take(&mut self.global_writes) }
     pub(crate) fn get_base_path(&self) -> Option<&PathBuf> { self.base_path.as_ref() }
     pub(crate) fn get_depth(&self) -> usize { self.depth }
     pub(crate) fn is_plain_css(&self) -> bool { self.plain_css }

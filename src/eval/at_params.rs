@@ -49,11 +49,11 @@ impl Evaluator {
     /// 对 @supports/@media 参数中的括号内表达式做求值。
     fn eval_expr_in_params(params: &str, env: &Env) -> String {
         let mut result = String::new();
-        let mut chars = params.chars().peekable();
+        let chars = params.chars().peekable();
         let mut paren_depth = 0;
         let mut paren_content = String::new();
 
-        while let Some(c) = chars.next() {
+        for c in chars {
             if c == '(' {
                 paren_depth += 1;
                 if paren_depth == 1 {

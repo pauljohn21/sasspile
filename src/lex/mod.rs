@@ -215,11 +215,7 @@ impl<'src> Lexer<'src> {
     fn scan_at(&mut self) -> Token {
         self.next_char(); // 消费 @
         let mut name = String::new();
-        loop {
-            let c = match self.peek() {
-                Some(c) => c,
-                None => break,
-            };
+        while let Some(c) = self.peek() {
             if c.is_ascii_alphanumeric() || c == '-' {
                 name.push(c);
                 self.next_char();

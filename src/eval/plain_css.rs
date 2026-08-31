@@ -180,7 +180,7 @@ impl super::Evaluator {
             // 简单检查：% 后跟标识符字符
             let has_placeholder = selector.chars().enumerate().any(|(i, c)| {
                 c == '%' && i + 1 < selector.len()
-                    && selector[i + 1..].chars().next().map_or(false, |nc| nc.is_alphanumeric() || nc == '-')
+                    && selector[i + 1..].chars().next().is_some_and(|nc| nc.is_alphanumeric() || nc == '-')
             });
             if has_placeholder {
                 return Err(SassError::Eval(

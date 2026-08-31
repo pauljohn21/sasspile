@@ -108,16 +108,14 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
                 // 除零产生 infinity——构建 calc(infinity) 表达式
                 let sign = if *a < 0.0 { "-" } else { "" };
                 let mut calc = format!("calc({sign}infinity");
-                if let Some(u) = u1 {
-                    if !u.is_empty() {
+                if let Some(u) = u1
+                    && !u.is_empty() {
                         calc.push_str(&format!(" * 1{u}"));
                     }
-                }
-                if let Some(u) = u2 {
-                    if !u.is_empty() {
+                if let Some(u) = u2
+                    && !u.is_empty() {
                         calc.push_str(&format!(" / 1{u}"));
                     }
-                }
                 calc.push(')');
                 return Ok(Value::Calc(calc));
             }

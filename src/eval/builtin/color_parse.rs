@@ -32,8 +32,8 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
             return items.clone();
         }
         // SlashLiteral 分隔：lab(L a b / A) → [Space[L,a,b], A]
-        if let Value::List(items, Separator::SlashLiteral | Separator::Slash, false) = &args[0] {
-            if items.len() == 2 {
+        if let Value::List(items, Separator::SlashLiteral | Separator::Slash, false) = &args[0]
+            && items.len() == 2 {
                 let mut flat = Vec::new();
                 if let Value::List(space_items, Separator::Space, false) = &items[0] {
                     flat.extend(space_items.iter().cloned());
@@ -43,7 +43,6 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
                 flat.push(items[1].clone());
                 return flat;
             }
-        }
     }
     args.to_vec()
 }
@@ -149,8 +148,8 @@ fn split_alpha(args: &[Value]) -> (Vec<Value>, f64) {
     if args.len() >= 2 {
         let last = &args[args.len() - 1];
         let is_slash = matches!(last, Value::List(_, Separator::Slash | Separator::SlashLiteral, false));
-        if is_slash {
-            if let Value::List(items, sep, false) = last {
+        if is_slash
+            && let Value::List(items, sep, false) = last {
                 let _ = sep; // 匹配已过滤
                 if items.len() == 2 {
                     let mut nums = args[..args.len() - 1].to_vec();
@@ -163,7 +162,6 @@ fn split_alpha(args: &[Value]) -> (Vec<Value>, f64) {
                     return (nums, alpha);
                 }
             }
-        }
     }
     (args.to_vec(), 1.0)
 }

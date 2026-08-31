@@ -132,7 +132,7 @@ impl Evaluator {
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // 在命名空间模块中查找同名函数
-        for (_, exports) in env.get_namespaces().iter() {
+        for exports in env.get_namespaces().values() {
             if let Some(func) = exports.all_functions().find(|(k, _)| *k == name).map(|(_, f)| f) {
                 return Self::call_user_function(func, pos_args, kw_args, env);
             }

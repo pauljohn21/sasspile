@@ -16,7 +16,8 @@ use std::collections::HashMap;
 pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     let args = merge_math_args(pos_args, kw_args, name);
     let args = args.as_slice();
-    let result = match name {
+    
+    match name {
         "abs" => {
             validate_single_number(args)?;
             match &args[0] {
@@ -110,16 +111,14 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                             // 0/0 = NaN，有单位时需要 calc(NaN * 1unit / 1unit) 格式
                             if u1.is_some() || u2.is_some() {
                                 let mut calc = String::from("calc(NaN");
-                                if let Some(u) = u1 {
-                                    if !u.is_empty() {
+                                if let Some(u) = u1
+                                    && !u.is_empty() {
                                         calc.push_str(&format!(" * 1{u}"));
                                     }
-                                }
-                                if let Some(u) = u2 {
-                                    if !u.is_empty() {
+                                if let Some(u) = u2
+                                    && !u.is_empty() {
                                         calc.push_str(&format!(" / 1{u}"));
                                     }
-                                }
                                 calc.push(')');
                                 return Ok(Some(Value::Calc(calc)));
                             }
@@ -129,16 +128,14 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                         if u1.is_some() || u2.is_some() {
                             let sign = if *a < 0.0 { "-" } else { "" };
                             let mut calc = format!("calc({sign}infinity");
-                            if let Some(u) = u1 {
-                                if !u.is_empty() {
+                            if let Some(u) = u1
+                                && !u.is_empty() {
                                     calc.push_str(&format!(" * 1{u}"));
                                 }
-                            }
-                            if let Some(u) = u2 {
-                                if !u.is_empty() {
+                            if let Some(u) = u2
+                                && !u.is_empty() {
                                     calc.push_str(&format!(" / 1{u}"));
                                 }
-                            }
                             calc.push(')');
                             return Ok(Some(Value::Calc(calc)));
                         }
@@ -503,7 +500,6 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 crate::eval::value::units_compatible(u1.as_deref(), u2.as_deref()),
             )))
         }
-        _ => return Ok(None),
-    };
-    result
+        _ => Ok(None),
+    }
 }

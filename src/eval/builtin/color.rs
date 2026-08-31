@@ -24,9 +24,9 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
         return flat;
     }
     // SlashLiteral 分隔的列表：hsl(H S L / A) → [Space[H,S,L], A]
-    if args.len() == 1 {
-        if let Some(Value::List(items, Separator::SlashLiteral | Separator::Slash, false)) = args.first() {
-            if items.len() == 2 {
+    if args.len() == 1
+        && let Some(Value::List(items, Separator::SlashLiteral | Separator::Slash, false)) = args.first()
+            && items.len() == 2 {
                 let mut flat = Vec::new();
                 if let Some(Value::List(hsl_items, Separator::Space, false)) = items.first() {
                     flat.extend(hsl_items.iter().cloned());
@@ -36,8 +36,6 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
                 flat.push(items[1].clone());
                 return flat;
             }
-        }
-    }
     args.to_vec()
 }
 
@@ -529,8 +527,8 @@ fn is_channel_powerless_str(color_str: &str, channel: &str) -> Option<bool> {
 /// 解析 `50%` 或 `0.1` 形式的数值。
 fn parse_percent_or_number(s: &str) -> Option<f64> {
     let s = s.trim();
-    if s.ends_with('%') {
-        s[..s.len() - 1].parse::<f64>().ok().map(|v| v / 100.0)
+    if let Some(num_str) = s.strip_suffix('%') {
+        num_str.parse::<f64>().ok().map(|v| v / 100.0)
     } else {
         s.parse::<f64>().ok()
     }

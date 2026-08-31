@@ -15,11 +15,6 @@ pub fn err_not_a_number(param: &str, val: &Value) -> SassError {
     SassError::Eval(format!("${param}: {val} is not a number."))
 }
 
-/// 生成 `$param: value is not an int.` 错误。
-pub fn err_not_an_int(param: &str, val: &Value) -> SassError {
-    SassError::Eval(format!("${param}: {val} is not an int."))
-}
-
 /// 生成 `$param: value is not a color.` 错误。
 pub fn err_not_a_color(param: &str, val: &Value) -> SassError {
     SassError::Eval(format!("${param}: {val} is not a color."))
@@ -30,29 +25,6 @@ pub fn err_missing_arg(param: &str) -> SassError {
     SassError::Eval(format!("Missing argument ${param}."))
 }
 
-/// 生成 `Only N arguments allowed, but M were/was passed.` 错误。
-pub fn err_wrong_arg_count(expected: usize, actual: usize) -> SassError {
-    let verb = if actual == 1 { "was" } else { "were" };
-    SassError::Eval(format!(
-        "Only {expected} argument{} allowed, but {actual} {verb} passed.",
-        if expected == 1 { "" } else { "s" }
-    ))
-}
-
-/// 生成 `$param: Expected value to have no units.` 错误。
-pub fn err_expected_no_units(param: &str, val: &Value) -> SassError {
-    SassError::Eval(format!("${param}: Expected {val} to have no units."))
-}
-
-/// 生成 `$param: Expected value to be a quoted string.` 错误。
-pub fn err_expected_quoted_string(param: &str, val: &Value) -> SassError {
-    SassError::Eval(format!("${param}: Expected {val} to be a quoted string."))
-}
-
-/// 生成 `$param: Expected value to be an unquoted string.` 错误。
-pub fn err_expected_unquoted_string(param: &str, val: &Value) -> SassError {
-    SassError::Eval(format!("${param}: Expected {val} to be an unquoted string."))
-}
 
 /// 生成 `Only N arguments allowed, but M were passed.` 错误（复数专用版）。
 pub fn err_wrong_arg_count_plural(expected: usize, actual: usize) -> SassError {
@@ -61,10 +33,6 @@ pub fn err_wrong_arg_count_plural(expected: usize, actual: usize) -> SassError {
     ))
 }
 
-/// 生成 `$param: Must be 1 or greater, was N.` 错误。
-pub fn err_must_be_positive(param: &str, val: i64) -> SassError {
-    SassError::Eval(format!("${param}: Must be 1 or greater, was {val}."))
-}
 
 /// 生成 `$channel: Color X has no channel named Y.` 错误。
 pub fn err_no_channel(color_name: &str, channel: &str) -> SassError {
@@ -73,10 +41,6 @@ pub fn err_no_channel(color_name: &str, channel: &str) -> SassError {
     ))
 }
 
-/// 生成 `$param: requires a number` 错误。
-pub fn err_requires_a_number(param: &str) -> SassError {
-    SassError::Eval(format!("${param} requires a number"))
-}
 
 /// 生成 `$param: Expected "value" to be an unquoted string.` 错误。
 pub fn err_expected_unquoted_str_display(param: &str, val: &str) -> SassError {

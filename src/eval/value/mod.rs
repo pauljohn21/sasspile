@@ -423,7 +423,7 @@ pub(crate) fn eval_variable(
                     Err(e) => Err(e),
                 }
             }
-            Value::Interp(segments) => Ok(Value::String(eval_interp_segments(&segments, env), false)),
+            Value::Interp(segments) => Ok(Value::String(eval_interp_segments(segments, env), false)),
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),
             Value::UnaryOp(op, v) => {
                 let val = Self::eval_value(v, env)?;

@@ -45,6 +45,7 @@ pub enum AtRuleKind {
 
 impl AtRuleKind {
     /// 从 @规则名解析为枚举变体。
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(name: &str) -> Self {
         match name {
             "if" => Self::If,
@@ -115,6 +116,7 @@ pub enum CssAtRule {
 
 impl CssAtRule {
     /// 从 @规则名解析为枚举变体（大小写不敏感）。
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(name: &str) -> Self {
         let lower = name.to_lowercase();
         match lower.as_str() {

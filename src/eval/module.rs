@@ -292,7 +292,7 @@ impl Evaluator {
                                 pending_val
                                     .filter(|v| !matches!(v, Value::Null))
                                     .cloned()
-                                    .or_else(|| if !matches!(val, Value::Null) { Some(val) } else { None })
+                                    .or(if !matches!(val, Value::Null) { Some(val) } else { None })
                             } else {
                                 if !matches!(val, Value::Null) { Some(val) } else {
                                     pending_val.filter(|v| !matches!(v, Value::Null)).cloned()

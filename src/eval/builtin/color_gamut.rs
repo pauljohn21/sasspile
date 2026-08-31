@@ -65,11 +65,10 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     }
 
     // 如果指定了 $space，验证是否已知
-    if let Some(ref sp) = target_space {
-        if !is_known_space(sp) {
+    if let Some(ref sp) = target_space
+        && !is_known_space(sp) {
             return Err(err_unknown_color_space_quoted(sp));
         }
-    }
 
     // 确定实际目标空间
     let effective_space = target_space.clone().unwrap_or_else(|| {
@@ -117,7 +116,7 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
     match space {
         "rgb" | "srgb" | "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" => {
             let (r, g, b) = get_rgb_channels(c, space);
-            r >= 0.0 && r <= 1.0 && g >= 0.0 && g <= 1.0 && b >= 0.0 && b <= 1.0
+            (0.0..=1.0).contains(&r) && (0.0..=1.0).contains(&g) && (0.0..=1.0).contains(&b)
         }
         "srgb-linear" | "display-p3-linear" => {
             let (r, g, b) = get_rgb_channels(c, space);
@@ -126,7 +125,7 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
         "hsl" => {
             if c.space == ColorSpace::Hsl {
                 let (_, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
-                s >= 0.0 && s <= 1.0 && l >= 0.0 && l <= 1.0
+                (0.0..=1.0).contains(&s) && (0.0..=1.0).contains(&l)
             } else {
                 true // legacy 颜色始终在色域内
             }
@@ -134,7 +133,7 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
         "hwb" => {
             if c.space == ColorSpace::Hwb {
                 let (_, w, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                w >= 0.0 && w <= 1.0 && b >= 0.0 && b <= 1.0 && (w + b) <= 1.0
+                (0.0..=1.0).contains(&w) && (0.0..=1.0).contains(&b) && (w + b) <= 1.0
             } else {
                 true
             }
@@ -241,7 +240,7 @@ fn local_minde_rgb(c: &Color, space: &str) -> Value {
     for _ in 0..50 {
         let mid = (lo + hi) / 2.0;
         let (r_test, g_test, b_test) = color_conv::oklch_to_srgb(l_ok, mid, h_ok);
-        if r_test >= 0.0 && r_test <= 1.0 && g_test >= 0.0 && g_test <= 1.0 && b_test >= 0.0 && b_test <= 1.0 {
+        if (0.0..=1.0).contains(&r_test) && (0.0..=1.0).contains(&g_test) && (0.0..=1.0).contains(&b_test) {
             lo = mid;
         } else {
             hi = mid;

@@ -97,8 +97,8 @@ pub(crate) fn bind_exports(
                 if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
                 let var_key = format!("${key}");
-                if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == var_key) { continue; }
-                if filter.hide.iter().any(|s| *s == var_key) { continue; }
+                if !filter.show.is_empty() && !filter.show.contains(&var_key) { continue; }
+                if filter.hide.contains(&var_key) { continue; }
                 // 冲突检测：forwarded_vars 已存在同名时报错
                 // 但如果值相同（来自同一底层模块）则跳过不报错
                 if let Some(existing) = new_env.forwarded_vars.get(&key) {
@@ -116,8 +116,8 @@ pub(crate) fn bind_exports(
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
                 if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
-                if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
-                if filter.hide.iter().any(|s| *s == key) { continue; }
+                if !filter.show.is_empty() && !filter.show.contains(&key) { continue; }
+                if filter.hide.contains(&key) { continue; }
                 if let Some(existing) = new_env.forwarded_mixins.get(&key) {
                     // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
@@ -134,8 +134,8 @@ pub(crate) fn bind_exports(
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
                 if k.starts_with('-') || k.starts_with('_') { continue; }
                 let key = fmt_key(k);
-                if !filter.show.is_empty() && !filter.show.iter().any(|s| *s == key) { continue; }
-                if filter.hide.iter().any(|s| *s == key) { continue; }
+                if !filter.show.is_empty() && !filter.show.contains(&key) { continue; }
+                if filter.hide.contains(&key) { continue; }
                 if let Some(existing) = new_env.forwarded_functions.get(&key) {
                     // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
