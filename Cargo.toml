@@ -43,9 +43,17 @@ tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter
 # 颜色处理 —— HSL/RGB/Lab/OKLab 等色彩空间转换
 color = { version = "0.3", default-features = false, features = ["std"] }
 
+# OpenTelemetry —— 分布式追踪（可选，通过 `otel` feature 启用）
+# 用 stdout exporter 输出 trace span，无需 gRPC/tokio
+opentelemetry = { version = "0.32", optional = true, features = ["trace"] }
+opentelemetry_sdk = { version = "0.32", optional = true, features = ["trace"] }
+opentelemetry-stdout = { version = "0.32", optional = true, features = ["trace"] }
+tracing-opentelemetry = { version = "0.33", optional = true }
+
 [features]
 default = ["tracing"]
 tracing = ["dep:tracing", "dep:tracing-subscriber"]
+otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:tracing-opentelemetry"]
 
 [[bin]]
 name = "sasspile"

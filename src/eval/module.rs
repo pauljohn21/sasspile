@@ -6,21 +6,19 @@ use super::module_helpers::{bind_exports, merge_module_cache, BindMode, FilterCo
 
 impl Evaluator {
     /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(caller_env), fields(path = %path.display(), depth = caller_env.depth, n_config = config.len(), validate = validate_config)))]
     pub(crate) fn load_module(
         path: &Path,
         config: &[(String, Value)],
         caller_env: &Env,
+        validate_config: bool,
     ) -> Result<ModuleExports> {
-        let span = crate::__tracing::info_span!("load_module", path = %path.display(), depth = caller_env.depth, n_config = config.len());
-        let _enter = span.enter();
         // 防止循环导入导致栈溢出
         if caller_env.depth > 50 {
             return Ok(ModuleExports::default());
         }
         // 模块缓存：如果路径已加载过，从缓存返回 exports（CSS 为空，不重复输出）。
         if caller_env.loaded_modules.contains(path) {
-            let span = crate::__tracing::debug_span!("load_module_cached", path = %path.display());
-            let _enter = span.enter();
             if let Some(cached) = caller_env.get_module_cache().get(path) {
                 let cached_exports = ModuleExports {
                     css: vec![],
@@ -53,21 +51,36 @@ impl Evaluator {
             let val = Self::eval_value(value, caller_env)?;
             if !matches!(val, Value::Null) {
                 let key = name.replace('-', "_");
+                crate::__tracing::debug!(name = %key, "load_module: inject pending_config");
                 env = env.add_pending_config(key, val);
             }
         }
         // 验证配置变量在上游模块中必须带 !default 声明
-        if !env.get_pending_config().is_empty() {
-            let default_vars = crate::eval::module_validation::collect_default_vars(&ast.nodes);
-            for (name, _) in env.get_pending_config().iter() {
-                if !default_vars.iter().any(|d| d.replace('-', "_") == *name) {
+        // 验证在 eval_nodes 之后执行（运行时消费跟踪）
+        let (module_css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
+        // 验证：config 中未被消费的 key 说明对应变量未声明 !default
+        // 仅当 validate_config=true（@use with 调用）时验证
+        if validate_config && !config.is_empty() {
+            let consumed = final_env.get_consumed_config();
+            crate::__tracing::debug!(
+                consumed = ?consumed,
+                pending = ?final_env.get_pending_config().keys().collect::<Vec<_>>(),
+                "load_module: validation check"
+            );
+            for (name, _) in config {
+                let normalized = name.replace('-', "_");
+                if !consumed.contains(&normalized) && !consumed.contains(name) {
+                    crate::__tracing::warn!(
+                        name = %name,
+                        normalized = %normalized,
+                        "load_module: config var not consumed — not !default"
+                    );
                     return Err(SassError::Eval(
                         "This variable was not declared with !default in the @used module.".into(),
                     ));
                 }
             }
         }
-        let (module_css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(module_css)]
         } else {
@@ -84,6 +97,7 @@ impl Evaluator {
             loaded_modules: final_env.get_loaded_modules_rc(),
             extends: final_env.get_extends_rc(),
             module_cache: final_env.get_module_cache_rc(),
+            consumed_config: final_env.get_consumed_config().clone(),
         };
         let exports_cache = exports.module_cache.clone();
         let mut updated_cache = (*exports_cache).clone();
@@ -99,10 +113,8 @@ impl Evaluator {
     ///
     /// SCSS @import 语义：被导入文件在当前作用域执行，
     /// 能看到之前定义的所有变量/mixin/函数，且定义的成员在导入后可见。
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(caller_env), fields(path = %path.display(), depth = caller_env.depth)))]
     pub(crate) fn load_import(path: &Path, caller_env: Env) -> Result<(Vec<CssNode>, Env)> {
-        let span =
-            crate::__tracing::info_span!("load_import", path = %path.display(), depth = caller_env.depth);
-        let _enter = span.enter();
         // 循环加载检测
         if caller_env.loaded_modules.contains(path) && !caller_env.get_module_cache().contains_key(path) {
             return Err(SassError::Module("This file is already being loaded.".into()));
@@ -144,9 +156,8 @@ impl Evaluator {
     }
 
     /// 模块限定函数调用。
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all, fields(name = name)))]
     pub(crate) fn call_module_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
-        let span = crate::__tracing::info_span!("call_module_function", name = name);
-        let _enter = span.enter();
         // 先检查文件加载的命名空间
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
@@ -204,7 +215,7 @@ impl Evaluator {
                         Ok::<(String, Value), SassError>((c.name.clone(), val))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Self::load_module(&path, &config_pairs, &env)?
+                Self::load_module(&path, &config_pairs, &env, true)?
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let css = if already_loaded { vec![] } else { exports.css.clone() };
@@ -233,6 +244,7 @@ impl Evaluator {
     }
 
     /// @forward 指令处理。
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(env), fields(url = url, has_prefix = prefix.is_some())))]
     pub(crate) fn eval_forward(
         url: &str,
         prefix: &Option<String>,
@@ -241,8 +253,6 @@ impl Evaluator {
         show: &[String],
         hide: &[String],
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = crate::__tracing::info_span!("eval_forward", url = url, has_prefix = prefix.is_some());
-        let _enter = span.enter();
         // 内建模块（sass:xxx）不能用 with 配置
         if url.starts_with("sass:") && !config.is_empty() {
             return Err(SassError::Eval("Built-in modules can't be configured.".into()));
@@ -262,28 +272,42 @@ impl Evaluator {
                     }
                     k.replace('-', "_")
                 };
-                let mut pairs: Vec<(String, Value)> = env
-                    .get_pending_config()
-                    .iter()
-                    .map(|(k, v)| (strip_prefix(k), v.clone()))
-                    .collect();
-                for cfg in config {
-                    let val = Evaluator::eval_value(&cfg.value, &env)?;
-                    let name = strip_prefix(&cfg.name);
-                    if cfg.is_default {
-                        if !pairs.iter().any(|(n, _)| n == &name) && !matches!(val, Value::Null) {
-                            pairs.push((name, val));
-                        }
-                    } else if !matches!(val, Value::Null) {
-                        if let Some(idx) = pairs.iter().position(|(n, _)| n == &name) {
-                            pairs[idx].1 = val;
-                        } else {
-                            pairs.push((name, val));
-                        }
-                    }
+                // 裸 forward：传递所有 pending_config（剥离前缀）
+                // @forward with：只传递 with 中声明的变量
+                if config.is_empty() {
+                    env.get_pending_config()
+                        .iter()
+                        .map(|(k, v)| (strip_prefix(k), v.clone()))
+                        .collect()
+                } else {
+                    config.iter()
+                        .try_fold(Vec::new(), |mut acc, cfg| {
+                            let name = strip_prefix(&cfg.name);
+                            let val = Evaluator::eval_value(&cfg.value, &env)?;
+                            let pending_val = env.get_pending_config()
+                                .get(&name)
+                                .or_else(|| env.get_pending_config().get(&cfg.name.replace('-', "_")));
+                            // 选择值：!default 时 pending_config 优先，否则 with 的值优先
+                            let chosen = if cfg.is_default {
+                                pending_val
+                                    .filter(|v| !matches!(v, Value::Null))
+                                    .cloned()
+                                    .or_else(|| if !matches!(val, Value::Null) { Some(val) } else { None })
+                            } else {
+                                if !matches!(val, Value::Null) { Some(val) } else {
+                                    pending_val.filter(|v| !matches!(v, Value::Null)).cloned()
+                                }
+                            };
+                            if let Some(v) = chosen { acc.push((name, v)); }
+                            Ok::<_, SassError>(acc)
+                        })?
                 }
-                pairs
             };
+            crate::__tracing::debug!(
+                config_pairs = ?config_pairs.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
+                pending = ?env.get_pending_config().keys().collect::<Vec<_>>(),
+                "eval_forward: built config_pairs"
+            );
             let already_loaded = env.get_loaded_modules().contains(&path);
             if already_loaded && !env.get_module_cache().contains_key(&path) {
                 return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
@@ -296,7 +320,7 @@ impl Evaluator {
             let exports = if already_loaded {
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
-                Self::load_module(&path, &config_pairs, &env)?
+                Self::load_module(&path, &config_pairs, &env, false)?
             };
             let css = if already_loaded { vec![] } else { exports.css.clone() };
             let env_with_cache = merge_module_cache(env, &path, &exports);
@@ -312,6 +336,28 @@ impl Evaluator {
                 &path,
                 &filter,
             )?;
+            // 将子模块的 consumed_config 回传到当前 env
+            // 如果有 as 前缀，子模块消费的 key 需要加上前缀后回传
+            // （外层 load_module 用带前缀的 key 做验证）
+            let prefix_norm = prefix.as_deref().map(|p| p.replace('-', "_"));
+            let add_prefix = |k: &str| -> String {
+                if let Some(ref pfx) = prefix_norm {
+                    format!("{pfx}{k}")
+                } else {
+                    k.to_string()
+                }
+            };
+            let merged_consumed: std::collections::HashSet<String> =
+                new_env.get_consumed_config().iter().cloned()
+                    .chain(exports.consumed_config.iter().map(|k| add_prefix(k)))
+                    .collect();
+            crate::__tracing::debug!(
+                child_consumed = ?exports.consumed_config,
+                merged = ?merged_consumed,
+                prefix = ?prefix,
+                "eval_forward: consumed_config merge"
+            );
+            let new_env = new_env.with_consumed_config(merged_consumed);
             return Ok((css, new_env));
         }
         Err(SassError::Eval("Can't find stylesheet to import.".into()))

@@ -7,7 +7,7 @@ use crate::lex::token::Token;
 use crate::parse::ast::*;
 use crate::__tracing::warn;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -24,6 +24,7 @@ pub(crate) struct ModuleExports {
     pub(crate) loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     pub(crate) extends: Rc<Vec<(String, String, bool)>>,
     pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
+    pub(crate) consumed_config: HashSet<String>,
 }
 
 impl ModuleExports {
@@ -67,6 +68,8 @@ pub struct Env {
     loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
     module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
     pending_config: HashMap<String, Value>,
+    /// 已被 !default 变量消费的 pending_config key 集合。
+    consumed_config: HashSet<String>,
 }
 
 /// mixin 定义存储。
@@ -149,6 +152,9 @@ impl Env {
     pub(crate) fn with_pending_config(mut self, config: HashMap<String, Value>) -> Self { self.pending_config = config; self }
     pub(crate) fn add_pending_config(mut self, key: String, val: Value) -> Self { self.pending_config.insert(key, val); self }
     pub(crate) fn get_pending_config(&self) -> &HashMap<String, Value> { &self.pending_config }
+    pub(crate) fn add_consumed_config(mut self, key: String) -> Self { self.consumed_config.insert(key); self }
+    pub(crate) fn get_consumed_config(&self) -> &HashSet<String> { &self.consumed_config }
+    pub(crate) fn with_consumed_config(mut self, config: HashSet<String>) -> Self { self.consumed_config = config; self }
     pub(crate) fn add_global_write(mut self, name: String, val: Value) -> Self { self.global_writes.insert(name, val); self }
     pub(crate) fn get_global_writes(&self) -> &HashMap<String, Value> { &self.global_writes }
     pub(crate) fn take_global_writes(&mut self) -> HashMap<String, Value> { std::mem::take(&mut self.global_writes) }
@@ -463,7 +469,6 @@ mod module;
 // module_dispatch 已被 builtin::dispatch 替代
 // mod module_dispatch;
 mod module_helpers;
-mod module_validation;
 mod plain_css;
 mod rule;
 mod value;

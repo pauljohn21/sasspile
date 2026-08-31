@@ -2,12 +2,12 @@ use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
-use crate::__tracing::warn;
+use crate::__tracing::{debug, warn};
 
 mod display;
 mod ops;
 
-pub(crate) use display::{eval_interp_str, eval_property_name, eval_simple_expr, inspect_value};
+pub(crate) use display::{eval_interp_segments, eval_interp_str, eval_property_name, eval_simple_expr, inspect_value};
 pub(crate) use ops::{add, compare, div, modulo, mul, sub, units_compatible, values_eq};
 
 /// 部分条件求值结果。
@@ -18,6 +18,7 @@ enum PartialCond {
 }
 
 impl Evaluator {
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(env), fields(name = name, is_default = flags.default), level = "debug"))]
 pub(crate) fn eval_variable(
     name: &str,
     value: &Value,
@@ -49,7 +50,17 @@ pub(crate) fn eval_variable(
             .or_else(|| env.get_pending_config().get(name))
             .cloned();
         if let Some(val) = config_val {
+            let consumed_key = env.get_pending_config()
+                .get(&normalized)
+                .map(|_| normalized.clone())
+                .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
+            debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
             let new_env = env.bind(name.to_string(), val);
+            let new_env = if let Some(key) = consumed_key {
+                new_env.add_consumed_config(key)
+            } else {
+                new_env
+            };
             return Ok((vec![], new_env));
         }
         // 无配置覆盖：已有变量则跳过
@@ -186,17 +197,12 @@ pub(crate) fn eval_variable(
                 }
             }
             // 插值——plain CSS 中不允许
-            Value::Interp(s) => {
+            Value::Interp(segments) => {
                 if env.is_plain_css() {
                     return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into()));
                 }
-                // 用 eval_simple_expr 求值插值内容（正确处理字符串引号）
-                let val = eval_simple_expr(s, env).unwrap_or_else(|_| Value::String(s.clone(), false));
-                // 提取字符串内部值（去引号）进行比较
-                let val_str = match &val {
-                    Value::String(inner, _) => inner.clone(),
-                    _ => val.to_string(),
-                };
+                // 求值插值片段，拼接为字符串
+                let val_str = eval_interp_segments(segments, env);
                 // and/or/not 关键字通过插值得到——作为 CSS 透传
                 if val_str == "and" || val_str == "or" || val_str == "not"
                     || val_str.starts_with("css(")
@@ -207,12 +213,13 @@ pub(crate) fn eval_variable(
                     || val_str.starts_with("clamp(")
                 {
                     Ok(PartialCond::Css(val_str))
-                } else if let Value::Calc(_) = val {
-                    Ok(PartialCond::Css(val.to_string()))
-                } else if Self::is_truthy(&val) {
-                    Ok(PartialCond::True)
                 } else {
-                    Ok(PartialCond::False)
+                    let val = Value::String(val_str, false);
+                    if Self::is_truthy(&val) {
+                        Ok(PartialCond::True)
+                    } else {
+                        Ok(PartialCond::False)
+                    }
                 }
             }
             // 其他值——正常求值
@@ -416,7 +423,7 @@ pub(crate) fn eval_variable(
                     Err(e) => Err(e),
                 }
             }
-            Value::Interp(s) => Ok(Value::String(eval_interp_str(s, env), false)),
+            Value::Interp(segments) => Ok(Value::String(eval_interp_segments(&segments, env), false)),
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),
             Value::UnaryOp(op, v) => {
                 let val = Self::eval_value(v, env)?;

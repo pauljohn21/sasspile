@@ -183,8 +183,56 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
     result
 }
 
+/// 求值插值片段列表——保留表达式与文本的边界。
+///
+/// 对每个 `Expr` 片段调用 `eval_simple_expr` 求值并去引号，
+/// 对 `Text` 片段直接输出。
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "debug", skip(env), fields(segments = ?segments.len())))]
+pub(crate) fn eval_interp_segments(segments: &[InterpSegment], env: &Env) -> String {
+    let mut result = String::new();
+    for seg in segments {
+        match seg {
+            InterpSegment::Expr(expr) => {
+                if let Ok(val) = super::eval_simple_expr(expr, env) {
+                    let s = match &val {
+                        Value::String(s, _) => s.clone(),
+                        Value::Null => continue, // #{null} 输出为空
+                        _ => val.to_string(),
+                    };
+                    result.push_str(&s);
+                } else {
+                    // 求值失败——回退到逐字符处理
+                    result.push_str(&eval_interp_str(expr, env));
+                }
+            }
+            InterpSegment::Text(text) => {
+                result.push_str(text);
+            }
+        }
+    }
+    result
+}
+
 /// 求值插值字符串 #{...}。
+///
+/// 先尝试用 `eval_simple_expr` 整体求值（处理纯变量 `$a`、数字、表达式），
+/// 失败时回退到逐字符扫描嵌套 `#{}` 模式（处理混合文本 `prefix#{expr}suffix`）。
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "debug", skip(env), fields(input = %s)))]
 pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
+    // 快速路径：不含 #{ 也不含 $ 的纯文本直接返回
+    if !s.contains("#{") && !s.contains('$') {
+        return s.to_string();
+    }
+    // 不含 #{ 嵌套但含 $ → 尝试整体求值（纯变量 $a、表达式 1+2 等）
+    if !s.contains("#{") {
+        if let Ok(val) = super::eval_simple_expr(s, env) {
+            return match &val {
+                Value::String(inner, _) => inner.clone(),
+                _ => val.to_string(),
+            };
+        }
+    }
+    // 回退：逐字符扫描 #{} 嵌套 + $var 变量引用
     let mut result = String::new();
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
@@ -216,6 +264,26 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
                 result.push_str(&s);
             } else {
                 result.push_str(&expr);
+            }
+        } else if c == '$' {
+            // 读取变量名
+            let mut var_name = String::new();
+            while let Some(&ch) = chars.peek() {
+                if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                    var_name.push(ch);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if let Some(val) = env.lookup(&var_name) {
+                let s = match val {
+                    Value::String(s, _) => s.clone(),
+                    _ => val.to_string(),
+                };
+                result.push_str(&s);
+            } else {
+                result.push_str(&format!("${var_name}"));
             }
         } else {
             result.push(c);

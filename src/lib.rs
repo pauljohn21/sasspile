@@ -168,6 +168,82 @@ pub fn init_tracing() {
 #[cfg(not(feature = "tracing"))]
 pub fn init_tracing() {}
 
+// ──────────────────────────────────────────────────────────────────────────
+// ANCHOR: otel_init
+// ──────────────────────────────────────────────────────────────────────────
+
+/// 初始化 tracing + OpenTelemetry stdout 导出。
+///
+/// 当 `otel` feature 启用时，创建 stdout span exporter，
+/// 将 tracing span 桥接为 OpenTelemetry trace span 并同步输出到 stdout。
+/// 无需 gRPC Collector 或 tokio runtime——适合编译器场景的轻量追踪。
+///
+/// # 环境变量
+///
+/// | 变量 | 默认值 | 说明 |
+/// |------|--------|------|
+/// | `RUST_LOG` | `warn` | tracing 日志级别过滤 |
+/// | `OTEL_SERVICE_NAME` | `sasspile` | 服务名标识 |
+///
+/// # 示例
+///
+/// ```bash
+/// # 编译并查看 trace span（stdout 输出）
+/// RUST_LOG=info cargo run --features otel -- input.scss
+/// ```
+#[cfg(feature = "otel")]
+pub fn init_tracing_otel() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
+    use tracing_opentelemetry::OpenTelemetryLayer;
+    use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+    // stdout exporter —— 同步输出 span 到 stdout，无需 async runtime
+    let exporter = opentelemetry_stdout::SpanExporter::default();
+
+    let service_name = std::env::var("OTEL_SERVICE_NAME")
+        .unwrap_or_else(|_| "sasspile".into());
+
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter)
+        .with_resource(
+            Resource::builder()
+                .with_service_name(service_name)
+                .build(),
+        )
+        .build();
+
+    let tracer = provider.tracer("sasspile-tracer");
+
+    // tracing layer 桥接
+    let otel_layer = OpenTelemetryLayer::new(tracer);
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("warn"));
+
+    let fmt_layer = fmt::layer()
+        .with_target(true)
+        .with_level(true)
+        .with_ansi(true)
+        .compact();
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .with(otel_layer)
+        .try_init()
+        .expect("subscriber init failed");
+}
+
+/// No-op `init_tracing_otel`——当 `otel` feature 未启用时回退到普通 tracing。
+#[cfg(not(feature = "otel"))]
+pub fn init_tracing_otel() {
+    init_tracing();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ANCHOR_END: otel_init
+// ──────────────────────────────────────────────────────────────────────────
+
 /// 输出风格。
 ///
 /// 控制编译器生成的 CSS 格式。

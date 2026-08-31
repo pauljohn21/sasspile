@@ -246,6 +246,15 @@ impl PartialEq for MixinRefData {
     }
 }
 
+/// 插值片段——区分表达式和文本。
+#[derive(Debug, Clone, PartialEq)]
+pub enum InterpSegment {
+    /// 表达式内容（来自 `#{...}` 内部，需要求值）。
+    Expr(String),
+    /// 文本（相邻的 ident/number/hash，直接输出）。
+    Text(String),
+}
+
 /// 值表达式。
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -267,8 +276,9 @@ pub enum Value {
     Null,
     /// 函数调用——`name(args)`。
     Call(String, Vec<Arg>),
-    /// 插值——`#{...}`。
-    Interp(String),
+    /// 插值——`#{...}` 与相邻文本的拼接。
+    /// 片段列表保留表达式与文本的边界，避免拼接后丢失语义。
+    Interp(Vec<InterpSegment>),
     /// 二元运算——`left op right`。
     BinOp(Box<BinOp>),
     /// 一元运算——`op operand`。

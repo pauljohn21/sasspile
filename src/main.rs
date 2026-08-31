@@ -2,10 +2,10 @@
 
 use std::io::{self, Read};
 
-use sasspile::{OutputStyle, compile, compile_file, init_tracing};
+use sasspile::{OutputStyle, compile, compile_file, init_tracing_otel};
 
 fn main() {
-    init_tracing();
+    init_tracing_otel();
 
     // 检查命令行参数：如果提供了文件路径，从文件读取
     let args: Vec<String> = std::env::args().collect();

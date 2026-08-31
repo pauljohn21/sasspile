@@ -118,7 +118,7 @@ impl Evaluator {
         }
 
         // 加载模块
-        let exports = Self::load_module(&path, &with_config, &env)?;
+        let exports = Self::load_module(&path, &with_config, &env, true)?;
         let css = exports.css.clone();
         let env_with_cache = super::module_helpers::merge_module_cache(env, &path, &exports);
 

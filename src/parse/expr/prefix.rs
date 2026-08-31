@@ -63,6 +63,16 @@ impl<'tok> Parser<'tok> {
             Some(Token::Ident(s)) => {
                 let name = s.clone();
                 self.advance();
+                // 检查 ident 后是否紧跟 Interp（无空格分隔）——拼接为插值片段
+                // 例如 hey#{$y}ho → [Text("hey"), Expr("$y"), Text("ho")]
+                if let Some(Token::Interp(interp_content)) = self.peek() {
+                    let interp_content = interp_content.clone();
+                    self.advance();
+                    return self.parse_interp_adjacent(
+                        vec![crate::parse::ast::InterpSegment::Text(name),
+                             crate::parse::ast::InterpSegment::Expr(interp_content)],
+                    );
+                }
                 self.skip_ws();
                 // 检查 module.function() 或 module.$var 语法
                 if self.peek() == Some(&Token::Dot) {
@@ -182,51 +192,9 @@ impl<'tok> Parser<'tok> {
                 }
             }
             Some(Token::Interp(s)) => {
-                let mut parts = vec![s.clone()];
+                let segments = vec![crate::parse::ast::InterpSegment::Expr(s.clone())];
                 self.advance();
-                // 相邻的标识符/数字/插值/Hash（无空格分隔）应拼接为字符串
-                // 例如 #{divide(...)}rem → "divide(...)rem"
-                loop {
-                    match self.peek() {
-                        Some(Token::Ident(t)) if !self.is_keyword(t) => {
-                            parts.push(t.clone());
-                            self.advance();
-                        }
-                        Some(Token::Number(n)) => {
-                            parts.push(n.clone());
-                            self.advance();
-                        }
-                        Some(Token::Interp(t)) => {
-                            parts.push(t.clone());
-                            self.advance();
-                        }
-                        Some(Token::Hash(h)) => {
-                            parts.push(format!("#{h}"));
-                            self.advance();
-                        }
-                        _ => break,
-                    }
-                }
-                if parts.len() == 1 {
-                    let interp = parts.into_iter().next().unwrap();
-                    // 插值后跟 () → 函数调用（如 #{css}() → Call("css", [])）
-                    self.skip_ws();
-                    if self.peek() == Some(&Token::LParen) {
-                        let args = self.parse_args()?;
-                        Ok(Value::Call(interp, args))
-                    } else {
-                        Ok(Value::Interp(interp))
-                    }
-                } else {
-                    let joined = parts.join("");
-                    self.skip_ws();
-                    if self.peek() == Some(&Token::LParen) {
-                        let args = self.parse_args()?;
-                        Ok(Value::Call(joined, args))
-                    } else {
-                        Ok(Value::Interp(joined))
-                    }
-                }
+                self.parse_interp_adjacent(segments)
             }
             Some(Token::True) => {
                 self.advance();
@@ -401,6 +369,63 @@ impl<'tok> Parser<'tok> {
                     }
                     None => Ok(Value::Null),
                 }
+            }
+        }
+    }
+
+    /// 从已有片段开始，继续向后拼接相邻的 ident/number/interp/hash token。
+    ///
+    /// 处理 `hey#{$y}ho`、`#{$a}px`、`#{1+2}rem` 等场景。
+    /// 当片段后紧跟 `()` 时，作为函数调用名。
+    fn parse_interp_adjacent(
+        &mut self,
+        mut segments: Vec<crate::parse::ast::InterpSegment>,
+    ) -> Result<Value> {
+        use crate::parse::ast::InterpSegment;
+        loop {
+            match self.peek() {
+                Some(Token::Ident(t)) if !self.is_keyword(t) => {
+                    segments.push(InterpSegment::Text(t.clone()));
+                    self.advance();
+                }
+                Some(Token::Number(n)) => {
+                    segments.push(InterpSegment::Text(n.clone()));
+                    self.advance();
+                }
+                Some(Token::Interp(t)) => {
+                    segments.push(InterpSegment::Expr(t.clone()));
+                    self.advance();
+                }
+                Some(Token::Hash(h)) => {
+                    segments.push(InterpSegment::Text(format!("#{h}")));
+                    self.advance();
+                }
+                _ => break,
+            }
+        }
+        if segments.len() == 1 {
+            let expr = match &segments[0] {
+                InterpSegment::Expr(e) => e.clone(),
+                InterpSegment::Text(t) => t.clone(),
+            };
+            self.skip_ws();
+            if self.peek() == Some(&Token::LParen) {
+                let args = self.parse_args()?;
+                Ok(Value::Call(expr, args))
+            } else {
+                Ok(Value::Interp(segments))
+            }
+        } else {
+            let joined: String = segments.iter().map(|seg| match seg {
+                InterpSegment::Expr(e) => e.clone(),
+                InterpSegment::Text(t) => t.clone(),
+            }).collect();
+            self.skip_ws();
+            if self.peek() == Some(&Token::LParen) {
+                let args = self.parse_args()?;
+                Ok(Value::Call(joined, args))
+            } else {
+                Ok(Value::Interp(segments))
             }
         }
     }

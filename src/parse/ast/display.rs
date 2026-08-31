@@ -303,7 +303,15 @@ impl std::fmt::Display for Value {
                     f.write_str(")")
                 }
             }
-            Value::Interp(s) => write!(f, "#{{{s}}}"),
+            Value::Interp(segments) => {
+                for seg in segments {
+                    match seg {
+                        InterpSegment::Expr(e) => write!(f, "#{{{e}}}")?,
+                        InterpSegment::Text(t) => f.write_str(t)?,
+                    }
+                }
+                Ok(())
+            }
             Value::BinOp(b) => {
                 let op_str = match b.op {
                     BinOpKind::Add => " + ",
