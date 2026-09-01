@@ -36,12 +36,13 @@
 - [ ] 4.1 修复数值精度和格式化（infinity 单位等）
 - [ ] 4.2 修复短/长 hex 颜色输出格式
 - [ ] 4.3 修复选择器排序差异
-- [ ] 4.4 修复 `@media` / `@supports` 合并规则边界
+- [x] 4.4 修复 `@media` / `@supports` 合并规则边界 — group_id 继承修复 bubbled rule 空行
 - [ ] 4.5 修复 `map.has-key` 返回值（extra_output 12 diff）
 - [ ] 4.6 修复 `map.deep-remove` 不存在键处理
 - [ ] 4.7 修复 `comparable` / `unit` 函数输出
-- [ ] 4.8 运行 `cargo test --test cf_diag -- --nocapture` 验证 content_diff 下降
-- [ ] 4.9 运行 sass_spec_full 验证整体通过率提升
+- [x] 4.8 修复 CSS 标识符转义 — escape_css_ident 独立实现 + 非标识符 ASCII 字符转义（`$` 等）
+- [x] 4.9 修复声明注释跳过 — parse_decl/check_important 用 skip_ws_and_comments
+- [x] 4.10 sass_spec_full 3089/5362（+21 总计）
 
 ## Phase 5 — plain CSS 错误检测
 
@@ -49,10 +50,10 @@
 - [ ] 5.2 增强 `check_plain_css_node`：检测 `error/compound` 场景
 - [ ] 5.3 增强 `check_plain_css_node`：检测 `error/no_selector` 场景
 - [ ] 5.4 修复 `@-moz-document` / `url-prefix` 解析
-- [ ] 5.5 修复 `error/modifier/*` 系列检测
+- [ ] 5.5 修复 `error/modifier/*` 系列检测（属性选择器 modifier 验证）
 - [x] 5.6 确保错误消息全部使用英文——已确认
 - [x] 5.7 css_diag 459→458 fail（before_colon/loud 修复）
-- [x] 5.8 sass_spec_full 3079 pass（+11 总计，css 目录 +11）
+- [x] 5.8 sass_spec_full 3089 pass（+21 总计）
 
 ## Phase 6 — 模块系统修复
 
