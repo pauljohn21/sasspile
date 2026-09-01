@@ -161,11 +161,11 @@ impl<'tok> Parser<'tok> {
         let property = self.parse_property()?;
         self.skip_ws_and_comments();
         self.expect(&Token::Colon)?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         // 声明值中使用斜杠分隔符语义——`1/2` 保留为 `1/2` 而非计算除法
         let value = self.parse_decl_value()?;
         let important = self.check_important()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
@@ -194,10 +194,10 @@ impl<'tok> Parser<'tok> {
     }
 
     pub(crate) fn check_important(&mut self) -> Result<bool> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         if self.peek() == Some(&Token::Bang) {
             self.advance();
-            self.skip_ws();
+            self.skip_ws_and_comments();
             if let Some(Token::Ident(s)) = self.peek()
                 && s == "important" {
                     self.advance();

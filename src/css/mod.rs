@@ -72,11 +72,12 @@ impl Serializer {
     }
 
     /// 展平嵌套规则。返回 (CssNode, group_id) 对——同源展平规则共享相同 group_id。
-    fn flatten_nodes(nodes: &[CssNode], group_id: usize) -> Vec<(CssNode, usize)> {
-        let mut next_group = group_id;
-        nodes.iter().flat_map(|node| {
-            let mut result = Vec::new();
-            match node {
+    /// 同一组顶层兄弟节点（来自同一个 eval_rule 输出）共享 group_id。
+    fn flatten_nodes(nodes: &[CssNode], start_group: usize) -> Vec<(CssNode, usize)> {
+        nodes.iter().fold(
+            (Vec::new(), start_group),
+            |(mut result, mut next_group), node| {
+                match node {
                 CssNode::Rule {
                     selector,
                     declarations,
@@ -107,14 +108,19 @@ impl Serializer {
                         result.extend(Self::flatten_children(selector, children, gid));
                     }
                 }
+                // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
                 other => {
-                    let gid = next_group;
-                    next_group += 1;
+                    let gid = if let Some((_, prev_gid)) = result.last() {
+                        *prev_gid
+                    } else {
+                        next_group
+                    };
                     result.push((other.clone(), gid));
                 }
-            }
-            result
-        }).collect()
+                }
+                (result, next_group)
+            },
+        ).0
     }
 
     fn flatten_children(_parent: &str, children: &[CssNode], group_id: usize) -> Vec<(CssNode, usize)> {
