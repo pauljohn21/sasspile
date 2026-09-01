@@ -67,18 +67,12 @@ pub(crate) fn bind_exports(
     };
     match mode {
         BindMode::Use => {
-            for (k, v) in merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars) {
-                let key = fmt_key(k);
-                new_env = new_env.bind(key, v.clone());
-            }
-            for (k, v) in exports.all_mixins() {
-                let key = fmt_key(k);
-                new_env = new_env.define_local_mixin(key, v.clone());
-            }
-            for (k, v) in exports.all_functions() {
-                let key = fmt_key(k);
-                new_env = new_env.define_local_function(key, v.clone());
-            }
+            new_env = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
+                .fold(new_env, |env, (k, v)| env.bind(fmt_key(k), v.clone()));
+            new_env = exports.all_mixins()
+                .fold(new_env, |env, (k, v)| env.define_local_mixin(fmt_key(k), v.clone()));
+            new_env = exports.all_functions()
+                .fold(new_env, |env, (k, v)| env.define_local_function(fmt_key(k), v.clone()));
         }
         BindMode::Forward => {
             let merged_vars: Vec<(String, Value)> = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)

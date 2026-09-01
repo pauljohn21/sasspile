@@ -1,3 +1,5 @@
+> ⛔ **禁止参照 dart-sass**：dart-sass 依赖 GC（垃圾回收），其嵌套结构依赖 GC 保。sasspile 是纯 Rust 项目，无 GC，所有权语义完全不同。任何实现必须基于 Rust 所有权模型和 sass-spec 规范，不得参照 dart-sass 的实现。
+
 # Design: Nested Output Format + Quick Fixes
 
 ## Architecture
@@ -60,7 +62,7 @@ a { &.b { c: d; } }
 // 输出：a { a.b { c: d; } }
 ```
 
-但 dart-sass 输出 `a { &.b { c: d; } }` — 保留 `&`！
+但 sass-spec 期望输出 `a { &.b { c: d; } }` — 保留 `&`！
 
 **决策**：`&` 替换延迟到序列化阶段。`eval_rule` 不替换 `&`，保留原始 `&` 选择器在 CssNode 中。
 

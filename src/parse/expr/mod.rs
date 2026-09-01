@@ -95,7 +95,7 @@ impl<'tok> Parser<'tok> {
                             // 空格列表中的 / 始终作为斜杠分隔符保留
                             // 例如 1 2/3 4 → [1, 2/3, 4]
                             if matches!(self.peek(), Some(Token::Slash)) {
-                                let last = items.pop().unwrap();
+                                let last = items.pop().expect("items non-empty: just pushed lhs");
                                 let mut slash_items = vec![last];
                                 while self.peek() == Some(&Token::Slash) {
                                     self.advance();
@@ -107,7 +107,7 @@ impl<'tok> Parser<'tok> {
                                 let slash_list = if slash_items.len() > 1 {
                                     Value::List(slash_items, Separator::SlashLiteral, false)
                                 } else {
-                                    slash_items.into_iter().next().unwrap()
+                                    slash_items.into_iter().next().expect("slash_items non-empty: at least one item pushed")
                                 };
                                 items.push(slash_list);
                                 continue;
@@ -117,7 +117,7 @@ impl<'tok> Parser<'tok> {
                             if let Some((_, bp)) = self.peek_binding_power()
                                 && bp >= 4
                             {
-                                let last = items.pop().unwrap();
+                                let last = items.pop().expect("items non-empty: at least one element");
                                 let binop_result = self.parse_expr_rest(last, 4)?;
                                 items.push(binop_result);
                                 continue;

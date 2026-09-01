@@ -144,7 +144,7 @@ fn css_fail_details() {
             for case in &parse_hrx(&content) {
                     if let Some(diff) = run_case(case, std::slice::from_ref(&spec_root)) {
                     fail_count += 1;
-                    if shown < 30 {
+                    if shown < 200 {
                         tracing::info!("\n{diff}");
                         shown += 1;
                     }

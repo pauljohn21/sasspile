@@ -9,15 +9,12 @@ fn main() {
 
     // 检查命令行参数：如果提供了文件路径，从文件读取
     let args: Vec<String> = std::env::args().collect();
-    let (input, is_file, file_path) = if args.len() > 1 {
+    let (input, file_path) = if args.len() > 1 {
         let path = &args[1];
         match std::fs::read_to_string(path) {
-            Ok(content) => (content, true, Some(path.clone())),
+            Ok(content) => (content, Some(path.clone())),
             Err(e) => {
-                #[cfg(feature = "tracing")]
                 tracing::error!(error = %e, "无法读取文件");
-                #[cfg(not(feature = "tracing"))]
-                eprintln!("无法读取文件: {e}");
                 std::process::exit(1);
             }
         }
@@ -25,20 +22,16 @@ fn main() {
         // 从 stdin 读取
         let mut input = String::new();
         if io::stdin().read_to_string(&mut input).is_err() {
-            #[cfg(feature = "tracing")]
             tracing::error!("无法读取输入");
-            #[cfg(not(feature = "tracing"))]
-            eprintln!("无法读取输入");
             std::process::exit(1);
         }
-        (input, false, None)
+        (input, None)
     };
 
     // 编译
     let style = OutputStyle::Expanded;
-    let result = if is_file {
-        let path = std::path::PathBuf::from(file_path.unwrap());
-        compile_file(&path, style)
+    let result = if let Some(path) = file_path {
+        compile_file(&std::path::PathBuf::from(path), style)
     } else {
         compile(&input, style)
     };
@@ -50,10 +43,7 @@ fn main() {
             let _ = stdout.write_all(css.as_bytes());
         }
         Err(e) => {
-            #[cfg(feature = "tracing")]
             tracing::error!(error = %e, "编译错误");
-            #[cfg(not(feature = "tracing"))]
-            eprintln!("编译错误: {e}");
             std::process::exit(1);
         }
     }

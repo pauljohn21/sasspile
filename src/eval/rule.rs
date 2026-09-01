@@ -155,6 +155,11 @@ impl Evaluator {
         let saved_forwarded_mixins = env.get_forwarded_mixins().clone();
         let saved_forwarded_functions = env.get_forwarded_functions().clone();
 
+        // 检查当前规则是否是 top-level（无父选择器或父选择器是 @at-rule）
+        // 用于 plain CSS 模式判断 @media 是否提升
+        let is_top_level = env.get_selector().is_none()
+            || env.get_selector().is_some_and(|s| s.starts_with('@'));
+
         let (css, new_env) = Self::eval_nodes(body, env.with_selector(selector.clone()))?;
 
         // plain CSS 模式——不合并选择器，保留嵌套结构
@@ -165,7 +170,20 @@ impl Evaluator {
                     match node {
                         decl @ CssNode::Declaration { .. } => decls.push(decl),
                         CssNode::AtRoot(nodes) => root.extend(nodes),
-                        CssNode::AtRule { name, params, children, has_body } if matches!(name.as_str(), "media" | "supports" | "container") => root.push(CssNode::AtRule { name, params, children, has_body }),
+                        CssNode::AtRule { name, params, children, has_body } if is_top_level && matches!(name.as_str(), "media" | "supports" | "container") => {
+                            // 提升 @media/@supports/@container 到外层
+                            // 将 children 包装在 Rule { selector } 中
+                            let wrapped = vec![CssNode::Rule {
+                                selector: selector.clone(),
+                declarations: Vec::new(),
+                                children,
+                            }];
+                            root.push(CssNode::AtRule { name, params, children: wrapped, has_body });
+                        }
+                        CssNode::AtRule { name, params, children, has_body: true } if !crate::parse::at_rule_kinds::CssAtRule::is_keyframes(&name) => {
+                            // 非提升的 AtRule——plain CSS 中保持原始 children
+                            kids.push(CssNode::AtRule { name, params, children, has_body: true });
+                        }
                         other => kids.push(other),
                     }
                     (decls, kids, root)

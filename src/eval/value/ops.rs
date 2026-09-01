@@ -206,9 +206,11 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
         &["hz", "khz"],                             // 频率
         &["dpi", "dpcm", "dppx"],                   // 分辨率
     ];
+    let g1 = u1.expect("non-none unit after none check");
+    let g2 = u2.expect("non-none unit after none check");
     for group in GROUPS {
-        let has1 = group.contains(&u1.unwrap());
-        let has2 = group.contains(&u2.unwrap());
+        let has1 = group.contains(&g1);
+        let has2 = group.contains(&g2);
         if has1 && has2 {
             return true;
         }

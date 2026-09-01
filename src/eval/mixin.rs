@@ -235,38 +235,15 @@ impl Evaluator {
             .map(|p| Self::eval_at_params(name, p, &new_env));
 
         // 当 @media/@supports/@container 在规则内部时，提升到外层
+        // 不在此处包装 Rule——让 nest_rule_in_children 处理选择器组合
         if matches!(name, "media" | "supports" | "container")
             && let Some(sel) = new_env.get_selector()
                 && !sel.is_empty() {
-                    let mut new_children = Vec::new();
-                    let mut current_decls = Vec::new();
-                    for child in children {
-                        match &child {
-                            CssNode::Declaration { .. } => current_decls.push(child),
-                            _ => {
-                                if !current_decls.is_empty() {
-                                    new_children.push(CssNode::Rule {
-                                        selector: sel.to_string(),
-                                        declarations: std::mem::take(&mut current_decls),
-                                        children: vec![],
-                                    });
-                                }
-                                new_children.push(child);
-                            }
-                        }
-                    }
-                    if !current_decls.is_empty() {
-                        new_children.push(CssNode::Rule {
-                            selector: sel.to_string(),
-                            declarations: current_decls,
-                            children: vec![],
-                        });
-                    }
                     return Ok((
                         vec![CssNode::AtRule {
                             name: name.to_string(),
                             params: eval_params,
-                            children: new_children,
+                            children,
                             has_body,
                         }],
                         new_env,

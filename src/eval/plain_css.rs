@@ -46,11 +46,15 @@ impl super::Evaluator {
                 "Parentheses aren't allowed in plain CSS.".into(),
             )),
 
-            // 字符串 — 检查是否包含插值
+            // 字符串 — 检查是否包含插值，以及是否为 & 父选择器
             Value::String(s, _) => {
                 if s.contains("#{") {
                     Err(SassError::Eval(
                         "Interpolation isn't allowed in plain CSS.".into(),
+                    ))
+                } else if s == "&" {
+                    Err(SassError::Eval(
+                        "The parent selector isn't allowed in plain CSS.".into(),
                     ))
                 } else {
                     Ok(())
@@ -135,11 +139,13 @@ impl super::Evaluator {
             // 允许的节点
             Node::Rule { .. } | Node::Decl { .. } | Node::Comment(_, false) => Ok(()),
             Node::AtRule { name, .. } => {
-                use crate::parse::at_rule_kinds::CssAtRule;
-                if CssAtRule::from_str(name).is_valid() {
-                    Ok(())
-                } else {
+                use crate::parse::at_rule_kinds::AtRuleKind;
+                // Sass 内建 at-rule（@if/@for/@each/@while/@mixin/@include/@function 等）— 禁止
+                if AtRuleKind::from_str(name).is_known() {
                     Err(err_plain_css_at_rule())
+                } else {
+                    // CSS 标准 at-rule 和未知 at-rule — 允许
+                    Ok(())
                 }
             }
             // 静默注释 — 禁止

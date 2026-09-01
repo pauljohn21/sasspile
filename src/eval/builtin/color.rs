@@ -385,50 +385,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         // ── sass:color 模块函数（Level 4 颜色空间支持）──
-        "is-powerless" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let channel = args.get(1).or_else(|| kw_args.get("$channel"));
-            match (color_arg, channel) {
-                (Some(Value::Color(c)), Some(Value::String(ch, _))) => {
-                    let powerless = is_channel_powerless(c, ch);
-                    Ok(Some(Value::Bool(powerless)))
-                }
-                // 处理 oklch()/oklab()/lch()/lab() 字符串形式
-                (Some(Value::String(s, _)), Some(Value::String(ch, _))) => {
-                    let powerless = is_channel_powerless_str(s, ch);
-                    match powerless {
-                        Some(b) => Ok(Some(Value::Bool(b))),
-                        None => Err(SassError::Eval(
-                            "is-powerless requires $color and $channel arguments".into(),
-                        )),
-                    }
-                }
-                _ => Err(SassError::Eval(
-                    "is-powerless requires $color and $channel arguments".into(),
-                )),
-            }
-        }
-        "is-missing" => {
-            // sasspile 目前不支持 none/missing 通道，所以总是返回 false。
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let channel_arg = args.get(1).or_else(|| kw_args.get("$channel"));
-            match (color_arg, channel_arg) {
-                (Some(Value::Color(_)), Some(Value::String(_, _))) => Ok(Some(Value::Bool(false))),
-                _ => Err(SassError::Eval("is-missing requires $color and $channel arguments".into())),
-            }
-        }
-        "is-in-gamut" => {
-            // sasspile 存储的 sRGB 颜色始终在色域内（u8 范围 + alpha 0-1）
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            match color_arg {
-                Some(Value::Color(_c)) => Ok(Some(Value::Bool(true))),
-                _ => Err(SassError::Eval("is-in-gamut requires $color argument".into())),
-            }
-        }
-        "is-legacy" => {
-            // sasspile 所有颜色都是 sRGB（legacy 空间）
-            Ok(Some(Value::Bool(true)))
-        }
+        "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy"
+            => super::color_inspect::call(name, args, kw_args),
         "channel" => super::color_space::channel(args, kw_args),
         "to-space" => super::color_space::to_space(args, kw_args),
         "to-gamut" => super::color_gamut::to_gamut(args, kw_args),
@@ -452,84 +410,5 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         _ => Ok(None),
-    }
-}
-
-/// 检查颜色通道是否"无效"（powerless）。
-/// 参考 CSS Color 规范实现：
-/// - HSL: hue 在 saturation ≈ 0 时无效；saturation 在 lightness = 0%/100% 时无效
-///   （注意：CSS 规范已更新，lightness 极端值不再使 hue/saturation 无效）
-/// - HWB: hue 在 whiteness + blackness >= 100%（归一化后）时无效
-/// - LCH/OKLCH: hue 在 chroma ≈ 0 时无效
-fn is_channel_powerless(c: &Color, channel: &str) -> bool {
-    let (_h, s, l) = Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
-    let max = c.legacy_rgb[0].max(c.legacy_rgb[1]).max(c.legacy_rgb[2]) / 255.0;
-    let min = c.legacy_rgb[0].min(c.legacy_rgb[1]).min(c.legacy_rgb[2]) / 255.0;
-    let w = min;
-    let b = 1.0 - max;
-    let w_b_sum = (w + b).min(1.0);
-    let eps = 0.0001;
-    match channel {
-        "hue" => s < eps || w_b_sum >= 1.0 - eps,
-        "saturation" => l < eps || (1.0 - l) < eps,
-        "lightness" => false,
-        "whiteness" => false,
-        "blackness" => false,
-        "a" | "b" => false,
-        _ => false,
-    }
-}
-
-/// 从字符串形式的 Level 4 颜色（如 `oklch(50% 0.1 0deg)`）判断通道是否 powerless。
-///
-/// 返回 `Some(bool)` 表示成功判断，`None` 表示无法识别。
-fn is_channel_powerless_str(color_str: &str, channel: &str) -> Option<bool> {
-    let s = color_str.trim();
-    let eps = 0.0001;
-
-    // 提取函数名和参数
-    let paren_start = s.find('(')?;
-    let func_name = s[..paren_start].trim();
-    let paren_end = s.rfind(')')?;
-    let inner = &s[paren_start + 1..paren_end];
-
-    // 解析空格分隔的参数
-    let parts: Vec<&str> = inner.split_whitespace().collect();
-
-    match func_name {
-        "oklch" | "lch" => {
-            // lch(L C H) / oklch(L C H)
-            // hue powerless 当 chroma ≈ 0
-            // chroma/lightness 永不 powerless
-            match channel {
-                "hue" => {
-                    // chroma 是第二个参数
-                    let chroma_str = parts.get(1)?;
-                    let chroma = parse_percent_or_number(chroma_str)?;
-                    Some(chroma.abs() < eps)
-                }
-                "chroma" | "lightness" => Some(false),
-                _ => Some(false),
-            }
-        }
-        "oklab" | "lab" => {
-            // lab(L A B) / oklab(L A B)
-            // a/b 永不 powerless
-            match channel {
-                "a" | "b" | "lightness" => Some(false),
-                _ => Some(false),
-            }
-        }
-        _ => None,
-    }
-}
-
-/// 解析 `50%` 或 `0.1` 形式的数值。
-fn parse_percent_or_number(s: &str) -> Option<f64> {
-    let s = s.trim();
-    if let Some(num_str) = s.strip_suffix('%') {
-        num_str.parse::<f64>().ok().map(|v| v / 100.0)
-    } else {
-        s.parse::<f64>().ok()
     }
 }

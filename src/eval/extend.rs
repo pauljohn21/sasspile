@@ -3,22 +3,21 @@ use crate::css::node::CssNode;
 
 impl Evaluator {
     /// 收集 CSS 中所有选择器文本（用于 extend target 匹配检查）。
-    fn collect_selectors(nodes: &[CssNode], out: &mut Vec<String>) {
-        for node in nodes {
-            match node {
+    fn collect_selectors(nodes: &[CssNode]) -> Vec<String> {
+        nodes.iter().flat_map(|node| {
+            let mut own = Vec::new();
+            let mut nested: Vec<String> = match node {
                 CssNode::Rule { selector, children, .. } => {
-                    out.push(selector.clone());
-                    Self::collect_selectors(children, out);
+                    own.push(selector.clone());
+                    Self::collect_selectors(children)
                 }
-                CssNode::AtRule { children, .. } => {
-                    Self::collect_selectors(children, out);
-                }
-                CssNode::AtRoot(kids) => {
-                    Self::collect_selectors(kids, out);
-                }
-                _ => {}
-            }
-        }
+                CssNode::AtRule { children, .. } => Self::collect_selectors(children),
+                CssNode::AtRoot(kids) => Self::collect_selectors(kids),
+                _ => Vec::new(),
+            };
+            own.append(&mut nested);
+            own
+        }).collect()
     }
 
     pub(crate) fn apply_extends(nodes: Vec<CssNode>, extends: &[(String, String, bool)]) -> Vec<CssNode> {
@@ -113,9 +112,8 @@ impl Evaluator {
     ) -> Result<()> {
         let span = crate::__tracing::debug_span!("check_extend_targets", n_extends = extends.len());
         let _enter = span.enter();
-    let mut all_selectors = Vec::new();
-        Self::collect_selectors(css, &mut all_selectors);
-        for (_extender, target, optional) in extends {
+    let all_selectors = Self::collect_selectors(css);
+    for (_extender, target, optional) in extends {
             if *optional {
                 continue;
             }

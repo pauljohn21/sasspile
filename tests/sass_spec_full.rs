@@ -216,6 +216,9 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
                     pass += 1;
                 } else {
                     fail += 1;
+                    if std::env::var("SHOW_FAILS").is_ok() {
+                        info!(case = %case.input_path, hrx = %rel_path, "FAIL");
+                    }
                 }
             }
         }

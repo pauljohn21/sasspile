@@ -1,3 +1,5 @@
+> ⛔ **禁止参照 dart-sass**：dart-sass 依赖 GC（垃圾回收），其嵌套结构依赖 GC 保。sasspile 是纯 Rust 项目，无 GC，所有权语义完全不同。任何实现必须基于 Rust 所有权模型和 sass-spec 规范，不得参照 dart-sass 的实现。
+
 # sasspile 2.0 —— 纯 Rust 函数式设计
 
 > 从零重写，以学习 Rust 函数式编程为核心目标。

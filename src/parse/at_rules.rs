@@ -271,175 +271,6 @@ impl<'tok> Parser<'tok> {
         Ok(Node::Return(value))
     }
 
-    pub(crate) fn parse_use(&mut self) -> Result<Node> {
-        self.skip_ws();
-        let url = self.parse_string_value()?;
-        let mut namespace = None;
-        let mut star = false;
-        let mut config = Vec::new();
-        self.skip_ws();
-        if self.peek_keyword("as") {
-            self.advance(); // 消费 as
-            self.skip_ws();
-            if self.peek() == Some(&Token::Star) {
-                self.advance();
-                star = true;
-            } else {
-                namespace = Some(self.parse_ident_name()?);
-            }
-        }
-        self.skip_ws();
-        if self.peek_keyword("with") {
-            self.advance(); // 消费 with
-            self.skip_ws();
-            self.expect(&Token::LParen)?;
-            config = self.parse_config()?;
-        }
-        self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
-        }
-        Ok(Node::Use {
-            url,
-            namespace,
-            star,
-            config,
-        })
-    }
-
-    pub(crate) fn parse_forward(&mut self) -> Result<Node> {
-        // @forward 不能在 mixin/function/style_rule 内使用
-        if self.in_body {
-            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
-        }
-        // @forward 必须在其他规则之前
-        if self.saw_other_rule {
-            return Err(SassError::Eval("@forward rules must be written before any other rules.".into()));
-        }
-        self.skip_ws();
-        // @forward 的 URL 必须是字符串字面量
-        let url = match self.peek() {
-            Some(Token::String(s, _)) => {
-                let s = s.clone();
-                self.advance();
-                s
-            }
-            _ => return Err(SassError::Eval("Expected string.".into())),
-        };
-        let mut show = Vec::new();
-        let mut hide = Vec::new();
-        let mut prefix = None;
-        self.skip_ws();
-        if self.peek_keyword("as") {
-            self.advance();
-            self.skip_ws();
-            match self.peek() {
-                Some(Token::Ident(s)) => {
-                    prefix = Some(s.clone());
-                    self.advance();
-                }
-                _ => return Err(SassError::Eval("Expected identifier.".into())),
-            }
-            self.skip_ws();
-            if self.peek() == Some(&Token::Star) {
-                self.advance();
-            } else {
-                return Err(SassError::Eval("expected \"*\".".into()));
-            }
-            self.skip_ws();
-        }
-        if self.peek_keyword("show") {
-            self.advance();
-            show = self.parse_member_list()?;
-            if show.is_empty() {
-                return Err(SassError::Eval("Expected variable, mixin, or function name".into()));
-            }
-            self.skip_ws();
-            if self.peek_keyword("hide") {
-                return Err(SassError::Eval("expected \";\".".into()));
-            }
-        } else if self.peek_keyword("hide") {
-            self.advance();
-            hide = self.parse_member_list()?;
-            if hide.is_empty() {
-                return Err(SassError::Eval("Expected variable, mixin, or function name".into()));
-            }
-            self.skip_ws();
-            if self.peek_keyword("show") {
-                return Err(SassError::Eval("expected \";\".".into()));
-            }
-        }
-        self.skip_ws();
-        let mut config = Vec::new();
-        if self.peek_keyword("with") {
-            self.advance();
-            self.skip_ws();
-            self.expect(&Token::LParen)?;
-            config = self.parse_config()?;
-            self.skip_ws();
-            if self.peek_keyword("as") || self.peek_keyword("show") || self.peek_keyword("hide") {
-                return Err(SassError::Eval("expected \";\".".into()));
-            }
-        }
-        self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
-        }
-        Ok(Node::Forward {
-            url,
-            show,
-            hide,
-            prefix,
-            config,
-        })
-    }
-
-    pub(crate) fn parse_import(&mut self) -> Result<Node> {
-        // 支持 @import "a", "b", "c" 多值语法
-        // 也支持 @import "url" modifier（CSS media/supports 修饰符）
-        let mut urls = Vec::new();
-        loop {
-            self.skip_ws();
-            let url = self.parse_string_value()?;
-            urls.push(url);
-            self.skip_ws();
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-                continue;
-            }
-            break;
-        }
-        // 捕获 URL 后面的修饰符（CSS @import media query 等，到分号为止）
-        self.skip_ws();
-        let modifier = if !matches!(self.peek(), Some(Token::Semicolon) | Some(Token::RBrace) | None) {
-            let mut s = String::new();
-            while let Some(t) = self.peek() {
-                match t {
-                    Token::Semicolon | Token::LBrace | Token::RBrace | Token::Eof => break,
-                    Token::Comment(_, _) => { self.advance(); }
-                    Token::Whitespace => { s.push(' '); self.advance(); }
-                    _ => { s.push_str(&t.to_string()); self.advance(); }
-                }
-            }
-            s.trim().to_string()
-        } else {
-            String::new()
-        };
-        self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
-        }
-        // 多值 @import：拼接为多行 CSS @import 透传
-        // sasspile 的 parse_node 只返回一个 Node，多值通过拼接 URL 处理
-        let url = if urls.len() == 1 {
-            urls.into_iter().next().unwrap()
-        } else {
-            // 多值 CSS @import 拼接为 "a", "b" 格式
-            urls.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join("\", \"")
-        };
-        Ok(Node::Import { url, modifier })
-    }
-
     pub(crate) fn parse_extend(&mut self) -> Result<Node> {
         self.skip_ws();
         let mut selector = String::new();
@@ -565,15 +396,37 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_at_params(&mut self) -> Result<String> {
         let mut s = String::new();
+        let mut paren_depth = 0i32;
         while let Some(t) = self.peek() {
             match t {
-                Token::LBrace | Token::Semicolon | Token::Eof => break,
+                Token::LBrace | Token::Semicolon | Token::Eof | Token::RBrace => break,
                 Token::Comment(_, _) => {
                     self.advance();
                 } // 跳过注释
-                Token::Whitespace => {
-                    s.push(' ');
+                Token::LParen => {
+                    paren_depth += 1;
+                    s.push('(');
                     self.advance();
+                }
+                Token::RParen => {
+                    paren_depth -= 1;
+                    // 修剪括号内侧尾部空白
+                    while s.ends_with(' ') {
+                        s.pop();
+                    }
+                    s.push(')');
+                    self.advance();
+                }
+                Token::Whitespace => {
+                    // 压缩连续空白为单个，跳过括号内侧前导空白
+                    if paren_depth > 0 && s.ends_with('(') {
+                        self.advance();
+                    } else if !s.ends_with(' ') {
+                        s.push(' ');
+                        self.advance();
+                    } else {
+                        self.advance();
+                    }
                 }
                 _ => {
                     s.push_str(&t.to_string());

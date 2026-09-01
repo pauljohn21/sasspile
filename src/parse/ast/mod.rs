@@ -1,11 +1,12 @@
 //! AST 定义——语法分析器的产出。
 
+mod color_fmt;
 mod color_types;
 mod display;
 pub mod named_colors;
 
 pub use color_types::{Color, ColorOutput, ColorSpace, ChannelSet};
-use color_types::{format_alpha, format_hue, format_pct, format_pct_val, hsl_to_rgb_percent};
+pub(crate) use color_fmt::{format_alpha, format_hue, format_pct, format_pct_val, hsl_to_rgb_percent};
 
 /// 变量标志——`!default`、`!global`。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

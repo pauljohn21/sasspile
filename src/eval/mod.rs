@@ -136,7 +136,11 @@ impl Env {
     pub(crate) fn get_namespace(&self, ns: &str) -> Option<&ModuleExports> { self.namespaces.get(ns).map(|rc| rc.as_ref()) }
 
     pub fn with_base_path(mut self, path: PathBuf) -> Self { self.base_path = Some(path); self }
-    pub fn add_extend(mut self, extender: String, target: String, optional: bool) -> Self { Rc::make_mut(&mut self.extends).push((extender, target, optional)); self }
+    pub fn add_extend(self, extender: String, target: String, optional: bool) -> Self {
+        let mut extends = (*self.extends).clone();
+        extends.push((extender, target, optional));
+        Self { extends: Rc::new(extends), ..self }
+    }
     pub fn get_extends(&self) -> &[(String, String, bool)] { &self.extends }
     pub fn with_selector(mut self, sel: String) -> Self { self.current_selector = Some(sel); self }
     pub fn get_selector(&self) -> Option<&str> { self.current_selector.as_deref() }
@@ -454,6 +458,7 @@ fn hoist_css_imports(nodes: Vec<CssNode>) -> Vec<CssNode> {
 mod at_params;
 mod builtin;
 mod color;
+mod color_names;
 mod control_flow;
 pub(crate) mod error_msgs;
 mod extend;

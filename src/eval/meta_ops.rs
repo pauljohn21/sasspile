@@ -130,13 +130,9 @@ impl Evaluator {
         ns_keys: &[String],
         env: &Env,
     ) -> HashMap<String, Rc<ModuleExports>> {
-        let mut result = HashMap::new();
-        for key in ns_keys {
-            if let Some(exports) = env.get_namespaces().get(key) {
-                result.insert(key.clone(), exports.clone());
-            }
-        }
-        result
+        ns_keys.iter()
+            .filter_map(|key| env.get_namespaces().get(key).map(|exports| (key.clone(), exports.clone())))
+            .collect()
     }
 
     /// `meta.get-mixin($name, $module: null)` 函数——返回 mixin 引用。

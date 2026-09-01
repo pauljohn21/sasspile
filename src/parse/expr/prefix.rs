@@ -297,7 +297,7 @@ impl<'tok> Parser<'tok> {
                         self.advance();
                     }
                     if items.len() == 1 && !saw_comma {
-                        Ok(Value::Paren(Box::new(items.into_iter().next().unwrap())))
+                        Ok(Value::Paren(Box::new(items.into_iter().next().expect("items has exactly 1 element"))))
                     } else {
                         Ok(Value::List(items, sep, false))
                     }

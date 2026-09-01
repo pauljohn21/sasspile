@@ -1,3 +1,5 @@
+> ⛔ **禁止参照 dart-sass**：dart-sass 依赖 GC（垃圾回收），其嵌套结构依赖 GC 保。sasspile 是纯 Rust 项目，无 GC，所有权语义完全不同。任何实现必须基于 Rust 所有权模型和 sass-spec 规范，不得参照 dart-sass 的实现。
+
 ## Context
 
 sasspile 当前 sass-spec 通过率 3068/5362 = 57%。经诊断分析，2294 个失败分布在六大类别。所有修复均在当前 Rust move 语义架构下完成，不需要 GC、共享引用或架构变更。
@@ -28,7 +30,7 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
 - 不做嵌套输出重构（sass-spec 期望展平，RuleBuilder 行为正确）
 - 不做颜色函数修复（颜色测试已跳过，需单独处理）
 - 不做 GC / 共享引用架构变更
-- 不做 dart-sass 移植
+- 不做其他语言实现的移植
 
 ## Decisions
 
