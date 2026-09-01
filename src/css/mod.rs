@@ -240,8 +240,8 @@ impl Serializer {
                 buf.push_str(text);
                 buf.push_str(" */");
             }
-            CssNode::AtRoot(nodes) => {
-                let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
+CssNode::AtRoot(nodes, _) => {
+let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
                 buf.push_str(&Self::serialize_expanded(&wrapped, depth));
             }
             CssNode::Rule {
@@ -360,8 +360,8 @@ impl Serializer {
                 buf.push(';');
             }
             CssNode::Comment(_) => {}
-            CssNode::AtRoot(nodes) => {
-                let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
+CssNode::AtRoot(nodes, _) => {
+let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
                 buf.push_str(&Self::serialize_compressed(&wrapped));
             }
             CssNode::Rule {

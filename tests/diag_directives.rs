@@ -1,5 +1,6 @@
-use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
-use hrx_auditor::vfs::Vfs;
+mod hrx_support;
+
+use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
 use sasspile::{compile_file_with_load_paths, OutputStyle};
 use std::path::PathBuf;
 

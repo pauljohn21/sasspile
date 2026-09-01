@@ -13,8 +13,9 @@
 
 mod common;
 
-use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
-use hrx_auditor::vfs::Vfs;
+mod hrx_support;
+
+use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
 use sasspile::lex::Lexer;
 use sasspile::lex::token::Token;
 use sasspile::parse::Parser;

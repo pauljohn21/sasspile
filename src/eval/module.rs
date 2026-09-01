@@ -90,7 +90,7 @@ impl Evaluator {
             }
         }
         let css = if is_plain_css {
-            vec![crate::css::node::CssNode::AtRoot(module_css)]
+            vec![crate::css::node::CssNode::AtRoot(module_css, None)]
         } else {
             module_css
         };
@@ -156,7 +156,7 @@ impl Evaluator {
         // @import 内联语义：forwarded 成员合并到 local
         let final_env = final_env.merge_forwarded_to_local();
         let css = if is_plain_css {
-            vec![crate::css::node::CssNode::AtRoot(css)]
+            vec![crate::css::node::CssNode::AtRoot(css, None)]
         } else {
             css
         };

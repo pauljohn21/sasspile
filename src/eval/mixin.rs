@@ -199,13 +199,18 @@ impl Evaluator {
     }
 
     // —— @at-root ——
+    // 官方文档：@at-root 默认只脱离 style rules（父选择器），保留 @media 等 at-rules。
+    // query 参数控制行为：without: media → 脱离 @media；without: all → 脱离所有；with: rule → 只保留 style rules。
+    // 实际的 query 解析和分流在 RuleBuilder::push 和 eval_at_rule 中完成。
     pub(crate) fn eval_at_root(
-        _query: &Option<String>,
+        query: &Option<String>,
         body: &[Node],
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        let span = crate::__tracing::info_span!("eval_at_root", query = ?query);
+        let _enter = span.enter();
         let (css, new_env) = Self::eval_nodes(body, env)?;
-        Ok((vec![CssNode::AtRoot(css)], new_env))
+        Ok((vec![CssNode::AtRoot(css, query.clone())], new_env))
     }
 
     // —— @规则 ——
@@ -236,31 +241,99 @@ impl Evaluator {
             .as_ref()
             .map(|p| Self::eval_at_params(name, p, &new_env));
 
+        // 分流 AtRoot 节点——需要提升到 at-rule 外面的内容
+        // 官方语义：
+        // - without: media/supports → 仅脱离匹配的 at-rule
+        // - without: all → 脱离所有 at-rules 和 style rules
+        // - with: rule → 排除所有 at-rules，只保留 style rules
+        // partition: predicate=true → inside（保留），predicate=false → outside（提升）
+        let (inside, outside): (Vec<CssNode>, Vec<CssNode>) = children.into_iter().partition(|node| {
+            match node {
+                CssNode::AtRoot(_, Some(q)) => {
+                    // without: all → 脱离所有 at-rules
+                    let without_all = q.contains("without: all") || q.contains("without:all");
+                    // with: rule → 排除所有 at-rules
+                    let with_rule = q.contains("with: rule") || q.contains("with:rule");
+                    if without_all || with_rule {
+                        return false; // 提升到外面
+                    }
+                    // without: media → 仅对 @media 生效
+                    if matches!(name, "media") {
+                        return !(q.contains("without: media") || q.contains("without:media"));
+                    }
+                    // without: supports → 仅对 @supports 生效
+                    if matches!(name, "supports") {
+                        return !(q.contains("without: supports") || q.contains("without:supports"));
+                    }
+                    // without: container → 仅对 @container 生效
+                    if matches!(name, "container") {
+                        return !(q.contains("without: container") || q.contains("without:container"));
+                    }
+                    true
+                }
+                _ => true,
+            }
+        });
+
+        // 将 outside 中的 AtRoot nodes 展开——父选择器已在 RuleBuilder 中处理
+        let outside_flat: Vec<CssNode> = outside.into_iter().flat_map(|node| {
+            match node {
+                CssNode::AtRoot(nodes, _) => {
+                    // without: all 时不需要嵌套父选择器——直接提升到 root
+                    // without: media 时需要嵌套在父选择器下
+                    // 但 AtRoot nodes 内部已经包含了父选择器信息（在 eval_rule 中保留的）
+                    // 这里直接展开即可——RuleBuilder 已处理了嵌套
+                    nodes
+                }
+                other => vec![other],
+            }
+        }).collect();
+
         // 当 @media/@supports/@container 在规则内部时，提升到外层
-        // 不在此处包装 Rule——让 nest_rule_in_children 处理选择器组合
         if matches!(name, "media" | "supports" | "container")
             && let Some(sel) = new_env.get_selector()
                 && !sel.is_empty() {
-                    return Ok((
-                        vec![CssNode::AtRule {
+                    let mut result = outside_flat;
+                    // @media/@supports/@container 空块不保留
+                    if !inside.is_empty() {
+                        result.push(CssNode::AtRule {
                             name: name.to_string(),
                             params: eval_params,
-                            children,
+                            children: inside,
                             has_body,
-                        }],
-                        new_env,
-                    ));
+                        });
+                    }
+                    return Ok((result, new_env));
                 }
 
-        Ok((
-            vec![CssNode::AtRule {
+        // @media/@supports/@container 空块不保留；其他 at-rule（如 @keyframes）保留空块
+        // 对于非 @media 类的 at-rule（如 @keyframes），先输出 at-rule 再输出 outside 提升的内容
+        let skip_empty = matches!(name, "media" | "supports" | "container");
+        let is_media_like = skip_empty;
+        let result = if is_media_like {
+            // @media 类：先 outside 后 at-rule（但上面已经 return 了，这里不会到）
+            let mut r = outside_flat;
+            if !skip_empty || !inside.is_empty() {
+                r.push(CssNode::AtRule {
+                    name: name.to_string(),
+                    params: eval_params,
+                    children: inside,
+                    has_body,
+                });
+            }
+            r
+        } else {
+            // 非 @media 类（如 @keyframes）：先 at-rule 后 outside
+            let mut r = vec![CssNode::AtRule {
                 name: name.to_string(),
                 params: eval_params,
-                children,
+                children: inside,
                 has_body,
-            }],
-            new_env,
-        ))
+            }];
+            r.extend(outside_flat);
+            r
+        };
+        Ok((result, new_env))
     }
 
     // —— 辅助 ——

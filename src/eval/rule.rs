@@ -41,8 +41,26 @@ impl RuleBuilder {
             CssNode::Declaration { .. } => {
                 self.current_decls.push(node);
             }
-            CssNode::AtRoot(nodes) => {
-                self.root_nodes.extend(nodes);
+CssNode::AtRoot(nodes, query) => {
+                // 解析 @at-root query 语义（官方文档）
+                // without: media/supports → 脱离 @media 但保留父选择器
+                // without: rule → 脱离父选择器（默认行为）
+                // without: all → 脱离所有包裹
+                // with: rule → 只保留 style rules，排除所有 at-rules
+                // 无 query → 脱离父选择器（默认行为）
+                let without_media = query.as_ref().is_some_and(|q| q.contains("without: media") || q.contains("without:media"));
+                let without_supports = query.as_ref().is_some_and(|q| q.contains("without: supports") || q.contains("without:supports"));
+                let without_all = query.as_ref().is_some_and(|q| q.contains("without: all") || q.contains("without:all"));
+                let with_rule = query.as_ref().is_some_and(|q| q.contains("with: rule") || q.contains("with:rule"));
+                if without_media || without_supports || without_all || with_rule {
+                    // 保留 AtRoot 但嵌套父选择器——由 eval_at_rule 分流提升到 @media 外面
+                    let nested = Evaluator::nest_rule_in_children(&self.selector, nodes);
+                    self.flush_decls();
+                    self.result.push(CssNode::AtRoot(nested, query));
+                } else {
+                    // 默认行为——脱离父选择器，提升到 root
+                    self.root_nodes.extend(nodes);
+                }
             }
             CssNode::Rule { selector: child_sel, declarations: child_decls, children: child_kids } => {
                 self.flush_decls();
@@ -169,7 +187,7 @@ impl Evaluator {
                 |(mut decls, mut kids, mut root), node| {
                     match node {
                         decl @ CssNode::Declaration { .. } => decls.push(decl),
-                        CssNode::AtRoot(nodes) => root.extend(nodes),
+                        CssNode::AtRoot(nodes, _) => root.extend(nodes),
                         CssNode::AtRule { name, params, children, has_body } if is_top_level && !crate::parse::at_rule_kinds::CssAtRule::is_keyframes(&name) => {
                             // 提升 AtRule 到外层，将 children 包装在 Rule { selector } 中
                             let wrapped = vec![CssNode::Rule {

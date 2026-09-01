@@ -119,7 +119,15 @@ impl Evaluator {
 
         // 加载模块
         let exports = Self::load_module(&path, &with_config, &env, true)?;
-        let css = exports.css.clone();
+        // 展开 AtRoot 包裹——meta.load-css 的 CSS 应该被嵌套在调用方选择器下
+        // 而不是提升到 root（AtRoot 默认行为）
+        let raw_css = exports.css.clone();
+        let css = raw_css.into_iter().flat_map(|node| {
+            match node {
+                CssNode::AtRoot(nodes, _) => nodes,
+                other => vec![other],
+            }
+        }).collect();
         let env_with_cache = super::module_helpers::merge_module_cache(env, &path, &exports);
 
         Ok((css, env_with_cache))

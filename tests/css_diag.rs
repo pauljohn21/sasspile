@@ -4,8 +4,9 @@
 
 mod spec_manifest;
 
-use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
-use hrx_auditor::vfs::Vfs;
+mod hrx_support;
+
+use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
 use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 

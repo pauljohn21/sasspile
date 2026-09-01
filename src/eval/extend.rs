@@ -12,7 +12,7 @@ impl Evaluator {
                     Self::collect_selectors(children)
                 }
                 CssNode::AtRule { children, .. } => Self::collect_selectors(children),
-                CssNode::AtRoot(kids) => Self::collect_selectors(kids),
+                CssNode::AtRoot(kids, _) => Self::collect_selectors(kids),
                 _ => Vec::new(),
             };
             own.append(&mut nested);
@@ -104,9 +104,9 @@ impl Evaluator {
                     let children = Self::apply_extends(children, extends);
                     CssNode::AtRule { name, params, children, has_body: true }
                 }
-                CssNode::AtRoot(kids) => {
-                    CssNode::AtRoot(Self::apply_extends(kids, extends))
-                }
+CssNode::AtRoot(kids, q) => {
+CssNode::AtRoot(Self::apply_extends(kids, extends), q)
+}
                 other => other,
             }
         }).collect()

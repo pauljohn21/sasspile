@@ -3,8 +3,9 @@
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 //! 使用 tracing 进行问题追踪，不使用 println!。
 
-use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
-use hrx_auditor::vfs::Vfs;
+mod hrx_support;
+
+use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
 use std::collections::HashMap;
 use std::path::Path;
 

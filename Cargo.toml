@@ -69,7 +69,6 @@ codegen-units = 1
 
 [dev-dependencies]
 criterion = "0.5"
-hrx-auditor = { path = "../scss-rust" }
 
 [[bench]]
 name = "lexer_bench"

@@ -3,8 +3,9 @@
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 //! 内存优化：逐文件处理，限制测试数量。
 
-use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
-use hrx_auditor::vfs::Vfs;
+mod hrx_support;
+
+use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
 use std::path::Path;
 
 /// HRX 测试用例。

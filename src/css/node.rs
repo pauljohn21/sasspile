@@ -47,7 +47,8 @@ pub enum CssNode {
     Comment(String),
 
     /// @at-root 输出——不嵌套在父选择器下。
-    AtRoot(Vec<CssNode>),
+    /// query: (without: media) / (with: media) / (without: all) 等
+    AtRoot(Vec<CssNode>, Option<String>),
 
     /// 原始 CSS 内容——用于 `.css` 文件的原样输出。
     /// `.css` 文件不经过 SCSS 求值，内容直接输出。
@@ -77,7 +78,7 @@ impl std::fmt::Display for CssNode {
             CssNode::AtRule { name, has_body, .. } => {
                 write!(f, "@{name}{}", if *has_body { " { ... }" } else { "" })
             }
-            CssNode::AtRoot(nodes) => write!(
+            CssNode::AtRoot(nodes, _) => write!(
                 f,
                 "{}",
                 nodes

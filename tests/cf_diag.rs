@@ -7,8 +7,9 @@
 mod common;
 use common::diff_css;
 
-use hrx_auditor::parser::{parse_hrx as hrx_parse, HrxArchive, HrxEntry};
-use hrx_auditor::vfs::Vfs;
+mod hrx_support;
+
+use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
 use std::path::{Path, PathBuf};
 
 /// HRX 测试用例——包含所有文件和期望输出。

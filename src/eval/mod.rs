@@ -442,7 +442,7 @@ fn hoist_css_imports(nodes: Vec<CssNode>) -> Vec<CssNode> {
         CssNode::AtRule { name, params, children, has_body: true } => {
             CssNode::AtRule { name, params, children: hoist_css_imports(children), has_body: true }
         }
-        CssNode::AtRoot(kids) => CssNode::AtRoot(hoist_css_imports(kids)),
+        CssNode::AtRoot(kids, q) => CssNode::AtRoot(hoist_css_imports(kids), q),
         other => other,
     }).collect();
     let (imports, rest): (Vec<CssNode>, Vec<CssNode>) = processed.into_iter().partition(|node| {

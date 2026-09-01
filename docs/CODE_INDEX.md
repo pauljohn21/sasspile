@@ -193,7 +193,7 @@
 | Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 + `eval/rule.rs` (eval_rule) |
 | Tracing events | `eval/color.rs` (sasspile::color) + `eval/extend.rs` (sasspile::extend) + `eval/value/mod.rs` (sasspile::binop) |
 | CSS diff 工具 | `tests/common/mod.rs` |
-| HRX 解析（VFS + `===` 分组） | `hrx_auditor` crate（`../scss-rust`）→ `tests/sass_spec_full.rs` + `tests/cf_diag.rs` 调用 |
+| HRX 解析（VFS 内联模块） | `tests/hrx_support.rs`（parse_hrx + Vfs + parse_hrx_to_cases）→ 9 个测试文件引用 |
 | spec 跳过列表 | `tests/spec_manifest.rs` → `SKIP_DIRS`（跳过 libsass/non_conformant/core_functions/color/values/colors） |
 | 颜色测试跳过 | `#[ignore]` 标记的 5 个颜色测试函数（cf_color/cf_diag/minimize/sass_spec_full），需 `--ignored` 手动触发 |
 | 最小化工具 | `tests/minimize.rs` |

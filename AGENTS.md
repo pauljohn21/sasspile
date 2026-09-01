@@ -444,19 +444,15 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
   - `minimize::minimize_color_error` — 颜色错误最小化
 - **手动触发颜色测试**：`cargo test --test <file> -- --ignored`
 
-## HRX 解析架构（hrx-auditor 集成）
+## HRX 解析架构（内联 hrx_support 模块）
 
-sasspile 通过 dev-dependency 引用 `hrx-auditor` crate（路径 `../scss-rust`），直接使用其 VFS + parser：
+sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依赖外部 crate**：
 
-```toml
-[dev-dependencies]
-hrx-auditor = { path = "../scss-rust" }
-```
-
-- `hrx_auditor::parser::parse_hrx(content)` → `HrxArchive`
-- `hrx_auditor::vfs::Vfs::from_archive(&archive)` → `Vfs`（虚拟目录树）
-- 测试代码按 `===` 分隔符将 entries 分成独立组，每组构建自己的 VFS，正确隔离不同测试组的文件
-- 已迁移全部 8 个测试文件：`sass_spec_full.rs`、`cf_diag.rs`、`css_diag.rs`、`expr_diag.rs`、`sass_spec.rs`、`diag_detail.rs`、`minimize.rs`、`cf_color.rs`
+- `hrx_support::parse_hrx(content)` → `Result<HrxArchive, String>`
+- `hrx_support::Vfs::from_archive(&archive)` → `Vfs`（虚拟目录树）
+- `hrx_support::parse_hrx_to_cases(content, hrx_rel_path)` → `Vec<HrxCase>`（高级 API，路径加 HRX 名作前缀）
+- 测试代码**不再按 `===` 分组隔离**——所有条目共享同一个 VFS，路径加 HRX 目录前缀，使 `@use` 跨组引用能正确解析
+- 共享模块被 9 个测试文件引用：`sass_spec_full.rs`、`cf_diag.rs`、`css_diag.rs`、`expr_diag.rs`、`sass_spec.rs`、`diag_detail.rs`、`minimize.rs`、`cf_color.rs`、`diag_directives.rs`
 
 ## 🔄 Git 规范
 
