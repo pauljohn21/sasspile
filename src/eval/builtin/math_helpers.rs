@@ -72,3 +72,21 @@ pub(crate) fn validate_single_number(args: &[Value]) -> Result<()> {
         ))),
     }
 }
+
+/// 将值强制转换为数字。
+///
+/// - `Value::Number(n, _)` → `n`
+/// - `Value::String(s, _)` → 尝试 `s.parse::<f64>()`
+/// - 其他 → 错误
+#[allow(dead_code)]
+pub(crate) fn coerce_number(v: &Value) -> Result<f64> {
+    match v {
+        Value::Number(n, _) => Ok(*n),
+        Value::String(s, _) => s.parse::<f64>().map_err(|_| {
+            SassError::Eval(format!("$number: {v} is not a number."))
+        }),
+        other => Err(SassError::Eval(format!(
+            "$number: {other} is not a number."
+        ))),
+    }
+}

@@ -43,6 +43,21 @@ impl Evaluator {
             return result;
         }
 
+        // ── meta 函数命名参数合并 ──
+        // if/inspect/type-of 等手工分派的函数不经过 dispatch，
+        // 需要在 match 之前合并 kw_args → pos_args
+        let merged_meta: Option<Vec<Value>> = match name.as_str() {
+            "if" => Some(merge_meta_args(pos_args, kw_args, &["condition", "if-true", "if-false"])),
+            "inspect" | "type-of" => Some(merge_meta_args(pos_args, kw_args, &["value"])),
+            _ => None,
+        };
+        let pos_args: &[Value] = if let Some(ref merged) = merged_meta {
+            merged.as_slice()
+        } else {
+            pos_args
+        };
+        let kw_args = if merged_meta.is_some() { &HashMap::new() } else { kw_args };
+
         match name.as_str() {
             // ── sass-spec 测试辅助函数 ──
             "sass" => {
@@ -402,6 +417,31 @@ pub(crate) fn merge_map_args(pos_args: &[Value], kw_args: &HashMap<String, Value
         }
     }
     // 追加多余的 pos_args（如 map-get(map, k1, k2, k3) 的多 key）
+    if pos_args.len() > param_names.len() {
+        result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
+}
+
+/// 合并 meta 函数（if/inspect/type-of）的位置参数和命名参数。
+///
+/// 与 `merge_args` 逻辑相同：按 `param_names` 顺序填充，
+/// 先取位置参数，不足的从命名参数查找。
+pub(crate) fn merge_meta_args(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    param_names: &[&str],
+) -> Vec<Value> {
+    let mut result = Vec::with_capacity(param_names.len().max(pos_args.len()));
+    for (i, pname) in param_names.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
     if pos_args.len() > param_names.len() {
         result.extend_from_slice(&pos_args[param_names.len()..]);
     }

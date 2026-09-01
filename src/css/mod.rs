@@ -14,7 +14,7 @@ pub struct Serializer;
 impl Serializer {
     /// 序列化 CssNode 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
-        let flattened = Self::flatten_nodes(nodes);
+        let flattened = Self::flatten_nodes(nodes, 0);
         let merged = Self::merge_at_rules(flattened);
         let css = match style {
             OutputStyle::Expanded => Self::serialize_expanded(&merged, 0),
@@ -32,8 +32,8 @@ impl Serializer {
     }
 
     /// 合并相邻的 @media/@supports 块（相同 query）。
-    fn merge_at_rules(nodes: Vec<CssNode>) -> Vec<CssNode> {
-        nodes.into_iter().fold(Vec::new(), |mut result, node| {
+    fn merge_at_rules(nodes: Vec<(CssNode, usize)>) -> Vec<(CssNode, usize)> {
+        nodes.into_iter().fold(Vec::new(), |mut result, (node, gid)| {
             match &node {
                 CssNode::AtRule {
                     name,
@@ -41,35 +41,39 @@ impl Serializer {
                     children,
                     has_body: true,
                 } => {
-                    // 检查是否与 result 中最后一个节点同名同 query
-                    let should_merge = result.last().is_some_and(|last| {
+                    let should_merge = result.last().is_some_and(|(last, _)| {
                         matches!(last, CssNode::AtRule { name: last_name, params: last_params, has_body: true, .. } if last_name == name && last_params == params)
                     });
                     if should_merge {
-                        if let Some(CssNode::AtRule { children: last_children, .. }) = result.last() {
+                        let (merged_children, last_gid) = if let Some((CssNode::AtRule { children: last_children, .. }, last_gid)) = result.last() {
                             let mut merged = last_children.clone();
                             merged.extend(children.clone());
-                            if let Some(last_mut) = result.last_mut() {
-                                *last_mut = CssNode::AtRule {
-                                    name: name.clone(),
-                                    params: params.clone(),
-                                    children: merged,
-                                    has_body: true,
-                                };
-                            }
+                            (merged, *last_gid)
+                        } else {
+                            (children.clone(), gid)
+                        };
+                        if let Some((last_mut, last_gid_val)) = result.last_mut() {
+                            *last_mut = CssNode::AtRule {
+                                name: name.clone(),
+                                params: params.clone(),
+                                children: merged_children,
+                                has_body: true,
+                            };
+                            *last_gid_val = last_gid;
                         }
                     } else {
-                        result.push(node);
+                        result.push((node, gid));
                     }
                 }
-                _ => result.push(node),
+                _ => result.push((node, gid)),
             }
             result
         })
     }
 
-    /// 展平嵌套规则。
-    fn flatten_nodes(nodes: &[CssNode]) -> Vec<CssNode> {
+    /// 展平嵌套规则。返回 (CssNode, group_id) 对——同源展平规则共享相同 group_id。
+    fn flatten_nodes(nodes: &[CssNode], group_id: usize) -> Vec<(CssNode, usize)> {
+        let mut next_group = group_id;
         nodes.iter().flat_map(|node| {
             let mut result = Vec::new();
             match node {
@@ -78,38 +82,42 @@ impl Serializer {
                     declarations,
                     children,
                 } => {
+                    let gid = next_group;
+                    next_group += 1;
                     if !declarations.is_empty() {
-                        result.push(CssNode::Rule {
+                        result.push((CssNode::Rule {
                             selector: selector.clone(),
                             declarations: declarations.clone(),
                             children: vec![],
-                        });
+                        }, gid));
                     }
-                    // 如果 children 中有非 Rule 节点（如 AtRule），保留 Rule 包裹
                     let has_non_rule_children = children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
                     if has_non_rule_children {
-                        let flat = Self::flatten_children(selector, children);
-                        // 分离 Rule 子节点和非 Rule 子节点
-                        let (rule_kids, other_kids): (Vec<CssNode>, Vec<CssNode>) = flat.into_iter().partition(|k| matches!(k, CssNode::Rule { .. }));
+                        let flat = Self::flatten_children(selector, children, gid);
+                        let (rule_kids, other_kids): (Vec<(CssNode, usize)>, Vec<(CssNode, usize)>) = flat.into_iter().partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
                         result.extend(rule_kids);
                         if !other_kids.is_empty() {
-                            result.push(CssNode::Rule {
+                            result.push((CssNode::Rule {
                                 selector: selector.clone(),
                                 declarations: vec![],
-                                children: other_kids,
-                            });
+                                children: other_kids.into_iter().map(|(n, _)| n).collect(),
+                            }, gid));
                         }
                     } else {
-                        result.extend(Self::flatten_children(selector, children));
+                        result.extend(Self::flatten_children(selector, children, gid));
                     }
                 }
-                other => result.push(other.clone()),
+                other => {
+                    let gid = next_group;
+                    next_group += 1;
+                    result.push((other.clone(), gid));
+                }
             }
             result
         }).collect()
     }
 
-    fn flatten_children(_parent: &str, children: &[CssNode]) -> Vec<CssNode> {
+    fn flatten_children(_parent: &str, children: &[CssNode], group_id: usize) -> Vec<(CssNode, usize)> {
         children.iter().flat_map(|child| {
             let mut result = Vec::new();
             match child {
@@ -118,38 +126,43 @@ impl Serializer {
                     declarations,
                     children: nested,
                 } => {
-                    // 选择器已由 Evaluator 合并——不再二次合并
                     if !declarations.is_empty() {
-                        result.push(CssNode::Rule {
+                        result.push((CssNode::Rule {
                             selector: selector.clone(),
                             declarations: declarations.clone(),
                             children: vec![],
-                        });
+                        }, group_id));
                     }
-                    result.extend(Self::flatten_children(selector, nested));
+                    result.extend(Self::flatten_children(selector, nested, group_id));
                 }
-                other => result.push(other.clone()),
+                other => result.push((other.clone(), group_id)),
             }
             result
         }).collect()
     }
 
-    fn serialize_expanded(nodes: &[CssNode], depth: usize) -> String {
+    fn serialize_expanded(nodes: &[(CssNode, usize)], depth: usize) -> String {
         let indent = "  ".repeat(depth);
-        let mut result = nodes.iter().enumerate().fold(String::new(), |mut acc, (i, n)| {
+        let mut result = nodes.iter().enumerate().fold(String::new(), |mut acc, (i, (n, gid))| {
             if i > 0 {
                 acc.push('\n');
                 // 顶层规则之间添加空行（SCSS expanded 模式）
                 // 但以下情况不加空行：
                 // - @import 等无 body 的 @规则之间
                 // - 连续注释之间
+                // - 同源展平规则（group_id 相同）
                 if depth == 0 {
-                    let prev_is_import = matches!(&nodes[i - 1], CssNode::AtRule { name, has_body: false, .. } if name == "import");
+                    let (prev_n, prev_gid) = &nodes[i - 1];
+                    let prev_is_import = matches!(prev_n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
                     let curr_is_import = matches!(n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
-                    let prev_is_comment = matches!(&nodes[i - 1], CssNode::Comment(_));
+                    let prev_is_comment = matches!(prev_n, CssNode::Comment(_));
                     let curr_is_comment = matches!(n, CssNode::Comment(_));
+                    let same_group = prev_gid == gid;
+                    let same_origin = !same_group && Self::is_same_origin(prev_n, n);
                     if !(prev_is_import || curr_is_import)
                         && !(prev_is_comment && curr_is_comment)
+                        && !same_group
+                        && !same_origin
                     {
                         acc.push('\n');
                     }
@@ -164,8 +177,35 @@ impl Serializer {
         result
     }
 
-    fn serialize_compressed(nodes: &[CssNode]) -> String {
-        nodes.iter().fold(String::new(), |mut acc, n| {
+    /// 启发式：判断两个顶层兄弟 Rule 是否来自同一 eval_rule 输出。
+    /// 仅在 group_id 不同时使用——检查选择器后代关系（非完全相同）。
+    fn is_same_origin(prev: &CssNode, curr: &CssNode) -> bool {
+        match (prev, curr) {
+            (CssNode::Rule { selector: prev_sel, .. }, CssNode::Rule { selector: curr_sel, .. }) => {
+                let prev_sel = prev_sel.trim();
+                let curr_sel = curr_sel.trim();
+                // 选择器完全相同时不通过启发式判断——依赖 group_id
+                if prev_sel == curr_sel {
+                    return false;
+                }
+                // 后代关系：curr 以 prev 为前缀，或反过来
+                let is_descendant = |a: &str, b: &str| {
+                    a.split(',').all(|p| {
+                        let p = p.trim();
+                        b.split(',').any(|c| {
+                            let c = c.trim();
+                            c.starts_with(&format!("{p} "))
+                        })
+                    })
+                };
+                is_descendant(prev_sel, curr_sel) || is_descendant(curr_sel, prev_sel)
+            }
+            _ => false,
+        }
+    }
+
+    fn serialize_compressed(nodes: &[(CssNode, usize)]) -> String {
+        nodes.iter().fold(String::new(), |mut acc, (n, _)| {
             Self::write_node_compressed(&mut acc, n);
             acc
         })
@@ -195,7 +235,8 @@ impl Serializer {
                 buf.push_str(" */");
             }
             CssNode::AtRoot(nodes) => {
-                buf.push_str(&Self::serialize_expanded(nodes, depth));
+                let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
+                buf.push_str(&Self::serialize_expanded(&wrapped, depth));
             }
             CssNode::Rule {
                 selector,
@@ -229,7 +270,8 @@ impl Serializer {
                     }
                 }
                 if !children.is_empty() {
-                    let child_css = Self::serialize_expanded(children, depth + 1);
+                    let wrapped: Vec<(CssNode, usize)> = children.iter().cloned().map(|n| (n, 0)).collect();
+                    let child_css = Self::serialize_expanded(&wrapped, depth + 1);
                     if !child_css.is_empty() {
                         buf.push_str(&child_css);
                         buf.push('\n');
@@ -263,7 +305,8 @@ impl Serializer {
                         buf.push_str(p);
                     }
                     buf.push_str(" {\n");
-                    let child_css = Self::serialize_expanded(children, depth + 1);
+                    let wrapped: Vec<(CssNode, usize)> = children.iter().cloned().map(|n| (n, 0)).collect();
+                    let child_css = Self::serialize_expanded(&wrapped, depth + 1);
                     if !child_css.is_empty() {
                         buf.push_str(&child_css);
                         buf.push('\n');
@@ -312,7 +355,8 @@ impl Serializer {
             }
             CssNode::Comment(_) => {}
             CssNode::AtRoot(nodes) => {
-                buf.push_str(&Self::serialize_compressed(nodes));
+                let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
+                buf.push_str(&Self::serialize_compressed(&wrapped));
             }
             CssNode::Rule {
                 selector,
