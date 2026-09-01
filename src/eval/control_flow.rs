@@ -62,7 +62,12 @@ impl Evaluator {
             _ => return Err(SassError::Eval("@for range must be numbers".into())),
         };
         let step: i64 = if start <= end { 1 } else { -1 };
-        let stop = if inclusive { end + step } else { end };
+        // inclusive: 正向 stop=end+1（不含 end+1，含 end），反向 stop=end（含 end）
+        let stop = if inclusive {
+            if step > 0 { end + step } else { end }
+        } else {
+            end
+        };
         // 构建迭代范围：正向 (start..stop)，反向 (stop+1..=start).rev()
         let count = 0i64;
         let (css, env, _) = if step > 0 {
