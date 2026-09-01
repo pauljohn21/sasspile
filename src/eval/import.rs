@@ -14,6 +14,8 @@ impl Evaluator {
         }
         let is_css = url.ends_with(".css")
             || url.starts_with("https://")
+            || url.starts_with("http://")
+            || url.starts_with("//")
             || url.starts_with("url(")
             || !modifier.is_empty()
             || url.split(", ").any(|u| u.trim_matches('"').ends_with(".css"));
@@ -21,7 +23,10 @@ impl Evaluator {
             let urls: Vec<&str> = url.split(", ").collect();
             let nodes: Vec<CssNode> = urls.iter().map(|u| {
                 let u = u.trim_matches('"');
-                let params = if modifier.is_empty() {
+                // http/https URL 用 url() 形式
+                let params = if u.starts_with("http://") || u.starts_with("https://") || u.starts_with("//") {
+                    format!("url({u})")
+                } else if modifier.is_empty() {
                     format!("\"{u}\"")
                 } else {
                     format!("\"{u}\" {modifier}")

@@ -130,7 +130,28 @@ impl<'tok> Parser<'tok> {
         let mut urls = Vec::new();
         loop {
             self.skip_ws_and_comments();
-            let url = self.parse_string_value()?;
+            // 支持 url() 函数形式
+            let url = if self.peek_keyword("url") {
+                self.advance();
+                self.skip_ws();
+                if self.peek() == Some(&Token::LParen) {
+                    self.advance();
+                    let mut url_content = String::new();
+                    while let Some(t) = self.peek() {
+                        match t {
+                            Token::RParen => { self.advance(); break; }
+                            Token::Whitespace => { url_content.push(' '); self.advance(); }
+                            Token::Comment(_, _) => { self.advance(); }
+                            _ => { url_content.push_str(&t.to_string()); self.advance(); }
+                        }
+                    }
+                    url_content.trim().to_string()
+                } else {
+                    return Err(SassError::Parse { expected: "(".into(), found: "other".into() });
+                }
+            } else {
+                self.parse_string_value()?
+            };
             urls.push(url);
             self.skip_ws_and_comments();
             if self.peek() == Some(&Token::Comma) {
