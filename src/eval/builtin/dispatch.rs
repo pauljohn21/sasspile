@@ -24,11 +24,14 @@ const MATH_NAMES: &[(&str, &str)] = &[
 ];
 
 const STRING_NAMES: &[(&str, &str)] = &[
-    ("string.length", "str-length"), ("string.index", "str-index"),
-    ("string.slice", "str-slice"), ("string.to-upper-case", "to-upper-case"),
-    ("string.to-lower-case", "to-lower-case"), ("string.insert", "str-insert"),
+    ("string.length", "str-length"),
+    ("string.index", "str-index"),
+    ("string.slice", "str-slice"),
+    ("string.insert", "str-insert"),
+    ("string.split", "str-split"),
+    ("string.to-upper-case", "to-upper-case"), ("string.to-lower-case", "to-lower-case"),
     ("string.quote", "quote"), ("string.unquote", "unquote"),
-    ("string.split", "str-split"), ("string.unique-id", "unique-id"),
+    ("string.unique-id", "unique-id"),
 ];
 
 const MAP_NAMES: &[(&str, &str)] = &[
@@ -46,9 +49,9 @@ const LIST_NAMES: &[(&str, &str)] = &[
 ];
 
 const COLOR_NAMES: &[(&str, &str)] = &[
-    ("color.adjust", "adjust-color"), ("color.adjust-color", "adjust-color"),
-    ("color.change", "change-color"), ("color.change-color", "change-color"),
-    ("color.scale", "scale-color"), ("color.scale-color", "scale-color"),
+    ("color.adjust", "adjust-color"),
+    ("color.change", "change-color"),
+    ("color.scale", "scale-color"),
     ("color.ie-hex-str", "ie-hex-str"), ("color.invert", "invert"),
     ("color.grayscale", "grayscale"), ("color.complement", "complement"),
     ("color.adjust-hue", "adjust-hue"), ("color.saturate", "saturate"),
@@ -69,12 +72,12 @@ const COLOR_NAMES: &[(&str, &str)] = &[
 ];
 
 const SELECTOR_NAMES: &[(&str, &str)] = &[
-    ("selector.append", "selector-append"), ("selector.nest", "selector-nest"),
     ("selector.is-superselector", "selector-is-superselector"),
     ("selector.parse", "selector-parse"),
     ("selector.simple-selectors", "selector-simple-selectors"),
     ("selector.unify", "selector-unify"), ("selector.extend", "selector-extend"),
     ("selector.replace", "selector-replace"),
+    ("selector.append", "selector-append"), ("selector.nest", "selector-nest"),
 ];
 
 const META_NAMES: &[(&str, &str)] = &[

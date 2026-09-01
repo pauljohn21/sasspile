@@ -8,6 +8,7 @@ pub mod color_adjust;
 pub mod color_conv;
 pub mod color_conv_ops;
 pub mod color_gamut;
+pub mod color_inspect;
 pub mod color_parse;
 pub mod color_space;
 pub mod dispatch;
@@ -16,7 +17,9 @@ pub mod map;
 pub mod selector;
 pub mod string;
 pub mod math;
+pub mod math_css;
 pub mod math_helpers;
+pub mod math_trig;
 
 use super::*;
 use crate::error::{Result, SassError};
@@ -72,11 +75,21 @@ impl Evaluator {
                 Ok(pos_args[0].clone())
             }
             // ── color（手工 arm：调用 Self::builtin_* 方法）──
-            "rgba" => Self::builtin_rgba("rgba", pos_args),
-            "rgb" => Self::builtin_rgba("rgb", pos_args),
-            "darken" => Self::builtin_darken(pos_args),
-            "lighten" => Self::builtin_lighten(pos_args),
-            "mix" => Self::builtin_mix(pos_args),
+            // 合并命名参数 $red/$green/$blue/$alpha → 位置参数
+            "rgba" | "rgb" => {
+                let merged = merge_color_args(pos_args, kw_args);
+                Self::builtin_rgba(&name, &merged)
+            }
+            // darken/lighten/mix 合并 $color/$amount 命名参数
+            "darken" | "lighten" => {
+                let merged = merge_two_args(pos_args, kw_args, "color", "amount");
+                if name == "darken" { Self::builtin_darken(&merged) }
+                else { Self::builtin_lighten(&merged) }
+            }
+            "mix" => {
+                let merged = merge_mix_args(pos_args, kw_args);
+                Self::builtin_mix(&merged)
+            },
             // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
             "lab" | "lch" | "oklab" | "oklch" | "color" => {
                 color_parse::parse_color_fn(&name, pos_args, kw_args)
@@ -444,6 +457,68 @@ pub(crate) fn merge_meta_args(
     }
     if pos_args.len() > param_names.len() {
         result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
+}
+
+/// 合并 rgba/rgb 的位置参数和命名参数（$red/$green/$blue/$alpha）。
+fn merge_color_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
+    const PARAMS: &[&str] = &["red", "green", "blue", "alpha"];
+    let mut result = Vec::with_capacity(PARAMS.len().max(pos_args.len()));
+    for (i, pname) in PARAMS.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
+    if pos_args.len() > PARAMS.len() {
+        result.extend_from_slice(&pos_args[PARAMS.len()..]);
+    }
+    result
+}
+
+/// 合并 darken/lighten 的位置参数和命名参数（$color/$amount）。
+fn merge_two_args(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    p1: &str,
+    p2: &str,
+) -> Vec<Value> {
+    const PARAMS_COUNT: usize = 2;
+    let mut result = Vec::with_capacity(PARAMS_COUNT.max(pos_args.len()));
+    for (i, pname) in [p1, p2].iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
+    if pos_args.len() > PARAMS_COUNT {
+        result.extend_from_slice(&pos_args[PARAMS_COUNT..]);
+    }
+    result
+}
+
+/// 合并 mix 的位置参数和命名参数（$color1/$color2/$weight）。
+fn merge_mix_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
+    const PARAMS: &[&str] = &["color1", "color2", "weight"];
+    let mut result = Vec::with_capacity(PARAMS.len().max(pos_args.len()));
+    for (i, pname) in PARAMS.iter().enumerate() {
+        if i < pos_args.len() {
+            result.push(pos_args[i].clone());
+        } else if let Some(v) = kw_args.get(*pname) {
+            result.push(v.clone());
+        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
+            result.push(v.clone());
+        }
+    }
+    if pos_args.len() > PARAMS.len() {
+        result.extend_from_slice(&pos_args[PARAMS.len()..]);
     }
     result
 }

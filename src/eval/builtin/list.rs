@@ -257,13 +257,27 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             }
         },
         "set-nth" => match args {
-            [Value::List(items, sep, false), Value::Number(n, _), val] => {
-                let idx = *n as usize;
+            [Value::List(items, sep, bracketed), Value::Number(n, _), val] => {
+                let len = items.len() as i64;
+                let idx = *n as i64;
+                let actual = if idx > 0 {
+                    (idx as usize).saturating_sub(1)
+                } else if idx < 0 {
+                    (len + idx) as usize
+                } else {
+                    return Err(SassError::Eval(
+                        format!("List index {idx} may not be 0."),
+                    ));
+                };
                 let mut new_items = items.clone();
-                if idx >= 1 && idx <= new_items.len() {
-                    new_items[idx - 1] = val.clone();
+                if actual < new_items.len() {
+                    new_items[actual] = val.clone();
+                } else {
+                    return Err(SassError::Eval(
+                        format!("List index {idx} is out of bounds for list of length {len}"),
+                    ));
                 }
-                Ok(Some(Value::List(new_items, sep.clone(), false)))
+                Ok(Some(Value::List(new_items, sep.clone(), *bracketed)))
             }
             _ => Err(SassError::Eval("set-nth requires 3 arguments".into())),
         },
