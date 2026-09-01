@@ -10,7 +10,7 @@ mod spec_manifest;
 use hrx_support::{parse_hrx_to_cases, run_case};
 use spec_manifest::SKIP_DIRS;
 use std::path::{Path, PathBuf};
-use tracing::{info, info_span, warn};
+use tracing::{info, info_span};
 
 // ─── 文件收集 ─────────────────────────────────────────────────────────────
 
@@ -122,7 +122,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
 
 #[test]
 fn test_import_use_forward() {
-    sasspile::init_tracing();
+    sasspile::init_tracing_otel();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     for subdir in &["directives/import", "directives/use", "directives/forward"] {
         let (pass, fail, skip, cases) = run_spec_dir(&spec_root, subdir);
@@ -142,7 +142,7 @@ fn test_import_use_forward() {
 
 #[test]
 fn test_directives_subdirs() {
-    sasspile::init_tracing();
+    sasspile::init_tracing_otel();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
 
     let subdirs = [
@@ -214,7 +214,7 @@ fn test_directives_subdirs() {
 
 #[test]
 fn test_sass_spec_full_stats() {
-    sasspile::init_tracing();
+    sasspile::init_tracing_otel();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
 
     let dirs = [
@@ -259,7 +259,7 @@ fn test_sass_spec_full_stats() {
 #[test]
 #[ignore]
 fn test_core_functions_subdirs() {
-    sasspile::init_tracing();
+    sasspile::init_tracing_otel();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
 
     let subdirs = [
