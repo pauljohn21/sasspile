@@ -110,6 +110,16 @@ impl<'tok> Parser<'tok> {
                         && !is_url_with_string
                     {
                         self.advance(); // 消费 (
+                        // 检查是否为空参数——calc() 等空参数可能是用户函数调用
+                        let after = self.peek();
+                        let is_special = name.eq_ignore_ascii_case("calc")
+                            || name.eq_ignore_ascii_case("clamp")
+                            || name.eq_ignore_ascii_case("env")
+                            || name.eq_ignore_ascii_case("var");
+                        if matches!(after, Some(Token::RParen)) && is_special {
+                            self.advance(); // 消费 )
+                            return Ok(Value::Call(name, Vec::new()));
+                        }
                         let mut content = String::new();
                         let mut depth = 1;
                         while let Some(t) = self.peek() {

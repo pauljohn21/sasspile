@@ -145,7 +145,14 @@ fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> bool {
         result.is_err()
     } else {
         match result {
-            Ok(actual) => actual.trim() == case.expected_output.trim(),
+            Ok(actual) => {
+                let ok = actual.trim() == case.expected_output.trim();
+                if !ok && std::env::var("SHOW_DIFF").is_ok() {
+                    eprintln!("--- EXPECTED ---\n{}", case.expected_output);
+                    eprintln!("--- ACTUAL ---\n{}", actual);
+                }
+                ok
+            }
             Err(_) => false,
         }
     }

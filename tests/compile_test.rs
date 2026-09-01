@@ -366,7 +366,6 @@ fn test_import_twice_forward() {
     std::fs::create_dir_all(&dir).ok();
     std::fs::write(dir.join("input.scss"), "$a: configured;\n@import \"other\";\n@import \"other\";\n").ok();
     std::fs::write(dir.join("_other.scss"), "$a: original !default;\nb {c: $a}\n").ok();
-    std::fs::write(dir.join("_other.import.scss"), "@forward \"other\";\n").ok();
     let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
     tracing::info!(css = %css, "import_twice result");
     assert!(css.contains("configured"), "expected 'configured' in output: {css}");

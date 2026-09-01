@@ -36,8 +36,10 @@ impl<'tok> Parser<'tok> {
             }
             let node = p.parse_node()?;
             // 跟踪非模块规则——@forward 必须在这些规则之前
+            // 变量声明和注释不触发 saw_other_rule（Sass 允许它们在 @forward 前）
             match &node {
-                Node::Forward { .. } | Node::Use { .. } | Node::Import { .. } => {}
+                Node::Forward { .. } | Node::Use { .. } | Node::Import { .. }
+                | Node::Variable { .. } | Node::Comment(_, _) => {}
                 _ => p.saw_other_rule = true,
             }
             nodes.push(node);

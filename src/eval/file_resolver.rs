@@ -15,24 +15,43 @@ impl Evaluator {
     /// 解析 @import/@use/@forward 的 url 为文件路径。
     ///
     /// 优先级顺序：partial > non-partial，.scss > .sass > .css，import-only > index
+    /// `is_import=true` 时 @import 优先使用 import-only 文件
     pub(crate) fn resolve_file(
         base: Option<&PathBuf>,
         url: &str,
         load_paths: &[PathBuf],
     ) -> Option<PathBuf> {
-        let span = crate::__tracing::debug_span!("resolve_file", url = url);
+        Self::resolve_file_inner(base, url, load_paths, false)
+    }
+
+    /// 解析 @import 专用——优先 import-only 文件。
+    pub(crate) fn resolve_file_import(
+        base: Option<&PathBuf>,
+        url: &str,
+        load_paths: &[PathBuf],
+    ) -> Option<PathBuf> {
+        Self::resolve_file_inner(base, url, load_paths, true)
+    }
+
+    fn resolve_file_inner(
+        base: Option<&PathBuf>,
+        url: &str,
+        load_paths: &[PathBuf],
+        is_import: bool,
+    ) -> Option<PathBuf> {
+        let span = crate::__tracing::debug_span!("resolve_file", url = url, is_import);
         let _enter = span.enter();
         let base_dir = base
             .as_ref()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_else(|| PathBuf::from("."));
         // 先尝试相对于当前文件目录解析
-        if let Some(path) = Self::try_resolve_dir(&base_dir, url) {
+        if let Some(path) = Self::try_resolve_dir(&base_dir, url, is_import) {
             return Some(path);
         }
         // 回退到 load paths
         for lp in load_paths {
-            if let Some(path) = Self::try_resolve_dir(lp, url) {
+            if let Some(path) = Self::try_resolve_dir(lp, url, is_import) {
                 return Some(path);
             }
         }
@@ -40,27 +59,40 @@ impl Evaluator {
     }
 
     /// 在指定目录下尝试解析 url 对应的文件。
-    fn try_resolve_dir(dir: &Path, url: &str) -> Option<PathBuf> {
+    fn try_resolve_dir(dir: &Path, url: &str, is_import: bool) -> Option<PathBuf> {
         let url_path = std::path::Path::new(url);
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
         let filename = url_path
             .file_stem()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| url.to_string());
-        let candidates = [
-            dir.join(parent).join(format!("_{filename}.scss")),
-            dir.join(parent).join(format!("{filename}.scss")),
-            dir.join(parent).join(format!("_{filename}.sass")),
-            dir.join(parent).join(format!("{filename}.sass")),
-            dir.join(parent).join(format!("_{filename}.css")),
-            dir.join(parent).join(format!("{filename}.css")),
-            dir.join(parent).join(format!("_{filename}.import.scss")),
-            dir.join(parent).join(format!("{filename}.import.scss")),
-            dir.join(url).join("_index.scss"),
-            dir.join(url).join("index.scss"),
-            dir.join(url).join("_index.sass"),
-            dir.join(url).join("index.sass"),
-        ];
+        // 规范化 parent 路径（处理 .. 等组件）
+        let parent_normalized = normalize_path(&dir.join(parent));
+        let url_normalized = normalize_path(&dir.join(url));
+        // @import 时优先 import-only 文件；@use/@forward 时跳过 import-only 文件
+        let import_only_pairs = if is_import {
+            vec![
+                parent_normalized.join(format!("_{filename}.import.scss")),
+                parent_normalized.join(format!("{filename}.import.scss")),
+                parent_normalized.join(format!("_{filename}.import.sass")),
+                parent_normalized.join(format!("{filename}.import.sass")),
+            ]
+        } else {
+            vec![]
+        };
+        let mut candidates = import_only_pairs;
+        candidates.extend([
+            parent_normalized.join(format!("_{filename}.scss")),
+            parent_normalized.join(format!("{filename}.scss")),
+            parent_normalized.join(format!("_{filename}.sass")),
+            parent_normalized.join(format!("{filename}.sass")),
+            parent_normalized.join(format!("_{filename}.css")),
+            parent_normalized.join(format!("{filename}.css")),
+            url_normalized.join("_index.scss"),
+            url_normalized.join("index.scss"),
+            url_normalized.join("_index.sass"),
+            url_normalized.join("index.sass"),
+        ]);
         for c in &candidates {
             if c.exists() {
                 return Some(c.clone());
@@ -195,4 +227,26 @@ impl Evaluator {
         }
         conflicts
     }
+}
+
+/// 规范化路径——处理 `..` 和 `.` 组件，不要求路径存在。
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = Vec::new();
+    for c in path.components() {
+        match c {
+            std::path::Component::ParentDir => {
+                if components.last().is_some_and(|last| {
+                    !matches!(last, std::path::Component::ParentDir)
+                        && !matches!(last, std::path::Component::RootDir)
+                }) {
+                    components.pop();
+                } else {
+                    components.push(c);
+                }
+            }
+            std::path::Component::CurDir => {}
+            other => components.push(other),
+        }
+    }
+    components.iter().collect()
 }

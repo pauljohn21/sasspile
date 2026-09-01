@@ -199,6 +199,9 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         // 内建模块 sass:math/string/list/map/color/meta/selector
         if url.starts_with("sass:") {
+            if !config.is_empty() {
+                return Err(SassError::Eval("Built-in modules can't be configured.".into()));
+            }
             return Ok((vec![], env.add_module(url.to_string())));
         }
         let base = env.get_base_path().cloned();
@@ -216,6 +219,16 @@ impl Evaluator {
             let exports = if already_loaded {
                 env.get_module_cache().get(&path).cloned().unwrap_or_default()
             } else {
+                // 检查重复配置变量
+                let mut seen = std::collections::HashSet::new();
+                for c in config {
+                    let normalized = c.name.replace('-', "_");
+                    if !seen.insert(normalized) {
+                        return Err(SassError::Eval(
+                            "The same variable may only be configured once.".into(),
+                        ));
+                    }
+                }
                 let config_pairs: Vec<(String, Value)> = config
                     .iter()
                     .map(|c| {
@@ -280,17 +293,32 @@ impl Evaluator {
                     }
                     k.replace('-', "_")
                 };
-                // 裸 forward：传递所有 pending_config（剥离前缀）
-                // @forward with：只传递 with 中声明的变量
+                // show/hide 过滤：检查变量名是否通过过滤
+                // show 格式: ["$a", "mixin_name", ...]；hide 同理
+                let passes_filter = |name: &str| -> bool {
+                    let var_marker = format!("${name}");
+                    if !show.is_empty() {
+                        return show.iter().any(|s| s == &var_marker || s == name);
+                    }
+                    if !hide.is_empty() {
+                        return !hide.iter().any(|s| s == &var_marker || s == name);
+                    }
+                    true
+                };
+                // 裸 forward：传递所有 pending_config（剥离前缀），受 show/hide 过滤
+                // @forward with：传递 with 中声明的变量 + pending_config 中未被覆盖的变量，受 show/hide 过滤
                 if config.is_empty() {
                     env.get_pending_config()
                         .iter()
+                        .filter(|(k, _)| passes_filter(k))
                         .map(|(k, v)| (strip_prefix(k), v.clone()))
                         .collect()
                 } else {
-                    config.iter()
+                    let mut configured_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+                    let from_config: Vec<(String, Value)> = config.iter()
                         .try_fold(Vec::new(), |mut acc, cfg| {
                             let name = strip_prefix(&cfg.name);
+                            configured_names.insert(name.clone());
                             let val = Evaluator::eval_value(&cfg.value, &env)?;
                             let pending_val = env.get_pending_config()
                                 .get(&name)
@@ -300,7 +328,7 @@ impl Evaluator {
                                 pending_val
                                     .filter(|v| !matches!(v, Value::Null))
                                     .cloned()
-                                    .or(if !matches!(val, Value::Null) { Some(val) } else { None })
+                                .or(if !matches!(val, Value::Null) { Some(val) } else { None })
                             } else {
                                 if !matches!(val, Value::Null) { Some(val) } else {
                                     pending_val.filter(|v| !matches!(v, Value::Null)).cloned()
@@ -308,7 +336,17 @@ impl Evaluator {
                             };
                             if let Some(v) = chosen { acc.push((name, v)); }
                             Ok::<_, SassError>(acc)
-                        })?
+                        })?;
+                    // 追加 pending_config 中未被 with 覆盖的变量（透传），受 show/hide 过滤
+                    let mut result = from_config;
+                    for (k, v) in env.get_pending_config() {
+                        let stripped = strip_prefix(k);
+                        if !configured_names.contains(&stripped) && !matches!(v, Value::Null)
+                            && passes_filter(k) {
+                            result.push((stripped, v.clone()));
+                        }
+                    }
+                    result
                 }
             };
             crate::__tracing::debug!(

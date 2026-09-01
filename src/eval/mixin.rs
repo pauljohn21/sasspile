@@ -128,6 +128,8 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
         let _enter = span.enter();
         // 用户函数
+        let has_user_func = env.get_function(name).is_some();
+        crate::__tracing::warn!(name = name, has_user_func, "call_function: checking user func");
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env);
         }

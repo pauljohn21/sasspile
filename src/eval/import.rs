@@ -44,7 +44,7 @@ impl Evaluator {
         let load_paths = env.get_load_paths().to_vec();
         // @import 文件歧义检测
         Self::check_resolve_ambiguity(base, url, &load_paths)?;
-        if let Some(path) = Self::resolve_file(base, url, &load_paths) {
+        if let Some(path) = Self::resolve_file_import(base, url, &load_paths) {
             return Self::load_import(&path, env);
         }
         if !url.ends_with(".css") && !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("url(") && modifier.is_empty() {

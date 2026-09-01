@@ -36,49 +36,56 @@ impl Evaluator {
                     // 应用 extend
                     for (extender, target, _optional) in extends {
                         let target_trimmed = target.trim();
-                        if selector.contains(target_trimmed) {
-                            crate::__tracing::info!(
+                        let extender_trimmed = extender.trim();
+                        // bogus 选择器检测
+                        if extender_trimmed.ends_with('+')
+                            || extender_trimmed.ends_with('>')
+                            || extender_trimmed.ends_with('~')
+                        {
+                            continue;
+                        }
+                        if target_trimmed.starts_with('%') {
+                            // 占位符：替换每个包含 target 的选择器部分
+                            let parts: Vec<&str> = selector.split(',').collect();
+                            let new_parts: Vec<String> = parts.iter().map(|p| {
+                                let trimmed = p.trim();
+                                if trimmed == target_trimmed || trimmed.contains(target_trimmed) {
+                                    p.replace(target_trimmed, extender_trimmed)
+                                } else {
+                                    p.to_string()
+                                }
+                            }).collect();
+                            selector = new_parts.join(",");
+                            crate::__tracing::debug!(
                                 target: "sasspile::extend",
-                                extender = %extender,
-                                target = %target_trimmed,
-                                selector = %selector,
-                                "extend matched"
+                                new_selector = %selector,
+                                "placeholder replaced"
                             );
-                            // bogus 选择器检测：extender 末尾为组合器（+ > ~）时跳过
-                            let extender_trimmed = extender.trim();
-                            if extender_trimmed.ends_with('+')
-                                || extender_trimmed.ends_with('>')
-                                || extender_trimmed.ends_with('~')
-                            {
-                                crate::__tracing::debug!(
-                                    target: "sasspile::extend",
-                                    extender = %extender_trimmed,
-                                    "bogus combinator extender skipped"
-                                );
-                                continue;
-                            }
-                            if target_trimmed.starts_with('%') {
-                                // 占位符：直接替换为目标
-                                selector = selector.replace(target_trimmed, extender);
-                                crate::__tracing::debug!(
-                                    target: "sasspile::extend",
-                                    new_selector = %selector,
-                                    "placeholder replaced"
-                                );
-                            } else {
-                                // 普通选择器：添加继承者作为额外选择器
-                                let new_sel = selector.replace(target_trimmed, extender);
-                                if !new_sel.is_empty() && new_sel != selector
-                                    && !selector.contains(&new_sel) {
-                                    selector.push_str(", ");
-                                    selector.push_str(&new_sel);
-                                    crate::__tracing::debug!(
-                                        target: "sasspile::extend",
-                                        final_selector = %selector,
-                                        "extender appended"
-                                    );
+                        } else {
+                            // 普通选择器：逐个逗号分隔部分检查匹配
+                            let parts: Vec<String> = selector.split(',').map(|s| s.trim().to_string()).collect();
+                            let mut new_selectors: Vec<String> = Vec::new();
+                            for part in &parts {
+                                if part == target_trimmed || part.contains(target_trimmed) {
+                                    // 替换 target 为 extender，生成新选择器
+                                    let replaced = part.replace(target_trimmed, extender_trimmed);
+                                    if !replaced.is_empty() && !new_selectors.contains(&replaced) {
+                                        new_selectors.push(replaced);
+                                    }
                                 }
                             }
+                            // 追加新选择器（去重）
+                            for ns in &new_selectors {
+                                if !selector.contains(ns.as_str()) {
+                                    selector.push_str(", ");
+                                    selector.push_str(ns);
+                                }
+                            }
+                            crate::__tracing::debug!(
+                                target: "sasspile::extend",
+                                final_selector = %selector,
+                                "extender appended"
+                            );
                         }
                     }
                     // 递归处理子规则
