@@ -170,9 +170,8 @@ impl Evaluator {
                     match node {
                         decl @ CssNode::Declaration { .. } => decls.push(decl),
                         CssNode::AtRoot(nodes) => root.extend(nodes),
-                        CssNode::AtRule { name, params, children, has_body } if is_top_level && matches!(name.as_str(), "media" | "supports" | "container") => {
-                            // 提升 @media/@supports/@container 到外层
-                            // 将 children 包装在 Rule { selector } 中
+                        CssNode::AtRule { name, params, children, has_body } if is_top_level && !crate::parse::at_rule_kinds::CssAtRule::is_keyframes(&name) => {
+                            // 提升 AtRule 到外层，将 children 包装在 Rule { selector } 中
                             let wrapped = vec![CssNode::Rule {
                                 selector: selector.clone(),
                 declarations: Vec::new(),

@@ -136,7 +136,7 @@ impl<'tok> Parser<'tok> {
                         } else if s.contains('=') {
                             // 属性值后的空白 — 检查是否是合法 modifier（任意单字符标识符，前向兼容）
                             match next_non_ws {
-                                Some(Token::Ident(id)) if id.len() == 1 => {
+                                Some(Token::Ident(id)) if id.len() == 1 && id.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) => {
                                     let mod_id = id.clone();
                                     // 检查 modifier 后面是否是 ]
                                     let after_mod = self.peek_n(look + 1);

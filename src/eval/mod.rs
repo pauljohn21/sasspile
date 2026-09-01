@@ -365,7 +365,8 @@ fn eval_decl(property: &str, value: &Value, important: bool, env: Env) -> Result
         return Err(SassError::Eval("Declarations may only be used within style rules.".into()));
     }
     let val = Evaluator::eval_value(value, &env)?;
-    if matches!(val, Value::Null) { return Ok((vec![], env)); }
+    // plain CSS 模式保留 null 值（如 `x: null`）
+    if matches!(val, Value::Null) && !env.is_plain_css() { return Ok((vec![], env)); }
     let property = crate::eval::value::eval_property_name(property, &env);
     Ok((vec![CssNode::Declaration { property, value: val.to_string(), important }], env))
 }
