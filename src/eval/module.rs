@@ -47,9 +47,13 @@ impl Evaluator {
         loaded.insert(path.to_path_buf());
         env = env.with_loaded_modules(loaded);
         // 注入 with() 配置变量到 pending_config
+        let mut null_configs: Vec<String> = Vec::new();
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
-            if !matches!(val, Value::Null) {
+            if matches!(val, Value::Null) {
+                // null 值配置不注入，但记录用于验证时跳过
+                null_configs.push(name.replace('-', "_"));
+            } else {
                 let key = name.replace('-', "_");
                 crate::__tracing::debug!(name = %key, "load_module: inject pending_config");
                 env = env.add_pending_config(key, val);
@@ -69,6 +73,10 @@ impl Evaluator {
             );
             for (name, _) in config {
                 let normalized = name.replace('-', "_");
+                // null 值配置跳过验证（不覆盖 !default）
+                if null_configs.contains(&normalized) {
+                    continue;
+                }
                 if !consumed.contains(&normalized) && !consumed.contains(name) {
                     crate::__tracing::warn!(
                         name = %name,
