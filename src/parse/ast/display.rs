@@ -52,8 +52,8 @@ impl std::fmt::Display for Value {
                 write!(f, "{quote}{escaped}{quote}")
             }
             Value::String(s, false) => {
-                // 未加引号的标识符也需要转义控制字符和加引号字符
-                write!(f, "{}", Self::escape_css_ident(s))
+                // 未加引号的字符串——只转义控制字符和引号
+                write!(f, "{}", Self::escape_css_chars(s, |_| false))
             }
             Value::Color(c) => {
                 match c.output {
@@ -369,8 +369,37 @@ impl Value {
 
     /// 对未加引号的 CSS 标识符进行转义。
     /// 反斜杠 → `\\`，控制字符 → `\XXXX`，NULL → `\0 `。
+    /// 非 ASCII 字母数字/`-`/`_` 的 ASCII 字符也需要转义（如 `$`, `(`, `)` 等）。
     pub(crate) fn escape_css_ident(s: &str) -> String {
-        Self::escape_css_chars(s, |_| false)
+        let chars: Vec<char> = s.chars().collect();
+        let mut result = String::new();
+        for (i, &c) in chars.iter().enumerate() {
+            match c {
+                '\\' => result.push_str("\\\\"),
+                '\0' => result.push_str("\\0 "),
+                c if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) => {
+                    let hex = format!("{:x}", c as u32);
+                    result.push('\\');
+                    result.push_str(&hex);
+                    let next = chars.get(i + 1).copied();
+                    if next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                        result.push(' ');
+                    }
+                }
+                // CSS 标识符中不合法的 ASCII 字符需要转义
+                c if c.is_ascii() && !c.is_ascii_alphanumeric() && c != '-' && c != '_' => {
+                    result.push('\\');
+                    result.push(c);
+                    // 如果下一个字符是十六进制数字或空白，需要添加空格终止转义
+                    let next = chars.get(i + 1).copied();
+                    if next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                        result.push(' ');
+                    }
+                }
+                _ => result.push(c),
+            }
+        }
+        result
     }
 
     /// 核心转义逻辑——遍历字符并转义特殊字符。
