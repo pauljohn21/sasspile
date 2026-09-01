@@ -219,8 +219,9 @@ impl Evaluator {
         let (children, has_body, new_env) = match body {
             Some(nodes) => {
                 // at-rule body 内允许声明（如 @font-face { font-family: ...; }）
+                // 使用 @ 前缀标记 AtRule 来源，让 eval_rule 能区分
                 let env = if env.current_selector.is_none() {
-                    env.with_selector(name.to_string())
+                    env.with_selector(format!("@{name}"))
                 } else { env };
                 let (css, e) = Self::eval_nodes(nodes, env)?;
                 (css, true, e)

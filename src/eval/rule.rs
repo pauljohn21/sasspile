@@ -113,6 +113,23 @@ impl Evaluator {
             selector.to_string()
         };
 
+        // 顶层父选择器后缀检测：&a 在无父选择器或 AtRule 上下文时非法
+        let is_top_level = env.get_selector().is_none()
+            || env.get_selector().is_some_and(|s| s.starts_with('@'));
+        if is_top_level {
+            let trimmed = selector.trim_start();
+            if trimmed.starts_with('&') {
+                let rest = &trimmed[1..];
+                if let Some(c) = rest.chars().next()
+                    && (c.is_alphanumeric() || c == '-')
+                {
+                    return Err(SassError::Eval(
+                        "A top-level selector may not contain a parent selector with a suffix.".into(),
+                    ));
+                }
+            }
+        }
+
         // 保存 local 表（规则体局部作用域不传播）
         let saved_local_vars = env.get_local_vars().clone();
         let saved_local_mixins = env.get_local_mixins().clone();
