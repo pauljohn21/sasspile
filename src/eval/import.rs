@@ -16,9 +16,9 @@ impl Evaluator {
             || url.starts_with("https://")
             || url.starts_with("url(")
             || !modifier.is_empty()
-            || url.split("\", \"").any(|u| u.trim_matches('"').ends_with(".css"));
+            || url.split(", ").any(|u| u.trim_matches('"').ends_with(".css"));
         if is_css {
-            let urls: Vec<&str> = url.split("\", \"").collect();
+            let urls: Vec<&str> = url.split(", ").collect();
             let nodes: Vec<CssNode> = urls.iter().map(|u| {
                 let u = u.trim_matches('"');
                 let params = if modifier.is_empty() {

@@ -129,17 +129,17 @@ impl<'tok> Parser<'tok> {
     pub(crate) fn parse_import(&mut self) -> Result<Node> {
         let mut urls = Vec::new();
         loop {
-            self.skip_ws();
+            self.skip_ws_and_comments();
             let url = self.parse_string_value()?;
             urls.push(url);
-            self.skip_ws();
+            self.skip_ws_and_comments();
             if self.peek() == Some(&Token::Comma) {
                 self.advance();
                 continue;
             }
             break;
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let modifier = if !matches!(self.peek(), Some(Token::Semicolon) | Some(Token::RBrace) | None) {
             let mut s = String::new();
             while let Some(t) = self.peek() {
@@ -154,7 +154,7 @@ impl<'tok> Parser<'tok> {
         } else {
             String::new()
         };
-        self.skip_ws();
+        self.skip_ws_and_comments();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
         }
