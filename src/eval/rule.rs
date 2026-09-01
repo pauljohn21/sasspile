@@ -130,6 +130,23 @@ impl Evaluator {
             }
         }
 
+        // & 位置检测：& 必须在 compound selector 开头
+        // compound selector 由空格、>、+、~、, 分隔
+        // 伪选择器括号内的 & 也是合法的（如 :is(&), :where(&)）
+        if selector.contains('&') {
+            let chars: Vec<char> = selector.chars().collect();
+            for (i, &c) in chars.iter().enumerate() {
+                if c == '&' && i > 0 {
+                    let prev = chars[i - 1];
+                    if prev != ' ' && prev != '>' && prev != '+' && prev != '~' && prev != ',' && prev != '\t' && prev != '\n' && prev != '(' {
+                        return Err(SassError::Eval(
+                            "\"&\" may only used at the beginning of a compound selector.".into(),
+                        ));
+                    }
+                }
+            }
+        }
+
         // 保存 local 表（规则体局部作用域不传播）
         let saved_local_vars = env.get_local_vars().clone();
         let saved_local_mixins = env.get_local_mixins().clone();
