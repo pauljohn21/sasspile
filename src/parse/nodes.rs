@@ -159,7 +159,7 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_decl(&mut self) -> Result<Node> {
         let property = self.parse_property()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         self.expect(&Token::Colon)?;
         self.skip_ws();
         // 声明值中使用斜杠分隔符语义——`1/2` 保留为 `1/2` 而非计算除法
@@ -181,6 +181,9 @@ impl<'tok> Parser<'tok> {
         while let Some(t) = self.peek() {
             match t {
                 Token::Colon | Token::Whitespace | Token::RBrace | Token::Semicolon => break,
+                Token::Comment(_, _) => {
+                    self.advance();
+                } // 跳过注释
                 _ => {
                     s.push_str(&t.to_string());
                     self.advance();

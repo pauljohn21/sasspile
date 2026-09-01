@@ -67,16 +67,26 @@ impl<'tok> Parser<'tok> {
         }
         matches!(self.tokens.get(i), None | Some(Token::Eof))
     }
-    fn skip_ws(&mut self) {
-        while let Some(tok) = self.peek() {
-            match tok {
-                Token::Whitespace => self.pos += 1,
-                // 静默注释 (//) 在 skip_ws 中跳过；块注释 (/* */) 保留由 parse_node 处理
-                Token::Comment(_, true) => self.pos += 1,
-                _ => break,
-            }
-        }
-    }
+fn skip_ws(&mut self) {
+while let Some(tok) = self.peek() {
+match tok {
+Token::Whitespace => self.pos += 1,
+// 静默注释 (//) 在 skip_ws 中跳过；块注释 (/* */) 保留由 parse_node 处理
+Token::Comment(_, true) => self.pos += 1,
+_ => break,
+}
+}
+}
+
+/// 跳过所有空白和注释（含块注释）。
+fn skip_ws_and_comments(&mut self) {
+while let Some(tok) = self.peek() {
+match tok {
+Token::Whitespace | Token::Comment(_, _) => self.pos += 1,
+_ => break,
+}
+}
+}
 
     fn expect(&mut self, tok: &Token) -> Result<()> {
         self.skip_ws();

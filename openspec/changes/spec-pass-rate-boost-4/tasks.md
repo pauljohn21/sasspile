@@ -4,7 +4,7 @@
 - [x] 1.2 `flatten_nodes` 返回 `Vec<(CssNode, usize)>` 同源 group_id
 - [x] 1.3 `serialize_expanded` 中 group_id 相同或 `is_same_origin` 为 true 时不加空行
 - [x] 1.4 声明穿插顺序由 `is_same_origin` 自动处理
-- [ ] 1.5 修复注释在声明中的位置处理
+- [x] 1.5 修复注释在声明中的位置——`parse_property` 跳过注释 + `skip_ws_and_comments`
 - [x] 1.6 compile_test 43/43 通过
 - [x] 1.7 css_diag 469→459 fail（interleaved 9→1）
 - [x] 1.8 sass_spec_full 3078/5362 = 57%（+10，无回归）
@@ -50,9 +50,9 @@
 - [ ] 5.3 增强 `check_plain_css_node`：检测 `error/no_selector` 场景
 - [ ] 5.4 修复 `@-moz-document` / `url-prefix` 解析
 - [ ] 5.5 修复 `error/modifier/*` 系列检测
-- [ ] 5.6 确保错误消息全部使用英文
-- [ ] 5.7 运行 `cargo test --test css_diag -- --nocapture` 验证 expected_error_but_ok 下降
-- [ ] 5.8 运行 sass_spec_full 验证 css 目录通过率提升
+- [x] 5.6 确保错误消息全部使用英文——已确认
+- [x] 5.7 css_diag 459→458 fail（before_colon/loud 修复）
+- [x] 5.8 sass_spec_full 3079 pass（+11 总计，css 目录 +11）
 
 ## Phase 6 — 模块系统修复
 
