@@ -392,10 +392,11 @@ impl Evaluator {
                 Self::load_module(&path, &config_pairs, &env, true)?
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
+            let mut exports = exports;
             let css = if already_loaded {
-                vec![]
+                Vec::new()
             } else {
-                exports.css.clone()
+                std::mem::take(&mut exports.css)
             };
             if star {
                 let new_env = bind_exports(

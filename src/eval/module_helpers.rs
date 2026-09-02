@@ -103,7 +103,7 @@ pub(crate) fn bind_exports(
             // 检测 as * 引入的变量与当前作用域已有变量冲突
             if is_star {
                 for (k, _) in merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars) {
-                    if (k.starts_with('-') || k.starts_with('_') || star_imported.contains(k.as_str())) {
+                    if k.starts_with('-') || k.starts_with('_') || star_imported.contains(k.as_str()) {
                         continue;
                     }
                     if new_env.local_vars.contains_key(k)
