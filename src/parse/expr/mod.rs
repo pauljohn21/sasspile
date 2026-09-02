@@ -3,6 +3,7 @@
 //! 包含 parse_expr/is_value_start/parse_prefix/peek_binding_power 方法
 //! 和 parse_number/parse_hash_color/hex2/hex1 自由函数。
 
+mod literals;
 mod prefix;
 
 #[allow(unused_imports)]

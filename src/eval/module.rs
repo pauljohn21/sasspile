@@ -179,7 +179,7 @@ impl Evaluator {
                             func_env = func_env.bind(k.clone(), v.clone());
                         }
                     }
-                    return Self::call_user_function(func, pos_args, kw_args, &func_env);
+                    return Self::call_user_function(func, pos_args, kw_args, func_env);
                 }
         }
         // 将模块限定名映射到内建函数

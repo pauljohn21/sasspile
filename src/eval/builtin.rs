@@ -2,6 +2,7 @@
 //!
 //! `call_builtin` 按 match 分派到各函数组。
 //! 各函数组已拆分到子模块：color/list/map/string/selector。
+//! 手工分派函数（rgba/rgb/darken/lighten/mix/if/inspect/type-of 等）在 `manual_dispatch` 中。
 
 pub mod color;
 pub mod color_adjust;
@@ -9,8 +10,9 @@ pub mod color_conv;
 pub mod color_conv_ops;
 pub mod color_gamut;
 pub mod color_inspect;
-pub mod color_parse;
+pub(crate) mod color_parse;
 pub mod color_space;
+pub(crate) mod manual_dispatch;
 pub mod dispatch;
 pub mod list;
 pub mod map;
@@ -22,7 +24,7 @@ pub mod math_helpers;
 pub mod math_trig;
 
 use super::*;
-use crate::error::{Result, SassError};
+use crate::error::Result;
 
 impl Evaluator {
     pub(crate) fn call_builtin(
@@ -61,189 +63,8 @@ impl Evaluator {
         };
         let kw_args = if merged_meta.is_some() { &HashMap::new() } else { kw_args };
 
-        match name.as_str() {
-            // ── sass-spec 测试辅助函数 ──
-            "sass" => {
-                if env.is_plain_css() {
-                    return Err(SassError::Eval(
-                        "sass() conditions aren't allowed in plain CSS".into(),
-                    ));
-                }
-                if pos_args.is_empty() {
-                    return Err(SassError::Eval("sass() requires at least 1 argument".into()));
-                }
-                Ok(pos_args[0].clone())
-            }
-            // ── color（手工 arm：调用 Self::builtin_* 方法）──
-            // 合并命名参数 $red/$green/$blue/$alpha → 位置参数
-            "rgba" | "rgb" => {
-                let merged = merge_color_args(pos_args, kw_args);
-                Self::builtin_rgba(&name, &merged)
-            }
-            // darken/lighten/mix 合并 $color/$amount 命名参数
-            "darken" | "lighten" => {
-                let merged = merge_two_args(pos_args, kw_args, "color", "amount");
-                if name == "darken" { Self::builtin_darken(&merged) }
-                else { Self::builtin_lighten(&merged) }
-            }
-            "mix" => {
-                let merged = merge_mix_args(pos_args, kw_args);
-                Self::builtin_mix(&merged)
-            },
-            // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
-            "lab" | "lch" | "oklab" | "oklch" | "color" => {
-                color_parse::parse_color_fn(&name, pos_args, kw_args)
-            }
-
-            // ── meta（手工 arm，dispatch = "none"）──
-            "type-of" => match pos_args {
-                [Value::Number(..)] => Ok(Value::String("number".into(), false)),
-                [Value::String(..)] => Ok(Value::String("string".into(), false)),
-                [Value::Color(..)] => Ok(Value::String("color".into(), false)),
-                [Value::Bool(..)] => Ok(Value::String("bool".into(), false)),
-                [Value::List(..)] => Ok(Value::String("list".into(), false)),
-                [Value::Map(..)] => Ok(Value::String("map".into(), false)),
-                [Value::Null] => Ok(Value::String("null".into(), false)),
-                [Value::MixinRef(..)] => Ok(Value::String("mixin".into(), false)),
-                [Value::Calc(..)] => Ok(Value::String("calc".into(), false)),
-                _ => Ok(Value::String("unknown".into(), false)),
-            },
-            "inspect" => {
-                if pos_args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $value.".into()));
-                }
-                if pos_args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        pos_args.len(),
-                        if pos_args.len() == 1 { "was" } else { "were" }
-                    )));
-                }
-                Ok(Value::String(crate::eval::value::inspect_value(&pos_args[0]), false))
-            }
-            "if" => match pos_args {
-                [cond, t, f] => Ok(if Self::is_truthy(cond) {
-                    t.clone()
-                } else {
-                    f.clone()
-                }),
-                _ => Err(SassError::Eval("if requires 3 arguments".into())),
-            },
-            "content-exists" => {
-                // 检查当前环境是否有 @content 内容块
-                Ok(Value::Bool(env.get_content().is_some()))
-            },
-            "feature-exists" => match pos_args {
-                [Value::String(name, _)] => {
-                    // 支持的特性列表
-                    let supported = matches!(
-                        name.as_str(),
-                        "global-variable-shadowing"
-                            | "extend-selector-pseudoclass"
-                            | "units-level-3"
-                            | "at-error"
-                            | "custom-property"
-                    );
-                    Ok(Value::Bool(supported))
-                }
-                _ => Ok(Value::Bool(false)),
-            },
-            "mixin-exists" => match pos_args {
-                [Value::String(name, _)] => {
-                    let normalized = name.replace('-', "_");
-                    let exists = env.get_mixin(name).is_some()
-                        || env.get_mixin(&normalized).is_some()
-                        || env.get_mixin(&name.replace('_', "-")).is_some();
-                    Ok(Value::Bool(exists))
-                }
-                _ => Ok(Value::Bool(false)),
-            },
-            "function-exists" => match pos_args {
-                [Value::String(name, _)] => Ok(Value::Bool(env.get_function(name).is_some())),
-                _ => Ok(Value::Bool(false)),
-            },
-            "global-variable-exists" => match pos_args {
-                [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
-                _ => Ok(Value::Bool(false)),
-            },
-            "variable-exists" => match pos_args {
-                [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
-                _ => Ok(Value::Bool(false)),
-            },
-            "get-function" => match pos_args {
-                [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
-                _ => Err(SassError::Eval("get-function requires 1 argument".into())),
-            },
-            "get-mixin" => Self::meta_get_mixin(pos_args, kw_args, env),
-            "call" => match pos_args {
-                [Value::String(fname, _), rest @ ..] => {
-                    let empty_kw = HashMap::new();
-                    Self::call_function(fname, rest, &empty_kw, env)
-                }
-                _ => Err(SassError::Eval("call requires at least 1 argument".into())),
-            },
-            "module-functions" => Self::meta_module_functions(pos_args, kw_args, env),
-            "module-mixins" => Self::meta_module_mixins(pos_args, kw_args, env),
-            "module-variables" => Self::meta_module_variables(pos_args, kw_args, env),
-            "accepts-content" => Self::meta_accepts_content(pos_args, kw_args, env),
-            "keywords" => match pos_args {
-                [_] => Ok(Value::Map(vec![])),
-                _ => Err(SassError::Eval("keywords requires 1 argument".into())),
-            },
-            "calc-args" => {
-                let calc_arg = pos_args.first().or_else(|| kw_args.get("calc")).or_else(|| kw_args.get("$calc"));
-                match calc_arg {
-                    Some(Value::Calc(s)) => {
-                        let args = parse_calc_args(s);
-                        Ok(Value::List(args, Separator::Comma, false))
-                    }
-                    Some(v) => Err(SassError::Eval(format!(
-                        "$calc: {} is not a calculation.",
-                        v
-                    ))),
-                    None => Err(SassError::Eval(
-                        "Missing argument $calc.".into(),
-                    )),
-                }
-            }
-            "calc-name" => {
-                let calc_arg = pos_args.first().or_else(|| kw_args.get("calc")).or_else(|| kw_args.get("$calc"));
-                match calc_arg {
-                    Some(Value::Calc(s)) => {
-                        let name = parse_calc_name(s);
-                        Ok(Value::String(name, true))
-                    }
-                    Some(v) => Err(SassError::Eval(format!(
-                        "$calc: {} is not a calculation.",
-                        v
-                    ))),
-                    None => Err(SassError::Eval(
-                        "Missing argument $calc.".into(),
-                    )),
-                }
-            }
-
-            // ── CSS 原生函数——原样保留 ──
-            "calc" | "env" | "var" => {
-                let arg_str = pos_args
-                    .iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                Ok(Value::Calc(format!("{name}({arg_str})")))
-            }
-
-            // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
-            _ if Self::is_css_function(&name) => {
-                let arg_str = pos_args
-                    .iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                Ok(Value::String(format!("{name}({arg_str})"), false))
-            }
-            _ => Err(SassError::UndefinedFunction(name.clone())),
-        }
+        // ── 手工分派：rgba/rgb/darken/lighten/mix/if/inspect/type-of 等 ──
+        Self::manual_dispatch(&name, pos_args, kw_args, env)
     }
 
     /// 检查函数名是否为已知的 Sass 内置函数。
@@ -297,7 +118,7 @@ impl Evaluator {
 /// `calc(var(--c))` → `"calc"`
 /// `clamp(1%, 2px, 3px)` → `"clamp"`
 /// `min(var(--c))` → `"min"`
-fn parse_calc_name(s: &str) -> String {
+pub(crate) fn parse_calc_name(s: &str) -> String {
     let s = s.trim();
     if let Some(end) = s.find('(') {
         s[..end].trim().to_string()
@@ -312,7 +133,7 @@ fn parse_calc_name(s: &str) -> String {
 /// `clamp(1%, 2px, 3px)` → `[1%, 2px, 3px]`
 ///
 /// 顶层逗号分隔参数，括号内的逗号不计入。
-fn parse_calc_args(s: &str) -> Vec<Value> {
+pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
     let s = s.trim();
     let inner = if let Some(start) = s.find('(') {
         let end = s.rfind(')').unwrap_or(s.len());
@@ -351,13 +172,13 @@ fn parse_calc_args(s: &str) -> Vec<Value> {
     args
 }
 
-/// 将单个 calc 参数字符串解析为 `Value`。
+/// 将单个 calc 参数字符串解析为 `Value`.
 ///
 /// `var(--c)` → `Value::String("var(--c)", false)`（未加引号字符串）
 /// `1%` → `Value::Number(1.0, Some("%"))`
 /// `2px` → `Value::Number(2.0, Some("px"))`
 /// `calc(...)` → `Value::Calc("calc(...)")`
-fn parse_calc_arg_value(s: &str) -> Value {
+pub(crate) fn parse_calc_arg_value(s: &str) -> Value {
     let s = s.trim();
     // 嵌套 calc/min/max/clamp → Value::Calc
     if s.starts_with("calc(")
@@ -462,7 +283,7 @@ pub(crate) fn merge_meta_args(
 }
 
 /// 合并 rgba/rgb 的位置参数和命名参数（$red/$green/$blue/$alpha）。
-fn merge_color_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
+pub(crate) fn merge_color_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
     const PARAMS: &[&str] = &["red", "green", "blue", "alpha"];
     let mut result = Vec::with_capacity(PARAMS.len().max(pos_args.len()));
     for (i, pname) in PARAMS.iter().enumerate() {
@@ -481,7 +302,7 @@ fn merge_color_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec
 }
 
 /// 合并 darken/lighten 的位置参数和命名参数（$color/$amount）。
-fn merge_two_args(
+pub(crate) fn merge_two_args(
     pos_args: &[Value],
     kw_args: &HashMap<String, Value>,
     p1: &str,
@@ -505,7 +326,7 @@ fn merge_two_args(
 }
 
 /// 合并 mix 的位置参数和命名参数（$color1/$color2/$weight）。
-fn merge_mix_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
+pub(crate) fn merge_mix_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
     const PARAMS: &[&str] = &["color1", "color2", "weight"];
     let mut result = Vec::with_capacity(PARAMS.len().max(pos_args.len()));
     for (i, pname) in PARAMS.iter().enumerate() {

@@ -227,19 +227,28 @@ impl Evaluator {
     pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
         let parents: Vec<&str> = parent.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
         let children: Vec<&str> = child.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        let mut result = Vec::new();
-        for p in &parents {
-            for c in &children {
-                if c.contains('&') {
-                    result.push(c.replace('&', p));
-                } else if p.is_empty() {
-                    result.push(c.to_string());
-                } else {
-                    result.push(format!("{p} {c}"));
-                }
-            }
+
+        // 空 parent 或空 child 时直接使用非空的一方
+        if parents.is_empty() {
+            return child.trim().to_string();
         }
-        result.join(", ")
+        if children.is_empty() {
+            return parent.trim().to_string();
+        }
+
+        // 迭代器笛卡尔积——flat_map 保持外层（parent）优先序
+        parents.iter()
+            .flat_map(|p| children.iter().map(move |c| {
+                if c.contains('&') {
+                    c.replace('&', p)
+                } else if p.is_empty() {
+                    c.to_string()
+                } else {
+                    format!("{p} {c}")
+                }
+            }))
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// 将父选择器传播到 AtRule children 内的 Rule 子节点。
