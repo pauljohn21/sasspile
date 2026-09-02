@@ -1,3 +1,10 @@
+#![allow(
+    clippy::many_single_char_names,
+    clippy::single_char_pattern,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 //! 颜色通道检查——is-powerless / is-missing / is-in-gamut / is-legacy。
 //!
 //! `is_channel_powerless` 检查颜色通道是否"无效"（powerless），
@@ -17,14 +24,18 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             let channel_arg = args.get(1).or_else(|| kw_args.get("$channel"));
             match (color_arg, channel_arg) {
                 (Some(Value::Color(_)), Some(Value::String(_, _))) => Ok(Some(Value::Bool(false))),
-                _ => Err(SassError::Eval("is-missing requires $color and $channel arguments".into())),
+                _ => Err(SassError::Eval(
+                    "is-missing requires $color and $channel arguments".into(),
+                )),
             }
         }
         "is-in-gamut" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             match color_arg {
                 Some(Value::Color(_c)) => Ok(Some(Value::Bool(true))),
-                _ => Err(SassError::Eval("is-in-gamut requires $color argument".into())),
+                _ => Err(SassError::Eval(
+                    "is-in-gamut requires $color argument".into(),
+                )),
             }
         }
         "is-legacy" => Ok(Some(Value::Bool(true))),

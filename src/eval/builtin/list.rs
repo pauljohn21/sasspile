@@ -1,3 +1,9 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
 //! List 内建函数。
 //!
 //! 包含 length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip。
@@ -23,12 +29,8 @@ fn list_param_names(name: &str) -> &'static [&'static str] {
     }
 }
 
-/// 合并位置参数和命名参数（复用 string 模块的 merge_args 逻辑）。
-fn merge_list_args(
-    pos_args: &[Value],
-    kw_args: &HashMap<String, Value>,
-    name: &str,
-) -> Vec<Value> {
+/// 合并位置参数和命名参数（复用 string 模块的 `merge_args` 逻辑）。
+fn merge_list_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
     let param_names = list_param_names(name);
     let mut result = Vec::with_capacity(param_names.len());
     for (i, pname) in param_names.iter().enumerate() {
@@ -46,7 +48,11 @@ fn merge_list_args(
     result
 }
 
-pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
+pub fn call(
+    name: &str,
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+) -> Result<Option<Value>> {
     let args = merge_list_args(pos_args, kw_args, name);
     let args = args.as_slice();
     match name {
@@ -65,7 +71,9 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 } else if idx < 0 {
                     (len + idx) as usize
                 } else {
-                    return Err(SassError::Eval("nth index 0 is invalid (starts from 1)".into()));
+                    return Err(SassError::Eval(
+                        "nth index 0 is invalid (starts from 1)".into(),
+                    ));
                 };
                 Ok(Some(es.get(actual).cloned().ok_or_else(|| {
                     SassError::Eval(format!("nth index {idx} out of range"))
@@ -124,12 +132,18 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             [Value::Map(pairs), val] => {
                 if pairs.is_empty() {
                     // 空映射 = 空列表 → 返回单元素 space 列表
-                    Ok(Some(Value::List(vec![val.clone()], Separator::Space, false)))
+                    Ok(Some(Value::List(
+                        vec![val.clone()],
+                        Separator::Space,
+                        false,
+                    )))
                 } else {
                     // 非空 Map → comma-separated list of space-separated pairs
                     let items: Vec<Value> = pairs
                         .iter()
-                        .map(|(k, v)| Value::List(vec![k.clone(), v.clone()], Separator::Space, false))
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
                         .collect();
                     let mut new_items = items;
                     new_items.push(val.clone());
@@ -157,9 +171,12 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             let (a_items, a_sep, a_bracketed) = match &args[0] {
                 Value::List(items, sep, br) => (items.clone(), sep.clone(), *br),
                 Value::Map(pairs) => {
-                    let items: Vec<Value> = pairs.iter().map(|(k, v)| {
-                        Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
-                    }).collect();
+                    let items: Vec<Value> = pairs
+                        .iter()
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .collect();
                     (items, Separator::Comma, false)
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
@@ -168,9 +185,12 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
             let (b_items, b_sep, _) = match &args[1] {
                 Value::List(items, sep, _) => (items.clone(), sep.clone(), false),
                 Value::Map(pairs) => {
-                    let items: Vec<Value> = pairs.iter().map(|(k, v)| {
-                        Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
-                    }).collect();
+                    let items: Vec<Value> = pairs
+                        .iter()
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .collect();
                     (items, Separator::Comma, false)
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
@@ -182,14 +202,30 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
                     _ => {
-                        let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
-                        if auto_sep == Separator::SlashLiteral { Separator::Slash } else { auto_sep }
+                        let auto_sep = if a_sep == Separator::Undecided {
+                            b_sep
+                        } else {
+                            a_sep
+                        };
+                        if auto_sep == Separator::SlashLiteral {
+                            Separator::Slash
+                        } else {
+                            auto_sep
+                        }
                     }
                 }
             } else {
                 // 无 separator 参数 → auto
-                let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
-                if auto_sep == Separator::SlashLiteral { Separator::Slash } else { auto_sep }
+                let auto_sep = if a_sep == Separator::Undecided {
+                    b_sep
+                } else {
+                    a_sep
+                };
+                if auto_sep == Separator::SlashLiteral {
+                    Separator::Slash
+                } else {
+                    auto_sep
+                }
             };
             // 解析 bracketed 参数
             let bracketed = if let Some(Value::Bool(b)) = args.get(3) {
@@ -255,7 +291,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 }
                 _ => Ok(Some(Value::String("space".into(), false))),
             }
-        },
+        }
         "set-nth" => match args {
             [Value::List(items, sep, bracketed), Value::Number(n, _), val] => {
                 let len = items.len() as i64;
@@ -265,17 +301,15 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 } else if idx < 0 {
                     (len + idx) as usize
                 } else {
-                    return Err(SassError::Eval(
-                        format!("List index {idx} may not be 0."),
-                    ));
+                    return Err(SassError::Eval(format!("List index {idx} may not be 0.")));
                 };
                 let mut new_items = items.clone();
                 if actual < new_items.len() {
                     new_items[actual] = val.clone();
                 } else {
-                    return Err(SassError::Eval(
-                        format!("List index {idx} is out of bounds for list of length {len}"),
-                    ));
+                    return Err(SassError::Eval(format!(
+                        "List index {idx} is out of bounds for list of length {len}"
+                    )));
                 }
                 Ok(Some(Value::List(new_items, sep.clone(), *bracketed)))
             }
@@ -290,7 +324,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 return Err(SassError::Eval("list-slash requires 1+ arguments".into()));
             }
             Ok(Some(Value::List(args.to_vec(), Separator::Slash, false)))
-        },
+        }
         "zip" => {
             if args.len() < 2 {
                 return Err(SassError::Eval("zip requires 2+ list arguments".into()));
@@ -303,7 +337,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     other => vec![other.clone()],
                 })
                 .collect();
-            let min_len = lists.iter().map(|l| l.len()).min().unwrap_or(0);
+            let min_len = lists.iter().map(std::vec::Vec::len).min().unwrap_or(0);
             let pairs: Vec<Value> = (0..min_len)
                 .map(|i| {
                     Value::List(

@@ -23,7 +23,11 @@ fn selector_param_names(name: &str) -> &'static [&'static str] {
 }
 
 /// 合并位置参数和命名参数。
-fn merge_selector_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
+fn merge_selector_args(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    name: &str,
+) -> Vec<Value> {
     let param_names = selector_param_names(name);
     if param_names.is_empty() {
         return pos_args.to_vec();
@@ -44,7 +48,11 @@ fn merge_selector_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, nam
     result
 }
 
-pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
+pub fn call(
+    name: &str,
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+) -> Result<Option<Value>> {
     let args = merge_selector_args(pos_args, kw_args, name);
     let args = args.as_slice();
     match name {
@@ -94,10 +102,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     Ok(Some(Value::List(parts, Separator::Comma, false)))
                 }
                 other => Err(SassError::Eval(format!(
-                    "$selector: {} is not a string.", other
+                    "$selector: {other} is not a string."
                 ))),
             }
-        },
+        }
         "selector-simple-selectors" => {
             if args.is_empty() {
                 return Err(SassError::Eval("Missing argument $selector.".into()));
@@ -132,10 +140,10 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     Ok(Some(Value::List(result, Separator::Comma, false)))
                 }
                 other => Err(SassError::Eval(format!(
-                    "$selector: {} is not a string.", other
+                    "$selector: {other} is not a string."
                 ))),
             }
-        },
+        }
         "selector-unify" => {
             let params = selector_param_names("selector-unify");
             if args.len() < params.len() {
@@ -162,7 +170,7 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                 }
                 _ => Ok(Some(Value::Null)),
             }
-        },
+        }
         "selector-extend" => {
             let params = selector_param_names("selector-extend");
             if args.len() < params.len() {
@@ -190,9 +198,12 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     };
                     Ok(Some(Value::String(result, false)))
                 }
-                _ => Err(SassError::Eval(format!("$selector: {} is not a string.", args[0])))
+                _ => Err(SassError::Eval(format!(
+                    "$selector: {} is not a string.",
+                    args[0]
+                ))),
             }
-        },
+        }
         "selector-replace" => {
             let params = selector_param_names("selector-replace");
             if args.len() < params.len() {
@@ -216,9 +227,12 @@ pub fn call(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>) ->
                     let result = selector.replace(original.as_str(), replacement.as_str());
                     Ok(Some(Value::String(result, false)))
                 }
-                _ => Err(SassError::Eval(format!("$selector: {} is not a string.", args[0])))
+                _ => Err(SassError::Eval(format!(
+                    "$selector: {} is not a string.",
+                    args[0]
+                ))),
             }
-        },
+        }
         _ => Ok(None),
     }
 }

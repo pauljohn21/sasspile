@@ -48,7 +48,9 @@ impl Parsed {
 
         if let Some(ref path) = self.base_path {
             let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
-            env = env.with_base_path(path.clone()).with_plain_css(is_plain_css);
+            env = env
+                .with_base_path(path.clone())
+                .with_plain_css(is_plain_css);
         }
 
         if !self.load_paths.is_empty() {

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::many_single_char_names,
+    clippy::single_char_pattern,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 use super::*;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
@@ -17,7 +24,12 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             qa,
         )),
         (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
-            format!("{a}#{:02x}{:02x}{:02x}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
+            format!(
+                "{a}#{:02x}{:02x}{:02x}",
+                c.legacy_rgb[0].round() as u8,
+                c.legacy_rgb[1].round() as u8,
+                c.legacy_rgb[2].round() as u8
+            ),
             qa,
         )),
         (Value::String(a, qa), Value::Null) => Ok(Value::String(a, qa)),
@@ -26,7 +38,12 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             qb,
         )),
         (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
-            format!("#{:02x}{:02x}{:02x}{b}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
+            format!(
+                "#{:02x}{:02x}{:02x}{b}",
+                c.legacy_rgb[0].round() as u8,
+                c.legacy_rgb[1].round() as u8,
+                c.legacy_rgb[2].round() as u8
+            ),
             qb,
         )),
         (Value::Null, Value::String(b, qb)) => Ok(Value::String(b, qb)),
@@ -37,12 +54,18 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
         // Number + Calc / Calc + Number — 作为 calc 表达式拼接
         (Value::Number(n, u), Value::Calc(c)) => {
             let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
-            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
             Ok(Value::Calc(format!("calc({n_str} + {c_inner})")))
         }
         (Value::Calc(c), Value::Number(n, u)) => {
             let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
-            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
             Ok(Value::Calc(format!("calc({c_inner} + {n_str})")))
         }
         // String + Bool / Bool + String
@@ -75,15 +98,18 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             Ok(Value::Number(a - b, unit))
         }
         // 字符串拼接——用 - 连接
-        (Value::String(a, qa), Value::String(b, _)) => {
-            Ok(Value::String(format!("{a}-{b}"), qa))
-        }
+        (Value::String(a, qa), Value::String(b, _)) => Ok(Value::String(format!("{a}-{b}"), qa)),
         (Value::String(a, qa), Value::Number(n, u)) => Ok(Value::String(
             format!("{a}-{}{}", n, u.as_deref().unwrap_or("")),
             qa,
         )),
         (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
-            format!("{a}-#{:02x}{:02x}{:02x}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
+            format!(
+                "{a}-#{:02x}{:02x}{:02x}",
+                c.legacy_rgb[0].round() as u8,
+                c.legacy_rgb[1].round() as u8,
+                c.legacy_rgb[2].round() as u8
+            ),
             qa,
         )),
         (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(
@@ -91,18 +117,29 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             qb,
         )),
         (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
-            format!("#{:02x}{:02x}{:02x}-{b}", c.legacy_rgb[0].round() as u8, c.legacy_rgb[1].round() as u8, c.legacy_rgb[2].round() as u8),
+            format!(
+                "#{:02x}{:02x}{:02x}-{b}",
+                c.legacy_rgb[0].round() as u8,
+                c.legacy_rgb[1].round() as u8,
+                c.legacy_rgb[2].round() as u8
+            ),
             qb,
         )),
         // Number - Calc / Calc - Number — 作为 calc 表达式
         (Value::Number(n, u), Value::Calc(c)) => {
             let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
-            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
             Ok(Value::Calc(format!("calc({n_str} - {c_inner})")))
         }
         (Value::Calc(c), Value::Number(n, u)) => {
             let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
-            let c_inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
             Ok(Value::Calc(format!("calc({c_inner} - {n_str})")))
         }
         _ => Err(SassError::Eval("Unsupported - operation".into())),
@@ -131,13 +168,15 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
                 let sign = if *a < 0.0 { "-" } else { "" };
                 let mut calc = format!("calc({sign}infinity");
                 if let Some(u) = u1
-                    && !u.is_empty() {
-                        calc.push_str(&format!(" * 1{u}"));
-                    }
+                    && !u.is_empty()
+                {
+                    calc.push_str(&format!(" * 1{u}"));
+                }
                 if let Some(u) = u2
-                    && !u.is_empty() {
-                        calc.push_str(&format!(" / 1{u}"));
-                    }
+                    && !u.is_empty()
+                {
+                    calc.push_str(&format!(" / 1{u}"));
+                }
                 calc.push(')');
                 return Ok(Value::Calc(calc));
             }

@@ -6,7 +6,7 @@ mod spec_manifest;
 
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 use tracing::info;
@@ -129,13 +129,23 @@ fn run_case(
                     let e = expected.trim();
                     let diff_start = a.chars().zip(e.chars()).position(|(a, e)| a != e);
                     let ctx = if let Some(pos) = diff_start {
-                        let a_ctx: String = a.chars().skip(pos.saturating_sub(20)).take(60).collect();
-                        let e_ctx: String = e.chars().skip(pos.saturating_sub(20)).take(60).collect();
+                        let a_ctx: String =
+                            a.chars().skip(pos.saturating_sub(20)).take(60).collect();
+                        let e_ctx: String =
+                            e.chars().skip(pos.saturating_sub(20)).take(60).collect();
                         format!("actual_near=|{a_ctx}| expected_near=|{e_ctx}|")
                     } else if a.len() < e.len() {
-                        format!("actual_shorter, actual_len={} expected_len={}", a.len(), e.len())
+                        format!(
+                            "actual_shorter, actual_len={} expected_len={}",
+                            a.len(),
+                            e.len()
+                        )
                     } else {
-                        format!("expected_shorter, actual_len={} expected_len={}", a.len(), e.len())
+                        format!(
+                            "expected_shorter, actual_len={} expected_len={}",
+                            a.len(),
+                            e.len()
+                        )
                     };
                     Err(format!("output_mismatch: {ctx}"))
                 }
@@ -145,11 +155,23 @@ fn run_case(
                 if msg.contains("UndefinedFunction") {
                     Err("undef_function".to_string())
                 } else if msg.contains("求值错误") {
-                    Err(format!("eval: {}", msg.split(':').nth(1).unwrap_or("").trim().chars().take(100).collect::<String>()))
+                    Err(format!(
+                        "eval: {}",
+                        msg.split(':')
+                            .nth(1)
+                            .unwrap_or("")
+                            .trim()
+                            .chars()
+                            .take(100)
+                            .collect::<String>()
+                    ))
                 } else if msg.contains("解析错误") || msg.contains("ParseError") {
                     Err("parse_error".to_string())
                 } else {
-                    Err(format!("other: {}", msg.chars().take(100).collect::<String>()))
+                    Err(format!(
+                        "other: {}",
+                        msg.chars().take(100).collect::<String>()
+                    ))
                 }
             }
         }
@@ -169,8 +191,10 @@ fn diag_output_mismatch() {
         "expressions",
     ];
 
-    let mut patterns: std::collections::BTreeMap<String, Vec<(String, String)>> = std::collections::BTreeMap::new();
-    let mut error_counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut patterns: std::collections::BTreeMap<String, Vec<(String, String)>> =
+        std::collections::BTreeMap::new();
+    let mut error_counts: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
 
     for dir_name in &dirs {
         let dir = spec_root.join(dir_name);
@@ -196,8 +220,18 @@ fn diag_output_mismatch() {
                         Ok(_) => {}
                         Err(err) => {
                             *error_counts.entry(err.clone()).or_insert(0) += 1;
-                            if err.starts_with("output_mismatch") || err.starts_with("eval: hsl") || err.starts_with("eval: hwb") || err.starts_with("eval: rgba") || err.starts_with("eval: alpha") || err.starts_with("eval: adjust") || err.starts_with("eval: scale") {
-                                patterns.entry(err).or_default().push((rel_file, case.2.clone()));
+                            if err.starts_with("output_mismatch")
+                                || err.starts_with("eval: hsl")
+                                || err.starts_with("eval: hwb")
+                                || err.starts_with("eval: rgba")
+                                || err.starts_with("eval: alpha")
+                                || err.starts_with("eval: adjust")
+                                || err.starts_with("eval: scale")
+                            {
+                                patterns
+                                    .entry(err)
+                                    .or_default()
+                                    .push((rel_file, case.2.clone()));
                             }
                         }
                     }
@@ -217,7 +251,12 @@ fn diag_output_mismatch() {
     sorted_patterns.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
     info!("=== Top 15 失败模式详情 ===");
     for (i, (pattern, files)) in sorted_patterns.iter().take(15).enumerate() {
-        info!(rank = i + 1, pattern = pattern.as_str(), count = files.len(), "模式");
+        info!(
+            rank = i + 1,
+            pattern = pattern.as_str(),
+            count = files.len(),
+            "模式"
+        );
         for (f, expected) in files.iter().take(2) {
             let exp_preview: String = expected.lines().take(5).collect::<Vec<_>>().join(" | ");
             info!(file = f.as_str(), expected = exp_preview.as_str(), "  详情");

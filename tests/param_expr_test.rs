@@ -4,7 +4,11 @@ use sasspile::compile_expanded;
 
 fn assert_output(input: &str, expected: &str) {
     let result = compile_expanded(input).unwrap_or_else(|e| format!("ERROR: {e}"));
-    assert_eq!(result.trim(), expected.trim(), "input: {input:?}\nexpected: {expected:?}\nactual: {result:?}");
+    assert_eq!(
+        result.trim(),
+        expected.trim(),
+        "input: {input:?}\nexpected: {expected:?}\nactual: {result:?}"
+    );
 }
 
 #[test]

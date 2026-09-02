@@ -1,3 +1,10 @@
+#![allow(
+    clippy::many_single_char_names,
+    clippy::single_char_pattern,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 use super::*;
 use crate::error::Result;
 use crate::parse::ast::{ColorOutput, ColorSpace};
@@ -28,11 +35,7 @@ impl Evaluator {
         } else {
             (c, 0.0, x)
         };
-        let result = Color::rgb(
-            (r1 + m) * 255.0,
-            (g1 + m) * 255.0,
-            (b1 + m) * 255.0,
-        );
+        let result = Color::rgb((r1 + m) * 255.0, (g1 + m) * 255.0, (b1 + m) * 255.0);
         crate::__tracing::trace!(
             target: "sasspile::color",
             fn = "hsl_to_rgb",
@@ -80,12 +83,7 @@ impl Evaluator {
         let r = to_rgb(h + 1.0 / 3.0);
         let g = to_rgb(h);
         let bl = to_rgb(h - 1.0 / 3.0);
-        Color::rgba(
-            r * 255.0,
-            g * 255.0,
-            bl * 255.0,
-            alpha,
-        )
+        Color::rgba(r * 255.0, g * 255.0, bl * 255.0, alpha)
     }
 
     /// RGB → HSL 转换。
@@ -101,7 +99,7 @@ impl Evaluator {
         let b = b / 255.0;
         let max = r.max(g).max(b);
         let min = r.min(g).min(b);
-        let l = (max + min) / 2.0;
+        let l = f64::midpoint(max, min);
         if (max - min).abs() < f64::EPSILON {
             return (0.0, 0.0, l);
         }
@@ -132,8 +130,7 @@ impl Evaluator {
     pub(crate) fn simple_random() -> f64 {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let val = (nanos % 1_000_000) as f64;
         val / 1_000_000.0
     }
@@ -154,7 +151,14 @@ impl Evaluator {
             } else {
                 args.to_vec()
             }
-        } else if matches!(args.first(), Some(Value::List(_, Separator::SlashLiteral | Separator::Slash, false))) {
+        } else if matches!(
+            args.first(),
+            Some(Value::List(
+                _,
+                Separator::SlashLiteral | Separator::Slash,
+                false
+            ))
+        ) {
             // rgb(R G B / A) — SlashLiteral 分隔的列表
             if let Some(Value::List(items, sep, false)) = args.first() {
                 let _ = sep;
@@ -177,7 +181,9 @@ impl Evaluator {
             args.to_vec()
         };
         // 检测是否有 none 参数——有则 CSS 原样透传
-        let has_none = args.iter().any(|a| matches!(a, Value::String(s, false) if s == "none"));
+        let has_none = args
+            .iter()
+            .any(|a| matches!(a, Value::String(s, false) if s == "none"));
         // 检测 alpha 参数是否存在（4 个参数时最后一个为 alpha）
         let has_alpha = args.len() == 4;
         match &args[..] {
@@ -187,16 +193,35 @@ impl Evaluator {
                 Value::Number(b, bu),
             ] => {
                 // 百分比参数转换为 0-255
-                let r_val = if ru.as_deref() == Some("%") { r * 255.0 / 100.0 } else { *r };
-                let g_val = if gu.as_deref() == Some("%") { g * 255.0 / 100.0 } else { *g };
-                let b_val = if bu.as_deref() == Some("%") { b * 255.0 / 100.0 } else { *b };
+                let r_val = if ru.as_deref() == Some("%") {
+                    r * 255.0 / 100.0
+                } else {
+                    *r
+                };
+                let g_val = if gu.as_deref() == Some("%") {
+                    g * 255.0 / 100.0
+                } else {
+                    *g
+                };
+                let b_val = if bu.as_deref() == Some("%") {
+                    b * 255.0 / 100.0
+                } else {
+                    *b
+                };
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
                     r = *r, g = *g, b = *b,
                     "rgba 3-arg input"
                 );
-                Ok(Value::Color(Color::with_rgb(r_val, g_val, b_val, 1.0, ColorSpace::Rgb, ColorOutput::RgbExplicit)))
+                Ok(Value::Color(Color::with_rgb(
+                    r_val,
+                    g_val,
+                    b_val,
+                    1.0,
+                    ColorSpace::Rgb,
+                    ColorOutput::RgbExplicit,
+                )))
             }
             [
                 Value::Number(r, ru),
@@ -204,9 +229,21 @@ impl Evaluator {
                 Value::Number(b, bu),
                 Value::Number(a, ua),
             ] => {
-                let r_val = if ru.as_deref() == Some("%") { r * 255.0 / 100.0 } else { *r };
-                let g_val = if gu.as_deref() == Some("%") { g * 255.0 / 100.0 } else { *g };
-                let b_val = if bu.as_deref() == Some("%") { b * 255.0 / 100.0 } else { *b };
+                let r_val = if ru.as_deref() == Some("%") {
+                    r * 255.0 / 100.0
+                } else {
+                    *r
+                };
+                let g_val = if gu.as_deref() == Some("%") {
+                    g * 255.0 / 100.0
+                } else {
+                    *g
+                };
+                let b_val = if bu.as_deref() == Some("%") {
+                    b * 255.0 / 100.0
+                } else {
+                    *b
+                };
                 let alpha = if ua.as_deref() == Some("%") {
                     *a / 100.0
                 } else {
@@ -219,25 +256,41 @@ impl Evaluator {
                     "rgba 4-arg input"
                 );
                 Ok(Value::Color(Color::with_rgb(
-                    r_val, g_val, b_val, alpha, ColorSpace::Rgb, ColorOutput::RgbExplicit,
+                    r_val,
+                    g_val,
+                    b_val,
+                    alpha,
+                    ColorSpace::Rgb,
+                    ColorOutput::RgbExplicit,
                 )))
             }
             // rgba($color, $alpha) — 修改颜色的 alpha 通道
-            [Value::Color(c), Value::Number(a, _)] => {
-                Ok(Value::Color(Color::with_rgb(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2], *a, c.space, c.output)))
-            }
+            [Value::Color(c), Value::Number(a, _)] => Ok(Value::Color(Color::with_rgb(
+                c.legacy_rgb[0],
+                c.legacy_rgb[1],
+                c.legacy_rgb[2],
+                *a,
+                c.space,
+                c.output,
+            ))),
             // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
-            _ if has_none || args.iter().any(|a| {
-                matches!(a, Value::Calc(_) | Value::String(_, false))
-                    && !matches!(a, Value::Color(_))
-            }) => {
+            _ if has_none
+                || args.iter().any(|a| {
+                    matches!(a, Value::Calc(_) | Value::String(_, false))
+                        && !matches!(a, Value::Color(_))
+                }) =>
+            {
                 let (rgb_args, alpha) = if has_alpha {
                     (&args[..3], Some(&args[3]))
                 } else {
                     (&args[..], None)
                 };
                 let sep = if is_space_sep { " " } else { ", " };
-                let rgb_str = rgb_args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(sep);
+                let rgb_str = rgb_args
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(sep);
                 let full_str = if let Some(a) = alpha {
                     if is_space_sep {
                         format!("{rgb_str} / {a}")
@@ -264,10 +317,18 @@ impl Evaluator {
                     "darken input"
                 );
                 // Sass darken = HSL lightness 减少
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
+                let (h, s, l) =
+                    Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                 let new_l = (l - *amount / 100.0).max(0.0);
                 let new_c = Evaluator::hsl_to_rgb(h, s, new_l);
-                let result = Value::Color(Color::with_hsl(h, s, new_l, c.a, ColorOutput::RgbPercent, new_c.legacy_rgb));
+                let result = Value::Color(Color::with_hsl(
+                    h,
+                    s,
+                    new_l,
+                    c.a,
+                    ColorOutput::RgbPercent,
+                    new_c.legacy_rgb,
+                ));
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "darken",
@@ -276,7 +337,9 @@ impl Evaluator {
                 );
                 Ok(result)
             }
-            _ => Err(SassError::Eval("darken requires (color, amount) arguments".into())),
+            _ => Err(SassError::Eval(
+                "darken requires (color, amount) arguments".into(),
+            )),
         }
     }
 
@@ -291,10 +354,18 @@ impl Evaluator {
                     "lighten input"
                 );
                 // Sass lighten = HSL lightness 增加
-                let (h, s, l) = Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
+                let (h, s, l) =
+                    Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                 let new_l = (l + *amount / 100.0).min(1.0);
                 let new_c = Evaluator::hsl_to_rgb(h, s, new_l);
-                let result = Value::Color(Color::with_hsl(h, s, new_l, c.a, ColorOutput::RgbPercent, new_c.legacy_rgb));
+                let result = Value::Color(Color::with_hsl(
+                    h,
+                    s,
+                    new_l,
+                    c.a,
+                    ColorOutput::RgbPercent,
+                    new_c.legacy_rgb,
+                ));
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "lighten",
@@ -303,7 +374,9 @@ impl Evaluator {
                 );
                 Ok(result)
             }
-            _ => Err(SassError::Eval("lighten requires (color, amount) arguments".into())),
+            _ => Err(SassError::Eval(
+                "lighten requires (color, amount) arguments".into(),
+            )),
         }
     }
 
@@ -317,10 +390,10 @@ impl Evaluator {
                     "mix 2-arg input"
                 );
                 Ok(Value::Color(Color::rgba(
-                    (a.legacy_rgb[0] + b.legacy_rgb[0]) / 2.0,
-                    (a.legacy_rgb[1] + b.legacy_rgb[1]) / 2.0,
-                    (a.legacy_rgb[2] + b.legacy_rgb[2]) / 2.0,
-                    (a.a + b.a) / 2.0,
+                    f64::midpoint(a.legacy_rgb[0], b.legacy_rgb[0]),
+                    f64::midpoint(a.legacy_rgb[1], b.legacy_rgb[1]),
+                    f64::midpoint(a.legacy_rgb[2], b.legacy_rgb[2]),
+                    f64::midpoint(a.a, b.a),
                 )))
             }
             [Value::Color(a), Value::Color(b), Value::Number(w, _)] => {

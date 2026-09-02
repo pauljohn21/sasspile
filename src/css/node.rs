@@ -1,4 +1,4 @@
-//! CssNode 定义——求值阶段的中间表示。
+//! `CssNode` 定义——求值阶段的中间表示。
 //!
 //! `CssNode` 是求值器的输出，包含：
 //! - 规则（嵌套结构）
@@ -83,7 +83,7 @@ impl std::fmt::Display for CssNode {
                 "{}",
                 nodes
                     .iter()
-                    .map(|n| n.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(" ")
             ),

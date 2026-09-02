@@ -1,6 +1,6 @@
 //! @规则解析。
 //!
-//! 包含 parse_at_rule/parse_if/parse_for/parse_each/parse_while 等所有 @ 规则解析方法。
+//! 包含 `parse_at_rule/parse_if/parse_for/parse_each/parse_while` 等所有 @ 规则解析方法。
 
 use super::Parser;
 use super::ast::*;
@@ -8,7 +8,7 @@ use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use crate::parse::at_rule_kinds::AtRuleKind;
 
-impl<'tok> Parser<'tok> {
+impl Parser<'_> {
     // —— @规则解析 ——
     pub(crate) fn parse_at_rule(&mut self, name: String) -> Result<Node> {
         self.advance(); // 消费 @rule
@@ -243,9 +243,7 @@ impl<'tok> Parser<'tok> {
 
         // Vendor prefix 检查: -prefix-element 仍然禁止（全小写时）
         // （-prefix-url/-expression/-and/-or/-not 已放宽，不报错）
-        if name == name.to_ascii_lowercase()
-            && name.starts_with('-')
-            && name.ends_with("-element")
+        if name == name.to_ascii_lowercase() && name.starts_with('-') && name.ends_with("-element")
         {
             return Err(SassError::Eval("Invalid function name.".into()));
         }
@@ -282,10 +280,11 @@ impl<'tok> Parser<'tok> {
                     self.advance();
                     self.skip_ws();
                     if let Some(Token::Ident(s)) = self.peek()
-                        && s == "optional" {
-                            optional = true;
-                            self.advance();
-                        }
+                        && s == "optional"
+                    {
+                        optional = true;
+                        self.advance();
+                    }
                 }
                 Token::Whitespace => {
                     selector.push(' ');
@@ -372,13 +371,10 @@ impl<'tok> Parser<'tok> {
 
     pub(crate) fn parse_generic_at_rule(&mut self, name: String) -> Result<Node> {
         self.skip_ws();
-        let params = if !matches!(
-            self.peek(),
-            Some(Token::LBrace) | Some(Token::Semicolon) | None
-        ) {
-            Some(self.parse_at_params()?)
-        } else {
+        let params = if matches!(self.peek(), Some(Token::LBrace | Token::Semicolon) | None) {
             None
+        } else {
+            Some(self.parse_at_params()?)
         };
         self.skip_ws();
         let body = if self.peek() == Some(&Token::LBrace) {

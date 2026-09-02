@@ -18,7 +18,10 @@ fn unary_math_func(
     match &args[0] {
         Value::Number(n, _) => Ok(Some(Value::Number(f(*n), None))),
         Value::Calc(c) => {
-            let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            let inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
             Ok(Some(Value::String(format!("{func_name}({inner})"), false)))
         }
         _ => unreachable!(),
@@ -38,7 +41,10 @@ fn inverse_trig_func(
             Ok(Some(Value::Number(result, Some("deg".to_string()))))
         }
         Value::Calc(c) => {
-            let inner = c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str());
+            let inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
             Ok(Some(Value::String(format!("{func_name}({inner})"), false)))
         }
         _ => unreachable!(),
@@ -49,13 +55,17 @@ fn inverse_trig_func(
 fn value_to_str(v: &Value) -> Result<String> {
     match v {
         Value::Number(n, u) => Ok(format!("{n}{}", u.as_deref().unwrap_or(""))),
-        Value::Calc(c) => Ok(c.strip_prefix("calc(").and_then(|s| s.strip_suffix(")")).unwrap_or(c.as_str()).to_string()),
+        Value::Calc(c) => Ok(c
+            .strip_prefix("calc(")
+            .and_then(|s| s.strip_suffix(")"))
+            .unwrap_or(c.as_str())
+            .to_string()),
         _ => Err(SassError::Eval(format!("{v} is not a number."))),
     }
 }
 
 /// 提取无单位数字——报错如果有单位。
-fn extract_unitless<'a>(v: &'a Value, param: &str) -> Result<f64> {
+fn extract_unitless(v: &Value, param: &str) -> Result<f64> {
     match v {
         Value::Number(n, u) => {
             if u.is_some() {
@@ -98,18 +108,16 @@ fn call_pow(args: &[Value]) -> Result<Option<Value>> {
     }
     if args.len() > 2 {
         return Err(SassError::Eval(format!(
-            "Only 2 arguments allowed, but {} were passed.", args.len()
+            "Only 2 arguments allowed, but {} were passed.",
+            args.len()
         )));
     }
     let a_is_calc = matches!(&args[0], Value::Calc(..));
     let b_is_calc = matches!(&args[1], Value::Calc(..));
     if a_is_calc || b_is_calc {
-        let a_str = value_to_str(&args[0]).map_err(|e| {
-            SassError::Eval(format!("$base: {}", e))
-        })?;
-        let b_str = value_to_str(&args[1]).map_err(|e| {
-            SassError::Eval(format!("$exponent: {}", e))
-        })?;
+        let a_str = value_to_str(&args[0]).map_err(|e| SassError::Eval(format!("$base: {e}")))?;
+        let b_str =
+            value_to_str(&args[1]).map_err(|e| SassError::Eval(format!("$exponent: {e}")))?;
         return Ok(Some(Value::String(format!("pow({a_str}, {b_str})"), false)));
     }
     let a = extract_unitless(&args[0], "base")?;
@@ -127,15 +135,19 @@ fn call_atan2(args: &[Value]) -> Result<Option<Value>> {
     }
     if args.len() > 2 {
         return Err(SassError::Eval(format!(
-            "Only 2 arguments allowed, but {} were passed.", args.len()
+            "Only 2 arguments allowed, but {} were passed.",
+            args.len()
         )));
     }
     let y_is_calc = matches!(&args[0], Value::Calc(..));
     let x_is_calc = matches!(&args[1], Value::Calc(..));
     if y_is_calc || x_is_calc {
-        let y_str = value_to_str(&args[0]).map_err(|e| SassError::Eval(format!("$y: {}", e)))?;
-        let x_str = value_to_str(&args[1]).map_err(|e| SassError::Eval(format!("$x: {}", e)))?;
-        return Ok(Some(Value::String(format!("atan2({y_str}, {x_str})"), false)));
+        let y_str = value_to_str(&args[0]).map_err(|e| SassError::Eval(format!("$y: {e}")))?;
+        let x_str = value_to_str(&args[1]).map_err(|e| SassError::Eval(format!("$x: {e}")))?;
+        return Ok(Some(Value::String(
+            format!("atan2({y_str}, {x_str})"),
+            false,
+        )));
     }
     let (y, uy) = match &args[0] {
         Value::Number(n, u) => (*n, u.clone()),
@@ -168,15 +180,17 @@ fn call_log(args: &[Value]) -> Result<Option<Value>> {
     }
     if args.len() > 2 {
         return Err(SassError::Eval(format!(
-            "Only 2 arguments allowed, but {} were passed.", args.len()
+            "Only 2 arguments allowed, but {} were passed.",
+            args.len()
         )));
     }
     let n_is_calc = matches!(&args[0], Value::Calc(..));
     let b_is_calc = args.len() == 2 && matches!(&args[1], Value::Calc(..));
     if n_is_calc || b_is_calc {
-        let n_str = value_to_str(&args[0]).map_err(|e| SassError::Eval(format!("$number: {}", e)))?;
+        let n_str = value_to_str(&args[0]).map_err(|e| SassError::Eval(format!("$number: {e}")))?;
         if args.len() == 2 && !matches!(&args[1], Value::Null) {
-            let b_str = value_to_str(&args[1]).map_err(|e| SassError::Eval(format!("$base: {}", e)))?;
+            let b_str =
+                value_to_str(&args[1]).map_err(|e| SassError::Eval(format!("$base: {e}")))?;
             return Ok(Some(Value::String(format!("log({n_str}, {b_str})"), false)));
         }
         return Ok(Some(Value::String(format!("log({n_str})"), false)));
@@ -205,9 +219,12 @@ fn call_hypot(args: &[Value]) -> Result<Option<Value>> {
     }
     let any_calc = args.iter().any(|a| matches!(a, Value::Calc(..)));
     if any_calc {
-        let strs: Result<Vec<String>> = args.iter().map(|a| value_to_str(a)).collect();
+        let strs: Result<Vec<String>> = args.iter().map(value_to_str).collect();
         let strs = strs?;
-        return Ok(Some(Value::String(format!("hypot({})", strs.join(", ")), false)));
+        return Ok(Some(Value::String(
+            format!("hypot({})", strs.join(", ")),
+            false,
+        )));
     }
     let mut nums: Vec<(f64, Option<String>)> = Vec::new();
     for (i, a) in args.iter().enumerate() {
@@ -221,7 +238,11 @@ fn call_hypot(args: &[Value]) -> Result<Option<Value>> {
             if !crate::eval::value::units_compatible(u0, ui) {
                 return Err(SassError::Eval(format!(
                     "$numbers[{}]: {}{} and $numbers[1]: {}{} have incompatible units.",
-                    i + 1, nums[i].0, ui.unwrap_or(""), nums[0].0, u0.unwrap_or("")
+                    i + 1,
+                    nums[i].0,
+                    ui.unwrap_or(""),
+                    nums[0].0,
+                    u0.unwrap_or("")
                 )));
             }
         }

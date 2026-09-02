@@ -1,3 +1,8 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
@@ -50,15 +55,21 @@ impl Evaluator {
                     let conv = unit_conversion_factor(e_u, s_u);
                     e * conv
                 } else {
-                    return Err(SassError::Eval(format!("@for incompatible units: {su:?} and {eu:?}")));
+                    return Err(SassError::Eval(format!(
+                        "@for incompatible units: {su:?} and {eu:?}"
+                    )));
                 };
                 if end_val.fract() != 0.0 {
                     return Err(SassError::Eval(format!("{end_val} is not an int.")));
                 }
                 (*s as i64, end_val as i64)
             }
-            (Value::String(s, _), _) => return Err(SassError::Eval(format!("\"{s}\" is not a number."))),
-            (_, Value::String(s, _)) => return Err(SassError::Eval(format!("\"{s}\" is not a number."))),
+            (Value::String(s, _), _) => {
+                return Err(SassError::Eval(format!("\"{s}\" is not a number.")));
+            }
+            (_, Value::String(s, _)) => {
+                return Err(SassError::Eval(format!("\"{s}\" is not a number.")));
+            }
             _ => return Err(SassError::Eval("@for range must be numbers".into())),
         };
         let step: i64 = if start <= end { 1 } else { -1 };
@@ -71,19 +82,16 @@ impl Evaluator {
         // 构建迭代范围：正向 (start..stop)，反向 (stop+1..=start).rev()
         let count = 0i64;
         let (css, env, _) = if step > 0 {
-            (start..stop).try_fold(
-                (Vec::new(), env, count),
-                |(mut css, env, mut count), i| {
-                    if count > MAX_DEPTH as i64 {
-                        return Err(SassError::Eval("@for loop iteration limit exceeded".into()));
-                    }
-                    count += 1;
-                    let env = env.bind(var.to_string(), Value::Number(i as f64, loop_unit.clone()));
-                    let (out, new_env) = Self::eval_nodes(body, env)?;
-                    css.extend(out);
-                    Ok((css, new_env, count))
-                },
-            )?
+            (start..stop).try_fold((Vec::new(), env, count), |(mut css, env, mut count), i| {
+                if count > MAX_DEPTH as i64 {
+                    return Err(SassError::Eval("@for loop iteration limit exceeded".into()));
+                }
+                count += 1;
+                let env = env.bind(var.to_string(), Value::Number(i as f64, loop_unit.clone()));
+                let (out, new_env) = Self::eval_nodes(body, env)?;
+                css.extend(out);
+                Ok((css, new_env, count))
+            })?
         } else {
             (stop..=start).rev().try_fold(
                 (Vec::new(), env, count),
@@ -112,10 +120,25 @@ impl Evaluator {
         let _enter = span.enter();
         let evaluated = Self::eval_value(list, &env)?;
         let items: Vec<Vec<Value>> = match &evaluated {
-            Value::Map(pairs) if vars.len() >= 2 => pairs.iter().map(|(k, v)| vec![k.clone(), v.clone()]).collect(),
-            Value::Map(pairs) if vars.len() == 1 => pairs.iter().map(|(k, v)| vec![Value::List(vec![k.clone(), v.clone()], Separator::Space, false)]).collect(),
+            Value::Map(pairs) if vars.len() >= 2 => pairs
+                .iter()
+                .map(|(k, v)| vec![k.clone(), v.clone()])
+                .collect(),
+            Value::Map(pairs) if vars.len() == 1 => pairs
+                .iter()
+                .map(|(k, v)| {
+                    vec![Value::List(
+                        vec![k.clone(), v.clone()],
+                        Separator::Space,
+                        false,
+                    )]
+                })
+                .collect(),
             Value::List(es, _, _) => es.iter().map(|e| vec![e.clone()]).collect(),
-            Value::Map(pairs) => pairs.iter().flat_map(|(k, v)| vec![vec![k.clone()], vec![v.clone()]]).collect(),
+            Value::Map(pairs) => pairs
+                .iter()
+                .flat_map(|(k, v)| vec![vec![k.clone()], vec![v.clone()]])
+                .collect(),
             other => vec![vec![other.clone()]],
         };
         let (css, env) = items.iter().try_fold(
@@ -143,11 +166,7 @@ impl Evaluator {
         Ok((css, env))
     }
 
-    pub(crate) fn eval_while(
-        cond: &Value,
-        body: &[Node],
-        env: Env,
-    ) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_while(cond: &Value, body: &[Node], env: Env) -> Result<(Vec<CssNode>, Env)> {
         let mut css = Vec::new();
         let mut env = env;
         let mut iteration = 0;
@@ -155,12 +174,16 @@ impl Evaluator {
             iteration += 1;
             if iteration > MAX_DEPTH {
                 crate::__tracing::error!(iteration, cond_ast = %cond, "@while 超过 MAX_DEPTH");
-                return Err(SassError::Eval("@while 循环次数超过限制（可能是无限循环）".into()));
+                return Err(SassError::Eval(
+                    "@while 循环次数超过限制（可能是无限循环）".into(),
+                ));
             }
             let c = Self::eval_value(cond, &env)?;
             let truthy = Self::is_truthy(&c);
             crate::__tracing::trace!(iteration, cond_value = %c, is_truthy = truthy, "@while 条件求值");
-            if !truthy { break; }
+            if !truthy {
+                break;
+            }
             let (out, new_env) = Self::eval_nodes(body, env)?;
             css.extend(out);
             env = new_env;
@@ -175,9 +198,14 @@ impl Evaluator {
 fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> f64 {
     fn to_mm(u: &str) -> Option<f64> {
         match u {
-            "mm" => Some(1.0), "cm" => Some(10.0), "in" => Some(25.4),
-            "pt" => Some(25.4 / 72.0), "pc" => Some(25.4 / 6.0), "px" => Some(25.4 / 96.0),
-            "q" => Some(0.25), _ => None,
+            "mm" => Some(1.0),
+            "cm" => Some(10.0),
+            "in" => Some(25.4),
+            "pt" => Some(25.4 / 72.0),
+            "pc" => Some(25.4 / 6.0),
+            "px" => Some(25.4 / 96.0),
+            "q" => Some(0.25),
+            _ => None,
         }
     }
     match (to_mm(from_unit), to_mm(to_unit)) {

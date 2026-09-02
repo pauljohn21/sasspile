@@ -2,7 +2,7 @@ use super::*;
 use crate::error::{Result, SassError};
 use std::path::Path;
 
-use super::module_helpers::{bind_exports, merge_module_cache, BindMode, FilterConfig};
+use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
 
 impl Evaluator {
     /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
@@ -109,7 +109,14 @@ impl Evaluator {
         };
         let exports_cache = exports.module_cache.clone();
         let mut updated_cache = (*exports_cache).clone();
-        updated_cache.insert(path.to_path_buf(), ModuleExports { css: vec![], module_cache: exports.module_cache.clone(), ..exports.clone() });
+        updated_cache.insert(
+            path.to_path_buf(),
+            ModuleExports {
+                css: vec![],
+                module_cache: exports.module_cache.clone(),
+                ..exports.clone()
+            },
+        );
         let exports = ModuleExports {
             module_cache: Rc::new(updated_cache),
             ..exports
@@ -124,8 +131,12 @@ impl Evaluator {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(caller_env), fields(path = %path.display(), depth = caller_env.depth)))]
     pub(crate) fn load_import(path: &Path, caller_env: Env) -> Result<(Vec<CssNode>, Env)> {
         // 循环加载检测
-        if caller_env.loaded_modules.contains(path) && !caller_env.get_module_cache().contains_key(path) {
-            return Err(SassError::Module("This file is already being loaded.".into()));
+        if caller_env.loaded_modules.contains(path)
+            && !caller_env.get_module_cache().contains_key(path)
+        {
+            return Err(SassError::Module(
+                "This file is already being loaded.".into(),
+            ));
         }
         if caller_env.depth > 50 {
             return Ok((vec![], caller_env));
@@ -152,7 +163,8 @@ impl Evaluator {
             final_env.with_base_path(bp)
         } else {
             final_env
-        }.with_depth(saved_depth);
+        }
+        .with_depth(saved_depth);
         // @import 内联语义：forwarded 成员合并到 local
         let final_env = final_env.merge_forwarded_to_local();
         let css = if is_plain_css {
@@ -165,22 +177,31 @@ impl Evaluator {
 
     /// 模块限定函数调用。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all, fields(name = name)))]
-    pub(crate) fn call_module_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
+    pub(crate) fn call_module_function(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        env: &Env,
+    ) -> Result<Value> {
         // 先检查文件加载的命名空间
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let func_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
-                && let Some(func) = module.all_functions().find(|(k, _)| *k == func_name).map(|(_, f)| f) {
-                    // 注入模块的 vars 到函数环境，使函数体可访问模块变量
-                    let mut func_env = env.clone();
-                    for (k, v) in module.all_vars() {
-                        if !func_env.local_vars.contains_key(k) {
-                            func_env = func_env.bind(k.clone(), v.clone());
-                        }
+                && let Some(func) = module
+                    .all_functions()
+                    .find(|(k, _)| *k == func_name)
+                    .map(|(_, f)| f)
+            {
+                // 注入模块的 vars 到函数环境，使函数体可访问模块变量
+                let mut func_env = env.clone();
+                for (k, v) in module.all_vars() {
+                    if !func_env.local_vars.contains_key(k) {
+                        func_env = func_env.bind(k.clone(), v.clone());
                     }
-                    return Self::call_user_function(func, pos_args, kw_args, func_env);
                 }
+                return Self::call_user_function(func, pos_args, kw_args, func_env);
+            }
         }
         // 将模块限定名映射到内建函数
         let builtin_name = super::builtin::dispatch::module_builtin_name(name);
@@ -200,7 +221,9 @@ impl Evaluator {
         // 内建模块 sass:math/string/list/map/color/meta/selector
         if url.starts_with("sass:") {
             if !config.is_empty() {
-                return Err(SassError::Eval("Built-in modules can't be configured.".into()));
+                return Err(SassError::Eval(
+                    "Built-in modules can't be configured.".into(),
+                ));
             }
             return Ok((vec![], env.add_module(url.to_string())));
         }
@@ -209,15 +232,21 @@ impl Evaluator {
         if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
             let already_loaded = env.get_loaded_modules().contains(&path);
             if already_loaded && !env.get_module_cache().contains_key(&path) {
-                return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
+                return Err(SassError::Module(
+                    "Module loop: this module is already being loaded.".into(),
+                ));
             }
             if already_loaded && !config.is_empty() {
                 return Err(SassError::Eval(
-                    "This module was already loaded, so it can't be configured using \"with\".".into(),
+                    "This module was already loaded, so it can't be configured using \"with\"."
+                        .into(),
                 ));
             }
             let exports = if already_loaded {
-                env.get_module_cache().get(&path).cloned().unwrap_or_default()
+                env.get_module_cache()
+                    .get(&path)
+                    .cloned()
+                    .unwrap_or_default()
             } else {
                 // 检查重复配置变量
                 let mut seen = std::collections::HashSet::new();
@@ -239,7 +268,11 @@ impl Evaluator {
                 Self::load_module(&path, &config_pairs, &env, true)?
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
-            let css = if already_loaded { vec![] } else { exports.css.clone() };
+            let css = if already_loaded {
+                vec![]
+            } else {
+                exports.css.clone()
+            };
             if star {
                 let new_env = bind_exports(
                     env_with_cache,
@@ -276,7 +309,9 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         // 内建模块（sass:xxx）不能用 with 配置
         if url.starts_with("sass:") && !config.is_empty() {
-            return Err(SassError::Eval("Built-in modules can't be configured.".into()));
+            return Err(SassError::Eval(
+                "Built-in modules can't be configured.".into(),
+            ));
         }
         let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
@@ -314,35 +349,44 @@ impl Evaluator {
                         .map(|(k, v)| (strip_prefix(k), v.clone()))
                         .collect()
                 } else {
-                    let mut configured_names: std::collections::HashSet<String> = std::collections::HashSet::new();
-                    let from_config: Vec<(String, Value)> = config.iter()
-                        .try_fold(Vec::new(), |mut acc, cfg| {
+                    let mut configured_names: std::collections::HashSet<String> =
+                        std::collections::HashSet::new();
+                    let from_config: Vec<(String, Value)> =
+                        config.iter().try_fold(Vec::new(), |mut acc, cfg| {
                             let name = strip_prefix(&cfg.name);
                             configured_names.insert(name.clone());
                             let val = Evaluator::eval_value(&cfg.value, &env)?;
-                            let pending_val = env.get_pending_config()
-                                .get(&name)
-                                .or_else(|| env.get_pending_config().get(&cfg.name.replace('-', "_")));
+                            let pending_val = env.get_pending_config().get(&name).or_else(|| {
+                                env.get_pending_config().get(&cfg.name.replace('-', "_"))
+                            });
                             // 选择值：!default 时 pending_config 优先，否则 with 的值优先
                             let chosen = if cfg.is_default {
                                 pending_val
                                     .filter(|v| !matches!(v, Value::Null))
                                     .cloned()
-                                .or(if !matches!(val, Value::Null) { Some(val) } else { None })
+                                    .or(if matches!(val, Value::Null) {
+                                        None
+                                    } else {
+                                        Some(val)
+                                    })
+                            } else if matches!(val, Value::Null) {
+                                pending_val.filter(|v| !matches!(v, Value::Null)).cloned()
                             } else {
-                                if !matches!(val, Value::Null) { Some(val) } else {
-                                    pending_val.filter(|v| !matches!(v, Value::Null)).cloned()
-                                }
+                                Some(val)
                             };
-                            if let Some(v) = chosen { acc.push((name, v)); }
+                            if let Some(v) = chosen {
+                                acc.push((name, v));
+                            }
                             Ok::<_, SassError>(acc)
                         })?;
                     // 追加 pending_config 中未被 with 覆盖的变量（透传），受 show/hide 过滤
                     let mut result = from_config;
                     for (k, v) in env.get_pending_config() {
                         let stripped = strip_prefix(k);
-                        if !configured_names.contains(&stripped) && !matches!(v, Value::Null)
-                            && passes_filter(k) {
+                        if !configured_names.contains(&stripped)
+                            && !matches!(v, Value::Null)
+                            && passes_filter(k)
+                        {
                             result.push((stripped, v.clone()));
                         }
                     }
@@ -356,19 +400,29 @@ impl Evaluator {
             );
             let already_loaded = env.get_loaded_modules().contains(&path);
             if already_loaded && !env.get_module_cache().contains_key(&path) {
-                return Err(SassError::Module("Module loop: this module is already being loaded.".into()));
+                return Err(SassError::Module(
+                    "Module loop: this module is already being loaded.".into(),
+                ));
             }
             if already_loaded && !config.is_empty() {
                 return Err(SassError::Eval(
-                    "This module was already loaded, so it can't be configured using \"with\".".into(),
+                    "This module was already loaded, so it can't be configured using \"with\"."
+                        .into(),
                 ));
             }
             let exports = if already_loaded {
-                env.get_module_cache().get(&path).cloned().unwrap_or_default()
+                env.get_module_cache()
+                    .get(&path)
+                    .cloned()
+                    .unwrap_or_default()
             } else {
                 Self::load_module(&path, &config_pairs, &env, false)?
             };
-            let css = if already_loaded { vec![] } else { exports.css.clone() };
+            let css = if already_loaded {
+                vec![]
+            } else {
+                exports.css.clone()
+            };
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let filter = FilterConfig {
                 show: show.to_vec(),
@@ -393,10 +447,12 @@ impl Evaluator {
                     k.to_string()
                 }
             };
-            let merged_consumed: std::collections::HashSet<String> =
-                new_env.get_consumed_config().iter().cloned()
-                    .chain(exports.consumed_config.iter().map(|k| add_prefix(k)))
-                    .collect();
+            let merged_consumed: std::collections::HashSet<String> = new_env
+                .get_consumed_config()
+                .iter()
+                .cloned()
+                .chain(exports.consumed_config.iter().map(|k| add_prefix(k)))
+                .collect();
             crate::__tracing::debug!(
                 child_consumed = ?exports.consumed_config,
                 merged = ?merged_consumed,

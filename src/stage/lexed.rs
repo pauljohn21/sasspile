@@ -41,6 +41,10 @@ impl Lexed {
         use crate::parse::Parser;
 
         let ast = Parser::parse(&self.tokens)?;
-        Ok(Parsed { ast, base_path: self.base_path, load_paths: self.load_paths })
+        Ok(Parsed {
+            ast,
+            base_path: self.base_path,
+            load_paths: self.load_paths,
+        })
     }
 }

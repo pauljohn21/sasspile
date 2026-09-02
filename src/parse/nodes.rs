@@ -1,23 +1,22 @@
 //! 节点解析 + 参数解析。
 //!
-//! 包含 parse_node/parse_rule/parse_decl/parse_variable 等节点级解析，
-//! 以及 parse_params/parse_args/parse_config 等参数解析和辅助方法。
+//! 包含 `parse_node/parse_rule/parse_decl/parse_variable` 等节点级解析，
+//! 以及 `parse_params/parse_args/parse_config` 等参数解析和辅助方法。
 
 use super::Parser;
 use super::ast::*;
+use crate::__tracing::{trace, warn};
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
-use crate::__tracing::{trace, warn};
 
-impl<'tok> Parser<'tok> {
+impl Parser<'_> {
     // —— 节点解析 ——
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(pos = self.pos)))]
     pub(crate) fn parse_node(&mut self) -> Result<Node> {
         self.skip_ws();
         let peek_str = self
             .peek()
-            .map(|t| t.to_string())
-            .unwrap_or_else(|| "EOF".into());
+            .map_or_else(|| "EOF".into(), std::string::ToString::to_string);
         trace!(peek = %peek_str, "parse_node");
         match self.peek() {
             Some(Token::AtRule(name)) => self.parse_at_rule(name.clone()),
@@ -31,7 +30,8 @@ impl<'tok> Parser<'tok> {
                 // 顶层孤立的 ; — 跳过（如 `downstream {...};` 中的尾部分号）
                 self.advance();
                 self.skip_ws();
-                if self.peek().is_none() || matches!(self.peek(), Some(Token::Eof | Token::RBrace)) {
+                if self.peek().is_none() || matches!(self.peek(), Some(Token::Eof | Token::RBrace))
+                {
                     // 文件末尾或 body 末尾的孤立 ; — 返回空注释节点
                     return Ok(Node::Comment(String::new(), true));
                 }
@@ -130,21 +130,41 @@ impl<'tok> Parser<'tok> {
                         if s.ends_with('[') || s.ends_with('=') {
                             // [ 或 = 后的空白跳过
                             self.advance();
-                        } else if matches!(next_non_ws, Some(Token::RBracket | Token::Assign | Token::Tilde | Token::Pipe | Token::Caret | Token::Star)) {
+                        } else if matches!(
+                            next_non_ws,
+                            Some(
+                                Token::RBracket
+                                    | Token::Assign
+                                    | Token::Tilde
+                                    | Token::Pipe
+                                    | Token::Caret
+                                    | Token::Star
+                            )
+                        ) {
                             // ] 前或属性操作符（= ~= |= ^= *=）前的空白跳过
                             self.advance();
                         } else if s.contains('=') {
                             // 属性值后的空白 — 检查是否是合法 modifier（任意单字符标识符，前向兼容）
                             match next_non_ws {
-                                Some(Token::Ident(id)) if id.len() == 1 && id.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) => {
+                                Some(Token::Ident(id))
+                                    if id.len() == 1
+                                        && id
+                                            .chars()
+                                            .next()
+                                            .is_some_and(|c| c.is_ascii_alphabetic()) =>
+                                {
                                     let mod_id = id.clone();
                                     // 检查 modifier 后面是否是 ]
                                     let after_mod = self.peek_n(look + 1);
                                     if matches!(after_mod, Some(Token::RBracket)) {
                                         // 跳过空白
-                                        for _ in 0..look { self.advance(); }
+                                        for _ in 0..look {
+                                            self.advance();
+                                        }
                                         // 消费 modifier 字符
-                                        if !s.ends_with(' ') { s.push(' '); }
+                                        if !s.ends_with(' ') {
+                                            s.push(' ');
+                                        }
                                         s.push_str(&mod_id);
                                         self.advance();
                                     } else {
@@ -227,10 +247,11 @@ impl<'tok> Parser<'tok> {
             self.advance();
             self.skip_ws_and_comments();
             if let Some(Token::Ident(s)) = self.peek()
-                && s == "important" {
-                    self.advance();
-                    return Ok(true);
-                }
+                && s == "important"
+            {
+                self.advance();
+                return Ok(true);
+            }
         }
         Ok(false)
     }
@@ -350,7 +371,7 @@ impl<'tok> Parser<'tok> {
         loop {
             self.skip_ws();
             match self.peek() {
-                Some(Token::RBrace) | None | Some(Token::Eof) => break,
+                Some(Token::RBrace | Token::Eof) | None => break,
                 _ => nodes.push(self.parse_node()?),
             }
         }

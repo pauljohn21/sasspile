@@ -3,15 +3,15 @@
 //! Lexer 实现 `Iterator<Item = Result<Token, SassError>>`，
 //! 逐字符扫描源码，产出 token 流。扫描方法在 `scanner` 模块中。
 
-pub mod token;
 mod scanner;
+pub mod token;
 
 pub use scanner::Lexer;
 use token::Token;
 
 use crate::error::{Result, SassError};
 
-impl<'src> Iterator for Lexer<'src> {
+impl Iterator for Lexer<'_> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -27,22 +27,70 @@ impl<'src> Iterator for Lexer<'src> {
             // 数字
             '0'..='9' => self.scan_number(),
             // 符号
-            '{' => { self.next_char(); Token::LBrace }
-            '}' => { self.next_char(); Token::RBrace }
-            '(' => { self.next_char(); Token::LParen }
-            ')' => { self.next_char(); Token::RParen }
-            '[' => { self.next_char(); Token::LBracket }
-            ']' => { self.next_char(); Token::RBracket }
-            ':' => { self.next_char(); Token::Colon }
-            ';' => { self.next_char(); Token::Semicolon }
-            ',' => { self.next_char(); Token::Comma }
-            '+' => { self.next_char(); Token::Plus }
-            '*' => { self.next_char(); Token::Star }
-            '%' => { self.next_char(); Token::Percent }
-            '&' => { self.next_char(); Token::Amp }
-            '^' => { self.next_char(); Token::Caret }
-            '~' => { self.next_char(); Token::Tilde }
-            '|' => { self.next_char(); Token::Pipe }
+            '{' => {
+                self.next_char();
+                Token::LBrace
+            }
+            '}' => {
+                self.next_char();
+                Token::RBrace
+            }
+            '(' => {
+                self.next_char();
+                Token::LParen
+            }
+            ')' => {
+                self.next_char();
+                Token::RParen
+            }
+            '[' => {
+                self.next_char();
+                Token::LBracket
+            }
+            ']' => {
+                self.next_char();
+                Token::RBracket
+            }
+            ':' => {
+                self.next_char();
+                Token::Colon
+            }
+            ';' => {
+                self.next_char();
+                Token::Semicolon
+            }
+            ',' => {
+                self.next_char();
+                Token::Comma
+            }
+            '+' => {
+                self.next_char();
+                Token::Plus
+            }
+            '*' => {
+                self.next_char();
+                Token::Star
+            }
+            '%' => {
+                self.next_char();
+                Token::Percent
+            }
+            '&' => {
+                self.next_char();
+                Token::Amp
+            }
+            '^' => {
+                self.next_char();
+                Token::Caret
+            }
+            '~' => {
+                self.next_char();
+                Token::Tilde
+            }
+            '|' => {
+                self.next_char();
+                Token::Pipe
+            }
             // 点——可能是小数开始或 Dot
             '.' => {
                 if self.peek2().is_some_and(|c| c.is_ascii_digit()) {
@@ -60,7 +108,8 @@ impl<'src> Iterator for Lexer<'src> {
             // 减号——可能是负数、标识符开头或减号运算符
             '-' => {
                 let next = self.peek2();
-                if next.is_some_and(|c| c.is_alphabetic() || c == '-' || c == '_' || !c.is_ascii()) {
+                if next.is_some_and(|c| c.is_alphabetic() || c == '-' || c == '_' || !c.is_ascii())
+                {
                     self.next_char();
                     let start = self.pos;
                     while let Some(c) = self.peek() {
@@ -89,8 +138,14 @@ impl<'src> Iterator for Lexer<'src> {
             '/' => {
                 self.next_char();
                 match self.peek() {
-                    Some('/') => { self.next_char(); self.scan_line_comment() }
-                    Some('*') => { self.next_char(); self.scan_block_comment() }
+                    Some('/') => {
+                        self.next_char();
+                        self.scan_line_comment()
+                    }
+                    Some('*') => {
+                        self.next_char();
+                        self.scan_block_comment()
+                    }
                     _ => Token::Slash,
                 }
             }

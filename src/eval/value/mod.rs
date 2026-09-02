@@ -1,72 +1,77 @@
 use super::*;
+use crate::__tracing::{debug, warn};
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
-use crate::__tracing::{debug, warn};
 
 mod calc;
 mod display;
 mod ops;
 mod partial;
 
-pub(crate) use display::{eval_interp_segments, eval_interp_str, eval_property_name, eval_simple_expr, inspect_value};
+pub(crate) use display::{
+    eval_interp_segments, eval_interp_str, eval_property_name, eval_simple_expr, inspect_value,
+};
 pub(crate) use ops::{add, compare, div, modulo, mul, sub, units_compatible, values_eq};
 pub(crate) use partial::PartialCond;
 
 impl Evaluator {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(env), fields(name = name, is_default = flags.default), level = "debug"))]
-pub(crate) fn eval_variable(
-    name: &str,
-    value: &Value,
-    flags: &VarFlags,
-    env: Env,
-) -> Result<(Vec<CssNode>, Env)> {
-    // 命名空间变量赋值（namespace.$var）——更新模块变量
-    if name.contains('.') {
-        let val = Self::eval_value(value, &env)?;
-        let parts: Vec<&str> = name.splitn(2, '.').collect();
-        if parts.len() == 2 {
-            let ns = parts[0];
-            let var_name = parts[1];
-            if env.get_namespace(ns).is_some() {
-                let env = env.with_namespace_var(ns, var_name, val);
+    pub(crate) fn eval_variable(
+        name: &str,
+        value: &Value,
+        flags: &VarFlags,
+        env: Env,
+    ) -> Result<(Vec<CssNode>, Env)> {
+        // 命名空间变量赋值（namespace.$var）——更新模块变量
+        if name.contains('.') {
+            let val = Self::eval_value(value, &env)?;
+            let parts: Vec<&str> = name.splitn(2, '.').collect();
+            if parts.len() == 2 {
+                let ns = parts[0];
+                let var_name = parts[1];
+                if env.get_namespace(ns).is_some() {
+                    let env = env.with_namespace_var(ns, var_name, val);
+                    return Ok((vec![], env));
+                }
+            }
+            return Ok((vec![], env));
+        }
+        if flags.default {
+            // !default 赋值：先检查 pending_config（with 配置覆盖值）
+            let normalized = name.replace('-', "_");
+            let config_val = env
+                .get_pending_config()
+                .get(&normalized)
+                .or_else(|| env.get_pending_config().get(name))
+                .cloned();
+            if let Some(val) = config_val {
+                let consumed_key = env
+                    .get_pending_config()
+                    .get(&normalized)
+                    .map(|_| normalized.clone())
+                    .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
+                debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
+                let new_env = env.bind(name.to_string(), val);
+                let new_env = if let Some(key) = consumed_key {
+                    new_env.add_consumed_config(key)
+                } else {
+                    new_env
+                };
+                return Ok((vec![], new_env));
+            }
+            if env.has_var(name) {
                 return Ok((vec![], env));
             }
         }
-        return Ok((vec![], env));
-    }
-    if flags.default {
-        // !default 赋值：先检查 pending_config（with 配置覆盖值）
-        let normalized = name.replace('-', "_");
-        let config_val = env.get_pending_config().get(&normalized)
-            .or_else(|| env.get_pending_config().get(name))
-            .cloned();
-        if let Some(val) = config_val {
-            let consumed_key = env.get_pending_config()
-                .get(&normalized)
-                .map(|_| normalized.clone())
-                .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
-            debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
-            let new_env = env.bind(name.to_string(), val);
-            let new_env = if let Some(key) = consumed_key {
-                new_env.add_consumed_config(key)
-            } else {
-                new_env
-            };
-            return Ok((vec![], new_env));
-        }
-        if env.has_var(name) {
-            return Ok((vec![], env));
+        let val = Self::eval_value(value, &env)?;
+        let new_env = env.bind(name.to_string(), val.clone());
+        if flags.global {
+            Ok((vec![], new_env.add_global_write(name.to_string(), val)))
+        } else {
+            Ok((vec![], new_env))
         }
     }
-    let val = Self::eval_value(value, &env)?;
-    let new_env = env.bind(name.to_string(), val.clone());
-    if flags.global {
-        Ok((vec![], new_env.add_global_write(name.to_string(), val)))
-    } else {
-        Ok((vec![], new_env))
-    }
-}
 
     /// 求值值表达式。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(value, env), fields(depth = env.get_depth()), level = "trace"))]
@@ -97,7 +102,11 @@ pub(crate) fn eval_variable(
                     let ns = &name[..dot];
                     let var_name = &name[dot + 1..];
                     if let Some(module) = env.get_namespace(ns) {
-                        if let Some(val) = module.all_vars().find(|(k, _)| *k == var_name).map(|(_, v)| v) {
+                        if let Some(val) = module
+                            .all_vars()
+                            .find(|(k, _)| *k == var_name)
+                            .map(|(_, v)| v)
+                        {
                             return Ok(val.clone());
                         }
                     } else {
@@ -125,7 +134,9 @@ pub(crate) fn eval_variable(
                 Ok(Value::Map(evaluated))
             }
             Value::Call(name, args) => Self::eval_call(name, args, env),
-            Value::Interp(segments) => Ok(Value::String(eval_interp_segments(segments, env), false)),
+            Value::Interp(segments) => {
+                Ok(Value::String(eval_interp_segments(segments, env), false))
+            }
             Value::BinOp(b) => Self::eval_binop(&b.op, &b.left, &b.right, env),
             Value::UnaryOp(op, v) => {
                 let val = Self::eval_value(v, env)?;
@@ -147,21 +158,32 @@ pub(crate) fn eval_variable(
     /// 求值函数调用。
     fn eval_call(name: &str, args: &[Arg], env: &Env) -> Result<Value> {
         // if() 惰性求值：只求值选中的分支
-        if name == "if" && args.len() == 3 && args.iter().all(|a| a.name.is_none() && a.condition.is_none()) {
+        if name == "if"
+            && args.len() == 3
+            && args
+                .iter()
+                .all(|a| a.name.is_none() && a.condition.is_none())
+        {
             let cond = Self::eval_value(&args[0].value, env)?;
             if Self::is_truthy(&cond) {
                 return Self::eval_value(&args[1].value, env);
-            } else {
-                return Self::eval_value(&args[2].value, env);
             }
+            return Self::eval_value(&args[2].value, env);
         }
         // if() 命名参数语法
         if name == "if" && args.iter().any(|a| a.name.is_some()) {
-            let pos_args: Vec<&Arg> = args.iter().filter(|a| a.name.is_none() && a.condition.is_none()).collect();
+            let pos_args: Vec<&Arg> = args
+                .iter()
+                .filter(|a| a.name.is_none() && a.condition.is_none())
+                .collect();
             if pos_args.len() == 1 {
                 let cond = Self::eval_value(&pos_args[0].value, env)?;
-                let if_true = args.iter().find(|a| a.name.as_deref() == Some("if-true") || a.name.as_deref() == Some("$if-true"));
-                let if_false = args.iter().find(|a| a.name.as_deref() == Some("if-false") || a.name.as_deref() == Some("$if-false"));
+                let if_true = args.iter().find(|a| {
+                    a.name.as_deref() == Some("if-true") || a.name.as_deref() == Some("$if-true")
+                });
+                let if_false = args.iter().find(|a| {
+                    a.name.as_deref() == Some("if-false") || a.name.as_deref() == Some("$if-false")
+                });
                 if Self::is_truthy(&cond) {
                     if let Some(t) = if_true {
                         return Self::eval_value(&t.value, env);
@@ -177,7 +199,10 @@ pub(crate) fn eval_variable(
             return Self::eval_if_colon(args, env);
         }
         // if(else: value) — else-only 语法
-        if name == "if" && !args.is_empty() && args.iter().all(|a| a.name.as_deref() == Some("else")) {
+        if name == "if"
+            && !args.is_empty()
+            && args.iter().all(|a| a.name.as_deref() == Some("else"))
+        {
             return Self::eval_value(&args[0].value, env);
         }
         // 分离位置参数和关键字参数，展开 spread
@@ -186,10 +211,14 @@ pub(crate) fn eval_variable(
         Self::dispatch_function(name, pos_args, kw_args, env)
     }
 
-    /// if() 冒号语法求值。
+    /// `if()` 冒号语法求值。
     fn eval_if_colon(args: &[Arg], env: &Env) -> Result<Value> {
         let else_arg = args.iter().find(|a| a.name.as_deref() == Some("else"));
-        for (i, cond_arg) in args.iter().enumerate().filter(|(_, a)| a.condition.is_some()) {
+        for (i, cond_arg) in args
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.condition.is_some())
+        {
             let condition = cond_arg.condition.as_ref().expect("已检查");
             match Self::partial_eval_condition(condition, env)? {
                 PartialCond::True => return Self::eval_value(&cond_arg.value, env),
@@ -197,19 +226,18 @@ pub(crate) fn eval_variable(
                 PartialCond::Css(css_str) => {
                     let mut parts: Vec<String> = Vec::new();
                     parts.push(format!("{css_str}: {}", cond_arg.value));
-                    for (_, a) in args.iter().enumerate().filter(|(j, a)| {
-                        *j > i && a.condition.is_some()
-                    }) {
+                    for (_, a) in args
+                        .iter()
+                        .enumerate()
+                        .filter(|(j, a)| *j > i && a.condition.is_some())
+                    {
                         let cond = a.condition.as_ref().expect("已检查");
                         parts.push(format!("{cond}: {}", a.value));
                     }
                     if let Some(else_a) = else_arg {
                         parts.push(format!("else: {}", else_a.value));
                     }
-                    return Ok(Value::String(
-                        format!("if({})", parts.join("; ")),
-                        false,
-                    ));
+                    return Ok(Value::String(format!("if({})", parts.join("; ")), false));
                 }
             }
         }
@@ -258,17 +286,28 @@ pub(crate) fn eval_variable(
         match Self::call_function(name, &pos_args, &kw_args, env) {
             Ok(result) => Ok(result),
             Err(SassError::UndefinedFunction(_))
-                if !name.contains('.') && !Self::is_known_builtin(name) => {
-                let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
+                if !name.contains('.') && !Self::is_known_builtin(name) =>
+            {
+                let mut parts: Vec<String> = pos_args
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 for (k, v) in &kw_args {
                     parts.push(format!("{k}={v}"));
                 }
-                Ok(Value::String(format!("{name}({})", parts.join(", ")), false))
+                Ok(Value::String(
+                    format!("{name}({})", parts.join(", ")),
+                    false,
+                ))
             }
             Err(SassError::Eval(_))
-                if !name.contains('.')
-                    && matches!(name, "min" | "max" | "clamp") => {
-                let arg_str = pos_args.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ");
+                if !name.contains('.') && matches!(name, "min" | "max" | "clamp") =>
+            {
+                let arg_str = pos_args
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 Ok(Value::Calc(format!("{name}({arg_str})")))
             }
             Err(e) => Err(e),
@@ -289,7 +328,7 @@ pub(crate) fn eval_variable(
                 if !Self::is_truthy(&l) {
                     return Ok(l);
                 }
-                return Ok(Self::eval_value(right, env)?);
+                return Self::eval_value(right, env);
             }
             BinOpKind::Or => {
                 let l = Self::eval_value(left, env)?;

@@ -43,32 +43,32 @@ impl Evaluator {
                 }
             }
             Value::BinOp(b) => match b.op {
-                BinOpKind::And => {
-                    match Self::partial_eval_condition(&b.left, env)? {
-                        PartialCond::False => Ok(PartialCond::False),
-                        PartialCond::True => Self::partial_eval_condition(&b.right, env),
-                        PartialCond::Css(left_css) => {
-                            match Self::partial_eval_condition(&b.right, env)? {
-                                PartialCond::False => Ok(PartialCond::False),
-                                PartialCond::True => Ok(PartialCond::Css(left_css)),
-                                PartialCond::Css(right_css) => Ok(PartialCond::Css(format!("{left_css} and {right_css}"))),
+                BinOpKind::And => match Self::partial_eval_condition(&b.left, env)? {
+                    PartialCond::False => Ok(PartialCond::False),
+                    PartialCond::True => Self::partial_eval_condition(&b.right, env),
+                    PartialCond::Css(left_css) => {
+                        match Self::partial_eval_condition(&b.right, env)? {
+                            PartialCond::False => Ok(PartialCond::False),
+                            PartialCond::True => Ok(PartialCond::Css(left_css)),
+                            PartialCond::Css(right_css) => {
+                                Ok(PartialCond::Css(format!("{left_css} and {right_css}")))
                             }
                         }
                     }
-                }
-                BinOpKind::Or => {
-                    match Self::partial_eval_condition(&b.left, env)? {
-                        PartialCond::True => Ok(PartialCond::True),
-                        PartialCond::False => Self::partial_eval_condition(&b.right, env),
-                        PartialCond::Css(left_css) => {
-                            match Self::partial_eval_condition(&b.right, env)? {
-                                PartialCond::True => Ok(PartialCond::True),
-                                PartialCond::False => Ok(PartialCond::Css(left_css)),
-                                PartialCond::Css(right_css) => Ok(PartialCond::Css(format!("{left_css} or {right_css}"))),
+                },
+                BinOpKind::Or => match Self::partial_eval_condition(&b.left, env)? {
+                    PartialCond::True => Ok(PartialCond::True),
+                    PartialCond::False => Self::partial_eval_condition(&b.right, env),
+                    PartialCond::Css(left_css) => {
+                        match Self::partial_eval_condition(&b.right, env)? {
+                            PartialCond::True => Ok(PartialCond::True),
+                            PartialCond::False => Ok(PartialCond::Css(left_css)),
+                            PartialCond::Css(right_css) => {
+                                Ok(PartialCond::Css(format!("{left_css} or {right_css}")))
                             }
                         }
                     }
-                }
+                },
                 _ => {
                     let val = Self::eval_value(condition, env)?;
                     if Self::is_truthy(&val) {
@@ -118,7 +118,9 @@ impl Evaluator {
             // sass() 函数——求值参数
             Value::Call(name, _args) if name == "sass" => {
                 if env.is_plain_css() {
-                    return Err(SassError::Eval("sass() conditions aren't allowed in plain CSS".into()));
+                    return Err(SassError::Eval(
+                        "sass() conditions aren't allowed in plain CSS".into(),
+                    ));
                 }
                 let val = Self::eval_value(condition, env)?;
                 if Self::is_truthy(&val) {
@@ -130,10 +132,14 @@ impl Evaluator {
             // 插值——plain CSS 中不允许
             Value::Interp(segments) => {
                 if env.is_plain_css() {
-                    return Err(SassError::Eval("Interpolation isn't allowed in plain CSS.".into()));
+                    return Err(SassError::Eval(
+                        "Interpolation isn't allowed in plain CSS.".into(),
+                    ));
                 }
                 let val_str = eval_interp_segments(segments, env);
-                if val_str == "and" || val_str == "or" || val_str == "not"
+                if val_str == "and"
+                    || val_str == "or"
+                    || val_str == "not"
                     || val_str.starts_with("css(")
                     || val_str.starts_with("var(")
                     || val_str.starts_with("attr(")

@@ -1,3 +1,4 @@
+#![allow(clippy::unreadable_literal)]
 //! CSS 命名颜色查找表。
 //!
 //! `lookup_named_color`: 名称 → Color
@@ -162,7 +163,7 @@ impl Evaluator {
             _ => return None,
         };
         let alpha = if name == "transparent" { 0.0 } else { 1.0 };
-        Some(Color::rgba(r as f64, g as f64, b as f64, alpha))
+        Some(Color::rgba(f64::from(r), f64::from(g), f64::from(b), alpha))
     }
 
     /// CSS 命名颜色反向查找——根据 RGB 值返回名称。

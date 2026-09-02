@@ -5,7 +5,7 @@ use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> Parser<'tok> {
+impl Parser<'_> {
     pub(crate) fn parse_use(&mut self) -> Result<Node> {
         self.skip_ws();
         let url = self.parse_string_value()?;
@@ -47,7 +47,9 @@ impl<'tok> Parser<'tok> {
             return Err(SassError::Eval("This at-rule is not allowed here.".into()));
         }
         if self.saw_other_rule {
-            return Err(SassError::Eval("@forward rules must be written before any other rules.".into()));
+            return Err(SassError::Eval(
+                "@forward rules must be written before any other rules.".into(),
+            ));
         }
         self.skip_ws();
         let url = match self.peek() {
@@ -84,7 +86,9 @@ impl<'tok> Parser<'tok> {
             self.advance();
             show = self.parse_member_list()?;
             if show.is_empty() {
-                return Err(SassError::Eval("Expected variable, mixin, or function name".into()));
+                return Err(SassError::Eval(
+                    "Expected variable, mixin, or function name".into(),
+                ));
             }
             self.skip_ws();
             if self.peek_keyword("hide") {
@@ -94,7 +98,9 @@ impl<'tok> Parser<'tok> {
             self.advance();
             hide = self.parse_member_list()?;
             if hide.is_empty() {
-                return Err(SassError::Eval("Expected variable, mixin, or function name".into()));
+                return Err(SassError::Eval(
+                    "Expected variable, mixin, or function name".into(),
+                ));
             }
             self.skip_ws();
             if self.peek_keyword("show") {
@@ -139,15 +145,29 @@ impl<'tok> Parser<'tok> {
                     let mut url_content = String::new();
                     while let Some(t) = self.peek() {
                         match t {
-                            Token::RParen => { self.advance(); break; }
-                            Token::Whitespace => { url_content.push(' '); self.advance(); }
-                            Token::Comment(_, _) => { self.advance(); }
-                            _ => { url_content.push_str(&t.to_string()); self.advance(); }
+                            Token::RParen => {
+                                self.advance();
+                                break;
+                            }
+                            Token::Whitespace => {
+                                url_content.push(' ');
+                                self.advance();
+                            }
+                            Token::Comment(_, _) => {
+                                self.advance();
+                            }
+                            _ => {
+                                url_content.push_str(&t.to_string());
+                                self.advance();
+                            }
                         }
                     }
                     url_content.trim().to_string()
                 } else {
-                    return Err(SassError::Parse { expected: "(".into(), found: "other".into() });
+                    return Err(SassError::Parse {
+                        expected: "(".into(),
+                        found: "other".into(),
+                    });
                 }
             } else {
                 self.parse_string_value()?
@@ -161,19 +181,27 @@ impl<'tok> Parser<'tok> {
             break;
         }
         self.skip_ws_and_comments();
-        let modifier = if !matches!(self.peek(), Some(Token::Semicolon) | Some(Token::RBrace) | None) {
+        let modifier = if matches!(self.peek(), Some(Token::Semicolon | Token::RBrace) | None) {
+            String::new()
+        } else {
             let mut s = String::new();
             while let Some(t) = self.peek() {
                 match t {
                     Token::Semicolon | Token::LBrace | Token::RBrace | Token::Eof => break,
-                    Token::Comment(_, _) => { self.advance(); }
-                    Token::Whitespace => { s.push(' '); self.advance(); }
-                    _ => { s.push_str(&t.to_string()); self.advance(); }
+                    Token::Comment(_, _) => {
+                        self.advance();
+                    }
+                    Token::Whitespace => {
+                        s.push(' ');
+                        self.advance();
+                    }
+                    _ => {
+                        s.push_str(&t.to_string());
+                        self.advance();
+                    }
                 }
             }
             s.trim().to_string()
-        } else {
-            String::new()
         };
         self.skip_ws_and_comments();
         if self.peek() == Some(&Token::Semicolon) {
@@ -182,7 +210,10 @@ impl<'tok> Parser<'tok> {
         let url = if urls.len() == 1 {
             urls.into_iter().next().expect("urls has exactly 1 element")
         } else {
-            urls.iter().map(|u| format!("\"{u}\"")).collect::<Vec<_>>().join("\", \"")
+            urls.iter()
+                .map(|u| format!("\"{u}\""))
+                .collect::<Vec<_>>()
+                .join("\", \"")
         };
         Ok(Node::Import { url, modifier })
     }

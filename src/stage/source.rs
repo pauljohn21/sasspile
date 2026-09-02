@@ -33,7 +33,11 @@ impl Source {
     /// # 参数
     /// - `text`: SCSS 源码字符串。
     pub fn new(text: String) -> Self {
-        Self { text, base_path: None, load_paths: vec![] }
+        Self {
+            text,
+            base_path: None,
+            load_paths: vec![],
+        }
     }
 
     /// 从文件创建 Source——读取文件内容并携带路径。
@@ -45,7 +49,11 @@ impl Source {
     /// 返回 [`SassError`] 如果文件不存在或读取失败。
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let text = std::fs::read_to_string(path)?;
-        Ok(Self { text, base_path: Some(path.clone()), load_paths: vec![] })
+        Ok(Self {
+            text,
+            base_path: Some(path.clone()),
+            load_paths: vec![],
+        })
     }
 
     /// 设置加载路径——用于 @use/@import 模块搜索。
@@ -80,6 +88,10 @@ impl Source {
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Lexed { tokens, base_path: self.base_path, load_paths: self.load_paths })
+        Ok(Lexed {
+            tokens,
+            base_path: self.base_path,
+            load_paths: self.load_paths,
+        })
     }
 }

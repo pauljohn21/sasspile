@@ -122,10 +122,7 @@ fn null_interp() {
 #[test]
 fn multiple_interp_segments() {
     let css = compile("$a: foo; $b: bar; .x { content: #{$a}#{$b}; }");
-    assert!(
-        css.contains("content: foobar"),
-        "多段插值拼接应正确: {css}"
-    );
+    assert!(css.contains("content: foobar"), "多段插值拼接应正确: {css}");
 }
 
 // —— 表达式插值+后缀 ——
@@ -134,10 +131,7 @@ fn multiple_interp_segments() {
 fn expression_with_suffix_interp() {
     // #{1 + 2}px → 3px
     let css = compile(".x { width: #{1 + 2}px; }");
-    assert!(
-        css.contains("width: 3px"),
-        "表达式插值带后缀应求值: {css}"
-    );
+    assert!(css.contains("width: 3px"), "表达式插值带后缀应求值: {css}");
 }
 
 #[test]
@@ -154,10 +148,7 @@ fn number_with_unit_interp() {
 fn pure_expression_interp() {
     // #{1 + 2} → 3
     let css = compile(".x { width: #{1 + 2}; }");
-    assert!(
-        css.contains("width: 3"),
-        "纯表达式插值应求值: {css}"
-    );
+    assert!(css.contains("width: 3"), "纯表达式插值应求值: {css}");
 }
 
 // —— sass-spec: basic_prop_name_interpolation.hrx ——
@@ -166,10 +157,7 @@ fn pure_expression_interp() {
 fn property_name_expr_interp() {
     // bar#{1 + 2} → bar3
     let css = compile("foo { bar#{1 + 2}: blip; }");
-    assert!(
-        css.contains("bar3: blip"),
-        "属性名表达式插值应求值: {css}"
-    );
+    assert!(css.contains("bar3: blip"), "属性名表达式插值应求值: {css}");
 }
 
 // —— sass-spec: quotes-in-interpolated-strings.hrx ——

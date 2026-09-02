@@ -1,4 +1,4 @@
-//! 阶段 4: Evaluated —— CssNode 序列。
+//! 阶段 4: Evaluated —— `CssNode` 序列。
 //!
 //! 求值器的输出，包含求值后的 CSS 节点树。
 
@@ -24,14 +24,14 @@ use crate::css::node::CssNode;
 /// ```
 #[derive(Debug, Clone)]
 pub struct Evaluated {
-    /// CssNode 列表。
+    /// `CssNode` 列表。
     pub nodes: Vec<CssNode>,
 }
 
 impl Evaluated {
     /// 序列化——Evaluated → Serialized。
     ///
-    /// 将 CssNode 树序列化为 CSS 字符串。
+    /// 将 `CssNode` 树序列化为 CSS 字符串。
     ///
     /// # 参数
     /// - `style`: 输出风格（展开式或压缩式）。
@@ -45,4 +45,3 @@ impl Evaluated {
         Serialized { css }
     }
 }
-

@@ -25,14 +25,12 @@ pub fn err_missing_arg(param: &str) -> SassError {
     SassError::Eval(format!("Missing argument ${param}."))
 }
 
-
 /// 生成 `Only N arguments allowed, but M were passed.` 错误（复数专用版）。
 pub fn err_wrong_arg_count_plural(expected: usize, actual: usize) -> SassError {
     SassError::Eval(format!(
         "Only {expected} arguments allowed, but {actual} were passed."
     ))
 }
-
 
 /// 生成 `$channel: Color X has no channel named Y.` 错误。
 pub fn err_no_channel(color_name: &str, channel: &str) -> SassError {
@@ -41,10 +39,11 @@ pub fn err_no_channel(color_name: &str, channel: &str) -> SassError {
     ))
 }
 
-
 /// 生成 `$param: Expected "value" to be an unquoted string.` 错误。
 pub fn err_expected_unquoted_str_display(param: &str, val: &str) -> SassError {
-    SassError::Eval(format!("${param}: Expected \"{val}\" to be an unquoted string."))
+    SassError::Eval(format!(
+        "${param}: Expected \"{val}\" to be an unquoted string."
+    ))
 }
 
 /// 生成 `$param: Expected value to be a quoted string.` 错误（Display 版本）。
@@ -64,7 +63,9 @@ pub fn err_unknown_color_space_quoted(space: &str) -> SassError {
 
 /// 生成 `fn_name() requires N arguments, got M.` 错误。
 pub fn err_requires_args(fn_name: &str, expected: usize, actual: usize) -> SassError {
-    SassError::Eval(format!("{fn_name}() requires {expected} arguments, got {actual}"))
+    SassError::Eval(format!(
+        "{fn_name}() requires {expected} arguments, got {actual}"
+    ))
 }
 
 /// 生成 `There is no mixin named "name".` 错误。

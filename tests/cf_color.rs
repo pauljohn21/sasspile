@@ -5,7 +5,7 @@
 
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -75,9 +75,10 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
                 collect_hrx(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 100_000
+            {
+                files.push(path);
+            }
         }
     }
 }
@@ -86,8 +87,7 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
 #[test]
 #[ignore]
 fn color_error_patterns() {
-    let dir =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/core_functions/color");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec/core_functions/color");
     let mut files = Vec::new();
     collect_hrx(&dir, &mut files);
 

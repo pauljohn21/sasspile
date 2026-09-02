@@ -1,17 +1,21 @@
-//! CSS Color 4 颜色函数解析：lab/lch/oklab/oklch/color()。
+//! CSS Color 4 `颜色函数解析：lab/lch/oklab/oklch/color()`。
 //!
 //! 从 Sass 值参数解析为 `Value::Color`，sRGB 近似值用 color crate 计算。
 
 use crate::error::{Result, SassError};
 use crate::eval::error_msgs::{err_not_a_number, err_requires_args};
-use crate::parse::ast::{ColorSpace, ColorOutput, Value, Separator};
+use crate::parse::ast::{ColorOutput, ColorSpace, Separator, Value};
 use std::collections::HashMap;
 
 use super::color_conv_ops::make_color;
 
-/// 解析 CSS Color 4 颜色函数：lab/lch/oklab/oklch/color()。
-/// 返回 Value::Color，sRGB 近似值用 color crate 计算。
-pub fn parse_color_fn(name: &str, args: &[Value], _kw_args: &HashMap<String, Value>) -> Result<Value> {
+/// 解析 CSS Color 4 `颜色函数：lab/lch/oklab/oklch/color()`。
+/// 返回 `Value::Color，sRGB` 近似值用 color crate 计算。
+pub fn parse_color_fn(
+    name: &str,
+    args: &[Value],
+    _kw_args: &HashMap<String, Value>,
+) -> Result<Value> {
     // 展开空格分隔的参数
     let flat = flatten_space_list(args);
     match name {
@@ -25,7 +29,7 @@ pub fn parse_color_fn(name: &str, args: &[Value], _kw_args: &HashMap<String, Val
 }
 
 /// 展开空格分隔的 List 参数。
-/// 同时处理 SlashLiteral 分隔的列表（lab(L a b / alpha) 等 CSS Level 4 语法）。
+/// 同时处理 `SlashLiteral` 分隔的列表（lab(L a b / alpha) 等 CSS Level 4 语法）。
 fn flatten_space_list(args: &[Value]) -> Vec<Value> {
     if args.len() == 1 {
         if let Value::List(items, Separator::Space, false) = &args[0] {
@@ -33,16 +37,17 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
         }
         // SlashLiteral 分隔：lab(L a b / A) → [Space[L,a,b], A]
         if let Value::List(items, Separator::SlashLiteral | Separator::Slash, false) = &args[0]
-            && items.len() == 2 {
-                let mut flat = Vec::new();
-                if let Value::List(space_items, Separator::Space, false) = &items[0] {
-                    flat.extend(space_items.iter().cloned());
-                } else {
-                    flat.push(items[0].clone());
-                }
-                flat.push(items[1].clone());
-                return flat;
+            && items.len() == 2
+        {
+            let mut flat = Vec::new();
+            if let Value::List(space_items, Separator::Space, false) = &items[0] {
+                flat.extend(space_items.iter().cloned());
+            } else {
+                flat.push(items[0].clone());
             }
+            flat.push(items[1].clone());
+            return flat;
+        }
     }
     args.to_vec()
 }
@@ -81,10 +86,15 @@ fn parse_lab(args: &[Value]) -> Result<Value> {
     if nums.len() < 3 {
         return Err(err_requires_args("lab", 3, nums.len()));
     }
-    let l = extract_pct_value(&nums[0])?;  // L% → 0-100
+    let l = extract_pct_value(&nums[0])?; // L% → 0-100
     let a = extract_num(&nums[1], false)?;
     let b = extract_num(&nums[2], false)?;
-    Ok(make_color(ColorSpace::Lab, [l, a, b], alpha, ColorOutput::Auto))
+    Ok(make_color(
+        ColorSpace::Lab,
+        [l, a, b],
+        alpha,
+        ColorOutput::Auto,
+    ))
 }
 
 /// lch(L% C Hdeg [/ alpha])
@@ -96,7 +106,12 @@ fn parse_lch(args: &[Value]) -> Result<Value> {
     let l = extract_pct_value(&nums[0])?;
     let c = extract_num(&nums[1], false)?;
     let h = extract_hue(&nums[2])?;
-    Ok(make_color(ColorSpace::Lch, [l, c, h], alpha, ColorOutput::Auto))
+    Ok(make_color(
+        ColorSpace::Lch,
+        [l, c, h],
+        alpha,
+        ColorOutput::Auto,
+    ))
 }
 
 /// oklab(L% a b [/ alpha])
@@ -105,10 +120,15 @@ fn parse_oklab(args: &[Value]) -> Result<Value> {
     if nums.len() < 3 {
         return Err(err_requires_args("oklab", 3, nums.len()));
     }
-    let l = extract_num(&nums[0], true)?;  // L% → 0-1
+    let l = extract_num(&nums[0], true)?; // L% → 0-1
     let a = extract_num(&nums[1], false)?;
     let b = extract_num(&nums[2], false)?;
-    Ok(make_color(ColorSpace::Oklab, [l, a, b], alpha, ColorOutput::Auto))
+    Ok(make_color(
+        ColorSpace::Oklab,
+        [l, a, b],
+        alpha,
+        ColorOutput::Auto,
+    ))
 }
 
 /// oklch(L% C Hdeg [/ alpha])
@@ -120,7 +140,12 @@ fn parse_oklch(args: &[Value]) -> Result<Value> {
     let l = extract_num(&nums[0], true)?;
     let c = extract_num(&nums[1], false)?;
     let h = extract_hue(&nums[2])?;
-    Ok(make_color(ColorSpace::Oklch, [l, c, h], alpha, ColorOutput::Auto))
+    Ok(make_color(
+        ColorSpace::Oklch,
+        [l, c, h],
+        alpha,
+        ColorOutput::Auto,
+    ))
 }
 
 /// color(space r g b [/ alpha])
@@ -131,7 +156,11 @@ fn parse_color_space(args: &[Value]) -> Result<Value> {
     }
     let space = match &nums[0] {
         Value::String(s, _) => s.clone(),
-        _ => return Err(SassError::Eval("color() first argument must be a color space name".into())),
+        _ => {
+            return Err(SassError::Eval(
+                "color() first argument must be a color space name".into(),
+            ));
+        }
     };
     let r = extract_num(&nums[1], false)?;
     let g = extract_num(&nums[2], false)?;
@@ -143,25 +172,27 @@ fn parse_color_space(args: &[Value]) -> Result<Value> {
 
 /// 分离 alpha 分量：参数末尾可能有 / alpha。
 /// 返回 (颜色分量, alpha值)。
-/// 同时匹配 Slash 和 SlashLiteral 分隔符（声明值中 / 被解析为 SlashLiteral）。
+/// 同时匹配 Slash 和 `SlashLiteral` 分隔符（声明值中 / 被解析为 `SlashLiteral`）。
 fn split_alpha(args: &[Value]) -> (Vec<Value>, f64) {
     if args.len() >= 2 {
         let last = &args[args.len() - 1];
-        let is_slash = matches!(last, Value::List(_, Separator::Slash | Separator::SlashLiteral, false));
-        if is_slash
-            && let Value::List(items, sep, false) = last {
-                let _ = sep; // 匹配已过滤
-                if items.len() == 2 {
-                    let mut nums = args[..args.len() - 1].to_vec();
-                    nums.push(items[0].clone());
-                    let alpha = match &items[1] {
-                        Value::Number(n, Some(u)) if u == "%" => *n / 100.0,
-                        Value::Number(n, _) => *n,
-                        _ => 1.0,
-                    };
-                    return (nums, alpha);
-                }
+        let is_slash = matches!(
+            last,
+            Value::List(_, Separator::Slash | Separator::SlashLiteral, false)
+        );
+        if is_slash && let Value::List(items, sep, false) = last {
+            let _ = sep; // 匹配已过滤
+            if items.len() == 2 {
+                let mut nums = args[..args.len() - 1].to_vec();
+                nums.push(items[0].clone());
+                let alpha = match &items[1] {
+                    Value::Number(n, Some(u)) if u == "%" => *n / 100.0,
+                    Value::Number(n, _) => *n,
+                    _ => 1.0,
+                };
+                return (nums, alpha);
             }
+        }
     }
     (args.to_vec(), 1.0)
 }

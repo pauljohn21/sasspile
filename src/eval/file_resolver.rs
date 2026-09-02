@@ -43,7 +43,7 @@ impl Evaluator {
         let _enter = span.enter();
         let base_dir = base
             .as_ref()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."));
         // 先尝试相对于当前文件目录解析
         if let Some(path) = Self::try_resolve_dir(&base_dir, url, is_import) {
@@ -64,8 +64,7 @@ impl Evaluator {
         let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
         let filename = url_path
             .file_stem()
-            .map(|f| f.to_string_lossy().to_string())
-            .unwrap_or_else(|| url.to_string());
+            .map_or_else(|| url.to_string(), |f| f.to_string_lossy().to_string());
         // 规范化 parent 路径（处理 .. 等组件）
         let parent_normalized = normalize_path(&dir.join(parent));
         let url_normalized = normalize_path(&dir.join(url));
@@ -117,21 +116,19 @@ impl Evaluator {
         let _enter = span.enter();
         let base_dir = base
             .as_ref()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."));
         for dir in std::iter::once(&base_dir).chain(load_paths.iter()) {
             let url_path = std::path::Path::new(url);
             let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
             let filename = url_path
                 .file_stem()
-                .map(|f| f.to_string_lossy().to_string())
-                .unwrap_or_else(|| url.to_string());
+                .map_or_else(|| url.to_string(), |f| f.to_string_lossy().to_string());
 
             let has_explicit_ext = url_path
                 .extension()
                 .and_then(|e| e.to_str())
-                .map(|e| e == "scss" || e == "sass" || e == "css")
-                .unwrap_or(false);
+                .is_some_and(|e| e == "scss" || e == "sass" || e == "css");
 
             let conflicts = if has_explicit_ext {
                 Self::check_explicit_ext_conflicts(dir, parent, &filename)
@@ -210,8 +207,12 @@ impl Evaluator {
         // import-only: scss vs sass 冲突
         for is_partial in &[true, false] {
             let prefix = if *is_partial { "_" } else { "" };
-            let scss_io = dir.join(parent).join(format!("{prefix}{filename}.import.scss"));
-            let sass_io = dir.join(parent).join(format!("{prefix}{filename}.import.sass"));
+            let scss_io = dir
+                .join(parent)
+                .join(format!("{prefix}{filename}.import.scss"));
+            let sass_io = dir
+                .join(parent)
+                .join(format!("{prefix}{filename}.import.sass"));
             if scss_io.exists() && sass_io.exists() {
                 conflicts.push(vec![scss_io, sass_io]);
             }

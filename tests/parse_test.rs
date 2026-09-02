@@ -64,25 +64,23 @@ fn test_parse_interp_not_css_if() {
         Node::Rule { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Node::Decl { value, .. } => {
-                    match value {
-                        Value::Call(name, args) => {
-                            assert_eq!(name, "if");
-                            assert_eq!(args.len(), 1);
-                            let cond = args[0].condition.as_ref().expect("应有 condition");
-                            match cond {
-                                Value::List(items, sep, _) => {
-                                    assert_eq!(*sep, Separator::Space);
-                                    assert_eq!(items.len(), 2);
-                                    assert!(matches!(&items[0], Value::Interp(_)));
-                                    assert!(matches!(&items[1], Value::Calc(_)));
-                                }
-                                _ => panic!("期望 List, 实际 {:#?}", cond),
+                Node::Decl { value, .. } => match value {
+                    Value::Call(name, args) => {
+                        assert_eq!(name, "if");
+                        assert_eq!(args.len(), 1);
+                        let cond = args[0].condition.as_ref().expect("应有 condition");
+                        match cond {
+                            Value::List(items, sep, _) => {
+                                assert_eq!(*sep, Separator::Space);
+                                assert_eq!(items.len(), 2);
+                                assert!(matches!(&items[0], Value::Interp(_)));
+                                assert!(matches!(&items[1], Value::Calc(_)));
                             }
+                            _ => panic!("期望 List, 实际 {:#?}", cond),
                         }
-                        _ => panic!("期望 Call, 实际 {:#?}", value),
                     }
-                }
+                    _ => panic!("期望 Call, 实际 {:#?}", value),
+                },
                 _ => panic!("期望 Decl"),
             }
         }

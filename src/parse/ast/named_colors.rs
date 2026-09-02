@@ -1,3 +1,4 @@
+#![allow(clippy::unreadable_literal, clippy::cast_lossless)]
 //! CSS 命名颜色单一数据源——合并正反向查找。
 //!
 //! 替代 `eval/color.rs` 中的双份颜色表，消除约 300 行重复数据。

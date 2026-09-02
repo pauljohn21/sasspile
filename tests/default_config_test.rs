@@ -2,7 +2,7 @@
 //!
 //! 测试 `!default` 配置变量通过 `@forward` 链正确传播和验证。
 
-use sasspile::{compile_file, compile_expanded, OutputStyle, init_tracing_otel};
+use sasspile::{OutputStyle, compile_expanded, compile_file, init_tracing_otel};
 
 /// 辅助函数：创建唯一临时目录 + 多文件 + 编译。
 fn compile_multi_file(files: &[(&str, &str)]) -> String {
@@ -50,10 +50,19 @@ fn through_forward_transitive() {
 fn through_forward_with_default() {
     let css = compile_multi_file(&[
         ("input.scss", "@use 'used' with ($a: from_input);"),
-        ("_used.scss", "@forward 'forwarded' with ($a: from_used !default);"),
-        ("_forwarded.scss", "$a: from_forwarded !default;\nb { c: $a; }"),
+        (
+            "_used.scss",
+            "@forward 'forwarded' with ($a: from_used !default);",
+        ),
+        (
+            "_forwarded.scss",
+            "$a: from_forwarded !default;\nb { c: $a; }",
+        ),
     ]);
-    assert!(css.contains("from_input"), "上游配置应优先于 @forward with !default: {css}");
+    assert!(
+        css.contains("from_input"),
+        "上游配置应优先于 @forward with !default: {css}"
+    );
 }
 
 #[test]
@@ -82,12 +91,36 @@ fn distributed_vars() {
     let dir = std::env::temp_dir().join(format!("sasspile_distributed_{}", std::process::id()));
     std::fs::create_dir_all(dir.join("module/a")).unwrap();
     std::fs::create_dir_all(dir.join("module/b")).unwrap();
-    std::fs::write(dir.join("input.scss"), "@use 'module' with ($a: 'a', $b: 'b');").unwrap();
-    std::fs::write(dir.join("module/_index.scss"), "@forward './a/a';\n@forward './b/b';").unwrap();
-    std::fs::write(dir.join("module/a/_variables.scss"), "$a: default !default;").unwrap();
-    std::fs::write(dir.join("module/a/a.scss"), "@forward './variables';\n@use './variables' as *;\n.a { content: #{$a}; }").unwrap();
-    std::fs::write(dir.join("module/b/_variables.scss"), "$b: default !default;").unwrap();
-    std::fs::write(dir.join("module/b/b.scss"), "@forward './variables';\n@use './variables' as *;\n.b { content: #{$b}; }").unwrap();
+    std::fs::write(
+        dir.join("input.scss"),
+        "@use 'module' with ($a: 'a', $b: 'b');",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("module/_index.scss"),
+        "@forward './a/a';\n@forward './b/b';",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("module/a/_variables.scss"),
+        "$a: default !default;",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("module/a/a.scss"),
+        "@forward './variables';\n@use './variables' as *;\n.a { content: #{$a}; }",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("module/b/_variables.scss"),
+        "$b: default !default;",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("module/b/b.scss"),
+        "@forward './variables';\n@use './variables' as *;\n.b { content: #{$b}; }",
+    )
+    .unwrap();
     let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap_or_else(|e| {
         std::fs::remove_dir_all(&dir).ok();
         panic!("编译失败: {e}");
@@ -100,10 +133,18 @@ fn distributed_vars() {
 #[test]
 fn forward_and_local_mixed() {
     let css = compile_multi_file(&[
-        ("input.scss", "@use 'used' with ($a: from_input, $b: from_input);"),
-        ("_used.scss",
-         "@forward 'forwarded' with ($b: from_used !default);\n$a: from_used !default;\nin-used { c: $a; }"),
-        ("_forwarded.scss", "$b: from_forwarded !default;\nin-forwarded { d: $b; }"),
+        (
+            "input.scss",
+            "@use 'used' with ($a: from_input, $b: from_input);",
+        ),
+        (
+            "_used.scss",
+            "@forward 'forwarded' with ($b: from_used !default);\n$a: from_used !default;\nin-used { c: $a; }",
+        ),
+        (
+            "_forwarded.scss",
+            "$b: from_forwarded !default;\nin-forwarded { d: $b; }",
+        ),
     ]);
     assert!(css.contains("from_input"), "混合场景应传播两个配置: {css}");
 }
@@ -122,5 +163,8 @@ fn single_use_with_default() {
         ("input.scss", "@use 'other' with ($a: configured);"),
         ("_other.scss", "$a: original !default;\nb { c: $a; }"),
     ]);
-    assert!(css.contains("configured"), "基础 @use with !default 应工作: {css}");
+    assert!(
+        css.contains("configured"),
+        "基础 @use with !default 应工作: {css}"
+    );
 }

@@ -3,12 +3,12 @@
 //! 物理隔离：所有阶段类型测试集中于此，不使用内联 #[cfg(test)] 模块。
 //! 同时包含 CSS Serializer 的单元测试。
 
+use sasspile::OutputStyle;
 use sasspile::css::Serializer;
 use sasspile::css::node::CssNode;
 use sasspile::stage::evaluated::Evaluated;
 use sasspile::stage::serialized::Serialized;
 use sasspile::stage::source::Source;
-use sasspile::OutputStyle;
 
 // —— Source 阶段 ——
 
@@ -31,8 +31,10 @@ fn test_source_to_lexed() {
 fn test_lexed_parse() {
     // 链式：Source → Lexed → Parsed
     let parsed = Source::new("a { color: red; }".to_string())
-        .lex().unwrap()
-        .parse().unwrap();
+        .lex()
+        .unwrap()
+        .parse()
+        .unwrap();
     assert!(!parsed.ast.nodes.is_empty());
 }
 
@@ -42,9 +44,12 @@ fn test_lexed_parse() {
 fn test_parsed_evaluate() {
     // 链式：Source → Lexed → Parsed → Evaluated
     let evaluated = Source::new("".to_string())
-        .lex().unwrap()
-        .parse().unwrap()
-        .evaluate().unwrap();
+        .lex()
+        .unwrap()
+        .parse()
+        .unwrap()
+        .evaluate()
+        .unwrap();
     assert!(evaluated.nodes.is_empty());
 }
 

@@ -6,7 +6,7 @@ mod spec_manifest;
 
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use spec_manifest::collect_hrx_files;
 use std::path::{Path, PathBuf};
 
@@ -101,31 +101,57 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
 }
 
 fn run_case(case: &HrxCase, load_paths: &[PathBuf]) -> Option<String> {
-    if case.expected_output.is_empty() && !case.expect_error { return None; }
+    if case.expected_output.is_empty() && !case.expect_error {
+        return None;
+    }
     let total_size: usize = case.files.iter().map(|(_, c)| c.len()).sum();
-    if total_size > 50_000 { return Some("TOO_LARGE".to_string()); }
+    if total_size > 50_000 {
+        return Some("TOO_LARGE".to_string());
+    }
 
     let tmp_dir = std::env::temp_dir().join(format!("css-diag-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
     for (path, content) in &case.files {
         let file_path = tmp_dir.join(path);
-        if let Some(parent) = file_path.parent() { std::fs::create_dir_all(parent).ok(); }
+        if let Some(parent) = file_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
         std::fs::write(&file_path, content).ok();
     }
 
     let input_file = tmp_dir.join(&case.input_path);
-    let result = sasspile::compile_file_with_load_paths(&input_file, sasspile::OutputStyle::Expanded, load_paths.to_vec());
+    let result = sasspile::compile_file_with_load_paths(
+        &input_file,
+        sasspile::OutputStyle::Expanded,
+        load_paths.to_vec(),
+    );
     let _ = std::fs::remove_dir_all(&tmp_dir);
 
     match result {
         Ok(actual) => {
-            if actual.trim() == case.expected_output.trim() { None }
-            else { Some(format!("--- FAIL: {} ---\nEXPECTED:\n{}\nACTUAL:\n{}\n", case.name, case.expected_output.trim(), actual.trim())) }
+            if actual.trim() == case.expected_output.trim() {
+                None
+            } else {
+                Some(format!(
+                    "--- FAIL: {} ---\nEXPECTED:\n{}\nACTUAL:\n{}\n",
+                    case.name,
+                    case.expected_output.trim(),
+                    actual.trim()
+                ))
+            }
         }
         Err(e) => {
-            if case.expect_error { None }
-            else { Some(format!("--- FAIL: {} ---\nEXPECTED:\n{}\nERROR:\n{}\n", case.name, case.expected_output.trim(), e)) }
+            if case.expect_error {
+                None
+            } else {
+                Some(format!(
+                    "--- FAIL: {} ---\nEXPECTED:\n{}\nERROR:\n{}\n",
+                    case.name,
+                    case.expected_output.trim(),
+                    e
+                ))
+            }
         }
     }
 }
@@ -143,7 +169,7 @@ fn css_fail_details() {
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
             for case in &parse_hrx(&content) {
-                    if let Some(diff) = run_case(case, std::slice::from_ref(&spec_root)) {
+                if let Some(diff) = run_case(case, std::slice::from_ref(&spec_root)) {
                     fail_count += 1;
                     if shown < 200 {
                         tracing::info!("\n{diff}");

@@ -4,7 +4,9 @@
 //! 此时禁止 Sass 特有的表达式和语句。
 
 use crate::error::{Result, SassError};
-use crate::eval::error_msgs::{err_plain_css_at_rule, err_plain_css_silent_comment, err_plain_css_sass_var};
+use crate::eval::error_msgs::{
+    err_plain_css_at_rule, err_plain_css_sass_var, err_plain_css_silent_comment,
+};
 use crate::parse::ast::{BinOpKind, Node, Value};
 
 impl super::Evaluator {
@@ -14,7 +16,12 @@ impl super::Evaluator {
     pub(crate) fn check_plain_css_value(value: &Value) -> Result<()> {
         match value {
             // 数值、颜色、布尔、null、Calc、MixinRef — 允许
-            Value::Number(..) | Value::Color(..) | Value::Bool(..) | Value::Null | Value::Calc(..) | Value::MixinRef(..) => Ok(()),
+            Value::Number(..)
+            | Value::Color(..)
+            | Value::Bool(..)
+            | Value::Null
+            | Value::Calc(..)
+            | Value::MixinRef(..) => Ok(()),
 
             // 变量引用 — 禁止
             Value::Variable(_) => Err(SassError::Eval(
@@ -73,9 +80,7 @@ impl super::Evaluator {
             Value::Map(_) => Err(SassError::Eval("expected \")\".".into())),
 
             // 函数调用 — 检查是否为允许的 CSS 原生函数
-            Value::Call(name, args) => {
-                Self::check_plain_css_call(name, args)
-            }
+            Value::Call(name, args) => Self::check_plain_css_call(name, args),
 
             // 剩余参数展开 — 检查内部值
             Value::Spread(v) => Self::check_plain_css_value(v),
@@ -158,14 +163,10 @@ impl super::Evaluator {
             Node::MixinDef { .. } | Node::Include { .. } | Node::Content => {
                 Err(err_plain_css_at_rule())
             }
-            Node::FunctionDef { .. } | Node::Return(_) => {
-                Err(err_plain_css_at_rule())
-            }
+            Node::FunctionDef { .. } | Node::Return(_) => Err(err_plain_css_at_rule()),
             Node::Extend { .. } => Err(err_plain_css_at_rule()),
             Node::AtRoot { .. } => Err(err_plain_css_at_rule()),
-            Node::Warn(_) | Node::Debug(_) | Node::Error(_) => {
-                Err(err_plain_css_at_rule())
-            }
+            Node::Warn(_) | Node::Debug(_) | Node::Error(_) => Err(err_plain_css_at_rule()),
             // Use/Forward/Import — 由模块系统处理，不拦截
             Node::Use { .. } | Node::Forward { .. } | Node::Import { .. } => Ok(()),
         }
@@ -185,8 +186,12 @@ impl super::Evaluator {
         if selector.contains('%') {
             // 简单检查：% 后跟标识符字符
             let has_placeholder = selector.chars().enumerate().any(|(i, c)| {
-                c == '%' && i + 1 < selector.len()
-                    && selector[i + 1..].chars().next().is_some_and(|nc| nc.is_alphanumeric() || nc == '-')
+                c == '%'
+                    && i + 1 < selector.len()
+                    && selector[i + 1..]
+                        .chars()
+                        .next()
+                        .is_some_and(|nc| nc.is_alphanumeric() || nc == '-')
             });
             if has_placeholder {
                 return Err(SassError::Eval(

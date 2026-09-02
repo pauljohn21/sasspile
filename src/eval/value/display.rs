@@ -1,6 +1,6 @@
 use super::*;
 
-/// inspect() 专用格式化——比 Display 更详细。
+/// `inspect()` 专用格式化——比 Display 更详细。
 pub(crate) fn inspect_value(v: &Value) -> String {
     match v {
         Value::List(elements, sep, bracketed) => {
@@ -23,30 +23,28 @@ pub(crate) fn inspect_value(v: &Value) -> String {
             //       space/slash 内层列表在外层 separator 相同时需要括号
             let parts: Vec<String> = elements
                 .iter()
-                .map(|e| {
-                    match e {
-                        Value::List(inner_items, inner_sep, false) if inner_items.len() > 1 => {
-                            let needs_paren = match inner_sep {
-                                Separator::Comma => true,
-                                _ => inner_sep == sep,
+                .map(|e| match e {
+                    Value::List(inner_items, inner_sep, false) if inner_items.len() > 1 => {
+                        let needs_paren = match inner_sep {
+                            Separator::Comma => true,
+                            _ => inner_sep == sep,
+                        };
+                        if needs_paren {
+                            let inner_parts: Vec<String> =
+                                inner_items.iter().map(inspect_value).collect();
+                            let inner_sep_str = match inner_sep {
+                                Separator::Comma => ", ",
+                                Separator::Space => " ",
+                                Separator::Slash => " / ",
+                                Separator::SlashLiteral => "/",
+                                Separator::Undecided => " ",
                             };
-                            if needs_paren {
-                                let inner_parts: Vec<String> =
-                                    inner_items.iter().map(inspect_value).collect();
-                                let inner_sep_str = match inner_sep {
-                                    Separator::Comma => ", ",
-                                    Separator::Space => " ",
-                                    Separator::Slash => " / ",
-                                    Separator::SlashLiteral => "/",
-                                    Separator::Undecided => " ",
-                                };
-                                format!("({})", inner_parts.join(inner_sep_str))
-                            } else {
-                                inspect_value(e)
-                            }
+                            format!("({})", inner_parts.join(inner_sep_str))
+                        } else {
+                            inspect_value(e)
                         }
-                        _ => inspect_value(e),
                     }
+                    _ => inspect_value(e),
                 })
                 .collect();
             let inner = if elements.len() == 1 {
@@ -107,7 +105,7 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                         }
                         _ => inspect_value(v),
                     };
-                    format!("{}: {}", key_str, val_str)
+                    format!("{key_str}: {val_str}")
                 })
                 .collect();
             format!("({})", parts.join(", "))
@@ -225,12 +223,13 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
     }
     // 不含 #{ 嵌套但含 $ → 尝试整体求值（纯变量 $a、表达式 1+2 等）
     if !s.contains("#{")
-        && let Ok(val) = super::eval_simple_expr(s, env) {
-            return match &val {
-                Value::String(inner, _) => inner.clone(),
-                _ => val.to_string(),
-            };
-        }
+        && let Ok(val) = super::eval_simple_expr(s, env)
+    {
+        return match &val {
+            Value::String(inner, _) => inner.clone(),
+            _ => val.to_string(),
+        };
+    }
     // 回退：逐字符扫描 #{} 嵌套 + $var 变量引用
     let mut result = String::new();
     let mut chars = s.chars().peekable();
@@ -310,7 +309,7 @@ pub(crate) fn eval_simple_expr(expr: &str, env: &Env) -> crate::error::Result<Va
         .filter(|t| {
             !matches!(
                 t.as_ref(),
-                Ok(crate::lex::token::Token::Whitespace) | Ok(crate::lex::token::Token::Eof)
+                Ok(crate::lex::token::Token::Whitespace | crate::lex::token::Token::Eof)
             )
         })
         .collect::<crate::error::Result<Vec<_>>>()?;

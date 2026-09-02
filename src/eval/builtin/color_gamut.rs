@@ -8,7 +8,10 @@
 //! 参考: CSS Color 4 规范 §12.3 Gamut Mapping
 
 use crate::error::{Result, SassError};
-use crate::eval::error_msgs::{err_not_a_color, err_not_a_string, err_missing_arg, err_wrong_arg_count_plural, err_expected_unquoted_str_display, err_unknown_color_space_quoted, err_expected_exactly};
+use crate::eval::error_msgs::{
+    err_expected_exactly, err_expected_unquoted_str_display, err_missing_arg, err_not_a_color,
+    err_not_a_string, err_unknown_color_space_quoted, err_wrong_arg_count_plural,
+};
 use crate::parse::ast::{Color, ColorSpace, Value};
 use std::collections::HashMap;
 
@@ -23,9 +26,15 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
         return Err(err_wrong_arg_count_plural(3, pos_count + kw_count));
     }
 
-    let color_arg = args.first().or_else(|| kw_args.get("color").or_else(|| kw_args.get("$color")));
-    let space_arg = args.get(1).or_else(|| kw_args.get("space").or_else(|| kw_args.get("$space")));
-    let method_arg = args.get(2).or_else(|| kw_args.get("method").or_else(|| kw_args.get("$method")));
+    let color_arg = args
+        .first()
+        .or_else(|| kw_args.get("color").or_else(|| kw_args.get("$color")));
+    let space_arg = args
+        .get(1)
+        .or_else(|| kw_args.get("space").or_else(|| kw_args.get("$space")));
+    let method_arg = args
+        .get(2)
+        .or_else(|| kw_args.get("method").or_else(|| kw_args.get("$method")));
 
     let c = match color_arg {
         Some(Value::Color(c)) => c.clone(),
@@ -61,14 +70,19 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
 
     // 验证 method
     if method != "clip" && method != "local-minde" {
-        return Err(err_expected_exactly("method", &method, &["clip", "local-minde"]));
+        return Err(err_expected_exactly(
+            "method",
+            &method,
+            &["clip", "local-minde"],
+        ));
     }
 
     // 如果指定了 $space，验证是否已知
     if let Some(ref sp) = target_space
-        && !is_known_space(sp) {
-            return Err(err_unknown_color_space_quoted(sp));
-        }
+        && !is_known_space(sp)
+    {
+        return Err(err_unknown_color_space_quoted(sp));
+    }
 
     // 确定实际目标空间
     let effective_space = target_space.clone().unwrap_or_else(|| {
@@ -103,11 +117,25 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
 
 /// 检查颜色空间名称是否已知。
 fn is_known_space(space: &str) -> bool {
-    matches!(space,
-        "rgb" | "srgb" | "srgb-linear" | "display-p3" | "display-p3-linear"
-        | "a98-rgb" | "prophoto-rgb" | "rec2020"
-        | "hsl" | "hwb" | "lab" | "lch" | "oklab" | "oklch"
-        | "xyz" | "xyz-d65" | "xyz-d50"
+    matches!(
+        space,
+        "rgb"
+            | "srgb"
+            | "srgb-linear"
+            | "display-p3"
+            | "display-p3-linear"
+            | "a98-rgb"
+            | "prophoto-rgb"
+            | "rec2020"
+            | "hsl"
+            | "hwb"
+            | "lab"
+            | "lch"
+            | "oklab"
+            | "oklch"
+            | "xyz"
+            | "xyz-d65"
+            | "xyz-d50"
     )
 }
 
@@ -149,17 +177,22 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
 /// 获取 RGB 通道值。
 fn get_rgb_channels(c: &Color, space: &str) -> (f64, f64, f64) {
     match c.space {
-        ColorSpace::Srgb | ColorSpace::DisplayP3
-        | ColorSpace::A98Rgb | ColorSpace::ProphotoRgb | ColorSpace::Rec2020 => {
-            (c.channels[0], c.channels[1], c.channels[2])
-        }
+        ColorSpace::Srgb
+        | ColorSpace::DisplayP3
+        | ColorSpace::A98Rgb
+        | ColorSpace::ProphotoRgb
+        | ColorSpace::Rec2020 => (c.channels[0], c.channels[1], c.channels[2]),
         ColorSpace::SrgbLinear | ColorSpace::DisplayP3Linear => {
             (c.channels[0], c.channels[1], c.channels[2])
         }
         _ => {
             // Legacy RGB → 0-1
             if space == "rgb" || space == "srgb" {
-                (c.legacy_rgb[0] / 255.0, c.legacy_rgb[1] / 255.0, c.legacy_rgb[2] / 255.0)
+                (
+                    c.legacy_rgb[0] / 255.0,
+                    c.legacy_rgb[1] / 255.0,
+                    c.legacy_rgb[2] / 255.0,
+                )
             } else {
                 space_to_srgb_f64(c.space, c.channels, c.legacy_rgb)
             }
@@ -177,7 +210,11 @@ fn clip_to_gamut(c: &Color, space: &str) -> Value {
         }
         "hsl" => {
             let (h, s, l) = if c.space == ColorSpace::Hsl {
-                (c.channels[0], c.channels[1].clamp(0.0, 1.0), c.channels[2].clamp(0.0, 1.0))
+                (
+                    c.channels[0],
+                    c.channels[1].clamp(0.0, 1.0),
+                    c.channels[2].clamp(0.0, 1.0),
+                )
             } else {
                 (0.0, 0.0, 0.0)
             };
@@ -238,9 +275,12 @@ fn local_minde_rgb(c: &Color, space: &str) -> Value {
     let epsilon = 0.0001;
 
     for _ in 0..50 {
-        let mid = (lo + hi) / 2.0;
+        let mid = f64::midpoint(lo, hi);
         let (r_test, g_test, b_test) = color_conv::oklch_to_srgb(l_ok, mid, h_ok);
-        if (0.0..=1.0).contains(&r_test) && (0.0..=1.0).contains(&g_test) && (0.0..=1.0).contains(&b_test) {
+        if (0.0..=1.0).contains(&r_test)
+            && (0.0..=1.0).contains(&g_test)
+            && (0.0..=1.0).contains(&b_test)
+        {
             lo = mid;
         } else {
             hi = mid;

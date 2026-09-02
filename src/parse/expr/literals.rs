@@ -2,13 +2,13 @@
 //!
 //! `parse_literal` 处理简单值 token，`parse_prefix` 保留控制流（Minus/Not/LParen 等）。
 
-use super::super::ast::*;
 use super::super::Parser;
+use super::super::ast::*;
+use super::{parse_hash_color, parse_number};
 use crate::error::Result;
 use crate::lex::token::Token;
-use super::{parse_hash_color, parse_number};
 
-impl<'tok> Parser<'tok> {
+impl Parser<'_> {
     /// 解析字面量值——Number/String/Hash/Dollar/Ident/True/False/Null/Interp 等。
     ///
     /// 返回 `Some(Value)` 当当前 token 是字面量，`None` 当不是（由 `parse_prefix` 处理控制流）。
@@ -77,10 +77,10 @@ impl<'tok> Parser<'tok> {
         if let Some(Token::Interp(interp_content)) = self.peek() {
             let interp_content = interp_content.clone();
             self.advance();
-            return self.parse_interp_adjacent(
-                vec![crate::parse::ast::InterpSegment::Text(name),
-                     crate::parse::ast::InterpSegment::Expr(interp_content)],
-            );
+            return self.parse_interp_adjacent(vec![
+                crate::parse::ast::InterpSegment::Text(name),
+                crate::parse::ast::InterpSegment::Expr(interp_content),
+            ]);
         }
         self.skip_ws();
         // 检查 module.function() 或 module.$var 语法
@@ -113,9 +113,13 @@ impl<'tok> Parser<'tok> {
                 let next = self.tokens.get(self.pos + 1);
                 matches!(next, Some(Token::String(_, _)))
             };
-            if (name.eq_ignore_ascii_case("calc") || name.eq_ignore_ascii_case("clamp")
-                || name.eq_ignore_ascii_case("env") || name.eq_ignore_ascii_case("var")
-                || name == "url" || name == "css" || name == "attr")
+            if (name.eq_ignore_ascii_case("calc")
+                || name.eq_ignore_ascii_case("clamp")
+                || name.eq_ignore_ascii_case("env")
+                || name.eq_ignore_ascii_case("var")
+                || name == "url"
+                || name == "css"
+                || name == "attr")
                 && !is_url_with_string
             {
                 self.advance(); // 消费 (
@@ -195,11 +199,19 @@ impl<'tok> Parser<'tok> {
                     }
                     // 空格分隔参数包装为列表——保留分隔符信息
                     let channels = Value::List(items, Separator::Space, false);
-                    let mut args: Vec<Arg> = vec![
-                        Arg { name: None, value: channels, spread: false, condition: None },
-                    ];
+                    let mut args: Vec<Arg> = vec![Arg {
+                        name: None,
+                        value: channels,
+                        spread: false,
+                        condition: None,
+                    }];
                     if let Some(a) = alpha {
-                        args.push(Arg { name: None, value: a, spread: false, condition: None });
+                        args.push(Arg {
+                            name: None,
+                            value: a,
+                            spread: false,
+                            condition: None,
+                        });
                     }
                     return Ok(Value::Call(name, args));
                 }

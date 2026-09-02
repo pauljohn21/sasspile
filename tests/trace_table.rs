@@ -1,4 +1,4 @@
-use sasspile::{compile_file_with_load_paths, OutputStyle};
+use sasspile::{OutputStyle, compile_file_with_load_paths};
 use std::path::PathBuf;
 
 #[test]

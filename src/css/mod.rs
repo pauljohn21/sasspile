@@ -12,7 +12,7 @@ use crate::OutputStyle;
 pub struct Serializer;
 
 impl Serializer {
-    /// 序列化 CssNode 列表为 CSS 字符串。
+    /// 序列化 `CssNode` 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
         let flattened = Self::flatten_nodes(nodes, 0);
         let merged = Self::merge_at_rules(flattened);
@@ -21,13 +21,13 @@ impl Serializer {
             OutputStyle::Compressed => Self::serialize_compressed(&merged),
         };
         // 当输出包含非 ASCII 字符时，SCSS 规范要求 expanded 模式下添加 @charset 前缀
-        if !css.is_ascii() {
+        if css.is_ascii() {
+            css
+        } else {
             match style {
                 OutputStyle::Expanded => format!("@charset \"UTF-8\";\n{css}"),
                 OutputStyle::Compressed => format!("@charset\"UTF-8\";{css}"),
             }
-        } else {
-            css
         }
     }
 
@@ -71,80 +71,108 @@ impl Serializer {
         })
     }
 
-    /// 展平嵌套规则。返回 (CssNode, group_id) 对——同源展平规则共享相同 group_id。
-    /// 同一组顶层兄弟节点（来自同一个 eval_rule 输出）共享 group_id。
+    /// 展平嵌套规则。返回 (`CssNode`, `group_id`) 对——同源展平规则共享相同 `group_id`。
+    /// 同一组顶层兄弟节点（来自同一个 `eval_rule` 输出）共享 `group_id`。
     fn flatten_nodes(nodes: &[CssNode], start_group: usize) -> Vec<(CssNode, usize)> {
-        nodes.iter().fold(
-            (Vec::new(), start_group),
-            |(mut result, mut next_group), node| {
-                match node {
-                CssNode::Rule {
-                    selector,
-                    declarations,
-                    children,
-                } => {
-                    let gid = next_group;
-                    next_group += 1;
-                    if !declarations.is_empty() {
-                        result.push((CssNode::Rule {
-                            selector: selector.clone(),
-                            declarations: declarations.clone(),
-                            children: vec![],
-                        }, gid));
-                    }
-                    let has_non_rule_children = children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
-                    if has_non_rule_children {
-                        let flat = Self::flatten_children(selector, children, gid);
-                        let (rule_kids, other_kids): (Vec<(CssNode, usize)>, Vec<(CssNode, usize)>) = flat.into_iter().partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
-                        result.extend(rule_kids);
-                        if !other_kids.is_empty() {
-                            result.push((CssNode::Rule {
-                                selector: selector.clone(),
-                                declarations: vec![],
-                                children: other_kids.into_iter().map(|(n, _)| n).collect(),
-                            }, gid));
+        nodes
+            .iter()
+            .fold(
+                (Vec::new(), start_group),
+                |(mut result, mut next_group), node| {
+                    match node {
+                        CssNode::Rule {
+                            selector,
+                            declarations,
+                            children,
+                        } => {
+                            let gid = next_group;
+                            next_group += 1;
+                            if !declarations.is_empty() {
+                                result.push((
+                                    CssNode::Rule {
+                                        selector: selector.clone(),
+                                        declarations: declarations.clone(),
+                                        children: vec![],
+                                    },
+                                    gid,
+                                ));
+                            }
+                            let has_non_rule_children =
+                                children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
+                            if has_non_rule_children {
+                                let flat = Self::flatten_children(selector, children, gid);
+                                let (rule_kids, other_kids): (
+                                    Vec<(CssNode, usize)>,
+                                    Vec<(CssNode, usize)>,
+                                ) = flat
+                                    .into_iter()
+                                    .partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
+                                result.extend(rule_kids);
+                                if !other_kids.is_empty() {
+                                    result.push((
+                                        CssNode::Rule {
+                                            selector: selector.clone(),
+                                            declarations: vec![],
+                                            children: other_kids
+                                                .into_iter()
+                                                .map(|(n, _)| n)
+                                                .collect(),
+                                        },
+                                        gid,
+                                    ));
+                                }
+                            } else {
+                                result.extend(Self::flatten_children(selector, children, gid));
+                            }
                         }
-                    } else {
-                        result.extend(Self::flatten_children(selector, children, gid));
+                        // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
+                        other => {
+                            let gid = if let Some((_, prev_gid)) = result.last() {
+                                *prev_gid
+                            } else {
+                                next_group
+                            };
+                            result.push((other.clone(), gid));
+                        }
                     }
-                }
-                // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
-                other => {
-                    let gid = if let Some((_, prev_gid)) = result.last() {
-                        *prev_gid
-                    } else {
-                        next_group
-                    };
-                    result.push((other.clone(), gid));
-                }
-                }
-                (result, next_group)
-            },
-        ).0
+                    (result, next_group)
+                },
+            )
+            .0
     }
 
-    fn flatten_children(_parent: &str, children: &[CssNode], group_id: usize) -> Vec<(CssNode, usize)> {
-        children.iter().flat_map(|child| {
-            let mut result = Vec::new();
-            match child {
-                CssNode::Rule {
-                    selector,
-                    declarations,
-                    children: nested,
-                } => {
-                    if !declarations.is_empty() {
-                        result.push((CssNode::Rule {
-                            selector: selector.clone(),
-                            declarations: declarations.clone(),
-                            children: vec![],
-                        }, group_id));
+    fn flatten_children(
+        _parent: &str,
+        children: &[CssNode],
+        group_id: usize,
+    ) -> Vec<(CssNode, usize)> {
+        children
+            .iter()
+            .flat_map(|child| {
+                let mut result = Vec::new();
+                match child {
+                    CssNode::Rule {
+                        selector,
+                        declarations,
+                        children: nested,
+                    } => {
+                        if !declarations.is_empty() {
+                            result.push((
+                                CssNode::Rule {
+                                    selector: selector.clone(),
+                                    declarations: declarations.clone(),
+                                    children: vec![],
+                                },
+                                group_id,
+                            ));
+                        }
+                        result.extend(Self::flatten_children(selector, nested, group_id));
                     }
-                    result.extend(Self::flatten_children(selector, nested, group_id));
+                    other => result.push((other.clone(), group_id)),
                 }
-                other => result.push((other.clone(), group_id)),
-            }
-            result
-        }).collect()
+                result
+            })
+            .collect()
     }
 
     fn serialize_expanded(nodes: &[(CssNode, usize)], depth: usize) -> String {
@@ -183,11 +211,18 @@ impl Serializer {
         result
     }
 
-    /// 启发式：判断两个顶层兄弟 Rule 是否来自同一 eval_rule 输出。
-    /// 仅在 group_id 不同时使用——检查选择器后代关系（非完全相同）。
+    /// 启发式：判断两个顶层兄弟 Rule 是否来自同一 `eval_rule` 输出。
+    /// 仅在 `group_id` 不同时使用——检查选择器后代关系（非完全相同）。
     fn is_same_origin(prev: &CssNode, curr: &CssNode) -> bool {
         match (prev, curr) {
-            (CssNode::Rule { selector: prev_sel, .. }, CssNode::Rule { selector: curr_sel, .. }) => {
+            (
+                CssNode::Rule {
+                    selector: prev_sel, ..
+                },
+                CssNode::Rule {
+                    selector: curr_sel, ..
+                },
+            ) => {
                 let prev_sel = prev_sel.trim();
                 let curr_sel = curr_sel.trim();
                 // 选择器完全相同时不通过启发式判断——依赖 group_id
@@ -240,8 +275,9 @@ impl Serializer {
                 buf.push_str(text);
                 buf.push_str(" */");
             }
-CssNode::AtRoot(nodes, _) => {
-let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
+            CssNode::AtRoot(nodes, _) => {
+                let wrapped: Vec<(CssNode, usize)> =
+                    nodes.iter().cloned().map(|n| (n, 0)).collect();
                 buf.push_str(&Self::serialize_expanded(&wrapped, depth));
             }
             CssNode::Rule {
@@ -276,7 +312,8 @@ let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).colle
                     }
                 }
                 if !children.is_empty() {
-                    let wrapped: Vec<(CssNode, usize)> = children.iter().cloned().map(|n| (n, 0)).collect();
+                    let wrapped: Vec<(CssNode, usize)> =
+                        children.iter().cloned().map(|n| (n, 0)).collect();
                     let child_css = Self::serialize_expanded(&wrapped, depth + 1);
                     if !child_css.is_empty() {
                         buf.push_str(&child_css);
@@ -311,7 +348,8 @@ let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).colle
                         buf.push_str(p);
                     }
                     buf.push_str(" {\n");
-                    let wrapped: Vec<(CssNode, usize)> = children.iter().cloned().map(|n| (n, 0)).collect();
+                    let wrapped: Vec<(CssNode, usize)> =
+                        children.iter().cloned().map(|n| (n, 0)).collect();
                     let child_css = Self::serialize_expanded(&wrapped, depth + 1);
                     if !child_css.is_empty() {
                         buf.push_str(&child_css);
@@ -360,8 +398,9 @@ let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).colle
                 buf.push(';');
             }
             CssNode::Comment(_) => {}
-CssNode::AtRoot(nodes, _) => {
-let wrapped: Vec<(CssNode, usize)> = nodes.iter().cloned().map(|n| (n, 0)).collect();
+            CssNode::AtRoot(nodes, _) => {
+                let wrapped: Vec<(CssNode, usize)> =
+                    nodes.iter().cloned().map(|n| (n, 0)).collect();
                 buf.push_str(&Self::serialize_compressed(&wrapped));
             }
             CssNode::Rule {

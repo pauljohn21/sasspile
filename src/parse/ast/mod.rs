@@ -5,8 +5,10 @@ mod color_types;
 mod display;
 pub mod named_colors;
 
-pub use color_types::{Color, ColorOutput, ColorSpace, ChannelSet};
-pub(crate) use color_fmt::{format_alpha, format_hue, format_pct, format_pct_val, hsl_to_rgb_percent};
+pub(crate) use color_fmt::{
+    format_alpha, format_hue, format_pct, format_pct_val, hsl_to_rgb_percent,
+};
+pub use color_types::{ChannelSet, Color, ColorOutput, ColorSpace};
 
 /// 变量标志——`!default`、`!global`。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -284,7 +286,7 @@ pub enum Value {
     BinOp(Box<BinOp>),
     /// 一元运算——`op operand`。
     UnaryOp(UnaryOp, Box<Value>),
-    /// calc() 原样保留。
+    /// `calc()` 原样保留。
     Calc(String),
     /// 括号表达式——保留括号用于 CSS 透传。
     Paren(Box<Value>),
@@ -352,7 +354,7 @@ pub enum Separator {
     Comma,
     /// 空格分隔——`(a b c)`。
     Space,
-    /// 斜杠分隔——`(a / b / c)`。由 list.slash() 等函数创建，输出带空格。
+    /// 斜杠分隔——`(a / b / c)`。由 `list.slash()` 等函数创建，输出带空格。
     Slash,
     /// 字面斜杠——声明值中直接写的 `1/2`，输出无空格。
     SlashLiteral,
@@ -366,5 +368,3 @@ pub struct Ast {
     /// 顶层语法树节点列表。
     pub nodes: Vec<Node>,
 }
-
-

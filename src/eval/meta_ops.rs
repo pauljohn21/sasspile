@@ -4,7 +4,7 @@
 use super::*;
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
-use crate::eval::error_msgs::{err_not_a_string, err_missing_arg, err_no_mixin, err_no_module};
+use crate::eval::error_msgs::{err_missing_arg, err_no_mixin, err_no_module, err_not_a_string};
 use crate::parse::ast::{MixinRefData, Node};
 
 impl Evaluator {
@@ -30,8 +30,7 @@ impl Evaluator {
             Value::MixinRef(data) => data.clone(),
             _ => {
                 return Err(SassError::Eval(format!(
-                    "$mixin: {} is not a mixin reference.",
-                    mixin_ref_val
+                    "$mixin: {mixin_ref_val} is not a mixin reference."
                 )));
             }
         };
@@ -55,10 +54,7 @@ impl Evaluator {
     /// `meta.load-css($module, $with: ())` mixin——动态加载模块 CSS。
     ///
     /// 加载指定模块并将其 CSS 输出注入当前上下文。
-    pub(crate) fn eval_meta_load_css(
-        args: &[Arg],
-        env: Env,
-    ) -> Result<(Vec<CssNode>, Env)> {
+    pub(crate) fn eval_meta_load_css(args: &[Arg], env: Env) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_meta_load_css", n_args = args.len());
         let _enter = span.enter();
 
@@ -91,10 +87,7 @@ impl Evaluator {
                     .collect(),
                 Value::Null => vec![],
                 _ => {
-                    return Err(SassError::Eval(format!(
-                        "$with: {} is not a map.",
-                        with_val
-                    )));
+                    return Err(SassError::Eval(format!("$with: {with_val} is not a map.")));
                 }
             }
         } else {
@@ -109,8 +102,10 @@ impl Evaluator {
         // 解析文件路径
         let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
-        let path = Self::resolve_file(base.as_ref(), &module_name, &load_paths)
-            .ok_or_else(|| SassError::Module(format!("Can't find stylesheet to import: {module_name}")))?;
+        let path =
+            Self::resolve_file(base.as_ref(), &module_name, &load_paths).ok_or_else(|| {
+                SassError::Module(format!("Can't find stylesheet to import: {module_name}"))
+            })?;
 
         // 检查是否已加载
         if env.get_loaded_modules().contains(&path) {
@@ -122,12 +117,13 @@ impl Evaluator {
         // 展开 AtRoot 包裹——meta.load-css 的 CSS 应该被嵌套在调用方选择器下
         // 而不是提升到 root（AtRoot 默认行为）
         let raw_css = exports.css.clone();
-        let css = raw_css.into_iter().flat_map(|node| {
-            match node {
+        let css = raw_css
+            .into_iter()
+            .flat_map(|node| match node {
                 CssNode::AtRoot(nodes, _) => nodes,
                 other => vec![other],
-            }
-        }).collect();
+            })
+            .collect();
         let env_with_cache = super::module_helpers::merge_module_cache(env, &path, &exports);
 
         Ok((css, env_with_cache))
@@ -138,8 +134,13 @@ impl Evaluator {
         ns_keys: &[String],
         env: &Env,
     ) -> HashMap<String, Rc<ModuleExports>> {
-        ns_keys.iter()
-            .filter_map(|key| env.get_namespaces().get(key).map(|exports| (key.clone(), exports.clone())))
+        ns_keys
+            .iter()
+            .filter_map(|key| {
+                env.get_namespaces()
+                    .get(key)
+                    .map(|exports| (key.clone(), exports.clone()))
+            })
             .collect()
     }
 
@@ -152,10 +153,12 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("meta_get_mixin");
         let _enter = span.enter();
 
-        let name_arg = pos_args.first()
+        let name_arg = pos_args
+            .first()
             .or_else(|| kw_args.get("name"))
             .or_else(|| kw_args.get("$name"));
-        let module_arg = pos_args.get(1)
+        let module_arg = pos_args
+            .get(1)
             .or_else(|| kw_args.get("module"))
             .or_else(|| kw_args.get("$module"));
         let name = match name_arg {
@@ -173,32 +176,31 @@ impl Evaluator {
         // 先在模块命名空间中查找
         if let Some(ns) = &module_ns
             && let Some(module) = env.get_namespace(ns)
-            && let Some(mixin) = module.all_mixins().find(|(k, _)| *k == &lookup_name || *k == &name).map(|(_, m)| m)
+            && let Some(mixin) = module
+                .all_mixins()
+                .find(|(k, _)| *k == &lookup_name || *k == &name)
+                .map(|(_, m)| m)
         {
             let ns_keys: Vec<String> = mixin.captured_namespaces.keys().cloned().collect();
-            return Ok(Value::MixinRef(std::rc::Rc::new(
-                MixinRefData {
-                    name: name.clone(),
-                    module: module_ns.clone(),
-                    params: mixin.params.clone(),
-                    body: mixin.body.clone(),
-                    captured_ns_keys: ns_keys,
-                }
-            )));
+            return Ok(Value::MixinRef(std::rc::Rc::new(MixinRefData {
+                name: name.clone(),
+                module: module_ns.clone(),
+                params: mixin.params.clone(),
+                body: mixin.body.clone(),
+                captured_ns_keys: ns_keys,
+            })));
         }
         // 全局查找
         let lookup_variants = [name.as_str(), &lookup_name, &name.replace('_', "-")];
         for variant in &lookup_variants {
             if let Some((params, body, ns_keys)) = env.get_mixin_ref_data(variant) {
-                return Ok(Value::MixinRef(std::rc::Rc::new(
-                    MixinRefData {
-                        name: name.clone(),
-                        module: None,
-                        params,
-                        body,
-                        captured_ns_keys: ns_keys,
-                    }
-                )));
+                return Ok(Value::MixinRef(std::rc::Rc::new(MixinRefData {
+                    name: name.clone(),
+                    module: None,
+                    params,
+                    body,
+                    captured_ns_keys: ns_keys,
+                })));
             }
         }
         Err(err_no_mixin(&name))
@@ -214,11 +216,16 @@ impl Evaluator {
         let _enter = span.enter();
 
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
-        let module = env.get_namespace(&ns_name)
+        let module = env
+            .get_namespace(&ns_name)
             .ok_or_else(|| err_no_module(&ns_name))?;
-        let pairs: Vec<(Value, Value)> = module.all_functions()
+        let pairs: Vec<(Value, Value)> = module
+            .all_functions()
             .map(|(name, _)| {
-                (Value::String(name.clone(), true), Value::String(name.clone(), false))
+                (
+                    Value::String(name.clone(), true),
+                    Value::String(name.clone(), false),
+                )
             })
             .collect();
         Ok(Value::Map(pairs))
@@ -234,9 +241,11 @@ impl Evaluator {
         let _enter = span.enter();
 
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
-        let module = env.get_namespace(&ns_name)
+        let module = env
+            .get_namespace(&ns_name)
             .ok_or_else(|| err_no_module(&ns_name))?;
-        let pairs: Vec<(Value, Value)> = module.all_mixins()
+        let pairs: Vec<(Value, Value)> = module
+            .all_mixins()
             .map(|(name, mixin)| {
                 let ns_keys: Vec<String> = mixin.captured_namespaces.keys().cloned().collect();
                 let ref_data = MixinRefData {
@@ -246,7 +255,10 @@ impl Evaluator {
                     body: mixin.body.clone(),
                     captured_ns_keys: ns_keys,
                 };
-                (Value::String(name.clone(), true), Value::MixinRef(std::rc::Rc::new(ref_data)))
+                (
+                    Value::String(name.clone(), true),
+                    Value::MixinRef(std::rc::Rc::new(ref_data)),
+                )
             })
             .collect();
         Ok(Value::Map(pairs))
@@ -262,9 +274,11 @@ impl Evaluator {
         let _enter = span.enter();
 
         let ns_name = Self::extract_module_arg(pos_args, kw_args)?;
-        let module = env.get_namespace(&ns_name)
+        let module = env
+            .get_namespace(&ns_name)
             .ok_or_else(|| err_no_module(&ns_name))?;
-        let pairs: Vec<(Value, Value)> = module.all_vars()
+        let pairs: Vec<(Value, Value)> = module
+            .all_vars()
             .filter(|(name, _)| !name.starts_with('_'))
             .map(|(name, val)| (Value::String(name.clone(), true), val.clone()))
             .collect();
@@ -282,14 +296,17 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("meta_accepts_content");
         let _enter = span.enter();
 
-        let mixin_arg = pos_args.first()
+        let mixin_arg = pos_args
+            .first()
             .or_else(|| kw_args.get("mixin"))
             .or_else(|| kw_args.get("$mixin"));
         let mixin_ref = match mixin_arg {
             Some(Value::MixinRef(data)) => data.clone(),
-            Some(v) => return Err(SassError::Eval(format!(
-                "$mixin: {v} is not a mixin reference."
-            ))),
+            Some(v) => {
+                return Err(SassError::Eval(format!(
+                    "$mixin: {v} is not a mixin reference."
+                )));
+            }
             None => return Err(err_missing_arg("mixin")),
         };
 
@@ -299,11 +316,9 @@ impl Evaluator {
     }
 
     /// 从参数中提取 $module 字符串。
-    fn extract_module_arg(
-        pos_args: &[Value],
-        kw_args: &HashMap<String, Value>,
-    ) -> Result<String> {
-        let module_arg = pos_args.first()
+    fn extract_module_arg(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Result<String> {
+        let module_arg = pos_args
+            .first()
             .or_else(|| kw_args.get("module"))
             .or_else(|| kw_args.get("$module"));
         match module_arg {
@@ -320,7 +335,10 @@ fn body_has_content(nodes: &[Node]) -> bool {
     nodes.iter().any(|n| match n {
         Node::Content => true,
         // 递归检查嵌套的控制流和规则体
-        Node::If { branches, else_body } => {
+        Node::If {
+            branches,
+            else_body,
+        } => {
             branches.iter().any(|(_, body)| body_has_content(body))
                 || else_body.as_ref().is_some_and(|eb| body_has_content(eb))
         }

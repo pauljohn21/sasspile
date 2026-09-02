@@ -28,7 +28,9 @@ impl Evaluator {
                     ));
                 }
                 if pos_args.is_empty() {
-                    return Err(SassError::Eval("sass() requires at least 1 argument".into()));
+                    return Err(SassError::Eval(
+                        "sass() requires at least 1 argument".into(),
+                    ));
                 }
                 Ok(pos_args[0].clone())
             }
@@ -41,13 +43,16 @@ impl Evaluator {
             // darken/lighten/mix 合并 $color/$amount 命名参数
             "darken" | "lighten" => {
                 let merged = super::merge_two_args(pos_args, kw_args, "color", "amount");
-                if name == "darken" { Self::builtin_darken(&merged) }
-                else { Self::builtin_lighten(&merged) }
+                if name == "darken" {
+                    Self::builtin_darken(&merged)
+                } else {
+                    Self::builtin_lighten(&merged)
+                }
             }
             "mix" => {
                 let merged = super::merge_mix_args(pos_args, kw_args);
                 Self::builtin_mix(&merged)
-            },
+            }
             // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
             "lab" | "lch" | "oklab" | "oklch" | "color" => {
                 super::color_parse::parse_color_fn(name, pos_args, kw_args)
@@ -77,7 +82,10 @@ impl Evaluator {
                         if pos_args.len() == 1 { "was" } else { "were" }
                     )));
                 }
-                Ok(Value::String(crate::eval::value::inspect_value(&pos_args[0]), false))
+                Ok(Value::String(
+                    crate::eval::value::inspect_value(&pos_args[0]),
+                    false,
+                ))
             }
             "if" => match pos_args {
                 [cond, t, f] => Ok(if Self::is_truthy(cond) {
@@ -90,7 +98,7 @@ impl Evaluator {
             "content-exists" => {
                 // 检查当前环境是否有 @content 内容块
                 Ok(Value::Bool(env.get_content().is_some()))
-            },
+            }
             "feature-exists" => match pos_args {
                 [Value::String(name, _)] => {
                     // 支持的特性列表
@@ -149,35 +157,35 @@ impl Evaluator {
                 _ => Err(SassError::Eval("keywords requires 1 argument".into())),
             },
             "calc-args" => {
-                let calc_arg = pos_args.first().or_else(|| kw_args.get("calc")).or_else(|| kw_args.get("$calc"));
+                let calc_arg = pos_args
+                    .first()
+                    .or_else(|| kw_args.get("calc"))
+                    .or_else(|| kw_args.get("$calc"));
                 match calc_arg {
                     Some(Value::Calc(s)) => {
                         let args = super::parse_calc_args(s);
-                        Ok(Value::List(args, crate::parse::ast::Separator::Comma, false))
+                        Ok(Value::List(
+                            args,
+                            crate::parse::ast::Separator::Comma,
+                            false,
+                        ))
                     }
-                    Some(v) => Err(SassError::Eval(format!(
-                        "$calc: {} is not a calculation.",
-                        v
-                    ))),
-                    None => Err(SassError::Eval(
-                        "Missing argument $calc.".into(),
-                    )),
+                    Some(v) => Err(SassError::Eval(format!("$calc: {v} is not a calculation."))),
+                    None => Err(SassError::Eval("Missing argument $calc.".into())),
                 }
             }
             "calc-name" => {
-                let calc_arg = pos_args.first().or_else(|| kw_args.get("calc")).or_else(|| kw_args.get("$calc"));
+                let calc_arg = pos_args
+                    .first()
+                    .or_else(|| kw_args.get("calc"))
+                    .or_else(|| kw_args.get("$calc"));
                 match calc_arg {
                     Some(Value::Calc(s)) => {
                         let name = super::parse_calc_name(s);
                         Ok(Value::String(name, true))
                     }
-                    Some(v) => Err(SassError::Eval(format!(
-                        "$calc: {} is not a calculation.",
-                        v
-                    ))),
-                    None => Err(SassError::Eval(
-                        "Missing argument $calc.".into(),
-                    )),
+                    Some(v) => Err(SassError::Eval(format!("$calc: {v} is not a calculation."))),
+                    None => Err(SassError::Eval("Missing argument $calc.".into())),
                 }
             }
 
@@ -185,7 +193,7 @@ impl Evaluator {
             "calc" | "env" | "var" => {
                 let arg_str = pos_args
                     .iter()
-                    .map(|a| a.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ");
                 Ok(Value::Calc(format!("{name}({arg_str})")))
@@ -195,7 +203,7 @@ impl Evaluator {
             _ if Self::is_css_function(name) => {
                 let arg_str = pos_args
                     .iter()
-                    .map(|a| a.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ");
                 Ok(Value::String(format!("{name}({arg_str})"), false))

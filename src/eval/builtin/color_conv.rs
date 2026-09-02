@@ -1,3 +1,12 @@
+#![allow(
+    clippy::unreadable_literal,
+    clippy::many_single_char_names,
+    clippy::single_char_pattern,
+    clippy::excessive_precision,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 //! f64 精度色彩空间转换算法。
 //!
 //! 基于 CSS Color 4 规范定义的数学公式，用 f64 实现以避免 f32 精度损失。
@@ -36,7 +45,7 @@ fn linear_to_srgb(c: f64) -> f64 {
 // 其中 sRGB→XYZ D65 和 D65→D50 合并为一个复合矩阵。
 
 /// sRGB (0-1) → XYZ D50。
-/// 复合矩阵 = D65_to_D50 × lin_sRGB_to_XYZ（使用规范中有理数分数形式）。
+/// 复合矩阵 = `D65_to_D50` × `lin_sRGB_to_XYZ（使用规范中有理数分数形式`）。
 fn srgb_to_xyz_d50(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let rl = srgb_to_linear(r);
     let gl = srgb_to_linear(g);
@@ -56,7 +65,7 @@ fn srgb_to_xyz_d50(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 }
 
 /// XYZ D50 → sRGB (0-1)。
-/// 复合矩阵 = XYZ_to_lin_sRGB × D50_to_D65（使用规范中有理数分数形式）。
+/// 复合矩阵 = `XYZ_to_lin_sRGB` × `D50_to_D65（使用规范中有理数分数形式`）。
 fn xyz_d50_to_srgb(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
     // Bradford D50 → D65
     let x65 = 0.955473421488075 * x - 0.02309845494876471 * y + 0.06325924320057072 * z;
@@ -320,7 +329,11 @@ pub fn srgb_to_display_p3(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let r_p3 = 446124.0 / 178915.0 * x - 333277.0 / 357830.0 * y - 72051.0 / 178915.0 * z;
     let g_p3 = -14852.0 / 17905.0 * x + 63121.0 / 35810.0 * y + 423.0 / 17905.0 * z;
     let b_p3 = 11844.0 / 330415.0 * x - 50337.0 / 660830.0 * y + 316169.0 / 330415.0 * z;
-    (linear_to_srgb(r_p3), linear_to_srgb(g_p3), linear_to_srgb(b_p3))
+    (
+        linear_to_srgb(r_p3),
+        linear_to_srgb(g_p3),
+        linear_to_srgb(b_p3),
+    )
 }
 
 // ── A98 RGB ──
@@ -362,7 +375,7 @@ pub fn srgb_to_a98_rgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 // 矩阵使用 CSS Color 4 规范参考实现的高精度小数。
 // gamma 1.8，线性段阈值 Et = 1/512。
 
-/// ProPhoto RGB (0-1) → sRGB (0-1)。
+/// `ProPhoto` RGB (0-1) → sRGB (0-1)。
 pub fn prophoto_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     // ProPhoto gamma decode (Et2 = 16/512 = 1/32)
     fn prophoto_gamma_decode(c: f64) -> f64 {
@@ -385,7 +398,7 @@ pub fn prophoto_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     xyz_d50_to_srgb(x, y, z)
 }
 
-/// sRGB (0-1) → ProPhoto RGB (0-1)。
+/// sRGB (0-1) → `ProPhoto` RGB (0-1)。
 pub fn srgb_to_prophoto(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let (x, y, z) = srgb_to_xyz_d50(r, g, b);
     // XYZ D50 → ProPhoto (高精度小数)
@@ -402,7 +415,11 @@ pub fn srgb_to_prophoto(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
             16.0 * c
         }
     }
-    (prophoto_gamma_encode(rl), prophoto_gamma_encode(gl), prophoto_gamma_encode(bl))
+    (
+        prophoto_gamma_encode(rl),
+        prophoto_gamma_encode(gl),
+        prophoto_gamma_encode(bl),
+    )
 }
 
 // ── Rec2020 ──
@@ -420,8 +437,12 @@ pub fn rec2020_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let gl = rec2020_decode(g);
     let bl = rec2020_decode(b);
     // Rec2020 → XYZ D65 (有理数分数)
-    let x = 63426534.0 / 99577255.0 * rl + 20160776.0 / 139408157.0 * gl + 47086771.0 / 278816314.0 * bl;
-    let y = 26158966.0 / 99577255.0 * rl + 472592308.0 / 697040785.0 * gl + 8267143.0 / 139408157.0 * bl;
+    let x = 63426534.0 / 99577255.0 * rl
+        + 20160776.0 / 139408157.0 * gl
+        + 47086771.0 / 278816314.0 * bl;
+    let y = 26158966.0 / 99577255.0 * rl
+        + 472592308.0 / 697040785.0 * gl
+        + 8267143.0 / 139408157.0 * bl;
     let z = 0.0 * rl + 19567812.0 / 697040785.0 * gl + 295819943.0 / 278816314.0 * bl;
     xyz_d65_to_srgb(x, y, z)
 }

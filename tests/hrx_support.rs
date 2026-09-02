@@ -244,9 +244,7 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
     let _enter = span.enter();
 
     // 从 HRX 相对路径提取目录前缀：`callable/arguments.hrx` → `callable/arguments`
-    let prefix = hrx_rel_path
-        .strip_suffix(".hrx")
-        .unwrap_or(hrx_rel_path);
+    let prefix = hrx_rel_path.strip_suffix(".hrx").unwrap_or(hrx_rel_path);
 
     let archive = match parse_hrx(content) {
         Ok(a) => a,
@@ -274,9 +272,7 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
                 (prefixed, c.clone())
             })
         })
-        .filter(|(p, _)| {
-            p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass")
-        })
+        .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
         .collect();
 
     let mut cases = Vec::new();
@@ -408,9 +404,7 @@ pub fn parse_hrx_legacy(content: &str) -> Vec<ParsedCase> {
                 (path, c.clone())
             })
         })
-        .filter(|(p, _)| {
-            p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass")
-        })
+        .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
         .collect();
 
     let mut cases = Vec::new();

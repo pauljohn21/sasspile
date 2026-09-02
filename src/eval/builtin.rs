@@ -12,16 +12,16 @@ pub mod color_gamut;
 pub mod color_inspect;
 pub(crate) mod color_parse;
 pub mod color_space;
-pub(crate) mod manual_dispatch;
 pub mod dispatch;
 pub mod list;
+pub(crate) mod manual_dispatch;
 pub mod map;
-pub mod selector;
-pub mod string;
 pub mod math;
 pub mod math_css;
 pub mod math_helpers;
 pub mod math_trig;
+pub mod selector;
+pub mod string;
 
 use super::*;
 use crate::error::Result;
@@ -39,12 +39,9 @@ impl Evaluator {
             crate::__tracing::info_span!("call_builtin", name = %name, n_args = pos_args.len());
         let _enter = span.enter();
         // ── 模块分派：math/string/map/list/color/selector 六组 ──
-        if let Some(result) = super::builtin::dispatch::dispatch_builtin_module(
-            &name,
-            pos_args,
-            kw_args,
-            env,
-        ) {
+        if let Some(result) =
+            super::builtin::dispatch::dispatch_builtin_module(&name, pos_args, kw_args, env)
+        {
             return result;
         }
 
@@ -52,7 +49,11 @@ impl Evaluator {
         // if/inspect/type-of 等手工分派的函数不经过 dispatch，
         // 需要在 match 之前合并 kw_args → pos_args
         let merged_meta: Option<Vec<Value>> = match name.as_str() {
-            "if" => Some(merge_meta_args(pos_args, kw_args, &["condition", "if-true", "if-false"])),
+            "if" => Some(merge_meta_args(
+                pos_args,
+                kw_args,
+                &["condition", "if-true", "if-false"],
+            )),
             "inspect" | "type-of" => Some(merge_meta_args(pos_args, kw_args, &["value"])),
             _ => None,
         };
@@ -61,7 +62,11 @@ impl Evaluator {
         } else {
             pos_args
         };
-        let kw_args = if merged_meta.is_some() { &HashMap::new() } else { kw_args };
+        let kw_args = if merged_meta.is_some() {
+            &HashMap::new()
+        } else {
+            kw_args
+        };
 
         // ── 手工分派：rgba/rgb/darken/lighten/mix/if/inspect/type-of 等 ──
         Self::manual_dispatch(&name, pos_args, kw_args, env)
@@ -211,12 +216,19 @@ fn parse_number_with_unit(s: &str) -> Option<Value> {
     let num_str = &s[..split];
     let unit = s[split..].trim();
     num_str.parse::<f64>().ok().map(|n| {
-        Value::Number(n, if unit.is_empty() { None } else { Some(unit.to_string()) })
+        Value::Number(
+            n,
+            if unit.is_empty() {
+                None
+            } else {
+                Some(unit.to_string())
+            },
+        )
     })
 }
 
 /// 返回每个 map 函数的固定参数名列表（按位置顺序）。
-/// 可变参数（多 key）返回前缀部分，超出部分从 pos_args 追加。
+/// 可变参数（多 key）返回前缀部分，超出部分从 `pos_args` 追加。
 fn map_param_names(name: &str) -> &'static [&'static str] {
     match name {
         "map-get" => &["map", "key"],
@@ -233,9 +245,13 @@ fn map_param_names(name: &str) -> &'static [&'static str] {
 }
 
 /// 将位置参数和命名参数合并为统一的位置参数列表。
-/// 按 `param_names` 顺序填充：先取 pos_args 对应位置，不足的从 kw_args 按参数名查找。
-/// 可变参数函数（如 map-get 的多 key）支持从 pos_args 追加。
-pub(crate) fn merge_map_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
+/// 按 `param_names` 顺序填充：先取 `pos_args` 对应位置，不足的从 `kw_args` 按参数名查找。
+/// 可变参数函数（如 map-get 的多 key）支持从 `pos_args` 追加。
+pub(crate) fn merge_map_args(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    name: &str,
+) -> Vec<Value> {
     let param_names = map_param_names(name);
     if param_names.is_empty() {
         return pos_args.to_vec();

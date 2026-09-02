@@ -1,7 +1,7 @@
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
-use sasspile::{compile_file_with_load_paths, OutputStyle};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
+use sasspile::{OutputStyle, compile_file_with_load_paths};
 use std::path::PathBuf;
 
 /// 从 HRX 内容编译所有 entry，返回结果列表。
@@ -88,7 +88,8 @@ fn compile_hrx(hrx: &str) -> Vec<(String, Result<String, String>, Option<String>
                 &input_path,
                 OutputStyle::Expanded,
                 vec![tmp_dir.clone()],
-            ).map_err(|e| format!("{e}"));
+            )
+            .map_err(|e| format!("{e}"));
 
             results.push((name, result, expected_output, expect_error));
         }
@@ -110,16 +111,22 @@ fn diag_forward_extend() {
         let ok = if expect_error {
             result.is_err()
         } else {
-            result.is_ok() && expected.is_some() && result.as_ref().unwrap().trim() == expected.as_ref().unwrap().trim()
+            result.is_ok()
+                && expected.is_some()
+                && result.as_ref().unwrap().trim() == expected.as_ref().unwrap().trim()
         };
         if ok {
             pass += 1;
         } else {
             fail += 1;
             match (&result, expect_error) {
-                (Ok(css), true) => tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK"),
+                (Ok(css), true) => {
+                    tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK")
+                }
                 (Err(e), true) => tracing::warn!(name = %name, error = %e, "wrong error"),
-                (Ok(css), false) => tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF"),
+                (Ok(css), false) => {
+                    tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF")
+                }
                 (Err(e), false) => tracing::warn!(name = %name, error = %e, "UNEXPECTED ERROR"),
             }
         }
@@ -135,16 +142,22 @@ fn diag_forward_extend() {
         let ok = if expect_error {
             result.is_err()
         } else {
-            result.is_ok() && expected.is_some() && result.as_ref().unwrap().trim() == expected.as_ref().unwrap().trim()
+            result.is_ok()
+                && expected.is_some()
+                && result.as_ref().unwrap().trim() == expected.as_ref().unwrap().trim()
         };
         if ok {
             pass2 += 1;
         } else {
             fail2 += 1;
             match (&result, expect_error) {
-                (Ok(css), true) => tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK"),
+                (Ok(css), true) => {
+                    tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK")
+                }
                 (Err(e), true) => tracing::warn!(name = %name, error = %e, "wrong error"),
-                (Ok(css), false) => tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF"),
+                (Ok(css), false) => {
+                    tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF")
+                }
                 (Err(e), false) => tracing::warn!(name = %name, error = %e, "UNEXPECTED ERROR"),
             }
         }

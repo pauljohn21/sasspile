@@ -5,7 +5,7 @@
 
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use std::path::Path;
 
 /// HRX 测试用例。
@@ -131,9 +131,10 @@ fn run_dir(dir: &Path, max_tests: usize) -> (usize, usize, usize) {
                 total += t;
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
                 if let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() > 100_000 {
-                        continue;
-                    }
+                    && meta.len() > 100_000
+                {
+                    continue;
+                }
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     let cases = parse_hrx(&content);
                     for case in &cases {
@@ -205,9 +206,10 @@ fn diag_dir(dir: &Path, shown: &mut usize) {
                 diag_dir(&path, shown);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx") {
                 if let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() > 50000 {
-                        continue;
-                    }
+                    && meta.len() > 50000
+                {
+                    continue;
+                }
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     let cases = parse_hrx(&content);
                     let stem = path.file_stem().unwrap().to_string_lossy();

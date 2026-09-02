@@ -1,3 +1,10 @@
+#![allow(
+    clippy::many_single_char_names,
+    clippy::single_char_pattern,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 //! 颜色格式化辅助函数。
 //!
 //! hue/百分比/alpha 值的浮点精度截断和格式化，
@@ -56,7 +63,11 @@ pub(crate) fn hsl_to_rgb_percent(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
     } else {
         (c, 0.0, x)
     };
-    ((r1 + m) * PCT_SCALE, (g1 + m) * PCT_SCALE, (b1 + m) * PCT_SCALE)
+    (
+        (r1 + m) * PCT_SCALE,
+        (g1 + m) * PCT_SCALE,
+        (b1 + m) * PCT_SCALE,
+    )
 }
 
 /// 格式化 alpha 值。

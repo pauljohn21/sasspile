@@ -18,8 +18,7 @@ impl Evaluator {
         // 快速路径：不含 #{} 或 $ 或 + 或 - 或数字的参数直接返回
         let needs_eval = params.contains("#{")
             || params.contains('$')
-            || (matches!(at_rule, "supports" | "media")
-                && Self::params_has_expr(params));
+            || (matches!(at_rule, "supports" | "media") && Self::params_has_expr(params));
         if !needs_eval {
             return params.to_string();
         }
@@ -146,10 +145,7 @@ impl Evaluator {
             let c = chars[i];
             if c == '<' || c == '>' || c == '=' {
                 // 对前面的 segment 做表达式求值（保留前导空格）
-                let leading_ws: String = current_seg
-                    .chars()
-                    .take_while(|&c| c == ' ')
-                    .collect();
+                let leading_ws: String = current_seg.chars().take_while(|&c| c == ' ').collect();
                 let trailing_ws: String = current_seg
                     .chars()
                     .rev()
@@ -185,10 +181,7 @@ impl Evaluator {
             i += 1;
         }
         // 对最后一个 segment 做表达式求值
-        let leading_ws: String = current_seg
-            .chars()
-            .take_while(|&c| c == ' ')
-            .collect();
+        let leading_ws: String = current_seg.chars().take_while(|&c| c == ' ').collect();
         let trailing_ws: String = current_seg
             .chars()
             .rev()
@@ -213,7 +206,9 @@ impl Evaluator {
             return String::new();
         }
         // 纯标识符（如 a, b, --a, width）不需要求值
-        if expr.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+        if expr
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
             && !expr.contains('+')
             && !expr.contains('*')
             && !expr.contains('/')
@@ -228,11 +223,7 @@ impl Evaluator {
                     crate::eval::Value::String(s, _) => s.clone(),
                     _ => val.to_string(),
                 };
-                if s == expr {
-                    expr.to_string()
-                } else {
-                    s
-                }
+                if s == expr { expr.to_string() } else { s }
             }
             Err(_) => expr.to_string(),
         }

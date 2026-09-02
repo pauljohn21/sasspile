@@ -1,3 +1,4 @@
+#![allow(clippy::unreadable_literal)]
 //! 颜色空间、输出模式、通道集、颜色结构和格式化辅助函数。
 //!
 //! 架构：
@@ -25,7 +26,7 @@ pub enum ColorSpace {
     DisplayP3Linear,
     /// A98 RGB。
     A98Rgb,
-    /// ProPhoto RGB。
+    /// `ProPhoto` RGB。
     ProphotoRgb,
     /// Rec2020。
     Rec2020,
@@ -41,9 +42,9 @@ pub enum ColorSpace {
     Lab,
     /// CIE Lch。
     Lch,
-    /// OKLab。
+    /// `OKLab`。
     Oklab,
-    /// OKLch。
+    /// `OKLch`。
     Oklch,
 }
 
@@ -103,8 +104,13 @@ impl ColorSpace {
     pub fn is_rgb_like(&self) -> bool {
         matches!(
             self,
-            Self::Srgb | Self::SrgbLinear | Self::DisplayP3 | Self::DisplayP3Linear
-                | Self::A98Rgb | Self::ProphotoRgb | Self::Rec2020
+            Self::Srgb
+                | Self::SrgbLinear
+                | Self::DisplayP3
+                | Self::DisplayP3Linear
+                | Self::A98Rgb
+                | Self::ProphotoRgb
+                | Self::Rec2020
         )
     }
 }
@@ -117,7 +123,7 @@ pub enum ColorOutput {
     /// 自动：hex / 命名颜色 / rgba（默认行为）。
     #[default]
     Auto,
-    /// 强制 rgb()/rgba() 输出。
+    /// 强制 `rgb()/rgba()` 输出。
     RgbExplicit,
     /// rgb(r%, g%, b%) 百分比输出（HSL 操作结果）。
     RgbPercent,
@@ -364,7 +370,14 @@ impl Color {
     }
 
     /// 创建带空间和输出模式指定的 RGB 颜色。
-    pub fn with_rgb(r: f64, g: f64, b: f64, a: f64, space: ColorSpace, output: ColorOutput) -> Self {
+    pub fn with_rgb(
+        r: f64,
+        g: f64,
+        b: f64,
+        a: f64,
+        space: ColorSpace,
+        output: ColorOutput,
+    ) -> Self {
         Self {
             space,
             channels: [r, g, b],
@@ -374,8 +387,15 @@ impl Color {
         }
     }
 
-    /// 创建带空间和通道的 HSL 颜色（legacy_rgb 自动计算）。
-    pub fn with_hsl(h: f64, s: f64, l: f64, a: f64, output: ColorOutput, legacy_rgb: [f64; 3]) -> Self {
+    /// 创建带空间和通道的 HSL `颜色（legacy_rgb` 自动计算）。
+    pub fn with_hsl(
+        h: f64,
+        s: f64,
+        l: f64,
+        a: f64,
+        output: ColorOutput,
+        legacy_rgb: [f64; 3],
+    ) -> Self {
         Self {
             space: ColorSpace::Hsl,
             channels: [h, s, l],
@@ -385,7 +405,7 @@ impl Color {
         }
     }
 
-    /// 创建带空间和通道的 HWB 颜色（legacy_rgb 自动计算）。
+    /// 创建带空间和通道的 HWB `颜色（legacy_rgb` 自动计算）。
     pub fn with_hwb(h: f64, w: f64, bk: f64, a: f64, legacy_rgb: [f64; 3]) -> Self {
         Self {
             space: ColorSpace::Hwb,
@@ -396,7 +416,7 @@ impl Color {
         }
     }
 
-    /// 创建现代色彩空间颜色（channels + legacy_rgb 分开传入）。
+    /// 创建现代色彩空间颜色（channels + `legacy_rgb` 分开传入）。
     pub fn with_space(
         space: ColorSpace,
         channels: [f64; 3],
@@ -436,17 +456,17 @@ impl Color {
 
     // ── 兼容性 accessor ──
 
-    /// 获取 red 通道（legacy_rgb[0]）。
+    /// 获取 red `通道（legacy_rgb`[0]）。
     pub fn r(&self) -> f64 {
         self.legacy_rgb[0]
     }
 
-    /// 获取 green 通道（legacy_rgb[1]）。
+    /// 获取 green `通道（legacy_rgb`[1]）。
     pub fn g(&self) -> f64 {
         self.legacy_rgb[1]
     }
 
-    /// 获取 blue 通道（legacy_rgb[2]）。
+    /// 获取 blue `通道（legacy_rgb`[2]）。
     pub fn b(&self) -> f64 {
         self.legacy_rgb[2]
     }

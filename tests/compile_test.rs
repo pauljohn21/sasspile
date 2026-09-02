@@ -3,7 +3,7 @@
 //! 物理隔离：所有编译相关测试集中于此，不使用内联 #[cfg(test)] 模块。
 //! 使用 tracing 进行问题追踪。
 
-use sasspile::{compile_expanded, compile_file, init_tracing, OutputStyle};
+use sasspile::{OutputStyle, compile_expanded, compile_file, init_tracing};
 
 #[test]
 fn test_compile_simple() {
@@ -38,15 +38,15 @@ fn test_compile_if() {
 
 #[test]
 fn test_compile_for() {
-    let css = compile_expanded("@for $i from 1 through 3 { .col-#{$i} { width: $i * 100%; } }")
-        .unwrap();
+    let css =
+        compile_expanded("@for $i from 1 through 3 { .col-#{$i} { width: $i * 100%; } }").unwrap();
     assert!(css.contains("col-1"));
 }
 
 #[test]
 fn test_compile_mixin() {
-    let css = compile_expanded("@mixin bold { font-weight: bold; } .title { @include bold; }")
-        .unwrap();
+    let css =
+        compile_expanded("@mixin bold { font-weight: bold; } .title { @include bold; }").unwrap();
     assert!(css.contains("font-weight: bold"));
 }
 
@@ -63,8 +63,7 @@ fn test_compile_content() {
 #[test]
 fn test_compile_each_map() {
     let css =
-        compile_expanded("@each $key, $val in (a: 1, b: 2) { .#{$key} { width: $val; } }")
-            .unwrap();
+        compile_expanded("@each $key, $val in (a: 1, b: 2) { .#{$key} { width: $val; } }").unwrap();
     assert!(css.contains(".a"));
     assert!(css.contains("width: 1"));
 }
@@ -85,8 +84,8 @@ fn test_compile_string_slice() {
 
 #[test]
 fn test_compile_map_get() {
-    let css = compile_expanded("@use 'sass:map' as map; $m: (a: 1); a { v: map.get($m, a); }")
-        .unwrap();
+    let css =
+        compile_expanded("@use 'sass:map' as map; $m: (a: 1); a { v: map.get($m, a); }").unwrap();
     assert!(css.contains("v: 1"));
 }
 
@@ -100,8 +99,7 @@ fn test_compile_at_root() {
 #[test]
 fn test_compile_user_function() {
     let css =
-        compile_expanded("@function double($x) { @return $x * 2; } a { w: double(5px); }")
-            .unwrap();
+        compile_expanded("@function double($x) { @return $x * 2; } a { w: double(5px); }").unwrap();
     assert!(css.contains("w: 10px"));
 }
 
@@ -134,9 +132,8 @@ fn test_compile_use_star() {
 
 #[test]
 fn test_compile_extend() {
-    let css =
-        compile_expanded(".btn { color: blue; } .large { @extend .btn; font-size: 20px; }")
-            .unwrap();
+    let css = compile_expanded(".btn { color: blue; } .large { @extend .btn; font-size: 20px; }")
+        .unwrap();
     assert!(css.contains(".btn"), "应该包含 .btn: {css}");
     assert!(css.contains(".large"), "应该包含 .large: {css}");
     assert!(css.contains("color: blue"), "应该包含 color: blue: {css}");
@@ -153,8 +150,11 @@ fn test_compile_extend_placeholder() {
 
 #[test]
 fn test_compile_hsl() {
-let css = compile_expanded("a { color: hsl(120, 50%, 50%); }").unwrap();
-assert!(css.contains("hsl(120, 50%, 50%)"), "应该保持 HSL 格式: {css}");
+    let css = compile_expanded("a { color: hsl(120, 50%, 50%); }").unwrap();
+    assert!(
+        css.contains("hsl(120, 50%, 50%)"),
+        "应该保持 HSL 格式: {css}"
+    );
 }
 
 #[test]
@@ -241,11 +241,9 @@ fn test_compile_selector_list_with_amp() {
 #[test]
 fn test_compile_css_custom_property() {
     // CSS 自定义属性 --var 和 var()
-    let css = compile_expanded(":root { --main-color: red; } .foo { color: var(--main-color); }").unwrap();
-    assert!(
-        css.contains("--main-color: red"),
-        "应定义 CSS 变量: {css}"
-    );
+    let css = compile_expanded(":root { --main-color: red; } .foo { color: var(--main-color); }")
+        .unwrap();
+    assert!(css.contains("--main-color: red"), "应定义 CSS 变量: {css}");
     assert!(
         css.contains("color: var(--main-color)"),
         "应使用 var(): {css}"
@@ -255,7 +253,10 @@ fn test_compile_css_custom_property() {
 #[test]
 fn test_compile_media_nesting() {
     // @media 嵌套展开
-    let css = compile_expanded(".container { width: 100%; @media (min-width: 768px) { max-width: 720px; } }").unwrap();
+    let css = compile_expanded(
+        ".container { width: 100%; @media (min-width: 768px) { max-width: 720px; } }",
+    )
+    .unwrap();
     assert!(css.contains("@media"), "应输出 @media: {css}");
     assert!(css.contains("max-width: 720px"), "应包含 max-width: {css}");
 }
@@ -273,7 +274,8 @@ fn test_compile_supports() {
 #[test]
 fn test_compile_font_face() {
     // @font-face
-    let css = compile_expanded("@font-face { font-family: 'MyFont'; src: url('font.woff'); }").unwrap();
+    let css =
+        compile_expanded("@font-face { font-family: 'MyFont'; src: url('font.woff'); }").unwrap();
     assert!(css.contains("@font-face"), "应输出 @font-face: {css}");
     assert!(
         css.contains("font-family: \"MyFont\""),
@@ -312,7 +314,8 @@ fn test_compile_css_url() {
 #[test]
 fn test_compile_keyframes() {
     // @keyframes
-    let css = compile_expanded("@keyframes fade { from { opacity: 0; } to { opacity: 1; } }").unwrap();
+    let css =
+        compile_expanded("@keyframes fade { from { opacity: 0; } to { opacity: 1; } }").unwrap();
     assert!(css.contains("@keyframes fade"), "应输出 @keyframes: {css}");
     assert!(css.contains("from"), "应包含 from: {css}");
     assert!(css.contains("to"), "应包含 to: {css}");
@@ -351,11 +354,22 @@ fn test_forward_with_config() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).ok();
     std::fs::write(dir.join("input.scss"), "@use \"midstream\";\n").ok();
-    std::fs::write(dir.join("_midstream.scss"), "@forward \"upstream\" with ($a: configured);\n").ok();
-    std::fs::write(dir.join("_upstream.scss"), "$a: original !default;\nb {c: $a}\n").ok();
+    std::fs::write(
+        dir.join("_midstream.scss"),
+        "@forward \"upstream\" with ($a: configured);\n",
+    )
+    .ok();
+    std::fs::write(
+        dir.join("_upstream.scss"),
+        "$a: original !default;\nb {c: $a}\n",
+    )
+    .ok();
     let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
     tracing::info!(css = %css, "forward_with result");
-    assert!(css.contains("configured"), "expected 'configured' in output: {css}");
+    assert!(
+        css.contains("configured"),
+        "expected 'configured' in output: {css}"
+    );
 }
 
 #[test]
@@ -364,11 +378,22 @@ fn test_import_twice_forward() {
     let dir = std::env::temp_dir().join("sasspile-import-twice-test");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).ok();
-    std::fs::write(dir.join("input.scss"), "$a: configured;\n@import \"other\";\n@import \"other\";\n").ok();
-    std::fs::write(dir.join("_other.scss"), "$a: original !default;\nb {c: $a}\n").ok();
+    std::fs::write(
+        dir.join("input.scss"),
+        "$a: configured;\n@import \"other\";\n@import \"other\";\n",
+    )
+    .ok();
+    std::fs::write(
+        dir.join("_other.scss"),
+        "$a: original !default;\nb {c: $a}\n",
+    )
+    .ok();
     let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
     tracing::info!(css = %css, "import_twice result");
-    assert!(css.contains("configured"), "expected 'configured' in output: {css}");
+    assert!(
+        css.contains("configured"),
+        "expected 'configured' in output: {css}"
+    );
     // 应输出两次 b 块
     let count = css.matches("b {").count();
     assert_eq!(count, 2, "expected 2 b blocks, got {count}: {css}");

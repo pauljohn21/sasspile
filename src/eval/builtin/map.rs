@@ -26,7 +26,10 @@ impl Evaluator {
     ) -> Result<Vec<(Value, Value)>> {
         if keys.is_empty() {
             let result = map2.iter().fold(map.to_vec(), |mut acc, (k, v)| {
-                if let Some(entry) = acc.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
+                if let Some(entry) = acc
+                    .iter_mut()
+                    .find(|(ek, _)| crate::eval::value::values_eq(ek, k))
+                {
                     entry.1 = v.clone();
                 } else {
                     acc.push((k.clone(), v.clone()));
@@ -45,8 +48,9 @@ impl Evaluator {
                     let inner_map = Self::value_to_map(v).unwrap_or_default();
                     let new_inner = if remaining.is_empty() {
                         map2.iter().fold(inner_map, |mut merged, (mk, mv)| {
-                            if let Some(entry) =
-                                merged.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, mk))
+                            if let Some(entry) = merged
+                                .iter_mut()
+                                .find(|(ek, _)| crate::eval::value::values_eq(ek, mk))
                             {
                                 entry.1 = mv.clone();
                             } else {
@@ -65,7 +69,9 @@ impl Evaluator {
                 }
             },
         )?;
-        if !found {
+        if found {
+            Ok(result)
+        } else {
             let inner = if remaining.is_empty() {
                 map2.to_vec()
             } else {
@@ -73,8 +79,6 @@ impl Evaluator {
             };
             let mut result = result;
             result.push((key.clone(), Value::Map(inner)));
-            Ok(result)
-        } else {
             Ok(result)
         }
     }
@@ -91,7 +95,10 @@ impl Evaluator {
         if keys.len() == 1 {
             let key = &keys[0];
             let mut result = map.to_vec();
-            if let Some(entry) = result.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, key)) {
+            if let Some(entry) = result
+                .iter_mut()
+                .find(|(ek, _)| crate::eval::value::values_eq(ek, key))
+            {
                 entry.1 = value;
             } else {
                 result.push((key.clone(), value));
@@ -126,15 +133,22 @@ impl Evaluator {
         let result = match name {
             "map-get" => {
                 if args.len() < 2 {
-                    return Err(SassError::Eval("map-get requires (map, key) arguments".into()));
+                    return Err(SassError::Eval(
+                        "map-get requires (map, key) arguments".into(),
+                    ));
                 }
-                args[1..].iter().try_fold(args[0].clone(), |current, key| -> Result<Value> {
-                    let pairs = Self::value_to_map(&current)?;
-                    match pairs.iter().find(|(k, _)| crate::eval::value::values_eq(k, key)) {
-                        Some((_, v)) => Ok(v.clone()),
-                        None => Ok(Value::Null),
-                    }
-                })?
+                args[1..]
+                    .iter()
+                    .try_fold(args[0].clone(), |current, key| -> Result<Value> {
+                        let pairs = Self::value_to_map(&current)?;
+                        match pairs
+                            .iter()
+                            .find(|(k, _)| crate::eval::value::values_eq(k, key))
+                        {
+                            Some((_, v)) => Ok(v.clone()),
+                            None => Ok(Value::Null),
+                        }
+                    })?
             }
             "map-keys" => {
                 if args.len() != 1 {
@@ -160,31 +174,36 @@ impl Evaluator {
             }
             "map-has-key" => {
                 if args.len() < 2 {
-                    return Err(SassError::Eval("map-has-key requires (map, key) arguments".into()));
+                    return Err(SassError::Eval(
+                        "map-has-key requires (map, key) arguments".into(),
+                    ));
                 }
                 let mut current = args[0].clone();
                 let mut found = true;
                 for key in &args[1..] {
-                    let pairs = match Self::value_to_map(&current) {
-                        Ok(p) => p,
-                        Err(_) => {
-                            found = false;
-                            break;
-                        }
+                    let pairs = if let Ok(p) = Self::value_to_map(&current) {
+                        p
+                    } else {
+                        found = false;
+                        break;
                     };
-                    match pairs.iter().find(|(k, _)| crate::eval::value::values_eq(k, key)) {
-                        Some((_, v)) => current = v.clone(),
-                        None => {
-                            found = false;
-                            break;
-                        }
+                    if let Some((_, v)) = pairs
+                        .iter()
+                        .find(|(k, _)| crate::eval::value::values_eq(k, key))
+                    {
+                        current = v.clone()
+                    } else {
+                        found = false;
+                        break;
                     }
                 }
                 Value::Bool(found)
             }
             "map-merge" => {
                 if args.len() < 2 {
-                    return Err(SassError::Eval("map-merge requires at least 2 arguments".into()));
+                    return Err(SassError::Eval(
+                        "map-merge requires at least 2 arguments".into(),
+                    ));
                 }
                 let map1 = Self::value_to_map(&args[0])?;
                 if args.len() > 2 {
@@ -195,7 +214,10 @@ impl Evaluator {
                 }
                 let map2 = Self::value_to_map(&args[1])?;
                 let merged = map2.iter().fold(map1, |mut acc, (k, v)| {
-                    if let Some(entry) = acc.iter_mut().find(|(ek, _)| crate::eval::value::values_eq(ek, k)) {
+                    if let Some(entry) = acc
+                        .iter_mut()
+                        .find(|(ek, _)| crate::eval::value::values_eq(ek, k))
+                    {
                         entry.1 = v.clone();
                     } else {
                         acc.push((k.clone(), v.clone()));
@@ -206,7 +228,9 @@ impl Evaluator {
             }
             "map-remove" => {
                 if args.is_empty() {
-                    return Err(SassError::Eval("map-remove requires at least 1 argument".into()));
+                    return Err(SassError::Eval(
+                        "map-remove requires at least 1 argument".into(),
+                    ));
                 }
                 let pairs = Self::value_to_map(&args[0])?;
                 if args.len() == 1 {
@@ -222,7 +246,9 @@ impl Evaluator {
             }
             "map-set" => {
                 if args.len() < 3 {
-                    return Err(SassError::Eval("map-set requires at least 3 arguments".into()));
+                    return Err(SassError::Eval(
+                        "map-set requires at least 3 arguments".into(),
+                    ));
                 }
                 let map = Self::value_to_map(&args[0])?;
                 let keys = &args[1..args.len() - 1];
@@ -233,7 +259,9 @@ impl Evaluator {
             "map-deep-merge" => {
                 // map.deep-merge($map1, $map2) — 递归合并：当两个值都是 map 时递归合并
                 if args.len() != 2 {
-                    return Err(SassError::Eval("map-deep-merge requires 2 arguments".into()));
+                    return Err(SassError::Eval(
+                        "map-deep-merge requires 2 arguments".into(),
+                    ));
                 }
                 let map1 = Self::value_to_map(&args[0])?;
                 let map2 = Self::value_to_map(&args[1])?;
@@ -248,12 +276,12 @@ impl Evaluator {
     }
 
     /// 递归合并两个 map——当同一键的两个值都是 map 时递归合并。
-    fn deep_merge_maps(
-        map1: &[(Value, Value)],
-        map2: &[(Value, Value)],
-    ) -> Vec<(Value, Value)> {
+    fn deep_merge_maps(map1: &[(Value, Value)], map2: &[(Value, Value)]) -> Vec<(Value, Value)> {
         map2.iter().fold(map1.to_vec(), |mut acc, (k2, v2)| {
-            if let Some(entry) = acc.iter_mut().find(|(k1, _)| crate::eval::value::values_eq(k1, k2)) {
+            if let Some(entry) = acc
+                .iter_mut()
+                .find(|(k1, _)| crate::eval::value::values_eq(k1, k2))
+            {
                 // 两个值都是 map → 递归合并
                 if let (Value::Map(inner1), Value::Map(inner2)) = (&entry.1, v2) {
                     entry.1 = Value::Map(Self::deep_merge_maps(inner1, inner2));
@@ -277,7 +305,11 @@ impl Evaluator {
                 }
                 let target_key = keys[0];
                 let remaining_keys = &keys[1..];
-                let result: Vec<(Value, Value)> = pairs.iter().filter(|(k, _)| !crate::eval::value::values_eq(k, target_key)).map(|(k, v)| (k.clone(), v.clone())).collect();
+                let result: Vec<(Value, Value)> = pairs
+                    .iter()
+                    .filter(|(k, _)| !crate::eval::value::values_eq(k, target_key))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
                 // For matching keys, we need to handle the recursive case
                 let (result, _) = pairs.iter().try_fold(
                     (result, false),
@@ -307,7 +339,9 @@ impl Evaluator {
                 Ok(Value::Map(result))
             }
             [other, ..] => Ok(other.clone()),
-            _ => Err(SassError::Eval("map-deep-remove requires at least 1 argument".into())),
+            _ => Err(SassError::Eval(
+                "map-deep-remove requires at least 1 argument".into(),
+            )),
         }
     }
 }

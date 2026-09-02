@@ -1,19 +1,30 @@
+#![allow(
+    clippy::many_single_char_names,
+    clippy::single_char_pattern,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 //! Sass Level 4 颜色空间函数：channel / to-space / space / same。
 //!
 //! 使用 `color` crate v0.3 做底层色彩空间转换计算，
 //! sasspile 封装自己的序列化格式输出。
 //! 支持 CSS Color Level 4 全部色彩空间。
 
+use crate::consts::{DEG_UNIT, PCT_SCALE, PERCENT_UNIT, RGB_MAX};
 use crate::error::{Result, SassError};
-use crate::eval::error_msgs::{err_not_a_color, err_not_a_string, err_missing_arg, err_wrong_arg_count_plural, err_expected_quoted_str_display, err_expected_unquoted_str_display, err_no_channel, err_unknown_color_space};
+use crate::eval::error_msgs::{
+    err_expected_quoted_str_display, err_expected_unquoted_str_display, err_missing_arg,
+    err_no_channel, err_not_a_color, err_not_a_string, err_unknown_color_space,
+    err_wrong_arg_count_plural,
+};
 use crate::parse::ast::{Color, ColorSpace, Value};
-use crate::consts::{RGB_MAX, PCT_SCALE, DEG_UNIT, PERCENT_UNIT};
 use std::collections::HashMap;
 
 use super::super::Evaluator;
 use super::color_conv_ops::{color_name, convert_space};
 
-/// 从 kw_args 中查找参数值，同时支持带 $ 和不带 $ 的 key。
+/// 从 `kw_args` 中查找参数值，同时支持带 $ 和不带 $ 的 key。
 fn kw_get<'a>(kw_args: &'a HashMap<String, Value>, key: &str) -> Option<&'a Value> {
     kw_args.get(key).or_else(|| kw_args.get(&format!("${key}")))
 }
@@ -67,9 +78,7 @@ pub fn to_space(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     let space_arg = args.get(1).or_else(|| kw_get(kw_args, "space"));
 
     match (color_arg, space_arg) {
-        (Some(Value::Color(c)), Some(Value::String(space, _))) => {
-            convert_space(c, space).map(Some)
-        }
+        (Some(Value::Color(c)), Some(Value::String(space, _))) => convert_space(c, space).map(Some),
         (Some(v), _) => Err(err_not_a_color("color", v)),
         _ => Err(err_missing_arg("space")),
     }
@@ -93,16 +102,16 @@ pub fn same(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<V
     let c1 = args.first().or_else(|| kw_get(kw_args, "color1"));
     let c2 = args.get(1).or_else(|| kw_get(kw_args, "color2"));
     match (c1, c2) {
-        (Some(Value::Color(a)), Some(Value::Color(b))) => {
-            Ok(Some(Value::Bool(
-                (a.legacy_rgb[0] - b.legacy_rgb[0]).abs() < 0.5
+        (Some(Value::Color(a)), Some(Value::Color(b))) => Ok(Some(Value::Bool(
+            (a.legacy_rgb[0] - b.legacy_rgb[0]).abs() < 0.5
                 && (a.legacy_rgb[1] - b.legacy_rgb[1]).abs() < 0.5
                 && (a.legacy_rgb[2] - b.legacy_rgb[2]).abs() < 0.5
-                && (a.a - b.a).abs() < 0.0001
-            )))
-        }
+                && (a.a - b.a).abs() < 0.0001,
+        ))),
         (Some(v), _) => Err(err_not_a_color("color1", v)),
-        _ => Err(SassError::Eval("color.same requires 2 color arguments".into())),
+        _ => Err(SassError::Eval(
+            "color.same requires 2 color arguments".into(),
+        )),
     }
 }
 
@@ -133,7 +142,8 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
             let (h, w, bk) = if c.space == ColorSpace::Hwb {
                 (c.channels[0], c.channels[1], c.channels[2])
             } else {
-                let (h, _s, _l) = Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
+                let (h, _s, _l) =
+                    Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                 let r = c.legacy_rgb[0] / RGB_MAX;
                 let g = c.legacy_rgb[1] / RGB_MAX;
                 let b = c.legacy_rgb[2] / RGB_MAX;
@@ -247,24 +257,39 @@ fn get_normalized_rgb(c: &Color, space: &str) -> (f64, f64, f64) {
     let b = c.legacy_rgb[2] / RGB_MAX;
     match space {
         "display-p3" => {
-            if c.space == ColorSpace::DisplayP3 { (c.channels[0], c.channels[1], c.channels[2]) }
-            else { color_conv::srgb_to_display_p3(r, g, b) }
+            if c.space == ColorSpace::DisplayP3 {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
+                color_conv::srgb_to_display_p3(r, g, b)
+            }
         }
         "srgb-linear" => {
-            if c.space == ColorSpace::SrgbLinear { (c.channels[0], c.channels[1], c.channels[2]) }
-            else { color_conv::srgb_to_linear_srgb(r, g, b) }
+            if c.space == ColorSpace::SrgbLinear {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
+                color_conv::srgb_to_linear_srgb(r, g, b)
+            }
         }
         "a98-rgb" => {
-            if c.space == ColorSpace::A98Rgb { (c.channels[0], c.channels[1], c.channels[2]) }
-            else { color_conv::srgb_to_a98_rgb(r, g, b) }
+            if c.space == ColorSpace::A98Rgb {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
+                color_conv::srgb_to_a98_rgb(r, g, b)
+            }
         }
         "prophoto-rgb" => {
-            if c.space == ColorSpace::ProphotoRgb { (c.channels[0], c.channels[1], c.channels[2]) }
-            else { color_conv::srgb_to_prophoto(r, g, b) }
+            if c.space == ColorSpace::ProphotoRgb {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
+                color_conv::srgb_to_prophoto(r, g, b)
+            }
         }
         "rec2020" => {
-            if c.space == ColorSpace::Rec2020 { (c.channels[0], c.channels[1], c.channels[2]) }
-            else { color_conv::srgb_to_rec2020(r, g, b) }
+            if c.space == ColorSpace::Rec2020 {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
+                color_conv::srgb_to_rec2020(r, g, b)
+            }
         }
         _ => (r, g, b),
     }
@@ -278,12 +303,16 @@ fn get_xyz(c: &Color, space: &str) -> (f64, f64, f64) {
     let b = c.legacy_rgb[2] / RGB_MAX;
     match space {
         "xyz" | "xyz-d65" => {
-            if c.space == ColorSpace::XyzD65 { (c.channels[0], c.channels[1], c.channels[2]) }
-            else { color_conv::srgb_to_xyz_d65(r, g, b) }
+            if c.space == ColorSpace::XyzD65 {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
+                color_conv::srgb_to_xyz_d65(r, g, b)
+            }
         }
         "xyz-d50" => {
-            if c.space == ColorSpace::XyzD50 { (c.channels[0], c.channels[1], c.channels[2]) }
-            else {
+            if c.space == ColorSpace::XyzD50 {
+                (c.channels[0], c.channels[1], c.channels[2])
+            } else {
                 let (x65, y65, z65) = color_conv::srgb_to_xyz_d65(r, g, b);
                 color_conv::xyz_d65_to_xyz_d50(x65, y65, z65)
             }

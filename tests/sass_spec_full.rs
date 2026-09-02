@@ -29,7 +29,7 @@ fn collect_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
                 collect_recursive(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000
+                && meta.len() < 100_000
             {
                 files.push(path);
             }
@@ -38,10 +38,7 @@ fn collect_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
 }
 
 /// 使用 manifest 跳过列表收集 HRX 文件。
-fn collect_hrx_files_with_manifest(
-    dir: &Path,
-    spec_root: &Path,
-) -> (Vec<PathBuf>, usize) {
+fn collect_hrx_files_with_manifest(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) {
     let all = collect_hrx_files(dir);
     let mut kept = Vec::new();
     let mut skipped = 0;
@@ -162,7 +159,16 @@ fn test_directives_subdirs() {
         let (p, f, s, c) = run_spec_dir(&spec_root, sub);
         let eval = c - s;
         let pct = p * 100 / eval.max(1);
-        info!(sub, pass = p, fail = f, skip = s, total = c, evaluated = eval, pct = pct, "子目录");
+        info!(
+            sub,
+            pass = p,
+            fail = f,
+            skip = s,
+            total = c,
+            evaluated = eval,
+            pct = pct,
+            "子目录"
+        );
         tp += p;
         tf += f;
         ts += s;
@@ -190,7 +196,16 @@ fn test_directives_subdirs() {
                 }
                 let heval = hc - hs;
                 let hpct = hp * 100 / heval.max(1);
-                info!(hrx, pass = hp, fail = hf, skip = hs, total = hc, evaluated = heval, pct = hpct, "hrx文件");
+                info!(
+                    hrx,
+                    pass = hp,
+                    fail = hf,
+                    skip = hs,
+                    total = hc,
+                    evaluated = heval,
+                    pct = hpct,
+                    "hrx文件"
+                );
                 tp += hp;
                 tf += hf;
                 ts += hs;
@@ -235,7 +250,16 @@ fn test_sass_spec_full_stats() {
         let (pass, fail, skip, cases) = run_spec_dir(&spec_root, dir);
         let eval = cases - skip;
         let pct = pass * 100 / eval.max(1);
-        info!(dir, pass, fail, skip, total = cases, evaluated = eval, pct, "sass-spec 目录");
+        info!(
+            dir,
+            pass,
+            fail,
+            skip,
+            total = cases,
+            evaluated = eval,
+            pct,
+            "sass-spec 目录"
+        );
         total_pass += pass;
         total_fail += fail;
         total_skip += skip;
@@ -288,7 +312,16 @@ fn test_core_functions_subdirs() {
         let (p, f, s, c) = run_spec_dir(&spec_root, &full);
         let eval = c - s;
         let pct = p * 100 / eval.max(1);
-        info!(sub, pass = p, fail = f, skip = s, total = c, evaluated = eval, pct, "cf子目录");
+        info!(
+            sub,
+            pass = p,
+            fail = f,
+            skip = s,
+            total = c,
+            evaluated = eval,
+            pct,
+            "cf子目录"
+        );
         tp += p;
         tf += f;
         ts += s;
@@ -297,5 +330,13 @@ fn test_core_functions_subdirs() {
 
     let evaluated = tc - ts;
     let pct = tp * 100 / evaluated.max(1);
-    info!(pass = tp, fail = tf, skip = ts, total = tc, evaluated, pct, "cf子目录汇总");
+    info!(
+        pass = tp,
+        fail = tf,
+        skip = ts,
+        total = tc,
+        evaluated,
+        pct,
+        "cf子目录汇总"
+    );
 }

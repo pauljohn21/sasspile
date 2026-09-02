@@ -37,9 +37,9 @@ pub const SKIP_DIRS: &[&str] = &[
 #[allow(dead_code)]
 fn should_skip(rel_path: &str) -> bool {
     // 检查是否在跳过的顶层目录下
-    SKIP_DIRS.iter().any(|skip| {
-        rel_path.starts_with(skip) || rel_path == *skip
-    })
+    SKIP_DIRS
+        .iter()
+        .any(|skip| rel_path.starts_with(skip) || rel_path == *skip)
 }
 
 /// 收集 spec 目录下所有 HRX 文件，跳过 `SKIP_DIRS` 和 >100KB 的文件。
@@ -55,12 +55,7 @@ pub fn collect_hrx_files(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) 
 }
 
 #[allow(dead_code)]
-fn collect_recursive(
-    dir: &Path,
-    spec_root: &Path,
-    files: &mut Vec<PathBuf>,
-    skipped: &mut usize,
-) {
+fn collect_recursive(dir: &Path, spec_root: &Path, files: &mut Vec<PathBuf>, skipped: &mut usize) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -77,9 +72,10 @@ fn collect_recursive(
                     continue;
                 }
                 if let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000 {
-                        files.push(path);
-                    }
+                    && meta.len() < 100_000
+                {
+                    files.push(path);
+                }
             }
         }
     }
@@ -102,9 +98,10 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
                 collect_all_recursive(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 100_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 100_000
+            {
+                files.push(path);
+            }
         }
     }
 }
@@ -113,8 +110,7 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
 #[allow(dead_code)]
 pub fn stats_by_dir(spec_root: &Path) -> Vec<(String, usize)> {
     let all = collect_all_hrx(spec_root);
-    let mut counts: std::collections::BTreeMap<String, usize> =
-        std::collections::BTreeMap::new();
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for path in &all {
         let rel = path.strip_prefix(spec_root).unwrap_or(path);
         let first = rel

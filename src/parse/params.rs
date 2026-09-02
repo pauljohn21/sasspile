@@ -1,13 +1,13 @@
 //! 参数解析 + 配置解析。
 //!
-//! parse_params / parse_args / parse_config / parse_member_list。
+//! `parse_params` / `parse_args` / `parse_config` / `parse_member_list`。
 
 use super::Parser;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> Parser<'tok> {
+impl Parser<'_> {
     pub(crate) fn parse_params(&mut self) -> Result<Vec<Param>> {
         self.expect(&Token::LParen)?;
         let mut params = Vec::new();
@@ -90,7 +90,7 @@ impl<'tok> Parser<'tok> {
                     } else {
                         next
                     };
-                    matches!(after_ws, Some(Token::Colon) | Some(Token::Assign))
+                    matches!(after_ws, Some(Token::Colon | Token::Assign))
                 }
                 _ => false,
             };
@@ -109,7 +109,7 @@ impl<'tok> Parser<'tok> {
                     _ => unreachable!(),
                 };
                 self.skip_ws();
-                if matches!(self.peek(), Some(Token::Colon) | Some(Token::Assign)) {
+                if matches!(self.peek(), Some(Token::Colon | Token::Assign)) {
                     self.advance();
                 }
                 self.skip_ws();
@@ -138,22 +138,23 @@ impl<'tok> Parser<'tok> {
                         self.advance();
                         self.skip_ws();
                         if let Some(Token::Ident(s)) = self.peek()
-                            && s == "else" {
+                            && s == "else"
+                        {
+                            self.advance();
+                            self.skip_ws();
+                            if self.peek() == Some(&Token::Colon) {
                                 self.advance();
                                 self.skip_ws();
-                                if self.peek() == Some(&Token::Colon) {
-                                    self.advance();
-                                    self.skip_ws();
-                                }
-                                let else_val = self.parse_expr(0)?;
-                                args.push(Arg {
-                                    name: Some("else".to_string()),
-                                    value: else_val,
-                                    spread: false,
-                                    condition: None,
-                                });
-                                break;
                             }
+                            let else_val = self.parse_expr(0)?;
+                            args.push(Arg {
+                                name: Some("else".to_string()),
+                                value: else_val,
+                                spread: false,
+                                condition: None,
+                            });
+                            break;
+                        }
                         let cond2 = self.parse_expr(0)?;
                         self.skip_ws();
                         if self.peek() == Some(&Token::Colon) {
@@ -178,9 +179,8 @@ impl<'tok> Parser<'tok> {
                     if self.peek() == Some(&Token::Comma) {
                         self.advance();
                         continue;
-                    } else {
-                        break;
                     }
+                    break;
                 }
                 (None, expr)
             };
@@ -251,7 +251,11 @@ impl<'tok> Parser<'tok> {
                     self.skip_ws();
                 }
             }
-            config.push(ConfigVar { name, value, is_default });
+            config.push(ConfigVar {
+                name,
+                value,
+                is_default,
+            });
             if self.peek() == Some(&Token::Comma) {
                 self.advance();
                 self.skip_ws();
@@ -274,7 +278,7 @@ impl<'tok> Parser<'tok> {
         self.skip_ws();
         loop {
             match self.peek() {
-                Some(Token::Semicolon) | Some(Token::LBrace) | None => break,
+                Some(Token::Semicolon | Token::LBrace) | None => break,
                 Some(Token::Dollar(n)) => {
                     if n.is_empty() {
                         return Err(SassError::Eval(

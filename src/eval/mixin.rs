@@ -23,8 +23,12 @@ impl Evaluator {
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let mixin_name = &name[dot + 1..];
-            let ns_mixin = env.get_namespace(ns)
-                .and_then(|module| module.all_mixins().find(|(k, _)| *k == mixin_name).map(|(_, m)| m.clone()));
+            let ns_mixin = env.get_namespace(ns).and_then(|module| {
+                module
+                    .all_mixins()
+                    .find(|(k, _)| *k == mixin_name)
+                    .map(|(_, m)| m.clone())
+            });
             if let Some(mixin) = ns_mixin {
                 return Self::exec_mixin(&mixin, args, content, env);
             }
@@ -49,7 +53,7 @@ impl Evaluator {
         let mut mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         // 合并 mixin 定义时捕获的命名空间
         for (ns, exports) in &mixin.captured_namespaces {
-            if !mixin_env.get_namespace(ns).is_some() {
+            if mixin_env.get_namespace(ns).is_none() {
                 mixin_env = mixin_env.add_namespace(ns.clone(), (**exports).clone());
             }
             // 将命名空间模块中的函数注入到 mixin 环境，使 mixin 体可直接调用
@@ -103,10 +107,13 @@ impl Evaluator {
         // 直接 move env，链式 bind 绑定参数
         let mut new_env = env;
         let mut pos_idx = 0;
-        for param in params.iter() {
+        for param in params {
             if param.rest {
                 let rest: Vec<Value> = positional[pos_idx..].to_vec();
-                new_env = new_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
+                new_env = new_env.bind(
+                    param.name.clone(),
+                    Value::List(rest, Separator::Comma, false),
+                );
                 break;
             }
             if let Some(val) = keyword.get(&param.name) {
@@ -125,18 +132,32 @@ impl Evaluator {
     }
 
     /// 调用函数（内建或用户定义）。
-    pub(crate) fn call_function(name: &str, pos_args: &[Value], kw_args: &HashMap<String, Value>, env: &Env) -> Result<Value> {
-        let span = crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
+    pub(crate) fn call_function(
+        name: &str,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        env: &Env,
+    ) -> Result<Value> {
+        let span =
+            crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
         let _enter = span.enter();
         // 用户函数
         let has_user_func = env.get_function(name).is_some();
-        crate::__tracing::warn!(name = name, has_user_func, "call_function: checking user func");
+        crate::__tracing::warn!(
+            name = name,
+            has_user_func,
+            "call_function: checking user func"
+        );
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env.clone());
         }
         // 在命名空间模块中查找同名函数
         for exports in env.get_namespaces().values() {
-            if let Some(func) = exports.all_functions().find(|(k, _)| *k == name).map(|(_, f)| f) {
+            if let Some(func) = exports
+                .all_functions()
+                .find(|(k, _)| *k == name)
+                .map(|(_, f)| f)
+            {
                 return Self::call_user_function(func, pos_args, kw_args, env.clone());
             }
         }
@@ -176,10 +197,13 @@ impl Evaluator {
             }
         }
         let mut pos_idx = 0;
-        for param in func.params.iter() {
+        for param in &func.params {
             if param.rest {
                 let rest: Vec<Value> = pos_args[pos_idx..].to_vec();
-                func_env = func_env.bind(param.name.clone(), Value::List(rest, Separator::Comma, false));
+                func_env = func_env.bind(
+                    param.name.clone(),
+                    Value::List(rest, Separator::Comma, false),
+                );
                 break;
             }
             if let Some(val) = kw_args.get(&param.name) {
@@ -208,8 +232,12 @@ impl Evaluator {
         }
         // exit_scope 恢复外层作用域（仅传播命名空间变量和 !global 变量）
         let _restored = func_env.exit_scope(
-            saved_local_vars, saved_local_mixins, saved_local_functions,
-            saved_forwarded_vars, saved_forwarded_mixins, saved_forwarded_functions,
+            saved_local_vars,
+            saved_local_mixins,
+            saved_local_functions,
+            saved_forwarded_vars,
+            saved_forwarded_mixins,
+            saved_forwarded_functions,
         );
         Ok(return_val)
     }
@@ -236,7 +264,8 @@ impl Evaluator {
         body: &Option<Vec<Node>>,
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = crate::__tracing::info_span!("eval_at_rule", name = name, has_body = body.is_some());
+        let span =
+            crate::__tracing::info_span!("eval_at_rule", name = name, has_body = body.is_some());
         let _enter = span.enter();
 
         let (children, has_body, new_env) = match body {
@@ -245,7 +274,9 @@ impl Evaluator {
                 // 使用 @ 前缀标记 AtRule 来源，让 eval_rule 能区分
                 let env = if env.current_selector.is_none() {
                     env.with_selector(format!("@{name}"))
-                } else { env };
+                } else {
+                    env
+                };
                 let (css, e) = Self::eval_nodes(nodes, env)?;
                 (css, true, e)
             }
@@ -263,64 +294,71 @@ impl Evaluator {
         // - without: all → 脱离所有 at-rules 和 style rules
         // - with: rule → 排除所有 at-rules，只保留 style rules
         // partition: predicate=true → inside（保留），predicate=false → outside（提升）
-        let (inside, outside): (Vec<CssNode>, Vec<CssNode>) = children.into_iter().partition(|node| {
-            match node {
-                CssNode::AtRoot(_, Some(q)) => {
-                    // without: all → 脱离所有 at-rules
-                    let without_all = q.contains("without: all") || q.contains("without:all");
-                    // with: rule → 排除所有 at-rules
-                    let with_rule = q.contains("with: rule") || q.contains("with:rule");
-                    if without_all || with_rule {
-                        return false; // 提升到外面
+        let (inside, outside): (Vec<CssNode>, Vec<CssNode>) =
+            children.into_iter().partition(|node| {
+                match node {
+                    CssNode::AtRoot(_, Some(q)) => {
+                        // without: all → 脱离所有 at-rules
+                        let without_all = q.contains("without: all") || q.contains("without:all");
+                        // with: rule → 排除所有 at-rules
+                        let with_rule = q.contains("with: rule") || q.contains("with:rule");
+                        if without_all || with_rule {
+                            return false; // 提升到外面
+                        }
+                        // without: media → 仅对 @media 生效
+                        if matches!(name, "media") {
+                            return !(q.contains("without: media") || q.contains("without:media"));
+                        }
+                        // without: supports → 仅对 @supports 生效
+                        if matches!(name, "supports") {
+                            return !(q.contains("without: supports")
+                                || q.contains("without:supports"));
+                        }
+                        // without: container → 仅对 @container 生效
+                        if matches!(name, "container") {
+                            return !(q.contains("without: container")
+                                || q.contains("without:container"));
+                        }
+                        true
                     }
-                    // without: media → 仅对 @media 生效
-                    if matches!(name, "media") {
-                        return !(q.contains("without: media") || q.contains("without:media"));
-                    }
-                    // without: supports → 仅对 @supports 生效
-                    if matches!(name, "supports") {
-                        return !(q.contains("without: supports") || q.contains("without:supports"));
-                    }
-                    // without: container → 仅对 @container 生效
-                    if matches!(name, "container") {
-                        return !(q.contains("without: container") || q.contains("without:container"));
-                    }
-                    true
+                    _ => true,
                 }
-                _ => true,
-            }
-        });
+            });
 
         // 将 outside 中的 AtRoot nodes 展开——父选择器已在 RuleBuilder 中处理
-        let outside_flat: Vec<CssNode> = outside.into_iter().flat_map(|node| {
-            match node {
-                CssNode::AtRoot(nodes, _) => {
-                    // without: all 时不需要嵌套父选择器——直接提升到 root
-                    // without: media 时需要嵌套在父选择器下
-                    // 但 AtRoot nodes 内部已经包含了父选择器信息（在 eval_rule 中保留的）
-                    // 这里直接展开即可——RuleBuilder 已处理了嵌套
-                    nodes
+        let outside_flat: Vec<CssNode> = outside
+            .into_iter()
+            .flat_map(|node| {
+                match node {
+                    CssNode::AtRoot(nodes, _) => {
+                        // without: all 时不需要嵌套父选择器——直接提升到 root
+                        // without: media 时需要嵌套在父选择器下
+                        // 但 AtRoot nodes 内部已经包含了父选择器信息（在 eval_rule 中保留的）
+                        // 这里直接展开即可——RuleBuilder 已处理了嵌套
+                        nodes
+                    }
+                    other => vec![other],
                 }
-                other => vec![other],
-            }
-        }).collect();
+            })
+            .collect();
 
         // 当 @media/@supports/@container 在规则内部时，提升到外层
         if matches!(name, "media" | "supports" | "container")
             && let Some(sel) = new_env.get_selector()
-                && !sel.is_empty() {
-                    let mut result = outside_flat;
-                    // @media/@supports/@container 空块不保留
-                    if !inside.is_empty() {
-                        result.push(CssNode::AtRule {
-                            name: name.to_string(),
-                            params: eval_params,
-                            children: inside,
-                            has_body,
-                        });
-                    }
-                    return Ok((result, new_env));
-                }
+            && !sel.is_empty()
+        {
+            let mut result = outside_flat;
+            // @media/@supports/@container 空块不保留
+            if !inside.is_empty() {
+                result.push(CssNode::AtRule {
+                    name: name.to_string(),
+                    params: eval_params,
+                    children: inside,
+                    has_body,
+                });
+            }
+            return Ok((result, new_env));
+        }
 
         // @media/@supports/@container 空块不保留；其他 at-rule（如 @keyframes）保留空块
         // 对于非 @media 类的 at-rule（如 @keyframes），先输出 at-rule 再输出 outside 提升的内容

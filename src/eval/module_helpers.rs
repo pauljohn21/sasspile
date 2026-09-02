@@ -13,10 +13,19 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
             vars.insert("pi".to_string(), Value::Number(std::f64::consts::PI, None));
             vars.insert("e".to_string(), Value::Number(std::f64::consts::E, None));
             vars.insert("epsilon".to_string(), Value::Number(f64::EPSILON, None));
-            vars.insert("max-safe-integer".to_string(), Value::Number(9007199254740991.0, None));
-            vars.insert("min-safe-integer".to_string(), Value::Number(-9007199254740991.0, None));
+            vars.insert(
+                "max-safe-integer".to_string(),
+                Value::Number(9007199254740991.0, None),
+            );
+            vars.insert(
+                "min-safe-integer".to_string(),
+                Value::Number(-9007199254740991.0, None),
+            );
             vars.insert("max-number".to_string(), Value::Number(f64::MAX, None));
-            vars.insert("min-number".to_string(), Value::Number(f64::MIN_POSITIVE, None));
+            vars.insert(
+                "min-number".to_string(),
+                Value::Number(f64::MIN_POSITIVE, None),
+            );
             Some(ModuleExports {
                 local_vars: vars,
                 ..Default::default()
@@ -45,9 +54,9 @@ pub(crate) fn merge_with_local_precedence<'a>(
     local: &'a HashMap<String, Value>,
     forwarded: &'a HashMap<String, Value>,
 ) -> impl Iterator<Item = (&'a String, &'a Value)> {
-    local.iter().chain(
-        forwarded.iter().filter(|(k, _)| !local.contains_key(*k))
-    )
+    local
+        .iter()
+        .chain(forwarded.iter().filter(|(k, _)| !local.contains_key(*k)))
 }
 
 /// 将模块导出绑定到环境。
@@ -62,37 +71,59 @@ pub(crate) fn bind_exports(
     let span = crate::__tracing::debug_span!("bind_exports", mode = ?mode, source = %source_path.display());
     let _enter = span.enter();
     let mut new_env = env;
-    let fmt_key = |k: &str| -> String {
-        prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}"))
-    };
+    let fmt_key =
+        |k: &str| -> String { prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}")) };
     match mode {
         BindMode::Use => {
             new_env = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
                 .fold(new_env, |env, (k, v)| env.bind(fmt_key(k), v.clone()));
-            new_env = exports.all_mixins()
-                .fold(new_env, |env, (k, v)| env.define_local_mixin(fmt_key(k), v.clone()));
-            new_env = exports.all_functions()
-                .fold(new_env, |env, (k, v)| env.define_local_function(fmt_key(k), v.clone()));
+            new_env = exports.all_mixins().fold(new_env, |env, (k, v)| {
+                env.define_local_mixin(fmt_key(k), v.clone())
+            });
+            new_env = exports.all_functions().fold(new_env, |env, (k, v)| {
+                env.define_local_function(fmt_key(k), v.clone())
+            });
         }
         BindMode::Forward => {
-            let merged_vars: Vec<(String, Value)> = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
+            let merged_vars: Vec<(String, Value)> =
+                merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+            let merged_mixins: Vec<(String, MixinDef)> = exports
+                .local_mixins
+                .iter()
+                .chain(
+                    exports
+                        .forwarded_mixins
+                        .iter()
+                        .filter(|(k, _)| !exports.local_mixins.contains_key(*k)),
+                )
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
-            let merged_mixins: Vec<(String, MixinDef)> = exports.local_mixins.iter()
-                .chain(exports.forwarded_mixins.iter().filter(|(k, _)| !exports.local_mixins.contains_key(*k)))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            let merged_functions: Vec<(String, FunctionDef)> = exports.local_functions.iter()
-                .chain(exports.forwarded_functions.iter().filter(|(k, _)| !exports.local_functions.contains_key(*k)))
+            let merged_functions: Vec<(String, FunctionDef)> = exports
+                .local_functions
+                .iter()
+                .chain(
+                    exports
+                        .forwarded_functions
+                        .iter()
+                        .filter(|(k, _)| !exports.local_functions.contains_key(*k)),
+                )
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             for (k, v) in &merged_vars {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
-                if k.starts_with('-') || k.starts_with('_') { continue; }
+                if k.starts_with('-') || k.starts_with('_') {
+                    continue;
+                }
                 let key = fmt_key(k);
                 let var_key = format!("${key}");
-                if !filter.show.is_empty() && !filter.show.contains(&var_key) { continue; }
-                if filter.hide.contains(&var_key) { continue; }
+                if !filter.show.is_empty() && !filter.show.contains(&var_key) {
+                    continue;
+                }
+                if filter.hide.contains(&var_key) {
+                    continue;
+                }
                 // 冲突检测：forwarded_vars 已存在同名时报错
                 // 但如果值相同（来自同一底层模块）则跳过不报错
                 if let Some(existing) = new_env.forwarded_vars.get(&key) {
@@ -108,10 +139,16 @@ pub(crate) fn bind_exports(
             }
             for (k, v) in &merged_mixins {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
-                if k.starts_with('-') || k.starts_with('_') { continue; }
+                if k.starts_with('-') || k.starts_with('_') {
+                    continue;
+                }
                 let key = fmt_key(k);
-                if !filter.show.is_empty() && !filter.show.contains(&key) { continue; }
-                if filter.hide.contains(&key) { continue; }
+                if !filter.show.is_empty() && !filter.show.contains(&key) {
+                    continue;
+                }
+                if filter.hide.contains(&key) {
+                    continue;
+                }
                 if let Some(existing) = new_env.forwarded_mixins.get(&key) {
                     // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
@@ -126,10 +163,16 @@ pub(crate) fn bind_exports(
             }
             for (k, v) in &merged_functions {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
-                if k.starts_with('-') || k.starts_with('_') { continue; }
+                if k.starts_with('-') || k.starts_with('_') {
+                    continue;
+                }
                 let key = fmt_key(k);
-                if !filter.show.is_empty() && !filter.show.contains(&key) { continue; }
-                if filter.hide.contains(&key) { continue; }
+                if !filter.show.is_empty() && !filter.show.contains(&key) {
+                    continue;
+                }
+                if filter.hide.contains(&key) {
+                    continue;
+                }
                 if let Some(existing) = new_env.forwarded_functions.get(&key) {
                     // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);

@@ -9,7 +9,7 @@ use common::diff_css;
 
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use std::path::{Path, PathBuf};
 
 /// HRX 测试用例——包含所有文件和期望输出。
@@ -65,7 +65,8 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
                 })
             })
             .filter(|(p, _)| {
-                (p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass")) && !p.contains("/sass/")
+                (p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
+                    && !p.contains("/sass/")
             })
             .collect();
 
@@ -106,15 +107,21 @@ fn collect_hrx(dir: &Path, files: &mut Vec<PathBuf>) {
                 collect_hrx(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 50_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 50_000
+            {
+                files.push(path);
+            }
         }
     }
 }
 
 /// 编译单个测试用例——写入临时目录后用 compile_file_with_load_paths 编译。
-fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str) -> Result<String, String> {
+fn compile_case(
+    case: &HrxCase,
+    spec_root: &Path,
+    hrx_dir: &Path,
+    hrx_stem: &str,
+) -> Result<String, String> {
     let tmp_dir = std::env::temp_dir().join(format!("cf-diag-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
@@ -138,10 +145,11 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
             let p = entry.path();
             if (p.extension().and_then(|s| s.to_str()) == Some("scss")
                 || p.extension().and_then(|s| s.to_str()) == Some("css"))
-                && let Ok(content) = std::fs::read_to_string(&p) {
-                    let filename = p.file_name().unwrap().to_string_lossy().to_string();
-                    std::fs::write(tmp_dir.join(&filename), content).ok();
-                }
+                && let Ok(content) = std::fs::read_to_string(&p)
+            {
+                let filename = p.file_name().unwrap().to_string_lossy().to_string();
+                std::fs::write(tmp_dir.join(&filename), content).ok();
+            }
         }
     }
 
@@ -192,11 +200,18 @@ fn diag(subdir: &str, max_show: usize) {
                     .unwrap_or(&case.input_path)
                     .trim_end_matches('/')
                     .to_string();
-                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
+                match compile_case(
+                    case,
+                    &spec_root,
+                    file.parent().unwrap_or(Path::new(".")),
+                    &stem,
+                ) {
                     Ok(actual) => {
                         if case.expect_error {
                             shown += 1;
-                            *err_types.entry("expected_error_but_ok".to_string()).or_default() += 1;
+                            *err_types
+                                .entry("expected_error_but_ok".to_string())
+                                .or_default() += 1;
                             tracing::warn!(test = %format!("{stem}/{name}"), "FAIL: expected_error_but_ok");
                         } else if actual.trim() != case.expected_output.trim() {
                             shown += 1;
@@ -206,7 +221,11 @@ fn diag(subdir: &str, max_show: usize) {
                             tracing::warn!(test = %format!("{stem}/{name}"), kind = %key, n_diffs = diff.lines.len(), "FAIL");
                             for dl in diff.lines.iter().take(3) {
                                 match dl {
-                                    common::DiffLine::Changed { line, expected, actual } => {
+                                    common::DiffLine::Changed {
+                                        line,
+                                        expected,
+                                        actual,
+                                    } => {
                                         tracing::debug!(line = line, expected = %expected, actual = %actual, "diff: changed");
                                     }
                                     common::DiffLine::ExtraExpected { line, content } => {
@@ -224,17 +243,30 @@ fn diag(subdir: &str, max_show: usize) {
                             // 期望错误且确实出错了——通过
                         } else {
                             shown += 1;
-                            let key = if err_str.contains("Undefined") || err_str.contains("undefined") {
-                                "undefined".to_string()
-                            } else if err_str.contains("Parse error") || err_str.contains("parse error") || err_str.contains("Syntax") || err_str.contains("syntax") {
-                                "syntax".to_string()
-                            } else if err_str.contains("Eval") || err_str.contains("eval") || err_str.contains("type") || err_str.contains("Type") {
-                                "eval".to_string()
-                            } else if err_str.contains("Module") || err_str.contains("module") || err_str.contains("Cannot") || err_str.contains("cannot") {
-                                "module".to_string()
-                            } else {
-                                "other_err".to_string()
-                            };
+                            let key =
+                                if err_str.contains("Undefined") || err_str.contains("undefined") {
+                                    "undefined".to_string()
+                                } else if err_str.contains("Parse error")
+                                    || err_str.contains("parse error")
+                                    || err_str.contains("Syntax")
+                                    || err_str.contains("syntax")
+                                {
+                                    "syntax".to_string()
+                                } else if err_str.contains("Eval")
+                                    || err_str.contains("eval")
+                                    || err_str.contains("type")
+                                    || err_str.contains("Type")
+                                {
+                                    "eval".to_string()
+                                } else if err_str.contains("Module")
+                                    || err_str.contains("module")
+                                    || err_str.contains("Cannot")
+                                    || err_str.contains("cannot")
+                                {
+                                    "module".to_string()
+                                } else {
+                                    "other_err".to_string()
+                                };
                             *err_types.entry(key.clone()).or_default() += 1;
                             tracing::warn!(test = %format!("{stem}/{name}"), kind = %key, error = %err_str, "ERROR");
                         }
@@ -251,77 +283,123 @@ fn diag(subdir: &str, max_show: usize) {
 }
 
 #[test]
-fn diag_list() { diag("core_functions/list", 15); }
+fn diag_list() {
+    diag("core_functions/list", 15);
+}
 
 #[test]
-fn diag_selector() { diag("core_functions/selector", 15); }
+fn diag_selector() {
+    diag("core_functions/selector", 15);
+}
 
 /// 颜色诊断——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
 #[ignore]
-fn diag_color() { diag("core_functions/color", 15); }
+fn diag_color() {
+    diag("core_functions/color", 15);
+}
 
 #[test]
-fn diag_math() { diag("core_functions/math", 15); }
+fn diag_math() {
+    diag("core_functions/math", 15);
+}
 
 #[test]
-fn diag_expressions() { diag("expressions", 15); }
+fn diag_expressions() {
+    diag("expressions", 15);
+}
 
 #[test]
-fn diag_meta() { diag("core_functions/meta", 15); }
+fn diag_meta() {
+    diag("core_functions/meta", 15);
+}
 
 #[test]
-fn diag_import() { diag("directives/import", 50); }
+fn diag_import() {
+    diag("directives/import", 50);
+}
 
 #[test]
-fn diag_use() { diag("directives/use", 50); }
+fn diag_use() {
+    diag("directives/use", 50);
+}
 
 #[test]
-fn diag_css() { diag("css", 20); }
+fn diag_css() {
+    diag("css", 20);
+}
 
 #[test]
-fn diag_non_conformant() { diag("non_conformant", 20); }
+fn diag_non_conformant() {
+    diag("non_conformant", 20);
+}
 
 #[test]
-fn diag_function() { diag("directives/function", 15); }
+fn diag_function() {
+    diag("directives/function", 15);
+}
 
 #[test]
-fn diag_extend() { diag("directives/extend", 50); }
+fn diag_extend() {
+    diag("directives/extend", 50);
+}
 
 #[test]
-fn diag_forward() { diag("directives/forward", 50); }
+fn diag_forward() {
+    diag("directives/forward", 50);
+}
 
 #[test]
-fn diag_numbers() { diag("values/numbers", 20); }
+fn diag_numbers() {
+    diag("values/numbers", 20);
+}
 
 #[test]
-fn diag_libsass_closed() { diag("libsass-closed-issues", 20); }
+fn diag_libsass_closed() {
+    diag("libsass-closed-issues", 20);
+}
 
 #[test]
-fn diag_string() { diag("core_functions/string", 20); }
+fn diag_string() {
+    diag("core_functions/string", 20);
+}
 
 #[test]
-fn diag_map() { diag("core_functions/map", 15); }
+fn diag_map() {
+    diag("core_functions/map", 15);
+}
 
 #[test]
-fn diag_for() { diag("directives/for", 15); }
+fn diag_for() {
+    diag("directives/for", 15);
+}
 
 #[test]
-fn diag_each() { diag("directives/each", 15); }
+fn diag_each() {
+    diag("directives/each", 15);
+}
 
 #[test]
-fn diag_while() { diag("directives/while", 15); }
+fn diag_while() {
+    diag("directives/while", 15);
+}
 
 #[test]
-fn diag_media() { diag("directives/media", 15); }
+fn diag_media() {
+    diag("directives/media", 15);
+}
 
 #[test]
-fn diag_values_maps() { diag("values/maps", 10); }
+fn diag_values_maps() {
+    diag("values/maps", 10);
+}
 
 /// 颜色值诊断——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
 #[ignore]
-fn diag_values_colors() { diag("values/colors", 10); }
+fn diag_values_colors() {
+    diag("values/colors", 10);
+}
 
 /// 只统计指定子目录的通过/失败/总数。
 fn stats_subdir(subdir: &str) {
@@ -340,7 +418,12 @@ fn stats_subdir(subdir: &str) {
                 if case.expected_output.is_empty() && !case.expect_error {
                     continue;
                 }
-                match compile_case(case, &spec_root, file.parent().unwrap_or(Path::new(".")), &stem) {
+                match compile_case(
+                    case,
+                    &spec_root,
+                    file.parent().unwrap_or(Path::new(".")),
+                    &stem,
+                ) {
                     Ok(actual) => {
                         if case.expect_error {
                             fail += 1;
@@ -366,7 +449,11 @@ fn stats_subdir(subdir: &str) {
 }
 
 #[test]
-fn stats_list() { stats_subdir("core_functions/list"); }
+fn stats_list() {
+    stats_subdir("core_functions/list");
+}
 
 #[test]
-fn stats_math() { stats_subdir("core_functions/math"); }
+fn stats_math() {
+    stats_subdir("core_functions/math");
+}

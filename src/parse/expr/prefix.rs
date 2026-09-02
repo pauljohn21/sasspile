@@ -1,9 +1,9 @@
-use super::super::ast::*;
 use super::super::Parser;
+use super::super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> Parser<'tok> {
+impl Parser<'_> {
     pub(crate) fn parse_prefix(&mut self) -> Result<Value> {
         self.skip_ws();
         match self.peek() {
@@ -13,10 +13,7 @@ impl<'tok> Parser<'tok> {
                 let next = self.tokens.get(self.pos + 1);
                 if matches!(
                     next,
-                    Some(Token::Number(_))
-                        | Some(Token::Dollar(_))
-                        | Some(Token::LParen)
-                        | Some(Token::Hash(_))
+                    Some(Token::Number(_) | Token::Dollar(_) | Token::LParen | Token::Hash(_))
                 ) {
                     self.advance();
                     self.skip_ws();
@@ -41,10 +38,19 @@ impl<'tok> Parser<'tok> {
                 }
             }
             // ── 字面量解析委托给 literals 模块 ──
-            Some(Token::Number(_)) | Some(Token::String(_, _)) | Some(Token::Hash(_))
-            | Some(Token::Dollar(_)) | Some(Token::Ident(_)) | Some(Token::Interp(_))
-            | Some(Token::True) | Some(Token::False) | Some(Token::Null)
-            | Some(Token::Amp) | Some(Token::Star) => {
+            Some(
+                Token::Number(_)
+                | Token::String(_, _)
+                | Token::Hash(_)
+                | Token::Dollar(_)
+                | Token::Ident(_)
+                | Token::Interp(_)
+                | Token::True
+                | Token::False
+                | Token::Null
+                | Token::Amp
+                | Token::Star,
+            ) => {
                 if let Some(v) = self.parse_literal()? {
                     Ok(v)
                 } else {
@@ -116,13 +122,15 @@ impl<'tok> Parser<'tok> {
                                 };
                             }
                             // 空格分隔的值——继续解析
-                            Some(Token::Number(_))
-                            | Some(Token::String(_, _))
-                            | Some(Token::Ident(_))
-                            | Some(Token::Hash(_))
-                            | Some(Token::Dollar(_))
-                            | Some(Token::Interp(_))
-                            | Some(Token::LParen) => {
+                            Some(
+                                Token::Number(_)
+                                | Token::String(_, _)
+                                | Token::Ident(_)
+                                | Token::Hash(_)
+                                | Token::Dollar(_)
+                                | Token::Interp(_)
+                                | Token::LParen,
+                            ) => {
                                 items.push(self.parse_expr(0)?);
                             }
                             _ => {
@@ -147,7 +155,12 @@ impl<'tok> Parser<'tok> {
                         self.advance();
                     }
                     if items.len() == 1 && !saw_comma {
-                        Ok(Value::Paren(Box::new(items.into_iter().next().expect("items has exactly 1 element"))))
+                        Ok(Value::Paren(Box::new(
+                            items
+                                .into_iter()
+                                .next()
+                                .expect("items has exactly 1 element"),
+                        )))
                     } else {
                         Ok(Value::List(items, sep, false))
                     }
@@ -181,9 +194,13 @@ impl<'tok> Parser<'tok> {
                 if self.peek() == Some(&Token::RBracket) {
                     self.advance();
                 }
-                let sep = if saw_comma { Separator::Comma }
-                    else if items.len() <= 1 { Separator::Undecided }
-                    else { Separator::Space };
+                let sep = if saw_comma {
+                    Separator::Comma
+                } else if items.len() <= 1 {
+                    Separator::Undecided
+                } else {
+                    Separator::Space
+                };
                 Ok(Value::List(items, sep, true))
             }
             Some(Token::Percent) => {
@@ -196,14 +213,11 @@ impl<'tok> Parser<'tok> {
                 match self.peek() {
                     Some(
                         Token::RBrace
-                            | Token::RParen
-                            | Token::Semicolon
-                            | Token::RBracket
-                            | Token::Comma,
-                    ) =>
-                    {
-                        Ok(Value::Null)
-                    }
+                        | Token::RParen
+                        | Token::Semicolon
+                        | Token::RBracket
+                        | Token::Comma,
+                    ) => Ok(Value::Null),
                     Some(t) => {
                         let v = Value::String(t.to_string(), false);
                         self.advance();
@@ -258,10 +272,13 @@ impl<'tok> Parser<'tok> {
                 Ok(Value::Interp(segments))
             }
         } else {
-            let joined: String = segments.iter().map(|seg| match seg {
-                InterpSegment::Expr(e) => e.clone(),
-                InterpSegment::Text(t) => t.clone(),
-            }).collect();
+            let joined: String = segments
+                .iter()
+                .map(|seg| match seg {
+                    InterpSegment::Expr(e) => e.clone(),
+                    InterpSegment::Text(t) => t.clone(),
+                })
+                .collect();
             self.skip_ws();
             if self.peek() == Some(&Token::LParen) {
                 let args = self.parse_args()?;
@@ -273,7 +290,7 @@ impl<'tok> Parser<'tok> {
     }
 }
 
-/// 解析数字字符串为 Value::Number。
+/// 解析数字字符串为 `Value::Number`。
 pub(crate) fn parse_number(s: &str) -> Result<Value> {
     let (num_part, unit) = if let Some(idx) = s.find(|c: char| c.is_ascii_alphabetic() || c == '%')
     {
@@ -295,26 +312,26 @@ pub(crate) fn parse_hash_color(s: &str) -> Color {
     let bytes = s.as_bytes();
     match bytes.len() {
         3 => Color::rgb(
-            hex2(bytes[0], bytes[0]) as f64,
-            hex2(bytes[1], bytes[1]) as f64,
-            hex2(bytes[2], bytes[2]) as f64,
+            f64::from(hex2(bytes[0], bytes[0])),
+            f64::from(hex2(bytes[1], bytes[1])),
+            f64::from(hex2(bytes[2], bytes[2])),
         ),
         4 => Color::rgba(
-            hex2(bytes[1], bytes[1]) as f64,
-            hex2(bytes[2], bytes[2]) as f64,
-            hex2(bytes[3], bytes[3]) as f64,
-            hex1(bytes[0]) as f64 / 15.0,
+            f64::from(hex2(bytes[1], bytes[1])),
+            f64::from(hex2(bytes[2], bytes[2])),
+            f64::from(hex2(bytes[3], bytes[3])),
+            f64::from(hex1(bytes[0])) / 15.0,
         ),
         6 => Color::rgb(
-            hex2(bytes[0], bytes[1]) as f64,
-            hex2(bytes[2], bytes[3]) as f64,
-            hex2(bytes[4], bytes[5]) as f64,
+            f64::from(hex2(bytes[0], bytes[1])),
+            f64::from(hex2(bytes[2], bytes[3])),
+            f64::from(hex2(bytes[4], bytes[5])),
         ),
         8 => Color::rgba(
-            hex2(bytes[0], bytes[1]) as f64,
-            hex2(bytes[2], bytes[3]) as f64,
-            hex2(bytes[4], bytes[5]) as f64,
-            hex2(bytes[6], bytes[7]) as f64 / 255.0,
+            f64::from(hex2(bytes[0], bytes[1])),
+            f64::from(hex2(bytes[2], bytes[3])),
+            f64::from(hex2(bytes[4], bytes[5])),
+            f64::from(hex2(bytes[6], bytes[7])) / 255.0,
         ),
         _ => Color::default(),
     }

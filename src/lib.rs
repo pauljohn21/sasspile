@@ -1,3 +1,9 @@
+#![allow(
+    clippy::wildcard_imports,
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use,
+    clippy::match_same_arms
+)]
 //! # sasspile
 //!
 //! 纯 Rust 函数式 SCSS 编译器，从零实现。
@@ -82,9 +88,7 @@
 /// `#[instrument]` 属性用 `#[cfg_attr(feature = "tracing", tracing::instrument)]` 处理。
 #[cfg(feature = "tracing")]
 pub(crate) mod __tracing {
-    pub use tracing::{
-        debug, debug_span, error, info, info_span, trace, warn,
-    };
+    pub use tracing::{debug, debug_span, error, info_span, trace, warn};
 }
 
 #[cfg(not(feature = "tracing"))]
@@ -92,14 +96,18 @@ pub(crate) mod __tracing {
     /// No-op span 类型——使 `span.enter()` 有效。
     pub struct DummySpan;
     impl DummySpan {
-        pub fn enter(&self) -> DummyGuard { DummyGuard }
+        pub fn enter(&self) -> DummyGuard {
+            DummyGuard
+        }
     }
     pub struct DummyGuard;
 
     /// No-op span 宏——返回 DummySpan 实例。
     #[macro_export]
     macro_rules! __noop_span {
-        ($($args:tt)*) => { $crate::__tracing::DummySpan };
+        ($($args:tt)*) => {
+            $crate::__tracing::DummySpan
+        };
     }
 
     pub use crate::__noop_span as debug_span;
@@ -201,24 +209,18 @@ pub fn init_tracing_otel() {
     // stdout exporter —— 同步输出 span 到 stdout，无需 async runtime
     let exporter = opentelemetry_stdout::SpanExporter::default();
 
-    let service_name = std::env::var("OTEL_SERVICE_NAME")
-        .unwrap_or_else(|_| "sasspile".into());
+    let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "sasspile".into());
 
     let provider = SdkTracerProvider::builder()
         .with_simple_exporter(exporter)
-        .with_resource(
-            Resource::builder()
-                .with_service_name(service_name)
-                .build(),
-        )
+        .with_resource(Resource::builder().with_service_name(service_name).build())
         .build();
 
     let tracer = provider.tracer("sasspile-tracer");
 
     // tracing layer 桥接
     let otel_layer = OpenTelemetryLayer::new(tracer);
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
 
     let fmt_layer = fmt::layer()
         .with_target(true)

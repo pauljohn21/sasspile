@@ -71,7 +71,7 @@ pub const D50_Z: f64 = (1.0 - 0.3457 - 0.3585) / 0.3585;
 
 // ── ProPhoto RGB ──
 
-/// ProPhoto RGB 线性段阈值 = 1/512。
+/// `ProPhoto` RGB 线性段阈值 = 1/512。
 pub const PROPHOTO_ET: f64 = 1.0 / 512.0;
 
 // ── sRGB 传递函数 ──

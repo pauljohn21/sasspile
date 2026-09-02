@@ -15,7 +15,7 @@ mod common;
 
 mod hrx_support;
 
-use hrx_support::{parse_hrx as hrx_parse, HrxArchive, HrxEntry, Vfs};
+use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use sasspile::lex::Lexer;
 use sasspile::lex::token::Token;
 use sasspile::parse::Parser;
@@ -240,9 +240,10 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
                 collect_hrx(&path, files);
             } else if path.extension().and_then(|s| s.to_str()) == Some("hrx")
                 && let Ok(meta) = std::fs::metadata(&path)
-                    && meta.len() < 50_000 {
-                        files.push(path);
-                    }
+                && meta.len() < 50_000
+            {
+                files.push(path);
+            }
         }
     }
 }

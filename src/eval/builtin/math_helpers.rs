@@ -5,12 +5,11 @@ use crate::parse::ast::*;
 use std::collections::HashMap;
 
 /// 返回每个 math 函数的参数名列表（按位置顺序）。
-/// 用于将命名参数（kw_args）按参数名映射到位置参数。
+/// `用于将命名参数（kw_args）按参数名映射到位置参数`。
 pub(crate) fn math_param_names(name: &str) -> &'static [&'static str] {
     match name {
-        "abs" | "ceil" | "floor" | "round" | "sqrt" | "sin" | "cos" | "tan"
-        | "asin" | "acos" | "atan" | "unit" | "is-unitless"
-        | "percentage" => &["number"],
+        "abs" | "ceil" | "floor" | "round" | "sqrt" | "sin" | "cos" | "tan" | "asin" | "acos"
+        | "atan" | "unit" | "is-unitless" | "percentage" => &["number"],
         "div" => &["number1", "number2"],
         "pow" => &["base", "exponent"],
         "atan2" => &["y", "x"],
@@ -25,7 +24,7 @@ pub(crate) fn math_param_names(name: &str) -> &'static [&'static str] {
 }
 
 /// 将位置参数和命名参数合并为统一的位置参数列表。
-/// 按 `param_names` 顺序填充：先取 pos_args 对应位置，不足的从 kw_args 按参数名查找。
+/// 按 `param_names` 顺序填充：先取 `pos_args` 对应位置，不足的从 `kw_args` 按参数名查找。
 pub(crate) fn merge_math_args(
     pos_args: &[Value],
     kw_args: &HashMap<String, Value>,
@@ -68,7 +67,7 @@ pub(crate) fn validate_single_number(args: &[Value]) -> Result<()> {
     match &args[0] {
         Value::Number(..) | Value::Calc(..) => Ok(()),
         other => Err(SassError::Eval(format!(
-            "$number: {} is not a number.", other
+            "$number: {other} is not a number."
         ))),
     }
 }
@@ -82,9 +81,9 @@ pub(crate) fn validate_single_number(args: &[Value]) -> Result<()> {
 pub(crate) fn coerce_number(v: &Value) -> Result<f64> {
     match v {
         Value::Number(n, _) => Ok(*n),
-        Value::String(s, _) => s.parse::<f64>().map_err(|_| {
-            SassError::Eval(format!("$number: {v} is not a number."))
-        }),
+        Value::String(s, _) => s
+            .parse::<f64>()
+            .map_err(|_| SassError::Eval(format!("$number: {v} is not a number."))),
         other => Err(SassError::Eval(format!(
             "$number: {other} is not a number."
         ))),
