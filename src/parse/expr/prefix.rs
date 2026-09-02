@@ -211,6 +211,10 @@ impl Parser<'_> {
             _ => {
                 // 尝试解析为标识符字符串——但不消费终止符
                 match self.peek() {
+                    Some(Token::Dot) => Err(SassError::Parse {
+                        expected: "digit".into(),
+                        found: ".".into(),
+                    }),
                     Some(
                         Token::RBrace
                         | Token::RParen

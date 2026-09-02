@@ -82,7 +82,10 @@ impl Parser<'_> {
                     matches!(after_ws, Some(Token::Colon))
                 }
                 Some(Token::Ident(s))
-                    if !matches!(s.as_str(), "true" | "false" | "null" | "and" | "or" | "not") =>
+                    if !matches!(
+                        s.as_str(),
+                        "true" | "false" | "null" | "and" | "or" | "not" | "else"
+                    ) =>
                 {
                     let next = self.tokens.get(self.pos + 1);
                     let after_ws = if matches!(next, Some(Token::Whitespace)) {
@@ -153,6 +156,11 @@ impl Parser<'_> {
                                 spread: false,
                                 condition: None,
                             });
+                            // 消费 trailing semicolon
+                            self.skip_ws();
+                            if self.peek() == Some(&Token::Semicolon) {
+                                self.advance();
+                            }
                             break;
                         }
                         let cond2 = self.parse_expr(0)?;

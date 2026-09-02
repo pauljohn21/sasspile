@@ -56,14 +56,20 @@ impl<'src> Lexer<'src> {
             }
         }
         let text = &self.source[start..self.pos];
-        match text {
-            "true" => Token::True,
-            "false" => Token::False,
-            "null" => Token::Null,
-            "and" => Token::And,
-            "or" => Token::Or,
-            "not" => Token::Not,
-            _ => Token::Ident(text.to_string()),
+        if text.eq_ignore_ascii_case("true") {
+            Token::True
+        } else if text.eq_ignore_ascii_case("false") {
+            Token::False
+        } else if text.eq_ignore_ascii_case("null") {
+            Token::Null
+        } else if text.eq_ignore_ascii_case("and") {
+            Token::And
+        } else if text.eq_ignore_ascii_case("or") {
+            Token::Or
+        } else if text.eq_ignore_ascii_case("not") {
+            Token::Not
+        } else {
+            Token::Ident(text.to_string())
         }
     }
 
