@@ -195,6 +195,7 @@ impl Serializer {
                     let same_origin = !same_group && Self::is_same_origin(prev_n, n);
                     if !(prev_is_import || curr_is_import)
                         && !(prev_is_comment && curr_is_comment)
+                        && !prev_is_comment
                         && !same_group
                         && !same_origin
                     {
