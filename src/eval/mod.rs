@@ -22,9 +22,11 @@ pub(crate) struct ModuleExports {
     pub(crate) forwarded_functions: HashMap<String, FunctionDef>,
     pub(crate) css: Vec<CssNode>,
     pub(crate) loaded_modules: Rc<std::collections::HashSet<PathBuf>>,
-    pub(crate) extends: Rc<Vec<(String, String, bool)>>,
+    pub(crate) extends: Rc<Vec<(String, String, bool, Option<PathBuf>)>>,
     pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
     pub(crate) consumed_config: HashSet<String>,
+    /// 该模块产生的所有选择器（用于 extend scope 检查）
+    pub(crate) selectors: std::collections::HashSet<String>,
 }
 
 impl ModuleExports {
@@ -67,7 +69,7 @@ pub struct Env {
     pub(crate) namespaces: HashMap<String, Rc<ModuleExports>>,
     base_path: Option<PathBuf>,
     depth: usize,
-    extends: Rc<Vec<(String, String, bool)>>,
+    extends: Rc<Vec<(String, String, bool, Option<PathBuf>)>>,
     current_selector: Option<String>,
     load_paths: Vec<PathBuf>,
     plain_css: bool,
@@ -192,15 +194,15 @@ impl Env {
         self.base_path = Some(path);
         self
     }
-    pub fn add_extend(self, extender: String, target: String, optional: bool) -> Self {
+    pub fn add_extend(self, extender: String, target: String, optional: bool, module: Option<PathBuf>) -> Self {
         let mut extends = (*self.extends).clone();
-        extends.push((extender, target, optional));
+        extends.push((extender, target, optional, module));
         Self {
             extends: Rc::new(extends),
             ..self
         }
     }
-    pub fn get_extends(&self) -> &[(String, String, bool)] {
+    pub fn get_extends(&self) -> &[(String, String, bool, Option<PathBuf>)] {
         &self.extends
     }
     pub fn with_selector(mut self, sel: String) -> Self {
@@ -239,7 +241,7 @@ impl Env {
         self.loaded_modules = Rc::new(loaded);
         self
     }
-    pub(crate) fn with_extends(mut self, extends: Vec<(String, String, bool)>) -> Self {
+    pub(crate) fn with_extends(mut self, extends: Vec<(String, String, bool, Option<PathBuf>)>) -> Self {
         self.extends = Rc::new(extends);
         self
     }
@@ -304,7 +306,7 @@ impl Env {
     pub(crate) fn get_loaded_modules_rc(&self) -> Rc<std::collections::HashSet<PathBuf>> {
         self.loaded_modules.clone()
     }
-    pub(crate) fn get_extends_rc(&self) -> Rc<Vec<(String, String, bool)>> {
+    pub(crate) fn get_extends_rc(&self) -> Rc<Vec<(String, String, bool, Option<PathBuf>)>> {
         self.extends.clone()
     }
     pub(crate) fn merge_forwarded_to_local(mut self) -> Self {
@@ -427,7 +429,8 @@ impl Evaluator {
         let css = if extends.is_empty() {
             css
         } else {
-            let css = Self::apply_extends(css, &extends);
+            let module_selectors = Self::build_module_selectors(&final_env.get_module_cache());
+            let css = Self::apply_extends(css, &extends, &module_selectors);
             Self::check_extend_targets(&css, &extends)?;
             css
         };
@@ -440,7 +443,8 @@ impl Evaluator {
         let css = if extends.is_empty() {
             css
         } else {
-            let css = Self::apply_extends(css, &extends);
+            let module_selectors = Self::build_module_selectors(&final_env.get_module_cache());
+            let css = Self::apply_extends(css, &extends, &module_selectors);
             Self::check_extend_targets(&css, &extends)?;
             css
         };
@@ -663,9 +667,10 @@ fn eval_return(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 /// 求值 @extend 节点。
 fn eval_extend_node(selector: &str, optional: bool, env: Env) -> Result<(Vec<CssNode>, Env)> {
     if let Some(extender) = env.get_selector().map(std::string::ToString::to_string) {
+        let module = env.get_base_path().cloned();
         Ok((
             vec![],
-            env.add_extend(extender, selector.to_string(), optional),
+            env.add_extend(extender, selector.to_string(), optional, module),
         ))
     } else {
         Ok((vec![], env))

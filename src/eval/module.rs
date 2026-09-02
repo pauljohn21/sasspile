@@ -89,17 +89,18 @@ impl Evaluator {
                 }
             }
         }
-        // 对模块 CSS 应用模块内部的 extends（模块隔离——不应用外部 extends）
-        let module_extends = final_env.get_extends().to_vec();
-        let css = if module_extends.is_empty() {
-            module_css
-        } else {
-            Self::apply_extends(module_css, &module_extends)
-        };
+        // extends 在顶层 evaluate 中统一应用（带模块路径标记）
+        let selectors = Self::collect_all_selectors(
+            &final_env.get_module_cache(),
+            path,
+            &module_css,
+            &ast,
+            final_env.get_load_paths(),
+        );
         let css = if is_plain_css {
-            vec![crate::css::node::CssNode::AtRoot(css, None)]
+            vec![crate::css::node::CssNode::AtRoot(module_css, None)]
         } else {
-            css
+            module_css
         };
         let exports = ModuleExports {
             local_vars: final_env.get_local_vars().clone(),
@@ -113,6 +114,7 @@ impl Evaluator {
             extends: final_env.get_extends_rc(),
             module_cache: final_env.get_module_cache_rc(),
             consumed_config: final_env.get_consumed_config().clone(),
+            selectors,
         };
         let exports_cache = exports.module_cache.clone();
         let mut updated_cache = (*exports_cache).clone();

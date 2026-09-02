@@ -27,7 +27,8 @@ impl Evaluator {
 
     pub(crate) fn apply_extends(
         nodes: Vec<CssNode>,
-        extends: &[(String, String, bool)],
+        extends: &[(String, String, bool, Option<PathBuf>)],
+        module_selectors: &HashMap<PathBuf, std::collections::HashSet<String>>,
     ) -> Vec<CssNode> {
         let span = crate::__tracing::info_span!("apply_extends", n_extends = extends.len());
         let _enter = span.enter();
@@ -46,7 +47,7 @@ impl Evaluator {
                             "processing rule for extends"
                         );
                         // 应用 extend
-                        for (extender, target, _optional) in extends {
+                        for (extender, target, _optional, module) in extends {
                             let target_trimmed = target.trim();
                             let extender_trimmed = extender.trim();
                             // bogus 选择器检测
@@ -55,6 +56,17 @@ impl Evaluator {
                                 || extender_trimmed.ends_with('~')
                             {
                                 continue;
+                            }
+                            // 模块 scope 检查：如果 extend 带模块标记，
+                            // 检查 target 是否在该模块的选择器中
+                            if let Some(module_path) = module {
+                                let in_scope = module_selectors
+                                    .get(module_path)
+                                    .map(|s| s.contains(target_trimmed))
+                                    .unwrap_or(false);
+                                if !in_scope {
+                                    continue;
+                                }
                             }
                             if target_trimmed.starts_with('%') {
                                 // 占位符：替换每个包含 target 的选择器部分
@@ -110,7 +122,7 @@ impl Evaluator {
                             }
                         }
                         // 递归处理子规则
-                        let children = Self::apply_extends(children, extends);
+                        let children = Self::apply_extends(children, extends, module_selectors);
                         // 移除未被继承的占位符选择器部分
                         let parts: Vec<&str> = selector
                             .split(',')
@@ -129,7 +141,7 @@ impl Evaluator {
                         children,
                         has_body: true,
                     } => {
-                        let children = Self::apply_extends(children, extends);
+                        let children = Self::apply_extends(children, extends, module_selectors);
                         CssNode::AtRule {
                             name,
                             params,
@@ -138,7 +150,7 @@ impl Evaluator {
                         }
                     }
                     CssNode::AtRoot(kids, q) => {
-                        CssNode::AtRoot(Self::apply_extends(kids, extends), q)
+                        CssNode::AtRoot(Self::apply_extends(kids, extends, module_selectors), q)
                     }
                     other => other,
                 }
@@ -149,12 +161,12 @@ impl Evaluator {
     /// 检查未匹配的 extend target——非 optional 的未匹配 target 报错。
     pub(crate) fn check_extend_targets(
         css: &[CssNode],
-        extends: &[(String, String, bool)],
+        extends: &[(String, String, bool, Option<PathBuf>)],
     ) -> Result<()> {
         let span = crate::__tracing::debug_span!("check_extend_targets", n_extends = extends.len());
         let _enter = span.enter();
         let all_selectors = Self::collect_selectors(css);
-        for (_extender, target, optional) in extends {
+        for (_extender, target, optional, _module) in extends {
             if *optional {
                 continue;
             }
@@ -171,5 +183,44 @@ impl Evaluator {
             }
         }
         Ok(())
+    }
+
+    /// 从模块缓存构建路径→选择器集合的映射
+    pub(crate) fn build_module_selectors(
+        cache: &HashMap<PathBuf, ModuleExports>,
+    ) -> HashMap<PathBuf, std::collections::HashSet<String>> {
+        cache
+            .iter()
+            .map(|(k, v)| (k.clone(), v.selectors.clone()))
+            .collect()
+    }
+
+    /// 收集模块 CSS 中所有选择器，加上当前模块直接 @use 的模块的选择器
+    /// `ast`: 当前模块的 AST，用于提取 @use 路径
+    pub(crate) fn collect_all_selectors(
+        cache: &HashMap<PathBuf, ModuleExports>,
+        module_path: &std::path::Path,
+        css: &[CssNode],
+        ast: &crate::parse::ast::Ast,
+        load_paths: &[PathBuf],
+    ) -> std::collections::HashSet<String> {
+        let mut selectors: std::collections::HashSet<String> =
+            Self::collect_selectors(css).into_iter().collect();
+        // 从 AST 中提取 @use 的模块路径
+        let base = Some(module_path.to_path_buf());
+        let base_ref = base.as_ref();
+        for node in &ast.nodes {
+            if let crate::parse::ast::Node::Use { url, .. } = node {
+                if !url.starts_with("sass:") {
+                    if let Some(path) = Self::resolve_file(base_ref, url, load_paths) {
+                        if let Some(v) = cache.get(&path) {
+                            selectors.extend(Self::collect_selectors(&v.css).into_iter());
+                            selectors.extend(v.selectors.iter().cloned());
+                        }
+                    }
+                }
+            }
+        }
+        selectors
     }
 }
