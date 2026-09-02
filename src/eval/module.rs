@@ -313,6 +313,12 @@ impl Evaluator {
                 "The default namespace \"\" is not a valid Sass identifier.".into(),
             ));
         }
+        // 未知 scheme（如 "scheme:bar"）报错
+        if !url.starts_with("sass:") && url.contains(':') {
+            return Err(SassError::Module(format!(
+                "Can't find stylesheet to import: {url}"
+            )));
+        }
         // 非 sass: URL 的默认命名空间必须是合法标识符
         if !url.starts_with("sass:") && namespace.is_none() && !star {
             let stem = std::path::Path::new(url)
@@ -345,6 +351,8 @@ impl Evaluator {
         }
         let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
+        // @use 文件歧义检测（与 @import 相同的四种冲突场景）
+        Self::check_resolve_ambiguity(base.as_ref(), url, &load_paths)?;
         if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
             let already_loaded = env.get_loaded_modules().contains(&path);
             if already_loaded && !env.get_module_cache().contains_key(&path) {
@@ -418,7 +426,10 @@ impl Evaluator {
             }
             return Ok((css, env_with_cache.add_namespace(ns, exports)));
         }
-        Ok((vec![], env))
+        // @use 找不到文件时必须报错（不像 @import 可以输出 CSS @import 语句）
+        Err(SassError::Module(format!(
+            "Can't find stylesheet to import: {url}"
+        )))
     }
 
     /// @forward 指令处理。

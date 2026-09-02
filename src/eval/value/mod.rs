@@ -49,6 +49,12 @@ impl Evaluator {
             // !default 赋值：只在顶层（无 current_selector）时消费 pending_config
             // 嵌套规则内的 !default 不算模块级声明，不能消费 with() 配置
             if env.get_selector().is_none() {
+                // 先检查 star_conflict：如果变量来自多个 as * 模块，报冲突
+                if env.star_conflict(name).is_some() {
+                    return Err(SassError::Eval(
+                        "This variable is available from multiple global modules.".into(),
+                    ));
+                }
                 // !default 赋值：先检查 pending_config（with 配置覆盖值）
                 let normalized = name.replace('-', "_");
                 let config_val = env
