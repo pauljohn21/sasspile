@@ -57,13 +57,19 @@ impl Evaluator {
                             {
                                 continue;
                             }
-                            // 模块 scope 检查：如果 extend 带模块标记，
-                            // 检查 target 是否在该模块的选择器中
+                            // 模块 scope 检查：extend 带模块标记时，
+                            // 检查 target 是否在该模块的选择器中。
+                            // 如果模块路径不在 cache 中（当前文件/顶层），
+                            // 则检查所有已加载模块的选择器。
                             if let Some(module_path) = module {
                                 let in_scope = module_selectors
                                     .get(module_path)
                                     .map(|s| s.contains(target_trimmed))
-                                    .unwrap_or(false);
+                                    .unwrap_or_else(|| {
+                                        module_selectors
+                                            .values()
+                                            .any(|s| s.contains(target_trimmed))
+                                    });
                                 if !in_scope {
                                     continue;
                                 }
