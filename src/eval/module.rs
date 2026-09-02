@@ -379,7 +379,9 @@ impl Evaluator {
                 base.trim_start_matches('_').to_string()
             });
             // 检查命名空间冲突
-            if env_with_cache.get_namespace(&ns).is_some() {
+            // 如果模块已加载（already_loaded），命名空间可能来自 @import 继承的 env
+            // 此时不应报冲突，而是从缓存返回
+            if !already_loaded && env_with_cache.get_namespace(&ns).is_some() {
                 return Err(SassError::Eval(format!(
                     "There's already a module with namespace \"{ns}\"."
                 )));
