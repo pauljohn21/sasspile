@@ -91,19 +91,34 @@ impl Parser<'_> {
             if let Some(Token::Dollar(var_name)) = self.peek() {
                 let var_name = var_name.clone();
                 self.advance();
+                // 私有成员检查：以下划线开头的变量不能从外部访问
+                if var_name.starts_with('_') {
+                    return Err(crate::error::SassError::Eval(
+                        "Private members can't be accessed from outside their modules.".into(),
+                    ));
+                }
                 return Ok(Value::Variable(format!("{name}.{var_name}")));
             }
             if let Some(Token::Ident(member)) = self.peek() {
                 let member = member.clone();
                 self.advance();
+                // 私有成员检查：以下划线开头的函数不能从外部访问
+                if member.starts_with('_') {
+                    return Err(crate::error::SassError::Eval(
+                        "Private members can't be accessed from outside their modules.".into(),
+                    ));
+                }
                 self.skip_ws();
                 // module.function()
                 if self.peek() == Some(&Token::LParen) {
                     let args = self.parse_args()?;
                     return Ok(Value::Call(format!("{name}.{member}"), args));
                 }
-                // module.member（非调用）
-                return Ok(Value::String(format!("{name}.{member}"), false));
+                // module.member（非调用）— 裸命名空间标识符无效
+                return Err(crate::error::SassError::Parse {
+                    expected: "(".into(),
+                    found: "other".into(),
+                });
             }
         }
         if self.peek() == Some(&Token::LParen) {

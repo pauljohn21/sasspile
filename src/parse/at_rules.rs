@@ -165,6 +165,13 @@ impl Parser<'_> {
     pub(crate) fn parse_mixin_def(&mut self) -> Result<Node> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
+        // @mixin 不允许命名空间限定名（如 namespace.member）
+        if self.peek() == Some(&Token::Dot) {
+            return Err(SassError::Parse {
+                expected: "{".into(),
+                found: ".".into(),
+            });
+        }
         self.skip_ws();
         let params = if self.peek() == Some(&Token::LParen) {
             self.parse_params()?
@@ -184,6 +191,12 @@ impl Parser<'_> {
         let name = if self.peek() == Some(&Token::Dot) {
             self.advance();
             let rest = self.parse_ident_name()?;
+            // 私有成员检查：以下划线开头的 mixin 不能从外部访问
+            if rest.starts_with('_') {
+                return Err(SassError::Eval(
+                    "Private members can't be accessed from outside their modules.".into(),
+                ));
+            }
             format!("{name}.{rest}")
         } else {
             name
@@ -213,6 +226,13 @@ impl Parser<'_> {
     pub(crate) fn parse_function_def(&mut self) -> Result<Node> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
+        // @function 不允许命名空间限定名（如 namespace.member）
+        if self.peek() == Some(&Token::Dot) {
+            return Err(SassError::Parse {
+                expected: "(".into(),
+                found: ".".into(),
+            });
+        }
         // 函数名验证——基于 Sass 官方规范
         // 参考: https://sass-lang.com/documentation/breaking-changes/function-name/
         // 参考: https://sass-lang.com/documentation/breaking-changes/type-function/

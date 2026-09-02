@@ -30,38 +30,50 @@ impl Evaluator {
             if parts.len() == 2 {
                 let ns = parts[0];
                 let var_name = parts[1];
-                if env.get_namespace(ns).is_some() {
-                    let env = env.with_namespace_var(ns, var_name, val);
-                    return Ok((vec![], env));
+                if let Some(module) = env.get_namespace(ns) {
+                    // 验证变量在模块中是否存在
+                    if module.all_vars().any(|(k, _)| k == var_name) {
+                        let env = env.with_namespace_var(ns, var_name, val);
+                        return Ok((vec![], env));
+                    }
+                    return Err(SassError::Eval(format!("Undefined variable: ${name}")));
                 }
+                // 命名空间不存在——报错
+                return Err(SassError::Eval(format!(
+                    "There is no module with the namespace \"{ns}\"."
+                )));
             }
             return Ok((vec![], env));
         }
         if flags.default {
-            // !default 赋值：先检查 pending_config（with 配置覆盖值）
-            let normalized = name.replace('-', "_");
-            let config_val = env
-                .get_pending_config()
-                .get(&normalized)
-                .or_else(|| env.get_pending_config().get(name))
-                .cloned();
-            if let Some(val) = config_val {
-                let consumed_key = env
+            // !default 赋值：只在顶层（无 current_selector）时消费 pending_config
+            // 嵌套规则内的 !default 不算模块级声明，不能消费 with() 配置
+            if env.get_selector().is_none() {
+                // !default 赋值：先检查 pending_config（with 配置覆盖值）
+                let normalized = name.replace('-', "_");
+                let config_val = env
                     .get_pending_config()
                     .get(&normalized)
-                    .map(|_| normalized.clone())
-                    .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
-                debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
-                let new_env = env.bind(name.to_string(), val);
-                let new_env = if let Some(key) = consumed_key {
-                    new_env.add_consumed_config(key)
-                } else {
-                    new_env
-                };
-                return Ok((vec![], new_env));
-            }
-            if env.has_var(name) {
-                return Ok((vec![], env));
+                    .or_else(|| env.get_pending_config().get(name))
+                    .cloned();
+                if let Some(val) = config_val {
+                    let consumed_key = env
+                        .get_pending_config()
+                        .get(&normalized)
+                        .map(|_| normalized.clone())
+                        .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
+                    debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
+                    let new_env = env.bind(name.to_string(), val);
+                    let new_env = if let Some(key) = consumed_key {
+                        new_env.add_consumed_config(key)
+                    } else {
+                        new_env
+                    };
+                    return Ok((vec![], new_env));
+                }
+                if env.has_var(name) {
+                    return Ok((vec![], env));
+                }
             }
         }
         let val = Self::eval_value(value, &env)?;

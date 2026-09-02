@@ -229,6 +229,13 @@ impl Evaluator {
             .with_base_path(path.to_path_buf())
             .with_depth(saved_depth + 1)
             .with_plain_css(is_plain_css);
+        // 预扫描导入文件中的 !global 变量（确保未执行路径的变量也可见）
+        let mut env = env;
+        for global_var in Self::collect_global_vars(&ast.nodes) {
+            if !env.has_var(&global_var) {
+                env = env.bind(global_var, crate::parse::ast::Value::Null);
+            }
+        }
         let (css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         // 恢复调用者的 base_path 和 depth
         let final_env = if let Some(bp) = saved_base_path {
@@ -297,6 +304,13 @@ impl Evaluator {
                     "Built-in modules can't be configured.".into(),
                 ));
             }
+            // 检查内建模块命名空间冲突
+            let ns = url.strip_prefix("sass:").unwrap_or(url);
+            if env.get_namespace(ns).is_some() {
+                return Err(SassError::Eval(format!(
+                    "There's already a module with namespace \"{ns}\"."
+                )));
+            }
             return Ok((vec![], env.add_module(url.to_string())));
         }
         let base = env.get_base_path().cloned();
@@ -364,6 +378,12 @@ impl Evaluator {
                 let base = url_stem.split('.').next().unwrap_or(url_stem);
                 base.trim_start_matches('_').to_string()
             });
+            // 检查命名空间冲突
+            if env_with_cache.get_namespace(&ns).is_some() {
+                return Err(SassError::Eval(format!(
+                    "There's already a module with namespace \"{ns}\"."
+                )));
+            }
             return Ok((css, env_with_cache.add_namespace(ns, exports)));
         }
         Ok((vec![], env))
@@ -384,6 +404,26 @@ impl Evaluator {
             return Err(SassError::Eval(
                 "Built-in modules can't be configured.".into(),
             ));
+        }
+        // @forward 内建模块（sass:xxx）——注册内建模块命名空间
+        if url.starts_with("sass:") {
+            let exports = crate::eval::module_helpers::builtin_module_exports(url)
+                .unwrap_or_default();
+            let filter = FilterConfig {
+                show: show.to_vec(),
+                hide: hide.to_vec(),
+            };
+            let new_env = bind_exports(
+                env,
+                &exports,
+                prefix.as_deref(),
+                BindMode::Forward,
+                &std::path::PathBuf::from(url),
+                &filter,
+            )?;
+            // 标记内建模块已注册（使命名空间下的函数调用能正确分派）
+            let new_env = new_env.add_module(url.to_string());
+            return Ok((vec![], new_env));
         }
         let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
@@ -511,6 +551,8 @@ impl Evaluator {
             // 将子模块的 consumed_config 回传到当前 env
             // 如果有 as 前缀，子模块消费的 key 需要加上前缀后回传
             // （外层 load_module 用带前缀的 key 做验证）
+            // 关键：如果 @forward ... with 显式传递了配置变量，这些变量不应算作父模块的 !default 消费
+            // （它们是被 forward 的 with 消费，而非父模块自身声明 !default）
             let prefix_norm = prefix.as_deref().map(|p| p.replace('-', "_"));
             let add_prefix = |k: &str| -> String {
                 if let Some(ref pfx) = prefix_norm {
@@ -519,11 +561,37 @@ impl Evaluator {
                     k.to_string()
                 }
             };
+            // @forward with 显式传递且不带 !default 的变量名集合
+            // 这些变量被 forward 的 with 消费，不算父模块的 !default 声明
+            // 带 !default 的变量是透传 pending_config，仍然算 consumed
+            let forward_with_names: std::collections::HashSet<String> = config
+                .iter()
+                .filter(|c| !c.is_default)
+                .map(|c| {
+                    if let Some(p) = prefix.as_deref() {
+                        let pfx = p.replace('-', "_");
+                        let k_norm = c.name.replace('-', "_");
+                        if k_norm.starts_with(&pfx) {
+                            k_norm[pfx.len()..].to_string()
+                        } else {
+                            k_norm
+                        }
+                    } else {
+                        c.name.replace('-', "_")
+                    }
+                })
+                .collect();
             let merged_consumed: std::collections::HashSet<String> = new_env
                 .get_consumed_config()
                 .iter()
                 .cloned()
-                .chain(exports.consumed_config.iter().map(|k| add_prefix(k)))
+                .chain(
+                    exports
+                        .consumed_config
+                        .iter()
+                        .filter(|k| !forward_with_names.contains(k.as_str()))
+                        .map(|k| add_prefix(k)),
+                )
                 .collect();
             crate::__tracing::debug!(
                 child_consumed = ?exports.consumed_config,

@@ -13,7 +13,14 @@ impl Parser<'_> {
             ));
         }
         self.skip_ws();
-        let url = self.parse_string_value()?;
+        let url = match self.peek() {
+            Some(Token::String(s, _)) => {
+                let s = s.clone();
+                self.advance();
+                s
+            }
+            _ => return Err(SassError::Eval("Expected string.".into())),
+        };
         let mut namespace = None;
         let mut star = false;
         let mut config = Vec::new();

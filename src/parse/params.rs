@@ -243,6 +243,7 @@ impl Parser<'_> {
 
     pub(crate) fn parse_config(&mut self) -> Result<Vec<ConfigVar>> {
         let mut config = Vec::new();
+        let mut seen = std::collections::HashSet::new();
         self.skip_ws();
         if self.peek() == Some(&Token::RParen) {
             return Err(SassError::Eval("expected \"$\".".into()));
@@ -281,6 +282,13 @@ impl Parser<'_> {
                     self.advance();
                     self.skip_ws();
                 }
+            }
+            // 重复配置变量检测——规范要求在解析阶段就报错
+            let normalized = name.replace('-', "_");
+            if !seen.insert(normalized) {
+                return Err(SassError::Eval(
+                    "The same variable may only be configured once.".into(),
+                ));
             }
             config.push(ConfigVar {
                 name,

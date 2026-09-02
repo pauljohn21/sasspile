@@ -338,6 +338,12 @@ impl Parser<'_> {
         self.skip_ws();
         let value = self.parse_value()?;
         let flags = self.parse_var_flags()?;
+        // 命名空间变量赋值不允许 !global
+        if flags.global {
+            return Err(SassError::Eval(
+                "!global isn't allowed for variables in other modules.".into(),
+            ));
+        }
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
             self.advance();
