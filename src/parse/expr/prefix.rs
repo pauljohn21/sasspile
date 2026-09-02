@@ -167,7 +167,16 @@ impl Parser<'_> {
                 }
             }
             Some(Token::Not) => {
+                // 检查 not 后面是否紧跟 ( 无空格
                 self.advance();
+                let next_is_paren_no_ws = matches!(self.peek(), Some(Token::LParen))
+                    && !matches!(self.tokens.get(self.pos.saturating_sub(1)), Some(Token::Whitespace));
+                if next_is_paren_no_ws {
+                    return Err(SassError::Parse {
+                        expected: "whitespace between \"not\" and \"(\"".into(),
+                        found: "(".into(),
+                    });
+                }
                 self.skip_ws();
                 let v = self.parse_prefix()?;
                 Ok(Value::UnaryOp(UnaryOp::Not, Box::new(v)))
@@ -215,12 +224,23 @@ impl Parser<'_> {
                         expected: "digit".into(),
                         found: ".".into(),
                     }),
+                    // and/or/not 关键字不能作为值起始
+                    Some(Token::And | Token::Or) => {
+                        let found = self
+                            .peek()
+                            .map_or("EOF".to_string(), |t| t.to_string());
+                        Err(SassError::Parse {
+                            expected: "expression".into(),
+                            found,
+                        })
+                    }
                     Some(
                         Token::RBrace
                         | Token::RParen
                         | Token::Semicolon
                         | Token::RBracket
-                        | Token::Comma,
+                        | Token::Comma
+                        | Token::Colon,
                     ) => Ok(Value::Null),
                     Some(t) => {
                         let v = Value::String(t.to_string(), false);

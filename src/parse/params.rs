@@ -140,6 +140,27 @@ impl Parser<'_> {
                     while self.peek() == Some(&Token::Semicolon) {
                         self.advance();
                         self.skip_ws();
+                        // 双分号——报错
+                        if self.peek() == Some(&Token::Semicolon) {
+                            return Err(SassError::Parse {
+                                expected: "identifier".into(),
+                                found: ";".into(),
+                            });
+                        }
+                        // 分号后紧跟 ) ——报错
+                        if self.peek() == Some(&Token::RParen) {
+                            return Err(SassError::Parse {
+                                expected: "identifier".into(),
+                                found: ")".into(),
+                            });
+                        }
+                        // 分号后紧跟 , ——报错
+                        if self.peek() == Some(&Token::Comma) {
+                            return Err(SassError::Parse {
+                                expected: ")".into(),
+                                found: ",".into(),
+                            });
+                        }
                         if let Some(Token::Ident(s)) = self.peek()
                             && s == "else"
                         {
@@ -185,8 +206,10 @@ impl Parser<'_> {
                     }
                     self.skip_ws();
                     if self.peek() == Some(&Token::Comma) {
-                        self.advance();
-                        continue;
+                        return Err(SassError::Parse {
+                            expected: ")".into(),
+                            found: ",".into(),
+                        });
                     }
                     break;
                 }

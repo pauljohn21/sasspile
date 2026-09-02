@@ -11,7 +11,7 @@ pub(crate) use prefix::{parse_hash_color, parse_number};
 
 use super::Parser;
 use super::ast::*;
-use crate::error::Result;
+use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
 impl Parser<'_> {
@@ -146,6 +146,17 @@ impl Parser<'_> {
                 break;
             }
             self.advance(); // 消费运算符
+            // 检查 and/or 后面是否紧跟 ( 无空格
+            if matches!(op, BinOpKind::And | BinOpKind::Or)
+                && matches!(self.peek(), Some(Token::LParen))
+                && !matches!(self.tokens.get(self.pos.saturating_sub(1)), Some(Token::Whitespace))
+            {
+                let kw = if matches!(op, BinOpKind::And) { "and" } else { "or" };
+                return Err(SassError::Parse {
+                    expected: format!("whitespace between \"{kw}\" and \"(\""),
+                    found: "(".into(),
+                });
+            }
             self.skip_ws();
             let rhs = self.parse_expr(bp + 1)?;
             lhs = Value::BinOp(Box::new(BinOp {

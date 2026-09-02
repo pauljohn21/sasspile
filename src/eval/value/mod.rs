@@ -220,6 +220,8 @@ impl Evaluator {
             .filter(|(_, a)| a.condition.is_some())
         {
             let condition = cond_arg.condition.as_ref().expect("已检查");
+            // 检查条件中是否有 sass()+CSS 混用
+            Self::check_sass_css_mix(condition)?;
             match Self::partial_eval_condition(condition, env)? {
                 PartialCond::True => return Self::eval_value(&cond_arg.value, env),
                 PartialCond::False => continue,

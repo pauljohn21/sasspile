@@ -22,6 +22,15 @@ impl Evaluator {
         match condition {
             // 括号——递归求值内部表达式
             Value::Paren(inner) => {
+                // (else) 不允许作为条件
+                if let Value::String(s, _) = inner.as_ref() {
+                    if s == "else" {
+                        return Err(SassError::Parse {
+                            expected: "(".into(),
+                            found: "else".into(),
+                        });
+                    }
+                }
                 match Self::partial_eval_condition(inner, env)? {
                     PartialCond::True => Ok(PartialCond::True),
                     PartialCond::False => Ok(PartialCond::False),
@@ -36,6 +45,29 @@ impl Evaluator {
                 }
             }
             Value::UnaryOp(UnaryOp::Not, inner) => {
+                // not not 不允许（不带括号）
+                if let Value::UnaryOp(UnaryOp::Not, _) = inner.as_ref() {
+                    return Err(SassError::Parse {
+                        expected: "(".into(),
+                        found: "not".into(),
+                    });
+                }
+                // not else 不允许
+                if let Value::String(s, _) = inner.as_ref() {
+                    if s == "else" {
+                        return Err(SassError::Parse {
+                            expected: "(".into(),
+                            found: "else".into(),
+                        });
+                    }
+                }
+                // not 后面不能为空
+                if matches!(&**inner, Value::Null) {
+                    return Err(SassError::Parse {
+                        expected: "identifier".into(),
+                        found: ":".into(),
+                    });
+                }
                 match Self::partial_eval_condition(inner, env)? {
                     PartialCond::True => Ok(PartialCond::False),
                     PartialCond::False => Ok(PartialCond::True),
@@ -43,32 +75,118 @@ impl Evaluator {
                 }
             }
             Value::BinOp(b) => match b.op {
-                BinOpKind::And => match Self::partial_eval_condition(&b.left, env)? {
-                    PartialCond::False => Ok(PartialCond::False),
-                    PartialCond::True => Self::partial_eval_condition(&b.right, env),
-                    PartialCond::Css(left_css) => {
-                        match Self::partial_eval_condition(&b.right, env)? {
-                            PartialCond::False => Ok(PartialCond::False),
-                            PartialCond::True => Ok(PartialCond::Css(left_css)),
-                            PartialCond::Css(right_css) => {
-                                Ok(PartialCond::Css(format!("{left_css} and {right_css}")))
+                BinOpKind::And => {
+                    // and 的 LHS 不允许 or（不带括号的混用）
+                    if let Value::BinOp(lb) = &b.left {
+                        if lb.op == BinOpKind::Or {
+                            return Err(SassError::Parse {
+                                expected: ":".into(),
+                                found: "or".into(),
+                            });
+                        }
+                    }
+                    // and 后面不允许 or（不带括号的混用）
+                    if let Value::BinOp(rb) = &b.right {
+                        if rb.op == BinOpKind::Or {
+                            return Err(SassError::Parse {
+                                expected: ":".into(),
+                                found: "or".into(),
+                            });
+                        }
+                    }
+                    // and 后面不允许 not（不带括号）
+                    if let Value::UnaryOp(UnaryOp::Not, _) = &b.right {
+                        return Err(SassError::Parse {
+                            expected: "(".into(),
+                            found: "not".into(),
+                        });
+                    }
+                    // and 后面不允许 else
+                    if let Value::String(s, _) = &b.right {
+                        if s == "else" {
+                            return Err(SassError::Parse {
+                                expected: "(".into(),
+                                found: "else".into(),
+                            });
+                        }
+                    }
+                    // and 后面不能为空
+                    if matches!(b.right, Value::Null) {
+                        return Err(SassError::Parse {
+                            expected: "identifier".into(),
+                            found: ":".into(),
+                        });
+                    }
+                    match Self::partial_eval_condition(&b.left, env)? {
+                        PartialCond::False => Ok(PartialCond::False),
+                        PartialCond::True => Self::partial_eval_condition(&b.right, env),
+                        PartialCond::Css(left_css) => {
+                            match Self::partial_eval_condition(&b.right, env)? {
+                                PartialCond::False => Ok(PartialCond::False),
+                                PartialCond::True => Ok(PartialCond::Css(left_css)),
+                                PartialCond::Css(right_css) => {
+                                    Ok(PartialCond::Css(format!("{left_css} and {right_css}")))
+                                }
                             }
                         }
                     }
-                },
-                BinOpKind::Or => match Self::partial_eval_condition(&b.left, env)? {
-                    PartialCond::True => Ok(PartialCond::True),
-                    PartialCond::False => Self::partial_eval_condition(&b.right, env),
-                    PartialCond::Css(left_css) => {
-                        match Self::partial_eval_condition(&b.right, env)? {
-                            PartialCond::True => Ok(PartialCond::True),
-                            PartialCond::False => Ok(PartialCond::Css(left_css)),
-                            PartialCond::Css(right_css) => {
-                                Ok(PartialCond::Css(format!("{left_css} or {right_css}")))
+                }
+                BinOpKind::Or => {
+                    // or 的 LHS 不允许 and（不带括号的混用）
+                    if let Value::BinOp(lb) = &b.left {
+                        if lb.op == BinOpKind::And {
+                            return Err(SassError::Parse {
+                                expected: ":".into(),
+                                found: "and".into(),
+                            });
+                        }
+                    }
+                    // or 后面不允许 and（不带括号的混用）
+                    if let Value::BinOp(rb) = &b.right {
+                        if rb.op == BinOpKind::And {
+                            return Err(SassError::Parse {
+                                expected: ":".into(),
+                                found: "and".into(),
+                            });
+                        }
+                    }
+                    // or 后面不允许 not（不带括号）
+                    if let Value::UnaryOp(UnaryOp::Not, _) = &b.right {
+                        return Err(SassError::Parse {
+                            expected: "(".into(),
+                            found: "not".into(),
+                        });
+                    }
+                    // or 后面不允许 else
+                    if let Value::String(s, _) = &b.right {
+                        if s == "else" {
+                            return Err(SassError::Parse {
+                                expected: "(".into(),
+                                found: "else".into(),
+                            });
+                        }
+                    }
+                    // or 后面不能为空
+                    if matches!(b.right, Value::Null) {
+                        return Err(SassError::Parse {
+                            expected: "identifier".into(),
+                            found: ":".into(),
+                        });
+                    }
+                    match Self::partial_eval_condition(&b.left, env)? {
+                        PartialCond::True => Ok(PartialCond::True),
+                        PartialCond::False => Self::partial_eval_condition(&b.right, env),
+                        PartialCond::Css(left_css) => {
+                            match Self::partial_eval_condition(&b.right, env)? {
+                                PartialCond::True => Ok(PartialCond::True),
+                                PartialCond::False => Ok(PartialCond::Css(left_css)),
+                                PartialCond::Css(right_css) => {
+                                    Ok(PartialCond::Css(format!("{left_css} or {right_css}")))
+                                }
                             }
                         }
                     }
-                },
+                }
                 _ => {
                     let val = Self::eval_value(condition, env)?;
                     if Self::is_truthy(&val) {
@@ -157,6 +275,13 @@ impl Evaluator {
                     }
                 }
             }
+            // 空列表——不允许作为条件
+            Value::List(items, _, _) if items.is_empty() => {
+                Err(SassError::Parse {
+                    expected: "identifier".into(),
+                    found: "()".into(),
+                })
+            }
             // 其他值——正常求值
             _ => {
                 let val = Self::eval_value(condition, env)?;
@@ -168,6 +293,83 @@ impl Evaluator {
                     Ok(PartialCond::False)
                 }
             }
+        }
+    }
+
+    /// 检查条件中是否有 sass()+CSS 混用。
+    /// 只在同一空格列表中同时出现才报错。
+    pub(crate) fn check_sass_css_mix(value: &Value) -> Result<()> {
+        match value {
+            Value::List(items, Separator::Space, _) => {
+                let has_sass = items.iter().any(Self::contains_sass_call);
+                let has_css = items.iter().any(Self::contains_css_value);
+                if has_sass && has_css {
+                    return Err(SassError::Eval(
+                        "if() conditions with arbitrary substitutions may not contain sass() expressions.".into(),
+                    ));
+                }
+                // 递归检查每个元素
+                for item in items {
+                    Self::check_sass_css_mix(item)?;
+                }
+                Ok(())
+            }
+            Value::BinOp(b) => {
+                Self::check_sass_css_mix(&b.left)?;
+                Self::check_sass_css_mix(&b.right)?;
+                Ok(())
+            }
+            Value::UnaryOp(_, inner) => Self::check_sass_css_mix(inner),
+            Value::Paren(inner) => Self::check_sass_css_mix(inner),
+            _ => Ok(()),
+        }
+    }
+
+    /// 检查条件中是否包含 sass() 调用。
+    pub(crate) fn contains_sass_call(value: &Value) -> bool {
+        match value {
+            Value::Call(name, _) if name == "sass" => true,
+            Value::Call(_, args) => args.iter().any(|a| {
+                Self::contains_sass_call(&a.value)
+                    || a.condition.as_ref().is_some_and(|c| Self::contains_sass_call(c))
+            }),
+            Value::Paren(inner) => Self::contains_sass_call(inner),
+            Value::UnaryOp(_, inner) => Self::contains_sass_call(inner),
+            Value::BinOp(b) => Self::contains_sass_call(&b.left) || Self::contains_sass_call(&b.right),
+            Value::List(items, _, _) => items.iter().any(Self::contains_sass_call),
+            Value::Interp(segments) => segments.iter().any(|s| {
+                if let crate::parse::ast::InterpSegment::Expr(e) = s {
+                    e.contains("sass(")
+                } else {
+                    false
+                }
+            }),
+            _ => false,
+        }
+    }
+
+    /// 检查条件中是否包含 CSS 不可求值部分（var()/css()/calc() 等）。
+    pub(crate) fn contains_css_value(value: &Value) -> bool {
+        match value {
+            Value::Calc(_) => true,
+            Value::Call(name, _) if name == "css" || name == "var" => true,
+            Value::Call(name, _) if matches!(name.as_str(), "attr" | "env" | "clamp" | "min" | "max" | "round" | "mod" | "rem") => true,
+            Value::Call(_, args) => args.iter().any(|a| {
+                Self::contains_css_value(&a.value)
+                    || a.condition.as_ref().is_some_and(|c| Self::contains_css_value(c))
+            }),
+            Value::Paren(inner) => Self::contains_css_value(inner),
+            Value::UnaryOp(_, inner) => Self::contains_css_value(inner),
+            Value::BinOp(b) => Self::contains_css_value(&b.left) || Self::contains_css_value(&b.right),
+            Value::List(items, _, _) => items.iter().any(Self::contains_css_value),
+            Value::Interp(segments) => segments.iter().any(|s| {
+                let text = match s {
+                    crate::parse::ast::InterpSegment::Expr(e) => e,
+                    crate::parse::ast::InterpSegment::Text(t) => t,
+                };
+                text.contains("var(") || text.contains("css(") || text.contains("calc(")
+            }),
+            _ => false,
         }
     }
 }
