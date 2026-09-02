@@ -522,7 +522,10 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 - **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
 - **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
 - **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
-- **directives-100**（进行中）：文件歧义检测增强（partial/extension/index/import-only 四种冲突）+ module_helpers 统一 + .sass 测试修复 — conflict 5/5 修复, import 37→32 FAIL
+- **directives-100**（2026-08-31 归档）：文件歧义检测增强（partial/extension/index/import-only 四种冲突）+ module_helpers 统一 + .sass 测试修复 — conflict 5/5 修复, import 37→32 FAIL
+- **spec-pass-rate-boost-3**（2026-08-31 归档）：参数验证 + 错误消息英文化 + plain CSS 错误检测 + 运算符/模块修复 — is-unitless kebab-case 映射修复, 中文错误消息改英文, callable utils 模块解析修复（HRX 路径前缀）— 2902→2922 (+20)
+- **nested-output-and-quick-fixes**（2026-08-31 归档，被取代）：序列化空行修复 + 参数验证 + 内建函数补全 + 输出格式对齐 + plain CSS 错误检测 + 模块系统修复 — group_id 方案, flatten_nodes 返回同源标记, escape_css_ident 独立实现 — 3068→3089 (+21)，被 spec-pass-rate-boost-4 接续
+- **spec-pass-rate-boost-4**（2026-09-01 归档）：序列化空行 group_id + 参数验证 merge_args + 内建函数补全 + 输出格式对齐 + plain CSS 错误检测 + 模块系统修复 — group_id/is_same_origin 混合方案, merge_meta_args for if(), CSS 标识符转义, 声明注释跳过 — 3078→3089 (+21)
 - **chain-reaction**（2026-08-31 归档）：全面链式反应重构 — eval_nodes/eval_for/eval_each 用 try_fold，hoist_css_imports 用 partition，eval_rule 用 RuleBuilder+fold，flatten_nodes 用 flat_map+partition，merge_at_rules 用 fold，Evaluated::serialize 改为 self 消费 — 202/202 全通过，sass-spec 2828→2902 (+74)
 - **calc-simplification**（2026-09-01 归档）：calc 表达式简化 + CSS round/mod/rem 函数 — simplify_calc 支持纯数字/常量(pi/e)/同单位算术/科学计数法/嵌套 min/max 简化，strip_parens 去除多余括号，remove_unnecessary_parens 去除乘除法括号，CSS round() 四种策略(nearest/up/down/to-zero)+单位转换，CSS mod()/rem() floored/truncated modulo，calc 函数名大小写不敏感，math 函数 Calc 参数透传 — 2902→3068 (+166)，1 个 spec（`calc-simplification`）已同步到 `openspec/specs/`
 - **fix-default-config-validation**（2026-08-31 归档）：@forward 链 !default 配置验证 — eval_forward 回传 consumed_config 正确处理 as 前缀映射，config_pairs 仅传递 with 声明变量，load_module 区分 @use（验证）和 @forward（不验证）场景 — 1 个 spec（`use-with-validation`）已同步到 `openspec/specs/`
