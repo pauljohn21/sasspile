@@ -127,6 +127,11 @@ impl Evaluator {
                         )));
                     }
                 }
+                if env.star_conflict(name).is_some() {
+                    return Err(SassError::Eval(
+                        "This variable is available from multiple global modules.".into(),
+                    ));
+                }
                 env.lookup(name)
                     .cloned()
                     .ok_or_else(|| SassError::UndefinedVariable(name.clone()))

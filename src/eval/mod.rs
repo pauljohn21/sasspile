@@ -78,6 +78,9 @@ pub struct Env {
     pending_config: HashMap<String, Value>,
     /// 已被 !default 变量消费的 `pending_config` key 集合。
     consumed_config: HashSet<String>,
+    /// `@use ... as *` 模块的成员名→模块名列表映射（用于冲突检测）。
+    /// key = 成员名，value = 定义该成员的模块名列表。
+    star_members: HashMap<String, Vec<String>>,
 }
 
 /// mixin 定义存储。
@@ -296,6 +299,29 @@ impl Env {
     }
     pub(crate) fn get_namespaces(&self) -> &HashMap<String, Rc<ModuleExports>> {
         &self.namespaces
+    }
+    /// 添加 `as *` 模块的成员到冲突追踪映射。
+    pub(crate) fn add_star_members(mut self, module_name: &str, names: &[&str]) -> Self {
+        for name in names {
+            self.star_members
+                .entry((*name).to_string())
+                .or_default()
+                .push(module_name.to_string());
+        }
+        self
+    }
+    /// 检查成员名是否被多个 `as *` 模块定义（冲突）。
+    pub(crate) fn star_conflict(&self, name: &str) -> Option<&[String]> {
+        self.star_members
+            .get(name)
+            .filter(|v| v.len() > 1)
+            .map(Vec::as_slice)
+    }
+    /// 检查 `as *` 模块是否已记录到 star_members。
+    pub(crate) fn star_module_loaded(&self, module_name: &str) -> bool {
+        self.star_members
+            .values()
+            .any(|mods| mods.iter().any(|m| m == module_name))
     }
     pub(crate) fn get_loaded_modules(&self) -> &std::collections::HashSet<PathBuf> {
         &self.loaded_modules

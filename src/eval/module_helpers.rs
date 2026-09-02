@@ -75,6 +75,27 @@ pub(crate) fn bind_exports(
         |k: &str| -> String { prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}")) };
     match mode {
         BindMode::Use => {
+            // `as *` 模式：追踪每个成员名到 star_members 以检测冲突
+            // 只在第一次加载该模块时记录（避免同模块多次 @use 导致误报）
+            if prefix.is_none() {
+                let stem = source_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown");
+                let is_new_module = !new_env
+                    .star_module_loaded(stem);
+                if is_new_module {
+                    let member_names: Vec<&str> = merge_with_local_precedence(
+                        &exports.local_vars,
+                        &exports.forwarded_vars,
+                    )
+                    .map(|(k, _)| k.as_str())
+                    .chain(exports.all_mixins().map(|(k, _)| k.as_str()))
+                    .chain(exports.all_functions().map(|(k, _)| k.as_str()))
+                    .collect();
+                    new_env = new_env.add_star_members(stem, &member_names);
+                }
+            }
             new_env = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
                 .fold(new_env, |env, (k, v)| env.bind(fmt_key(k), v.clone()));
             new_env = exports.all_mixins().fold(new_env, |env, (k, v)| {

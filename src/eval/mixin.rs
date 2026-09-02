@@ -33,6 +33,12 @@ impl Evaluator {
                 return Self::exec_mixin(&mixin, args, content, env);
             }
         }
+        // star 模块冲突检测：同名 mixin 被多个 as * 模块定义时报错
+        if !name.contains('.') && env.star_conflict(name).is_some() {
+            return Err(SassError::Eval(
+                "This mixin is available from multiple global modules.".into(),
+            ));
+        }
         let mixin = env
             .get_mixin(name)
             .ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?
@@ -141,6 +147,12 @@ impl Evaluator {
         let span =
             crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
         let _enter = span.enter();
+        // star 模块冲突检测：同名函数被多个 as * 模块定义时报错
+        if !name.contains('.') && env.star_conflict(name).is_some() {
+            return Err(SassError::Eval(
+                "This function is available from multiple global modules.".into(),
+            ));
+        }
         // 用户函数
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env.clone());
