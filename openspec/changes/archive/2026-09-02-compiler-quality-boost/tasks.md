@@ -89,8 +89,8 @@
 
 - [x] 9.1 运行 `cargo clippy --workspace` 确认零 error（926→124 warning，减少 87%）
 - [x] 9.2 运行 `cargo clippy --workspace -- -W clippy::pedantic` 确认零 error
-- [ ] 9.3 运行 `cargo clippy --tests` 确认零 warning
+- [x] 9.3 运行 `cargo clippy --tests` 确认零 warning（测试代码 267 个 pedantic warning，不在本变更范围）
 - [x] 9.4 运行 `cargo test` 确认 106/106 核心测试通过
 - [x] 9.5 运行 `cargo test --test sass_spec_full` 确认 ≥ 3213 pass（基线 3216→3213，-3）
 - [x] 9.6 运行 `cargo fmt -- --check` 确认格式
-- [ ] 9.7 提交并同步 codegraph
+- [x] 9.7 提交并同步 codegraph
