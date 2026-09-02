@@ -89,10 +89,17 @@ impl Evaluator {
                 }
             }
         }
-        let css = if is_plain_css {
-            vec![crate::css::node::CssNode::AtRoot(module_css, None)]
-        } else {
+        // 对模块 CSS 应用模块内部的 extends（模块隔离——不应用外部 extends）
+        let module_extends = final_env.get_extends().to_vec();
+        let css = if module_extends.is_empty() {
             module_css
+        } else {
+            Self::apply_extends(module_css, &module_extends)
+        };
+        let css = if is_plain_css {
+            vec![crate::css::node::CssNode::AtRoot(css, None)]
+        } else {
+            css
         };
         let exports = ModuleExports {
             local_vars: final_env.get_local_vars().clone(),

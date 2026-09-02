@@ -195,8 +195,9 @@ pub(crate) fn merge_module_cache(env: Env, path: &Path, exports: &ModuleExports)
     let mut new_loaded = (*env.get_loaded_modules()).clone();
     new_loaded.insert(path.to_path_buf());
     new_loaded.extend((*exports.loaded_modules).clone().iter().cloned());
-    let mut new_extends = (*env.get_extends()).to_vec();
-    new_extends.extend((*exports.extends).clone().iter().cloned());
+    // 模块隔离：不合并模块的 extends 到调用者 env
+    // 模块的 extends 已经在 load_module 中应用到了模块的 CSS 上
+    let new_extends = (*env.get_extends()).to_vec();
     let mut new_cache = (*env.get_module_cache()).clone();
     for (k, v) in &*exports.module_cache {
         new_cache.insert(k.clone(), v.clone());
