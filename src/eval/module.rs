@@ -178,6 +178,7 @@ impl Evaluator {
             module_cache: final_env.get_module_cache_rc(),
             consumed_config: final_env.get_consumed_config().clone(),
             selectors,
+            star_imported: final_env.get_star_imported().clone(),
         };
         let exports_cache = exports.module_cache.clone();
         let mut updated_cache = (*exports_cache).clone();

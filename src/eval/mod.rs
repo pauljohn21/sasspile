@@ -27,6 +27,8 @@ pub(crate) struct ModuleExports {
     pub(crate) consumed_config: HashSet<String>,
     /// 该模块产生的所有选择器（用于 extend scope 检查）
     pub(crate) selectors: std::collections::HashSet<String>,
+    /// 通过 `@use ... as *` 引入的成员名集合（不应传递到下一个 `@use ... as *`）。
+    pub(crate) star_imported: std::collections::HashSet<String>,
 }
 
 impl ModuleExports {
@@ -81,6 +83,8 @@ pub struct Env {
     /// `@use ... as *` 模块的成员名→模块名列表映射（用于冲突检测）。
     /// key = 成员名，value = 定义该成员的模块名列表。
     star_members: HashMap<String, Vec<String>>,
+    /// 通过 `@use ... as *` 引入到当前作用域的成员名集合（不应传递到下一个 `@use ... as *`）。
+    star_imported: std::collections::HashSet<String>,
 }
 
 /// mixin 定义存储。
@@ -322,6 +326,15 @@ impl Env {
         self.star_members
             .values()
             .any(|mods| mods.iter().any(|m| m == module_name))
+    }
+    /// 获取 `star_imported` 成员名集合。
+    pub(crate) fn get_star_imported(&self) -> &std::collections::HashSet<String> {
+        &self.star_imported
+    }
+    /// 添加通过 `@use ... as *` 引入的成员名。
+    pub(crate) fn add_star_imported(mut self, name: String) -> Self {
+        self.star_imported.insert(name);
+        self
     }
     pub(crate) fn get_loaded_modules(&self) -> &std::collections::HashSet<PathBuf> {
         &self.loaded_modules

@@ -90,20 +90,58 @@ pub(crate) fn bind_exports(
                         &exports.forwarded_vars,
                     )
                     .map(|(k, _)| k.as_str())
-                    .chain(exports.all_mixins().map(|(k, _)| k.as_str()))
-                    .chain(exports.all_functions().map(|(k, _)| k.as_str()))
+                    .filter(|k| !(k.starts_with('-') || k.starts_with('_')))
+                    .chain(exports.all_mixins().map(|(k, _)| k.as_str()).filter(|k| !(k.starts_with('-') || k.starts_with('_'))))
+                    .chain(exports.all_functions().map(|(k, _)| k.as_str()).filter(|k| !(k.starts_with('-') || k.starts_with('_'))))
                     .collect();
                     new_env = new_env.add_star_members(stem, &member_names);
                 }
             }
+            // `as *` 模式（prefix=None）：过滤私有成员和通过 @use ... as * 传递引入的成员
+            let is_star = prefix.is_none();
+            let star_imported = &exports.star_imported;
             new_env = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
-                .fold(new_env, |env, (k, v)| env.bind(fmt_key(k), v.clone()));
-            new_env = exports.all_mixins().fold(new_env, |env, (k, v)| {
-                env.define_local_mixin(fmt_key(k), v.clone())
-            });
-            new_env = exports.all_functions().fold(new_env, |env, (k, v)| {
-                env.define_local_function(fmt_key(k), v.clone())
-            });
+                .filter(|(k, _)| {
+                    !is_star
+                        || (!(k.starts_with('-') || k.starts_with('_'))
+                            && !star_imported.contains(k.as_str()))
+                })
+                .fold(new_env, |env, (k, v)| {
+                    let env = env.bind(fmt_key(k), v.clone());
+                    if is_star {
+                        env.add_star_imported(fmt_key(k))
+                    } else {
+                        env
+                    }
+                });
+            new_env = exports.all_mixins()
+                .filter(|(k, _)| {
+                    !is_star
+                        || (!(k.starts_with('-') || k.starts_with('_'))
+                            && !star_imported.contains(k.as_str()))
+                })
+                .fold(new_env, |env, (k, v)| {
+                    let env = env.define_local_mixin(fmt_key(k), v.clone());
+                    if is_star {
+                        env.add_star_imported(fmt_key(k))
+                    } else {
+                        env
+                    }
+                });
+            new_env = exports.all_functions()
+                .filter(|(k, _)| {
+                    !is_star
+                        || (!(k.starts_with('-') || k.starts_with('_'))
+                            && !star_imported.contains(k.as_str()))
+                })
+                .fold(new_env, |env, (k, v)| {
+                    let env = env.define_local_function(fmt_key(k), v.clone());
+                    if is_star {
+                        env.add_star_imported(fmt_key(k))
+                    } else {
+                        env
+                    }
+                });
         }
         BindMode::Forward => {
             let merged_vars: Vec<(String, Value)> =
