@@ -305,6 +305,49 @@ span.record("result", &format!("{:?}", result));
 | `span.record("x", &format!(...))` | 应传原始值或用 `?`/`%` sigil |
 | `Span::enter` 跨 await 点 | async 代码 trace 错乱 |
 
+## 🔬 OpenTelemetry (OTel) 追踪架构
+
+### 架构概要
+
+sasspile 通过 `otel` feature 提供可选的 OpenTelemetry 追踪，使用 stdout exporter 输出 span（无需 gRPC/tokio）：
+
+```toml
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
+otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:tracing-opentelemetry"]
+```
+
+### 双模式初始化
+
+| 函数 | feature | 输出 |
+|------|---------|------|
+| `init_tracing()` | `tracing` | tracing fmt 日志（`RUST_LOG` 控制） |
+| `init_tracing_otel()` | `otel` | tracing fmt + OTel stdout span（`RUST_LOG` + `OTEL_SERVICE_NAME`） |
+
+`init_tracing_otel()` 在 `otel` feature 未启用时回退到 `init_tracing()`，无需条件编译。
+
+### OTel Span 输出内容
+
+每个 span 包含：
+- **TraceId / SpanId / ParentSpanId** — 完整调用链层级
+- **busy_ns / idle_ns** — 精确耗时（纳秒级）
+- **业务字段** — `stage`、`module`、`dir`、`hrx`、`pass`、`fail`、`pct` 等
+- **Event** — span 内事件（如 `hrx parsed`、`sass-spec 目录`）
+
+### 使用方式
+
+```bash
+# 编译器 CLI + OTel
+RUST_LOG=info cargo run --features otel -- input.scss
+
+# 测试 + OTel
+RUST_LOG=info cargo test --features otel --test sass_spec_full -- --nocapture
+
+# 自定义服务名
+OTEL_SERVICE_NAME=sasspile-debug RUST_LOG=debug cargo test --features otel --test compile_test -- --nocapture
+```
+
 ## 🔬 调试协议（4 步强制流程）
 
 > **核心原则**：禁止凭直觉猜测根因。所有 bug 修复必须基于 tracing trace 证据链。
@@ -321,10 +364,14 @@ span.record("result", &format!("{:?}", result));
 ### Step 2: TRACE 采集
 
 ```bash
+# 基础 tracing
 RUST_LOG=trace cargo test test_name 2>&1 | tee /tmp/trace.log
+
+# OTel 追踪（输出 OpenTelemetry span 到 stdout，含 TraceId/SpanId/耗时）
+RUST_LOG=trace cargo test --features otel test_name -- --nocapture 2>&1 | tee /tmp/trace.log
 ```
 
-保留 trace 输出作为**证据**。
+保留 trace 输出作为**证据**。OTel 模式额外提供 `busy_ns`/`idle_ns` 精确耗时和 span 层级 `ParentSpanId`。
 
 ### Step 3: 根因定位（必须引用 span + 字段值）
 
@@ -351,7 +398,7 @@ Root cause: parse_expr doesn't convert Number(1) to true semantically
 ## ⛔ sasspile 特定规则
 
 1. **禁止 #[cfg(test)] 内联测试**：所有测试放在 tests/ 目录，src/ 保持纯生产代码。
-2. **修复 bug 前必须 tracing 追踪**：RUST_LOG=info/debug cargo test 查看完整链路。
+2. **修复 bug 前必须 tracing 追踪**：`RUST_LOG=info/debug cargo test` 或 `--features otel` 查看完整链路。
 
 ## 会话开始检查清单
 
@@ -421,12 +468,15 @@ cargo test --test bs_spec -- --nocapture    # 15 个
 cargo test --test ep_full -- --nocapture    # 121 个（约 38 秒）
 cargo test --test default_config_test -- --test-threads=1  # 9 个
 
-# sass-spec 全量统计（约 70 秒）
+# sass-spec 全量统计（约 44 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
+
+# sass-spec 全量统计 + OTel 追踪（输出 span 到 stdout）
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：3068/5362 = 57%（VFS + `===` 分组隔离，跳过 libsass/color/colors 目录，calc 简化 + CSS round/mod/rem 函数 + 括号去除后 +166）
+**sass-spec 基线**：3216/5624 = 57%（hrx-auditor 依赖移除 + 内联 hrx_support 模块，非隔离模式 + 路径前缀，跳过 libsass/color/colors 目录）
 **@directives 子目录**：forward 76%，import 32 FAIL（conflict 5/5 修复，pending_config 架构生效）
 **ep_full**：121/121 = 100%（file_resolver.rs 拆分 + module_helpers 统一后无回归）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
@@ -477,6 +527,8 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 - **calc-simplification**（2026-09-01 归档）：calc 表达式简化 + CSS round/mod/rem 函数 — simplify_calc 支持纯数字/常量(pi/e)/同单位算术/科学计数法/嵌套 min/max 简化，strip_parens 去除多余括号，remove_unnecessary_parens 去除乘除法括号，CSS round() 四种策略(nearest/up/down/to-zero)+单位转换，CSS mod()/rem() floored/truncated modulo，calc 函数名大小写不敏感，math 函数 Calc 参数透传 — 2902→3068 (+166)，1 个 spec（`calc-simplification`）已同步到 `openspec/specs/`
 - **fix-default-config-validation**（2026-08-31 归档）：@forward 链 !default 配置验证 — eval_forward 回传 consumed_config 正确处理 as 前缀映射，config_pairs 仅传递 with 声明变量，load_module 区分 @use（验证）和 @forward（不验证）场景 — 1 个 spec（`use-with-validation`）已同步到 `openspec/specs/`
 - **fix-interp-eval**（2026-08-31 归档）：插值求值架构重构 — Value::Interp 从 String 改为 Vec<InterpSegment> 保留表达式与文本边界，parser parse_interp_adjacent 方法拼接相邻片段，eval_interp_segments 逐片段求值 — 1 个 spec（`interp-eval`）已同步到 `openspec/specs/`，15 个 interp_test 全通过
+- **hrx-auditor-removal**（2026-09-02 归档）：移除 hrx-auditor 外部依赖 — 创建内联 tests/hrx_support.rs 模块（parse_hrx + Vfs + parse_hrx_to_cases），9 个测试文件引用，sass_spec_full.rs 重写为非隔离模式（路径加 HRX 名前缀，@use 跨组引用正确解析），sass-spec 3216/5624=57%
+- **otel-integration**（2026-09-02 归档）：OpenTelemetry 0.32 集成 — `otel` feature + `init_tracing_otel()` stdout exporter（无需 gRPC/tokio），sass_spec_full.rs 所有测试改用 `init_tracing_otel()`，输出 TraceId/SpanId/busy_ns 精确耗时
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 
@@ -640,6 +692,9 @@ codegraph query <search>       # 搜索符号
 RUST_LOG=info cargo test --test compile_test <test_name> -- --nocapture
 RUST_LOG="sasspile::color=trace" cargo test --test compile_test -- --nocapture
 
+# OTel 追踪（输出 OpenTelemetry span，含 TraceId/SpanId/busy_ns）
+RUST_LOG=info cargo test --features otel --test compile_test <test_name> -- --nocapture
+
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture
 RUST_LOG="minimize=info" cargo test --test minimize minimize_<subdir>_error -- --nocapture
@@ -687,5 +742,6 @@ cargo tree                               # 依赖树
 - [ ] 累积操作用 `try_fold` / `fold` 而非可变 `Vec` + push
 - [ ] 分流用 `partition` 而非两个 `Vec` + for + if
 - [ ] 调试遵循 4 步协议（如果是 bug 修复）
+- [ ] OTel 追踪可用：`cargo test --features otel` 输出 span 正常
 - [ ] CodeGraph 用于代码查询
 - [ ] Commit 等用户确认后再推送

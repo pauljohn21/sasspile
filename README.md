@@ -9,7 +9,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.7** — 函数式链式调用重构 + Env move 语义（零 clone） + stage 管线携带路径 — 2828/5362 (53%) sass-spec, ep_full 121/121 (100%).
+> **v0.9.7** — 函数式链式调用重构 + Env move 语义（零 clone） + stage 管线携带路径 + hrx-auditor 依赖移除（内联 hrx_support 模块） — 3216/5624 (57%) sass-spec, ep_full 121/121 (100%).
 
 sasspile 是一个从零实现的 SCSS 编译器，采用 Rust 所有权管线。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 move 语义实现零 clone 的数据流。
 
@@ -28,10 +28,10 @@ Source::from_file(&path)?
 - **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
-- **sass-spec 兼容**: 2828/5362 (53%) 全量通过（VFS + `===` 分组隔离，更准确），@directives forward 76% + import conflict 5/5 修复，core_functions/color 已跳过（需 `--ignored` 手动触发）
+- **sass-spec 兼容**: 3216/5624 (57%) 全量通过（内联 hrx_support 模块，非隔离模式 + 路径前缀），@directives forward 76% + import conflict 5/5 修复，core_functions/color 已跳过（需 `--ignored` 手动触发）
 - **Bootstrap 5.3.8**: 全量编译通过 ✅
-- **Element Plus**: 101/121 (83%) 通过 ✅（模块缓存修复后）
-- **tracing 调试**: 内建 span + event 追踪链路
+- **Element Plus**: 121/121 (100%) 通过 ✅（file_resolver.rs 拆分 + module_helpers 统一后无回归）
+- **tracing 调试**: 内建 span + event 追踪链路 + OpenTelemetry stdout exporter（`--features otel`）
 - **AI 开发技能**: 内置 `skill.md` 综合开发指南
 
 ## 快速开始
@@ -176,10 +176,16 @@ cargo test --test common_test       # 5 个
 
 # 兼容性测试
 cargo test --test bs_spec           # 15 Bootstrap 测试
-cargo test --test ep_full           # 121 Element Plus 测试（约 28 秒）
+cargo test --test ep_full           # 121 Element Plus 测试（约 38 秒）— 121/121 通过
+
+# sass-spec 全量统计（约 44 秒）
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
+
+# OTel 追踪（输出 OpenTelemetry span）
+RUST_LOG=info cargo test --features otel --test sass_spec_full -- --nocapture
 ```
 
-全部通过：**compile 43/43 + stage 10/10 + ast 8/8 + common 5/5 + BS 15/15 + EP 101/121**
+全部通过：**compile 43/43 + stage 10/10 + ast 8/8 + common 5/5 + BS 15/15 + EP 121/121 + sass-spec 3216/5624 (57%)**
 
 > 详见根目录 `skill.md` 获取完整开发指南。
 

@@ -101,6 +101,10 @@ RUST_LOG="sasspile::binop=trace" cargo test --lib -- --nocapture
 
 # 组合多个 target
 RUST_LOG="sasspile::color=debug,sasspile::extend=info" cargo test --lib -- --nocapture
+
+# OTel 追踪（输出 OpenTelemetry span，含 TraceId/SpanId/busy_ns 精确耗时）
+RUST_LOG=info cargo test --features otel --test compile_test <name> -- --nocapture
+RUST_LOG=info cargo test --features otel --test sass_spec_full test_sass_spec_full_stats -- --nocapture
 ```
 
 ### 步骤 3：分析 span 链路
@@ -147,6 +151,9 @@ RUST_LOG=error cargo test --lib test_debug_bs_close -- --nocapture
 
 # 全量统计验证
 RUST_LOG=info cargo test --test sass_spec_full test_sass_spec_full_stats -- --nocapture 2>&1 | grep "全量"
+
+# OTel 追踪验证（输出 span 到 stdout）
+RUST_LOG=info cargo test --features otel --test sass_spec_full test_sass_spec_full_stats -- --nocapture
 
 # 确保无回归
 cargo test --lib 2>&1 | tail -3

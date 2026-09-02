@@ -19,7 +19,7 @@
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| **lib.rs** | 334 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing |
+| **lib.rs** | 409 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing + init_tracing_otel（OTel stdout exporter） |
 | **main.rs** | 60 | CLI 入口（支持文件路径参数 + stdin 回退 + .css 文件 plain CSS 模式） |
 | **error.rs** | 95 | SassError 定义（全英文错误消息） |
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |

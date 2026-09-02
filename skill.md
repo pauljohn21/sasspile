@@ -577,6 +577,10 @@ RUST_LOG="cssdiff=debug" cargo test --test cf_diag diag_<subdir> -- --nocapture
 
 # 最小化失败用例
 RUST_LOG="minimize=info" cargo test --test minimize minimize_color_error -- --nocapture
+
+# OTel 追踪（输出 OpenTelemetry span，含 TraceId/SpanId/busy_ns 精确耗时）
+RUST_LOG=info cargo test --features otel --test compile_test <name> -- --nocapture
+RUST_LOG=info cargo test --features otel --test sass_spec_full test_sass_spec_full_stats -- --nocapture
 ```
 
 ### 5.3 Event Targets 值快照
@@ -698,11 +702,14 @@ cargo test --test common_test     # 5 个
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
 cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 120 秒）— 121/121 通过
 
-# sass-spec 全量统计（约 70 秒）
+# sass-spec 全量统计（约 44 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：3068/5362 = 57%（calc 简化 + CSS round/mod/rem 函数 + 括号去除）
+# 基线：3216/5624 = 57%（hrx-auditor 依赖移除 + 内联 hrx_support 模块）
 # @directives 子目录：337/605 = 56%
 # ep_full：121/121 = 100%（fix-forward-use-conflict 修复后全部通过）
+
+# sass-spec 全量统计 + OTel 追踪
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
 
 # sass-spec 诊断
 cargo test --test cf_diag diag_<subdir> -- --nocapture
