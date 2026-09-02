@@ -251,7 +251,10 @@ impl Parser<'_> {
         let params = if self.peek() == Some(&Token::LParen) {
             self.parse_params()?
         } else {
-            Vec::new()
+            return Err(SassError::Parse {
+                expected: "(".into(),
+                found: "other".into(),
+            });
         };
         self.skip_ws();
         self.expect(&Token::LBrace)?;
