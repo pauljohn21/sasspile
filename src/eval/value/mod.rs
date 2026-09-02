@@ -72,6 +72,12 @@ impl Evaluator {
                     return Ok((vec![], new_env));
                 }
                 if env.has_var(name) {
+                    // 如果变量来自多个 as * 模块，报冲突
+                    if env.star_conflict(name).is_some() {
+                        return Err(SassError::Eval(
+                            "This variable is available from multiple global modules.".into(),
+                        ));
+                    }
                     return Ok((vec![], env));
                 }
             }
