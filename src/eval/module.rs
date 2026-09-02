@@ -247,6 +247,9 @@ impl Evaluator {
         .with_depth(saved_depth);
         // @import 内联语义：forwarded 成员合并到 local
         let final_env = final_env.merge_forwarded_to_local();
+        // @import 内联语义：移除通过 @use ... as * 引入的传递性成员
+        // 这些成员只在被导入文件内部可见，不应传递到导入文件
+        let final_env = final_env.remove_star_imported();
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(css, None)]
         } else {
@@ -298,6 +301,32 @@ impl Evaluator {
         config: &[crate::parse::ast::ConfigVar],
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        // @use 只能在顶层使用——在 style rule 或 mixin 内报错
+        if env.get_selector().is_some() || env.get_content().is_some() {
+            return Err(SassError::Eval(
+                "This at-rule is not allowed here.".into(),
+            ));
+        }
+        // 空 URL 报错
+        if url.is_empty() {
+            return Err(SassError::Eval(
+                "The default namespace \"\" is not a valid Sass identifier.".into(),
+            ));
+        }
+        // 非 sass: URL 的默认命名空间必须是合法标识符
+        if !url.starts_with("sass:") && namespace.is_none() && !star {
+            let stem = std::path::Path::new(url)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(url);
+            let base = stem.split('.').next().unwrap_or(stem);
+            let ns = base.trim_start_matches('_');
+            if !ns.is_empty() && !ns.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
+                return Err(SassError::Eval(format!(
+                    "The default namespace \"{ns}\" is not a valid Sass identifier."
+                )));
+            }
+        }
         // 内建模块 sass:math/string/list/map/color/meta/selector
         if url.starts_with("sass:") {
             if !config.is_empty() {

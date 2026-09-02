@@ -336,6 +336,15 @@ impl Env {
         self.star_imported.insert(name);
         self
     }
+    /// 移除通过 `@use ... as *` 引入的传递性成员（@import 内联后清理）。
+    pub(crate) fn remove_star_imported(mut self) -> Self {
+        for name in self.star_imported.drain() {
+            self.local_vars.remove(&name);
+            self.local_mixins.remove(&name);
+            self.local_functions.remove(&name);
+        }
+        self
+    }
     pub(crate) fn get_loaded_modules(&self) -> &std::collections::HashSet<PathBuf> {
         &self.loaded_modules
     }

@@ -241,7 +241,9 @@ impl Parser<'_> {
         Ok(args)
     }
 
-    pub(crate) fn parse_config(&mut self) -> Result<Vec<ConfigVar>> {
+    /// 解析 `with ($x: val, ...)` 配置参数。
+    /// `allow_default = true` 允许 `!default` 标志（`@forward` 场景）。
+    pub(crate) fn parse_config(&mut self, allow_default: bool) -> Result<Vec<ConfigVar>> {
         let mut config = Vec::new();
         let mut seen = std::collections::HashSet::new();
         self.skip_ws();
@@ -271,8 +273,12 @@ impl Parser<'_> {
             self.skip_ws();
             let value = self.parse_expr(0)?;
             self.skip_ws();
+            // @use with() 中不允许 !default 标志；@forward with() 允许
             let mut is_default = false;
-            while self.peek() == Some(&Token::Bang) {
+            if self.peek() == Some(&Token::Bang) {
+                if !allow_default {
+                    return Err(SassError::Eval("expected \")\".".into()));
+                }
                 self.advance();
                 self.skip_ws();
                 if let Some(Token::Ident(s)) = self.peek() {

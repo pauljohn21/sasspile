@@ -40,7 +40,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_ws();
             self.expect(&Token::LParen)?;
-            config = self.parse_config()?;
+            config = self.parse_config(false)?;
         }
         self.skip_ws();
         if self.peek() == Some(&Token::Semicolon) {
@@ -125,7 +125,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_ws();
             self.expect(&Token::LParen)?;
-            config = self.parse_config()?;
+            config = self.parse_config(true)?;
             self.skip_ws();
             if self.peek_keyword("as") || self.peek_keyword("show") || self.peek_keyword("hide") {
                 return Err(SassError::Eval("expected \";\".".into()));
