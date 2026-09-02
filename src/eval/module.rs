@@ -5,8 +5,64 @@ use std::path::Path;
 use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
 
 impl Evaluator {
-    /// 加载文件模块——读取、词法分析、语法分析、求值，返回导出。
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(caller_env), fields(path = %path.display(), depth = caller_env.depth, n_config = config.len(), validate = validate_config)))]
+    /// 递归收集 AST 中所有 !global 变量名
+    fn collect_global_vars(nodes: &[crate::parse::ast::Node]) -> Vec<String> {
+        use crate::parse::ast::Node;
+        let mut vars = Vec::new();
+        for node in nodes {
+            match node {
+                Node::Variable {
+                    name,
+                    flags,
+                    ..
+                } => {
+                    if flags.global && !name.contains('.') {
+                        vars.push(name.clone());
+                    }
+                }
+                Node::If {
+                    branches,
+                    else_body,
+                } => {
+                    for (_, branch_body) in branches {
+                        vars.extend(Self::collect_global_vars(branch_body));
+                    }
+                    if let Some(else_nodes) = else_body {
+                        vars.extend(Self::collect_global_vars(else_nodes));
+                    }
+                }
+                Node::For { body, .. }
+                | Node::Each { body, .. }
+                | Node::While { body, .. }
+                | Node::MixinDef { body, .. }
+                | Node::FunctionDef { body, .. }
+                | Node::AtRoot { body, .. } => {
+                    vars.extend(Self::collect_global_vars(body));
+                }
+                Node::Include {
+                    args,
+                    content,
+                    ..
+                } => {
+                    let _ = args;
+                    if let Some(content_nodes) = content {
+                        vars.extend(Self::collect_global_vars(content_nodes));
+                    }
+                }
+                Node::Rule { body, .. } => {
+                    vars.extend(Self::collect_global_vars(body));
+                }
+                Node::AtRule { body, .. } => {
+                    if let Some(b) = body {
+                        vars.extend(Self::collect_global_vars(b));
+                    }
+                }
+                _ => {}
+            }
+        }
+        vars
+    }
+
     pub(crate) fn load_module(
         path: &Path,
         config: &[(String, Value)],
@@ -57,6 +113,13 @@ impl Evaluator {
                 let key = name.replace('-', "_");
                 crate::__tracing::debug!(name = %key, "load_module: inject pending_config");
                 env = env.add_pending_config(key, val);
+            }
+        }
+        // 预扫描 AST 中所有 !global 变量声明，预先初始化为 null
+        // SCSS 规范要求模块始终暴露这些变量，即使所在代码路径未执行
+        for global_var in Self::collect_global_vars(&ast.nodes) {
+            if !env.has_var(&global_var) {
+                env = env.bind(global_var, crate::parse::ast::Value::Null);
             }
         }
         // 验证配置变量在上游模块中必须带 !default 声明
