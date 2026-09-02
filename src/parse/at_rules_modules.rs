@@ -7,6 +7,11 @@ use crate::lex::token::Token;
 
 impl Parser<'_> {
     pub(crate) fn parse_use(&mut self) -> Result<Node> {
+        if self.saw_other_rule {
+            return Err(SassError::Eval(
+                "@use rules must be written before any other rules.".into(),
+            ));
+        }
         self.skip_ws();
         let url = self.parse_string_value()?;
         let mut namespace = None;
