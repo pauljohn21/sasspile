@@ -1,5 +1,7 @@
 use super::*;
 use crate::error::{Result, SassError};
+use crate::lex::Lexer;
+use crate::lex::token::Token;
 use std::path::Path;
 
 use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
