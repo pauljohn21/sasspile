@@ -1,6 +1,7 @@
 //! @import 指令处理。
 
 use super::*;
+use std::path::Path;
 
 impl Evaluator {
     /// @import 指令处理。
@@ -8,15 +9,19 @@ impl Evaluator {
         if url.starts_with("sass:") {
             return Ok((vec![], env.add_module(url.to_string())));
         }
-        let is_css = url.ends_with(".css")
+        let is_css = Path::new(url)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("css"))
             || url.starts_with("https://")
             || url.starts_with("http://")
             || url.starts_with("//")
             || url.starts_with("url(")
             || !modifier.is_empty()
-            || url
-                .split(", ")
-                .any(|u| u.trim_matches('"').ends_with(".css"));
+            || url.split(", ").any(|u| {
+                Path::new(u.trim_matches('"'))
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("css"))
+            });
         if is_css {
             let urls: Vec<&str> = url.split(", ").collect();
             let nodes: Vec<CssNode> = urls
@@ -51,7 +56,9 @@ impl Evaluator {
         if let Some(path) = Self::resolve_file_import(base, url, &load_paths) {
             return Self::load_import(&path, env);
         }
-        if !url.ends_with(".css")
+        if !(Path::new(url)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("css")))
             && !url.starts_with("http://")
             && !url.starts_with("https://")
             && !url.starts_with("url(")

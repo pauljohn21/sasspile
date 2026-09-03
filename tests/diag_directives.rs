@@ -1,3 +1,4 @@
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
 mod hrx_support;
 
 use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
@@ -5,10 +6,10 @@ use sasspile::{OutputStyle, compile_file_with_load_paths};
 use std::path::PathBuf;
 
 /// 从 HRX 内容编译所有 entry，返回结果列表。
+#[allow(clippy::type_complexity)]
 fn compile_hrx(hrx: &str) -> Vec<(String, Result<String, String>, Option<String>, bool)> {
-    let archive = match hrx_parse(hrx) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = hrx_parse(hrx) else {
+        return Vec::new();
     };
 
     let groups: Vec<Vec<HrxEntry>> = {

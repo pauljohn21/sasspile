@@ -167,6 +167,7 @@ impl Evaluator {
     }
 
     /// CSS 命名颜色反向查找——根据 RGB 值返回名称。
+    #[allow(clippy::items_after_statements)]
     pub(crate) fn reverse_lookup_named_color(c: &Color) -> Option<&'static str> {
         if (c.a - 1.0).abs() > 0.0001 {
             return None;

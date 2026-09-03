@@ -3,7 +3,9 @@
     clippy::single_char_pattern,
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
+    clippy::cast_possible_wrap,
+    clippy::float_cmp,
+    clippy::cast_precision_loss
 )]
 use super::*;
 use crate::error::Result;

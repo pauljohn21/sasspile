@@ -395,18 +395,6 @@ Root cause: parse_expr doesn't convert Number(1) to true semantically
 | 简单拼写/语法错误 | 跳过插桩，注明 "可见错误，无需 tracing" |
 | 初始代码探索 | 轻量 `debug_span!` 可接受 |
 
-## ⛔ sasspile 特定规则
-
-1. **禁止 #[cfg(test)] 内联测试**：所有测试放在 tests/ 目录，src/ 保持纯生产代码。
-2. **修复 bug 前必须 tracing 追踪**：`RUST_LOG=info/debug cargo test` 或 `--features otel` 查看完整链路。
-
-## 会话开始检查清单
-
-每次新会话，先确认：
-- [ ] 读 workspace 规则（本文件）
-- [ ] 读用户规则（user_rules 部分）
-- [ ] 检查是否有相关记忆需要加载
-
 ## 项目核心
 
 sasspile 是纯 Rust 函数式 SCSS 编译器。架构：
@@ -483,10 +471,9 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：3327/5624 = 59%（scope-chain-arch：Scope 结构体 + Rc<Scope> 父链零 clone 作用域管理，非隔离模式 + 路径前缀，跳过 libsass/color/colors 目录）
-**@directives 子目录**：forward 76%，import 32 FAIL（conflict 5/5 修复，pending_config 架构生效）
-**ep_full**：121/121 = 100%（file_resolver.rs 拆分 + module_helpers 统一后无回归）
-**core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
+**sass-spec 基线**：3327/5624 = 59%（跳过 libsass/color/colors 目录）
+**ep_full**：121/121 = 100%
+**颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
 
@@ -522,24 +509,14 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 
 ## OpenSpec 归档
 
-- 已归档变更存储在 `openspec/changes/archive/` 目录
-- **rc-env-perf**（2026-08-22 归档）：Rc COW 性能方案（已被 mut-env-refactor 取代）— Env 从 im::HashMap 改为 Rc<HashMap> COW，后因模仿 GC 模式被弃用
-- **mut-env-refactor**（2026-08-22 归档）：Env move 语义重构 + 函数式链式调用 — lib.rs 入口改链式 Source→Lexed→Parsed→Evaluated→Serialized，15 个 eval_xxx 改 Env（move），消除 env.clone() 和 Rc::make_mut()，stage 管线携带 base_path + load_paths — 202/202 全通过
-- **fix-top-level-declaration**（2026-08-22 归档）：顶层 CSS 声明检测 — eval_node 的 Node::Decl 分支增加 current_selector 检查
-- **spec-pass-rate-boost**（2026-08-21 归档）：参数验证修复 + meta 模块功能 + error 检测 + values/css 深度修复 — 5 个 spec 已同步到 `openspec/specs/`
-- **builtin-dispatch-macro**（2026-08-21 归档）：派生宏重构内建函数注册 — 1 个 spec（`builtin-registry`）已同步到 `openspec/specs/`
-- **fix-forward-use-conflict**（2026-08-21 归档）：local/forwarded 双层结构 + bind_exports 重构 + @forward show/hide 过滤 + @import 内联合并 — ep_full 10/121→121/121
-- **directives-100**（2026-08-31 归档）：文件歧义检测增强（partial/extension/index/import-only 四种冲突）+ module_helpers 统一 + .sass 测试修复 — conflict 5/5 修复, import 37→32 FAIL
-- **spec-pass-rate-boost-3**（2026-08-31 归档）：参数验证 + 错误消息英文化 + plain CSS 错误检测 + 运算符/模块修复 — is-unitless kebab-case 映射修复, 中文错误消息改英文, callable utils 模块解析修复（HRX 路径前缀）— 2902→2922 (+20)
-- **nested-output-and-quick-fixes**（2026-08-31 归档，被取代）：序列化空行修复 + 参数验证 + 内建函数补全 + 输出格式对齐 + plain CSS 错误检测 + 模块系统修复 — group_id 方案, flatten_nodes 返回同源标记, escape_css_ident 独立实现 — 3068→3089 (+21)，被 spec-pass-rate-boost-4 接续
-- **spec-pass-rate-boost-4**（2026-09-01 归档）：序列化空行 group_id + 参数验证 merge_args + 内建函数补全 + 输出格式对齐 + plain CSS 错误检测 + 模块系统修复 — group_id/is_same_origin 混合方案, merge_meta_args for if(), CSS 标识符转义, 声明注释跳过 — 3078→3089 (+21)
-- **chain-reaction**（2026-08-31 归档）：全面链式反应重构 — eval_nodes/eval_for/eval_each 用 try_fold，hoist_css_imports 用 partition，eval_rule 用 RuleBuilder+fold，flatten_nodes 用 flat_map+partition，merge_at_rules 用 fold，Evaluated::serialize 改为 self 消费 — 202/202 全通过，sass-spec 2828→2902 (+74)
-- **calc-simplification**（2026-09-01 归档）：calc 表达式简化 + CSS round/mod/rem 函数 — simplify_calc 支持纯数字/常量(pi/e)/同单位算术/科学计数法/嵌套 min/max 简化，strip_parens 去除多余括号，remove_unnecessary_parens 去除乘除法括号，CSS round() 四种策略(nearest/up/down/to-zero)+单位转换，CSS mod()/rem() floored/truncated modulo，calc 函数名大小写不敏感，math 函数 Calc 参数透传 — 2902→3068 (+166)，1 个 spec（`calc-simplification`）已同步到 `openspec/specs/`
-- **fix-default-config-validation**（2026-08-31 归档）：@forward 链 !default 配置验证 — eval_forward 回传 consumed_config 正确处理 as 前缀映射，config_pairs 仅传递 with 声明变量，load_module 区分 @use（验证）和 @forward（不验证）场景 — 1 个 spec（`use-with-validation`）已同步到 `openspec/specs/`
-- **fix-interp-eval**（2026-08-31 归档）：插值求值架构重构 — Value::Interp 从 String 改为 Vec<InterpSegment> 保留表达式与文本边界，parser parse_interp_adjacent 方法拼接相邻片段，eval_interp_segments 逐片段求值 — 1 个 spec（`interp-eval`）已同步到 `openspec/specs/`，15 个 interp_test 全通过
-- **hrx-auditor-removal**（2026-09-02 归档）：移除 hrx-auditor 外部依赖 — 创建内联 tests/hrx_support.rs 模块（parse_hrx + Vfs + parse_hrx_to_cases），9 个测试文件引用，sass_spec_full.rs 重写为非隔离模式（路径加 HRX 名前缀，@use 跨组引用正确解析），sass-spec 3216/5624=57%
-- **otel-integration**（2026-09-02 归档）：OpenTelemetry 0.32 集成 — `otel` feature + `init_tracing_otel()` stdout exporter（无需 gRPC/tokio），sass_spec_full.rs 所有测试改用 `init_tracing_otel()`，输出 TraceId/SpanId/busy_ns 精确耗时
-- **scope-chain-arch**（2026-09-03 归档）：Scope Chain 作用域管理架构 — `Scope` 结构体（7 HashMap + parent 链）+ `Rc<Scope>` 父链零 clone 进出 + `enter_scope`/`exit_scope` 替代 6 次 HashMap clone + `Rc::try_unwrap` 写操作零 clone + 变量查找沿 scope 链向上搜索 + flow control 不创建新 scope — 202/202 全通过，sass-spec 3324→3327 (+3)，1 个 spec（`scope-chain`）+ 1 个 delta（`fp-architecture`）已同步到 `openspec/specs/`
+已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **scope-chain-arch**（2026-09-03）：Scope Chain 作用域管理架构 — 202/202 全通过，sass-spec 3324→3327
+- **otel-integration**（2026-09-02）：OpenTelemetry 0.32 集成
+- **hrx-auditor-removal**（2026-09-02）：移除 hrx-auditor 外部依赖，内联 hrx_support.rs
+- **calc-simplification**（2026-09-01）：calc 表达式简化 + CSS round/mod/rem — 2902→3068 (+166)
+- **chain-reaction**（2026-08-31）：全面链式反应重构 — 202/202 全通过，2828→2902 (+74)
+
+更早的归档记录详见 `openspec/changes/archive/` 目录。
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 
@@ -607,41 +584,6 @@ sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影�
 - 在纯函数中引入 `&mut` 参数
 - 用 `if-else` 链替换已有的 `match`
 
-## 📝 编码规范速查
-
-### 命名
-
-| 类型 | 规范 | 示例 |
-|------|------|------|
-| 函数/变量 | snake_case | `fn parse_input()` |
-| 类型/结构体 | CamelCase | `struct HttpClient` |
-| 常量 | SCREAMING_CASE | `const MAX_RETRIES: u32 = 3;` |
-| 模块 | snake_case | `mod user_service;` |
-
-### 转换方法命名
-
-| 前缀 | 语义 | 开销 | 示例 |
-|------|------|------|------|
-| `as_` | 廉价引用转换 | `&T` | `as_str()` |
-| `to_` | 昂贵转换 | 分配 | `to_string()` |
-| `into_` | 消耗所有权 | move | `into_vec()` |
-
-### 已弃用 → 推荐
-
-| 已弃用 | 推荐 | 起始版本 |
-|--------|------|---------|
-| `lazy_static!` | `std::sync::OnceLock` | 1.70 |
-| `once_cell::Lazy` | `std::sync::LazyLock` | 1.80 |
-| `std::sync::mpsc` | `crossbeam::channel` | — |
-| `std::sync::Mutex` | `parking_lot::Mutex` | — |
-| `failure` / `error-chain` | `thiserror` / `anyhow` | — |
-| `try!()` | `?` 操作符 | 2018 |
-
-### 文档注释
-
-- 公开 API 必须有 `///` 文档注释
-- 模块用 `//!` 文档注释
-
 ## 🔍 CodeGraph 优先
 
 查询调用链、影响分析、代码流向时，**使用 CodeGraph CLI**（优先于 LSP 或手动阅读）：
@@ -695,40 +637,6 @@ codegraph query <search>       # 搜索符号
   3. index 冲突（`dir/_index.scss` 和 `dir/index.scss` 同时存在）
   4. import-only 冲突（`file.import.scss` 和 `file.import.sass`）
 - `module_helpers.rs` 统一承载 `bind_exports`（含 values_eq + Display 后备检查）、`merge_module_cache`、`BindMode`、`FilterConfig` 等 pub(crate) 辅助函数
-
-## 常用命令（需要时查阅）
-
-```bash
-# 追踪错误链路
-RUST_LOG=info cargo test --test compile_test <test_name> -- --nocapture
-RUST_LOG="sasspile::color=trace" cargo test --test compile_test -- --nocapture
-
-# OTel 追踪（输出 OpenTelemetry span，含 TraceId/SpanId/busy_ns）
-RUST_LOG=info cargo test --features otel --test compile_test <test_name> -- --nocapture
-
-# sass-spec 诊断
-cargo test --test cf_diag diag_<subdir> -- --nocapture
-RUST_LOG="minimize=info" cargo test --test minimize minimize_<subdir>_error -- --nocapture
-
-# CodeGraph 查询（优先使用）
-codegraph sync                # 同步索引（每次提交后必跑）
-codegraph impact <symbol>      # 影响分析
-codegraph callers <function>   # 谁调了这个函数
-codegraph explore "query"      # 自然语言探索
-codegraph node <symbol>       # 查看符号源码 + 调用链路
-
-# Rust 通用命令
-cargo check                              # 快速检查
-cargo clippy --workspace                 # 全 workspace clippy
-cargo clippy -- -W clippy::pedantic      # 严格 clippy
-cargo test                               # 运行所有测试
-cargo nextest run                        # 使用 nextest（更快）
-cargo build --release                    # 发布构建
-cargo doc --open                         # 生成并打开文档
-cargo fmt                                # 格式化所有代码
-cargo fmt -- --check                     # 检查格式（CI 用）
-cargo tree                               # 依赖树
-```
 
 ## ✅ 自检清单
 

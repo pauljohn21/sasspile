@@ -70,9 +70,7 @@ impl super::Evaluator {
 
             // 列表 — 检查每个元素
             Value::List(elements, _, _) => {
-                elements
-                    .iter()
-                    .try_for_each(Self::check_plain_css_value)?;
+                elements.iter().try_for_each(Self::check_plain_css_value)?;
                 Ok(())
             }
 

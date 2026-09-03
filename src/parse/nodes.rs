@@ -70,7 +70,6 @@ impl Parser<'_> {
                         }
                         i += 1;
                     }
-                    continue;
                 }
                 Token::Whitespace => {
                     i += 1;

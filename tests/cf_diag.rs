@@ -4,6 +4,8 @@
 //!
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
+
 mod common;
 use common::diff_css;
 
@@ -22,9 +24,8 @@ struct HrxCase {
 
 /// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
 fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    let archive = match hrx_parse(content) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = hrx_parse(content) else {
+        return Vec::new();
     };
 
     let groups: Vec<Vec<HrxEntry>> = {
@@ -171,6 +172,7 @@ fn compile_case(
     result.map_err(|e| format!("{e}"))
 }
 
+#[allow(clippy::too_many_lines)]
 fn diag(subdir: &str, max_show: usize) {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
@@ -294,7 +296,7 @@ fn diag_selector() {
 
 /// 颜色诊断——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
-#[ignore]
+#[ignore = "颜色测试需手动 --ignored 触发"]
 fn diag_color() {
     diag("core_functions/color", 15);
 }
@@ -396,7 +398,7 @@ fn diag_values_maps() {
 
 /// 颜色值诊断——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
-#[ignore]
+#[ignore = "颜色测试需手动 --ignored 触发"]
 fn diag_values_colors() {
     diag("values/colors", 10);
 }

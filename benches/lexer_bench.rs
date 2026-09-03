@@ -2,7 +2,7 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sasspile::Lexer;
 
 fn sample_scss() -> String {
-    r#"
+    r"
 // Variables
 $primary-color: #3498db;
 $secondary-color: #2ecc71;
@@ -87,7 +87,7 @@ nav {
         width: 100%;
     }
 }
-"#
+"
     .repeat(10)
 }
 
@@ -98,7 +98,7 @@ fn bench_lexer(c: &mut Criterion) {
             let lexer = Lexer::new(black_box(&input));
             let tokens: Vec<_> = lexer.collect();
             black_box(tokens);
-        })
+        });
     });
 }
 

@@ -13,6 +13,10 @@ use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// unique-id 全局计数器。
+static UNIQUE_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// 返回每个 string 函数的参数名列表（按位置顺序）。
 /// `用于将命名参数（kw_args）按参数名映射到位置参数`。
@@ -228,9 +232,7 @@ impl Evaluator {
                         if args.len() == 1 { "was" } else { "were" }
                     )));
                 }
-                use std::sync::atomic::{AtomicU64, Ordering};
-                static COUNTER: AtomicU64 = AtomicU64::new(1);
-                let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+                let id = UNIQUE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
                 Value::String(format!("u{id}"), false)
             }
             _ => return Ok(None),

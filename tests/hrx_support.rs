@@ -3,6 +3,12 @@
 //! 提供三个核心功能：
 //! - `parse_hrx()` — 解析 HRX 文本为 `HrxArchive`
 //! - `Vfs::from_archive()` — 从归档构建虚拟文件系统
+
+#![allow(
+    clippy::case_sensitive_file_extension_comparisons,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc
+)]
 //! - `ParsedHrx` — 解析后的测试用例集合
 //!
 //! 每个测试文件是独立 crate，`dead_code` lint 会误报——全局抑制。
@@ -252,9 +258,8 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
     // 从 HRX 相对路径提取目录前缀：`callable/arguments.hrx` → `callable/arguments`
     let prefix = hrx_rel_path.strip_suffix(".hrx").unwrap_or(hrx_rel_path);
 
-    let archive = match parse_hrx(content) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = parse_hrx(content) else {
+        return Vec::new();
     };
     let vfs = Vfs::from_archive(&archive);
     let dirs = vfs.walk();
@@ -389,9 +394,8 @@ pub struct ParsedCase {
 /// 解析 HRX 为 `ParsedCase` 列表（兼容旧 `ParsedHrx` 接口）。
 #[must_use]
 pub fn parse_hrx_legacy(content: &str) -> Vec<ParsedCase> {
-    let archive = match parse_hrx(content) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = parse_hrx(content) else {
+        return Vec::new();
     };
     let vfs = Vfs::from_archive(&archive);
     let dirs = vfs.walk();

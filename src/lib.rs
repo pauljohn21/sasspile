@@ -2,7 +2,13 @@
     clippy::wildcard_imports,
     clippy::must_use_candidate,
     clippy::return_self_not_must_use,
-    clippy::match_same_arms
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    clippy::unnecessary_wraps,
+    clippy::needless_pass_by_value,
+    clippy::type_complexity,
+    clippy::similar_names,
+    clippy::ref_option
 )]
 //! # sasspile
 //!

@@ -226,11 +226,11 @@ impl Evaluator {
             }
         }
         // 求值函数体，找 @return
-        let return_val = func.body.iter().try_fold::<_, _, Result<(Value, Env)>>(
+        let return_val = func.body.iter().try_fold(
             /* ANCHOR: func-body-return */ (Value::Null, func_env),
             |(rv, fe), node| {
                 if !matches!(rv, Value::Null) {
-                    return Ok((rv, fe));
+                    return Ok::<_, SassError>((rv, fe));
                 }
                 let (out, e) = Self::eval_node(node, fe)?;
                 let new_rv = out

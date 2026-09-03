@@ -247,6 +247,15 @@ pub(crate) fn compare(op: &BinOpKind, l: &Value, r: &Value) -> Result<Value> {
 }
 
 /// 检查两个单位是否兼容（属于同一物理量类别）。
+/// 单位兼容组——同组的单位互相兼容。
+const UNIT_COMPAT_GROUPS: &[&[&str]] = &[
+    &["px", "in", "cm", "mm", "pt", "pc", "q"], // 长度
+    &["deg", "grad", "rad", "turn"],            // 角度
+    &["s", "ms"],                               // 时间
+    &["hz", "khz"],                             // 频率
+    &["dpi", "dpcm", "dppx"],                   // 分辨率
+];
+
 pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
     if u1 == u2 {
         return true;
@@ -254,17 +263,9 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
     if u1.is_none() || u2.is_none() {
         return true;
     }
-    // 单位兼容组——同组的单位互相兼容
-    const GROUPS: &[&[&str]] = &[
-        &["px", "in", "cm", "mm", "pt", "pc", "q"], // 长度
-        &["deg", "grad", "rad", "turn"],            // 角度
-        &["s", "ms"],                               // 时间
-        &["hz", "khz"],                             // 频率
-        &["dpi", "dpcm", "dppx"],                   // 分辨率
-    ];
     let g1 = u1.expect("non-none unit after none check");
     let g2 = u2.expect("non-none unit after none check");
-    GROUPS
+    UNIT_COMPAT_GROUPS
         .iter()
         .any(|group| group.contains(&g1) && group.contains(&g2))
 }

@@ -267,7 +267,7 @@ impl Parser<'_> {
         use crate::parse::ast::InterpSegment;
         loop {
             match self.peek() {
-                Some(Token::Ident(t)) if !self.is_keyword(t) => {
+                Some(Token::Ident(t)) if !Self::is_keyword(t) => {
                     segments.push(InterpSegment::Text(t.clone()));
                     self.advance();
                 }

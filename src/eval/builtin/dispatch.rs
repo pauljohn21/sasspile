@@ -228,11 +228,11 @@ pub(crate) fn map_dispatch(
     name: &str,
     pos_args: &[Value],
     kw_args: &HashMap<String, Value>,
-    _env: &Env,
+    env: &Env,
 ) -> Option<Result<Value>> {
     if map_is_known(name) {
         let combined = super::merge_map_args(pos_args, kw_args, name);
-        match super::Evaluator::call_map_builtin(name, &combined, _env) {
+        match super::Evaluator::call_map_builtin(name, &combined, env) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),

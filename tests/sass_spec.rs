@@ -3,6 +3,8 @@
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 //! 内存优化：逐文件处理，限制测试数量。
 
+#![allow(clippy::cast_precision_loss)]
+
 mod hrx_support;
 
 use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
@@ -19,9 +21,8 @@ struct HrxCase {
 
 /// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
 fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    let archive = match hrx_parse(content) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = hrx_parse(content) else {
+        return Vec::new();
     };
 
     let groups: Vec<Vec<HrxEntry>> = {
@@ -243,7 +244,7 @@ fn diag_dir(dir: &Path, shown: &mut usize) {
 
 /// 全量 sass-spec 合规快报——默认不运行，用 --ignored 手动触发。
 #[test]
-#[ignore]
+#[ignore = "sass-spec 全量合规快报需手动 --ignored 触发"]
 fn test_sass_spec_summary() {
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");
     let (passed, failed, total) = run_dir(&spec_root, 50);

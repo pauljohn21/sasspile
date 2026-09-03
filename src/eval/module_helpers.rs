@@ -15,11 +15,11 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
             vars.insert("epsilon".to_string(), Value::Number(f64::EPSILON, None));
             vars.insert(
                 "max-safe-integer".to_string(),
-                Value::Number(9007199254740991.0, None),
+                Value::Number(9_007_199_254_740_991.0, None),
             );
             vars.insert(
                 "min-safe-integer".to_string(),
-                Value::Number(-9007199254740991.0, None),
+                Value::Number(-9_007_199_254_740_991.0, None),
             );
             vars.insert("max-number".to_string(), Value::Number(f64::MAX, None));
             vars.insert(
@@ -128,8 +128,9 @@ pub(crate) fn bind_exports(
             new_env = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
                 .filter(|(k, _)| {
                     !is_star
-                        || (!(k.starts_with('-') || k.starts_with('_'))
-                            && !star_imported.contains(k.as_str()))
+                        || !(k.starts_with('-')
+                            || k.starts_with('_')
+                            || star_imported.contains(k.as_str()))
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.bind(fmt_key(k), v.clone());
@@ -143,8 +144,9 @@ pub(crate) fn bind_exports(
                 .all_mixins()
                 .filter(|(k, _)| {
                     !is_star
-                        || (!(k.starts_with('-') || k.starts_with('_'))
-                            && !star_imported.contains(k.as_str()))
+                        || !(k.starts_with('-')
+                            || k.starts_with('_')
+                            || star_imported.contains(k.as_str()))
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.define_local_mixin(fmt_key(k), v.clone());
@@ -158,8 +160,9 @@ pub(crate) fn bind_exports(
                 .all_functions()
                 .filter(|(k, _)| {
                     !is_star
-                        || (!(k.starts_with('-') || k.starts_with('_'))
-                            && !star_imported.contains(k.as_str()))
+                        || !(k.starts_with('-')
+                            || k.starts_with('_')
+                            || star_imported.contains(k.as_str()))
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.define_local_function(fmt_key(k), v.clone());

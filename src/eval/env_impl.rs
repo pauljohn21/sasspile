@@ -23,10 +23,6 @@ impl Env {
         }
     }
 
-    pub fn new_env() -> Self {
-        Self::default()
-    }
-
     pub fn incr_depth(mut self) -> Self {
         self.depth += 1;
         self
@@ -125,10 +121,6 @@ impl Env {
             self.namespaces.insert(ns_name, Rc::new(exports));
         }
         self
-    }
-
-    pub fn has_module(&self, name: &str) -> bool {
-        self.builtin_modules.iter().any(|m| m == name)
     }
 
     pub(crate) fn add_namespace(mut self, ns: String, exports: ModuleExports) -> Self {
@@ -255,32 +247,6 @@ impl Env {
         self.plain_css
     }
 
-    // --- Scope getter 方法（委托 current scope）---
-
-    pub(crate) fn get_local_vars(&self) -> &HashMap<String, Value> {
-        &self.current.local_vars
-    }
-
-    pub(crate) fn get_local_mixins(&self) -> &HashMap<String, MixinDef> {
-        &self.current.local_mixins
-    }
-
-    pub(crate) fn get_local_functions(&self) -> &HashMap<String, FunctionDef> {
-        &self.current.local_functions
-    }
-
-    pub(crate) fn get_forwarded_vars(&self) -> &HashMap<String, Value> {
-        &self.current.forwarded_vars
-    }
-
-    pub(crate) fn get_forwarded_mixins(&self) -> &HashMap<String, MixinDef> {
-        &self.current.forwarded_mixins
-    }
-
-    pub(crate) fn get_forwarded_functions(&self) -> &HashMap<String, FunctionDef> {
-        &self.current.forwarded_functions
-    }
-
     pub(crate) fn get_namespaces(&self) -> &HashMap<String, Rc<ModuleExports>> {
         &self.namespaces
     }
@@ -362,6 +328,7 @@ impl Env {
     }
 
     /// 退出作用域——恢复父 scope，传播 !global 和新增 mixin/function。
+    #[allow(clippy::needless_for_each)]
     pub(crate) fn exit_scope(self) -> Self {
         let parent = self.current.parent.clone();
         match parent {
@@ -419,6 +386,7 @@ impl Env {
     }
 
     /// 合并 forwarded 表到 local `表（std::mem::take` 模式）。
+    #[allow(clippy::needless_for_each)]
     pub(crate) fn merge_forwarded_to_local(self) -> Self {
         let (mut scope, env) = self.mutate_scope();
         let forwarded_vars = std::mem::take(&mut scope.forwarded_vars);
@@ -474,11 +442,6 @@ impl Env {
             scope.forwarded_mixins,
             scope.forwarded_functions,
         )
-    }
-
-    /// 直接写入 `forwarded_vars（用于` @forward 绑定）。
-    pub(crate) fn forwarded_vars_contains(&self, key: &str) -> bool {
-        self.current.forwarded_vars.contains_key(key)
     }
 
     /// 获取 `forwarded_vars` 中的值引用。

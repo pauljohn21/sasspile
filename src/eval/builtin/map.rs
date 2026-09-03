@@ -181,12 +181,11 @@ impl Evaluator {
                 let mut current = args[0].clone();
                 let mut found = true;
                 for key in &args[1..] {
-                    let pairs = if let Ok(p) = Self::value_to_map(&current) {
-                        p
-                    } else {
+                    let Ok(p) = Self::value_to_map(&current) else {
                         found = false;
                         break;
                     };
+                    let pairs = p;
                     if let Some((_, v)) = pairs
                         .iter()
                         .find(|(k, _)| crate::eval::value::values_eq(k, key))

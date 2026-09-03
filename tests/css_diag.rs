@@ -2,6 +2,8 @@
 //!
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
+
 mod spec_manifest;
 
 mod hrx_support;
@@ -20,9 +22,8 @@ struct HrxCase {
 
 /// 按 `===` 分隔符将 HRX entries 分成独立组，每组构建自己的 VFS。
 fn parse_hrx(content: &str) -> Vec<HrxCase> {
-    let archive = match hrx_parse(content) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = hrx_parse(content) else {
+        return Vec::new();
     };
 
     let groups: Vec<Vec<HrxEntry>> = {

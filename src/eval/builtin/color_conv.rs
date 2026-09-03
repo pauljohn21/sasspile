@@ -406,20 +406,22 @@ pub fn srgb_to_prophoto(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let gl = -0.544_630_705_124_901_9 * x + 1.508_247_742_845_146_8 * y + 0.02052744743642139 * z;
     let bl = 0.00000000000000000 * x + 0.00000000000000000 * y + 1.211_967_545_638_945_2 * z;
     // ProPhoto gamma encode (Et = 1/512)
-    fn prophoto_gamma_encode(c: f64) -> f64 {
-        let sign = if c < 0.0 { -1.0 } else { 1.0 };
-        let abs = c.abs();
-        if abs >= 1.0 / 512.0 {
-            sign * abs.powf(1.0 / 1.8)
-        } else {
-            16.0 * c
-        }
-    }
     (
         prophoto_gamma_encode(rl),
         prophoto_gamma_encode(gl),
         prophoto_gamma_encode(bl),
     )
+}
+
+/// `ProPhoto` gamma encode (Et = 1/512)。
+fn prophoto_gamma_encode(c: f64) -> f64 {
+    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let abs = c.abs();
+    if abs >= 1.0 / 512.0 {
+        sign * abs.powf(1.0 / 1.8)
+    } else {
+        16.0 * c
+    }
 }
 
 // ── Rec2020 ──
@@ -455,11 +457,13 @@ pub fn srgb_to_rec2020(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let gl = -19765991.0 / 29648200.0 * x + 47925759.0 / 29648200.0 * y + 467509.0 / 29648200.0 * z;
     let bl = 792561.0 / 44930125.0 * x - 1921689.0 / 44930125.0 * y + 42328811.0 / 44930125.0 * z;
     // linear → Rec2020 gamma: pow(1/2.4) (扩展传递函数)
-    fn rec2020_encode(c: f64) -> f64 {
-        let sign = if c < 0.0 { -1.0 } else { 1.0 };
-        sign * c.abs().powf(1.0 / 2.4)
-    }
     (rec2020_encode(rl), rec2020_encode(gl), rec2020_encode(bl))
+}
+
+/// Rec2020 gamma encode: pow(1/2.4)。
+fn rec2020_encode(c: f64) -> f64 {
+    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    sign * c.abs().powf(1.0 / 2.4)
 }
 
 // ── XYZ D50 ↔ XYZ D65 ──

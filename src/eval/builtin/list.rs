@@ -67,14 +67,14 @@ pub fn call(
             [Value::List(es, _, _), Value::Number(n, _)] => {
                 let len = es.len() as i64;
                 let idx = *n as i64;
-                let actual = if idx > 0 {
-                    (idx as usize).saturating_sub(1)
-                } else if idx < 0 {
-                    (len + idx) as usize
-                } else {
-                    return Err(SassError::Eval(
-                        "nth index 0 is invalid (starts from 1)".into(),
-                    ));
+                let actual = match idx.cmp(&0) {
+                    std::cmp::Ordering::Greater => (idx as usize).saturating_sub(1),
+                    std::cmp::Ordering::Less => (len + idx) as usize,
+                    std::cmp::Ordering::Equal => {
+                        return Err(SassError::Eval(
+                            "nth index 0 is invalid (starts from 1)".into(),
+                        ));
+                    }
                 };
                 Ok(Some(es.get(actual).cloned().ok_or_else(|| {
                     SassError::Eval(format!("nth index {idx} out of range"))
@@ -83,12 +83,12 @@ pub fn call(
             [Value::Map(pairs), Value::Number(n, _)] => {
                 let len = pairs.len() as i64;
                 let idx = *n as i64;
-                let actual = if idx > 0 {
-                    (idx as usize).saturating_sub(1)
-                } else if idx < 0 {
-                    (len + idx) as usize
-                } else {
-                    return Err(SassError::Eval("nth index 0 is invalid".into()));
+                let actual = match idx.cmp(&0) {
+                    std::cmp::Ordering::Greater => (idx as usize).saturating_sub(1),
+                    std::cmp::Ordering::Less => (len + idx) as usize,
+                    std::cmp::Ordering::Equal => {
+                        return Err(SassError::Eval("nth index 0 is invalid".into()));
+                    }
                 };
                 Ok(Some(
                     pairs
@@ -297,12 +297,12 @@ pub fn call(
             [Value::List(items, sep, bracketed), Value::Number(n, _), val] => {
                 let len = items.len() as i64;
                 let idx = *n as i64;
-                let actual = if idx > 0 {
-                    (idx as usize).saturating_sub(1)
-                } else if idx < 0 {
-                    (len + idx) as usize
-                } else {
-                    return Err(SassError::Eval(format!("List index {idx} may not be 0.")));
+                let actual = match idx.cmp(&0) {
+                    std::cmp::Ordering::Greater => (idx as usize).saturating_sub(1),
+                    std::cmp::Ordering::Less => (len + idx) as usize,
+                    std::cmp::Ordering::Equal => {
+                        return Err(SassError::Eval(format!("List index {idx} may not be 0.")));
+                    }
                 };
                 let mut new_items = items.clone();
                 if actual < new_items.len() {

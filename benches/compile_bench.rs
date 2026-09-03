@@ -2,7 +2,7 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sasspile::{OutputStyle, compile};
 
 fn sample_scss() -> String {
-    r#"
+    r"
 // Variables
 $primary-color: #3498db;
 $secondary-color: #2ecc71;
@@ -73,7 +73,7 @@ nav {
         width: 100%;
     }
 }
-"#
+"
     .repeat(20)
 }
 
@@ -82,7 +82,7 @@ fn bench_compile_full(c: &mut Criterion) {
     c.bench_function("compile_full_28kb_expanded", |b| {
         b.iter(|| {
             let _ = black_box(compile(black_box(&input), OutputStyle::Expanded));
-        })
+        });
     });
 }
 

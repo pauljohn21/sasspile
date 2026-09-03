@@ -92,7 +92,7 @@ pub const SRGB_GAMMA_SCALE: f64 = 1.055;
 pub const SRGB_GAMMA_EXP: f64 = 2.4;
 
 /// sRGB 逆线性段阈值上限。
-pub const LINEAR_SRGB_THRESHOLD: f64 = 0.0031308;
+pub const LINEAR_SRGB_THRESHOLD: f64 = 0.003_130_8;
 
 /// sRGB 逆线性段斜率。
 pub const LINEAR_SRGB_SLOPE: f64 = 12.92;

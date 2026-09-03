@@ -97,9 +97,7 @@ impl Parser<'_> {
                 }
                 // 有外部算术运算符 → / 做除法，走正常 Pratt 路径
             }
-            let (op, bp) = if let Some(v) = self.peek_binding_power() {
-                v
-            } else {
+            let Some((op, bp)) = self.peek_binding_power() else {
                 // 空格分隔列表——仅顶层（min_bp=0）
                 if min_bp == 0 && self.is_value_start() {
                     let mut items = vec![lhs.clone()];
@@ -188,9 +186,8 @@ impl Parser<'_> {
     fn parse_expr_rest(&mut self, mut lhs: Value, min_bp: u8) -> Result<Value> {
         loop {
             self.skip_ws();
-            let (op, bp) = match self.peek_binding_power() {
-                Some(v) => v,
-                None => break,
+            let Some((op, bp)) = self.peek_binding_power() else {
+                break;
             };
             if bp < min_bp {
                 break;
@@ -208,7 +205,7 @@ impl Parser<'_> {
     }
 
     /// 检查字符串是否为 SCSS 关键字（不应被拼接进字符串）。
-    fn is_keyword(&self, s: &str) -> bool {
+    fn is_keyword(s: &str) -> bool {
         matches!(
             s,
             "through"

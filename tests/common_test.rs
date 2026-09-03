@@ -1,4 +1,4 @@
-//! common 模块的测试——diff_css 和 DiffResult。
+//! `common` 模块的测试——`diff_css` 和 `DiffResult`。
 //!
 //! 从 tests/common/mod.rs 移出，避免使用 #[cfg(test)] 内联测试。
 

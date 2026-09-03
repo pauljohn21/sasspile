@@ -2,7 +2,7 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sasspile::{OutputStyle, compile};
 
 fn sample_scss() -> String {
-    r#"
+    r"
 // Variables
 $primary-color: #3498db;
 $secondary-color: #2ecc71;
@@ -55,7 +55,7 @@ nav {
     background-color: $primary-color;
     color: white;
 }
-"#
+"
     .repeat(5)
 }
 
@@ -64,7 +64,7 @@ fn bench_eval_expanded(c: &mut Criterion) {
     c.bench_function("eval_expanded_7kb", |b| {
         b.iter(|| {
             let _ = black_box(compile(black_box(&input), OutputStyle::Expanded));
-        })
+        });
     });
 }
 
@@ -73,7 +73,7 @@ fn bench_eval_compressed(c: &mut Criterion) {
     c.bench_function("eval_compressed_7kb", |b| {
         b.iter(|| {
             let _ = black_box(compile(black_box(&input), OutputStyle::Compressed));
-        })
+        });
     });
 }
 

@@ -14,7 +14,7 @@ pub(crate) use std::rc::Rc;
 
 /// 求值器。
 pub struct Evaluator;
-const MAX_DEPTH: usize = 100000;
+const MAX_DEPTH: usize = 100_000;
 
 impl Evaluator {
     /// 求值 AST 为 CSS 节点树。

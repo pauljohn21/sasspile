@@ -56,6 +56,7 @@ impl ModuleExports {
 /// `current` 持有 `Rc<Scope>`（当前活跃作用域），通过 parent 链管理嵌套作用域。
 /// 写操作通过 `Rc::try_unwrap` 获取 scope 所有权（引用计数为 1 时零 clone）。
 #[derive(Debug, Default)]
+#[allow(clippy::struct_field_names)]
 pub struct Env {
     /// 当前活跃作用域——通过 Rc<Scope> 父链管理嵌套。
     pub(crate) current: Rc<Scope>,

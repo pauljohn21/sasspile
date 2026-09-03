@@ -66,34 +66,35 @@ pub(crate) fn css_round(strategy: &str, number: &Value, step: &Value) -> Result<
     Ok(Some(Value::Number(result, out_unit)))
 }
 
+// 长度单位到 px 的转换因子
+const LENGTH_TO_PX: &[(&str, f64)] = &[
+    ("px", 1.0),
+    ("in", 96.0),
+    ("cm", 96.0 / 2.54),
+    ("mm", 96.0 / 25.4),
+    ("pt", 96.0 / 72.0),
+    ("pc", 96.0 / 6.0),
+    ("q", 96.0 / 254.0),
+];
+// 角度单位到 deg 的转换因子
+const ANGLE_TO_DEG: &[(&str, f64)] = &[
+    ("deg", 1.0),
+    ("grad", 0.9),
+    ("rad", 180.0 / std::f64::consts::PI),
+    ("turn", 360.0),
+];
+// 时间单位到 s 的转换因子
+const TIME_TO_S: &[(&str, f64)] = &[("s", 1.0), ("ms", 0.001)];
+// 频率单位到 Hz 的转换因子
+const FREQ_TO_HZ: &[(&str, f64)] = &[("hz", 1.0), ("khz", 1000.0)];
+// 分辨率单位到 dpi 的转换因子
+const RES_TO_DPI: &[(&str, f64)] = &[("dpi", 1.0), ("dpcm", 2.54), ("dppx", 96.0)];
+
 /// 获取从 `from_unit` 到 `to_unit` 的转换因子。
 pub(crate) fn unit_conversion_factor(from: &str, to: &str) -> f64 {
     if from == to {
         return 1.0;
     }
-    // 长度单位到 px 的转换因子
-    const LENGTH_TO_PX: &[(&str, f64)] = &[
-        ("px", 1.0),
-        ("in", 96.0),
-        ("cm", 96.0 / 2.54),
-        ("mm", 96.0 / 25.4),
-        ("pt", 96.0 / 72.0),
-        ("pc", 96.0 / 6.0),
-        ("q", 96.0 / 254.0),
-    ];
-    // 角度单位到 deg 的转换因子
-    const ANGLE_TO_DEG: &[(&str, f64)] = &[
-        ("deg", 1.0),
-        ("grad", 0.9),
-        ("rad", 180.0 / std::f64::consts::PI),
-        ("turn", 360.0),
-    ];
-    // 时间单位到 s 的转换因子
-    const TIME_TO_S: &[(&str, f64)] = &[("s", 1.0), ("ms", 0.001)];
-    // 频率单位到 Hz 的转换因子
-    const FREQ_TO_HZ: &[(&str, f64)] = &[("hz", 1.0), ("khz", 1000.0)];
-    // 分辨率单位到 dpi 的转换因子
-    const RES_TO_DPI: &[(&str, f64)] = &[("dpi", 1.0), ("dpcm", 2.54), ("dppx", 96.0)];
     for table in [
         LENGTH_TO_PX,
         ANGLE_TO_DEG,

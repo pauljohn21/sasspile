@@ -2,6 +2,8 @@
 //!
 //! 被 `cf_diag.rs` 和 `minimize.rs` 引用。
 
+#![allow(dead_code)]
+
 /// CSS diff 行类型。
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffLine {
@@ -94,7 +96,7 @@ pub fn diff_css(expected: &str, actual: &str) -> DiffResult {
         let e = expected_lines.get(i).copied();
         let a = actual_lines.get(i).copied();
         match (e, a) {
-            (Some(e), Some(a)) if e == a => continue,
+            (Some(e), Some(a)) if e == a => {}
             (Some(e), Some(a)) => {
                 tracing::debug!(
                     target: "cssdiff",

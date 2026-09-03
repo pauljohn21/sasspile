@@ -225,11 +225,10 @@ impl Serializer {
                     let prev_is_import = matches!(prev_n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
                     let curr_is_import = matches!(n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
                     let prev_is_comment = matches!(prev_n, CssNode::Comment(_));
-                    let curr_is_comment = matches!(n, CssNode::Comment(_));
                     let same_group = prev_gid == gid;
                     let same_origin = !same_group && Self::is_same_origin(prev_n, n);
-                    if !(prev_is_import || curr_is_import)
-                        && !(prev_is_comment && curr_is_comment)
+                    if !prev_is_import
+                        && !curr_is_import
                         && !prev_is_comment
                         && !same_group
                         && !same_origin

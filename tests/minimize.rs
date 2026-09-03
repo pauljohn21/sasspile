@@ -173,9 +173,8 @@ fn minimize(input: &str, oracle: &FailOracle) -> String {
 
 /// HRX 解析——按 `===` 分组，提取所有 (name, input, expected) 三元组。
 fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
-    let archive = match hrx_parse(content) {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
+    let Ok(archive) = hrx_parse(content) else {
+        return Vec::new();
     };
 
     let groups: Vec<Vec<HrxEntry>> = {
@@ -247,7 +246,7 @@ fn collect_hrx(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
 
 /// 颜色错误最小化——已跳过（颜色测试需手动 --ignored 触发）。
 #[test]
-#[ignore]
+#[ignore = "颜色测试需手动 --ignored 触发"]
 fn minimize_color_error() {
     sasspile::init_tracing();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");

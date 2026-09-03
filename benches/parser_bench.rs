@@ -2,7 +2,7 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sasspile::{Lexer, Parser};
 
 fn sample_scss() -> String {
-    r#"
+    r"
 // Variables
 $primary-color: #3498db;
 $secondary-color: #2ecc71;
@@ -67,7 +67,7 @@ nav {
         width: 100%;
     }
 }
-"#
+"
     .repeat(10)
 }
 
@@ -79,15 +79,15 @@ fn bench_parser(c: &mut Criterion) {
                 .filter(|t| {
                     !matches!(
                         t.as_ref(),
-                        Ok(sasspile::lex::token::Token::Whitespace)
-                            | Ok(sasspile::lex::token::Token::Eof)
+                        Ok(sasspile::lex::token::Token::Whitespace
+                            | sasspile::lex::token::Token::Eof)
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
             let ast = Parser::parse(&tokens);
             let _ = black_box(ast);
-        })
+        });
     });
 }
 

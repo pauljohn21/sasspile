@@ -13,7 +13,7 @@ fn compile_multi_file(files: &[(&str, &str)]) -> String {
     for (name, content) in files {
         let path = dir.join(name);
         if name == &"input.scss" {
-            main_path = path.clone();
+            main_path.clone_from(&path);
         }
         std::fs::write(path, content).unwrap();
     }

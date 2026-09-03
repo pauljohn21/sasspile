@@ -219,9 +219,8 @@ fn test_use_top_level_hrx() {
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
-        let content = match std::fs::read_to_string(hrx_file) {
-            Ok(c) => c,
-            Err(_) => continue,
+        let Ok(content) = std::fs::read_to_string(hrx_file) else {
+            continue;
         };
 
         let rel_path = hrx_file

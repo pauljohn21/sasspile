@@ -253,7 +253,7 @@ impl Evaluator {
             Self::check_sass_css_mix(condition)?;
             match Self::partial_eval_condition(condition, env)? {
                 PartialCond::True => return Self::eval_value(&cond_arg.value, env),
-                PartialCond::False => continue,
+                PartialCond::False => {}
                 PartialCond::Css(css_str) => {
                     let mut parts: Vec<String> = Vec::new();
                     parts.push(format!("{css_str}: {}", cond_arg.value));
