@@ -581,7 +581,8 @@ impl Evaluator {
                 if module_css.is_empty() {
                     vec![]
                 } else {
-                    vec![crate::css::node::CssNode::AtRoot(module_css, None)]
+                    let marker = if config.is_empty() { None } else { Some("configured".to_string()) };
+                    vec![crate::css::node::CssNode::AtRoot(module_css, marker)]
                 }
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);

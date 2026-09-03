@@ -141,17 +141,20 @@ impl Serializer {
                     }
                     out
                 }
-                // AtRoot：保留为节点。连续 AtRoot（@forward 链）共享 group_id。
-                CssNode::AtRoot(_, _) => {
-                    let gid = match &state.prev {
-                        Some((prev_n, prev_gid)) if matches!(prev_n, CssNode::AtRoot(_, _)) => {
-                            *prev_gid
-                        }
-                        _ => {
-                            let g = state.next_group;
-                            state.next_group += 1;
-                            g
-                        }
+                // AtRoot：保留为节点。
+                // 连续无配置 AtRoot（@forward 不带 with）共享 group_id（无空行）。
+                // 带配置 AtRoot（@forward with）与前一个之间分配新 group_id（有空行）。
+                CssNode::AtRoot(_, marker) => {
+                    let prev_is_unconfigured_atroot = matches!(
+                        &state.prev,
+                        Some((prev_n, _)) if matches!(prev_n, CssNode::AtRoot(_, None))
+                    );
+                    let gid = if marker.is_none() && prev_is_unconfigured_atroot {
+                        state.prev.as_ref().map(|(_, g)| *g).unwrap_or(0)
+                    } else {
+                        let g = state.next_group;
+                        state.next_group += 1;
+                        g
                     };
                     let item = (node.clone(), gid);
                     state.prev = Some(item.clone());
