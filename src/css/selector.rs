@@ -99,18 +99,14 @@ pub(super) fn has_bogus_combinators(selector: &str) -> bool {
 /// `allow_leading_combinator` 控制是否允许单个前导组合器。
 fn check_bogus_in_selector(selector: &str, allow_leading_combinator: bool) -> bool {
     // 对逗号分隔的每个选择器部分单独检查
-    for part in selector.split(',') {
+    selector.split(',').any(|part| {
         let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        // 将选择器分解为 token 序列，同时提取伪类内部内容
-        let tokens = tokenize_selector_with_pseudo(part);
-        if tokens_have_bogus(&tokens, allow_leading_combinator) {
-            return true;
-        }
-    }
-    false
+        !part.is_empty()
+            && {
+                let tokens = tokenize_selector_with_pseudo(part);
+                tokens_have_bogus(&tokens, allow_leading_combinator)
+            }
+    })
 }
 
 /// 将选择器字符串分解为 token 向量，识别伪类内部内容。
@@ -229,22 +225,21 @@ fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> boo
         }
     }
     // 递归检查伪类内部
-    for token in tokens {
+    tokens.iter().any(|token| {
         if let SelToken::PseudoInner(inner, allow_leading) = token {
             // 处理逗号分隔的多个选择器
-            for part in inner.split(',') {
+            inner.split(',').any(|part| {
                 let part = part.trim();
-                if part.is_empty() {
-                    continue;
-                }
-                let inner_tokens = tokenize_selector_with_pseudo(part);
-                if tokens_have_bogus(&inner_tokens, *allow_leading) {
-                    return true;
-                }
-            }
+                !part.is_empty()
+                    && {
+                        let inner_tokens = tokenize_selector_with_pseudo(part);
+                        tokens_have_bogus(&inner_tokens, *allow_leading)
+                    }
+            })
+        } else {
+            false
         }
-    }
-    false
+    })
 }
 
 /// 规范化相邻复合选择器——在属性选择器后跟类型选择器时添加空格。

@@ -189,8 +189,8 @@ impl Evaluator {
         let is_top_level = env.get_selector().is_none_or(|s| s.starts_with('@'));
         if is_top_level {
             let trimmed = selector.trim_start();
-            if let Some(rest) = trimmed.strip_prefix('&') {
-                if let Some(c) = rest.chars().next()
+            if let Some(rest) = trimmed.strip_prefix('&')
+                && let Some(c) = rest.chars().next()
                     && (c.is_alphanumeric() || c == '-')
                 {
                     return Err(SassError::Eval(
@@ -198,7 +198,6 @@ impl Evaluator {
                             .into(),
                     ));
                 }
-            }
         }
 
         // & 位置检测：& 必须在 compound selector 开头

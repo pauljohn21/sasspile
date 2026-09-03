@@ -1,4 +1,4 @@
-//! sass-spec 全量统计——使用内联 hrx_support 模块，不依赖 hrx-auditor crate。
+//! sass-spec 全量统计——使用内联 `hrx_support` 模块，不依赖 hrx-auditor crate。
 //!
 //! manifest 在 `tests/spec_manifest.rs` 中定义 `SKIP_DIRS` 跳过列表。
 //! HRX 解析：所有条目写入同一临时目录，路径加 HRX 名作前缀。
@@ -178,8 +178,8 @@ fn test_directives_subdirs() {
     // top-level hrx files
     for hrx in &["debug", "each", "error", "return", "warn", "while"] {
         let dir = spec_root.join(format!("directives/{hrx}.hrx"));
-        if dir.exists() {
-            if let Ok(content) = std::fs::read_to_string(&dir) {
+        if dir.exists()
+            && let Ok(content) = std::fs::read_to_string(&dir) {
                 let hrx_rel = format!("directives/{hrx}.hrx");
                 let (mut hp, mut hf, mut hs, mut hc) = (0, 0, 0, 0);
                 for case in &parse_hrx_to_cases(&content, &hrx_rel) {
@@ -211,7 +211,6 @@ fn test_directives_subdirs() {
                 ts += hs;
                 tc += hc;
             }
-        }
     }
 
     let evaluated = tc - ts;
@@ -308,7 +307,7 @@ fn test_core_functions_subdirs() {
 
     let (mut tp, mut tf, mut ts, mut tc) = (0, 0, 0, 0);
     for sub in &subdirs {
-        let full = format!("core_functions/{}", sub);
+        let full = format!("core_functions/{sub}");
         let (p, f, s, c) = run_spec_dir(&spec_root, &full);
         let eval = c - s;
         let pct = p * 100 / eval.max(1);

@@ -31,7 +31,7 @@ enum FailOracle<'a> {
     OutputPreserve { original_output: &'a str },
 }
 
-impl<'a> FailOracle<'a> {
+impl FailOracle<'_> {
     fn still_fails(&self, input: &str) -> bool {
         match self {
             FailOracle::Error => match sasspile::compile_expanded(input) {
@@ -55,24 +55,21 @@ impl<'a> FailOracle<'a> {
                 }
             },
             FailOracle::OutputPreserve { original_output } => {
-                match sasspile::compile_expanded(input) {
-                    Ok(css) => {
-                        let same = css.trim() == original_output.trim();
-                        tracing::info!(
-                            target: "minimize",
-                            output_unchanged = same,
-                            input_len = input.len(),
-                            "output comparison"
-                        );
-                        same
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            target: "minimize",
-                            "compilation failed during output-preserve"
-                        );
-                        false
-                    }
+                if let Ok(css) = sasspile::compile_expanded(input) {
+                    let same = css.trim() == original_output.trim();
+                    tracing::info!(
+                        target: "minimize",
+                        output_unchanged = same,
+                        input_len = input.len(),
+                        "output comparison"
+                    );
+                    same
+                } else {
+                    tracing::warn!(
+                        target: "minimize",
+                        "compilation failed during output-preserve"
+                    );
+                    false
                 }
             }
         }
@@ -82,7 +79,7 @@ impl<'a> FailOracle<'a> {
 /// 解析 SCSS 为 AST 节点列表。
 fn parse_to_nodes(input: &str) -> Vec<Node> {
     let tokens: Vec<Token> = Lexer::new(input)
-        .filter(|t| !matches!(t.as_ref(), Ok(Token::Whitespace) | Ok(Token::Eof)))
+        .filter(|t| !matches!(t.as_ref(), Ok(Token::Whitespace | Token::Eof)))
         .collect::<sasspile::error::Result<Vec<_>>>()
         .unwrap_or_default();
     Parser::parse(&tokens)

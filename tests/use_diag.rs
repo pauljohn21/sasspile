@@ -48,11 +48,10 @@ fn collect_subdirs(spec_root: &Path) -> Vec<String> {
     if let Ok(entries) = std::fs::read_dir(&use_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|s| s.to_str()) {
                     subdirs.push(name.to_string());
                 }
-            }
         }
     }
     subdirs.sort();

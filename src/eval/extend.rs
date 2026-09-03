@@ -7,19 +7,18 @@ impl Evaluator {
         nodes
             .iter()
             .flat_map(|node| {
-                let mut own = Vec::new();
-                let mut nested: Vec<String> = match node {
+                let own: Vec<String> = match node {
                     CssNode::Rule {
                         selector, children, ..
                     } => {
-                        own.push(selector.clone());
-                        Self::collect_selectors(children)
+                        let mut v = vec![selector.clone()];
+                        v.extend(Self::collect_selectors(children));
+                        v
                     }
                     CssNode::AtRule { children, .. } => Self::collect_selectors(children),
                     CssNode::AtRoot(kids, _) => Self::collect_selectors(kids),
                     _ => Vec::new(),
                 };
-                own.append(&mut nested);
                 own
             })
             .collect()
@@ -63,13 +62,11 @@ impl Evaluator {
                             // 则检查所有已加载模块的选择器。
                             if let Some(module_path) = module {
                                 let in_scope = module_selectors
-                                    .get(module_path)
-                                    .map(|s| s.contains(target_trimmed))
-                                    .unwrap_or_else(|| {
+                                    .get(module_path).map_or_else(|| {
                                         module_selectors
                                             .values()
                                             .any(|s| s.contains(target_trimmed))
-                                    });
+                                    }, |s| s.contains(target_trimmed));
                                 if !in_scope {
                                     continue;
                                 }
@@ -216,16 +213,13 @@ impl Evaluator {
         let base = Some(module_path.to_path_buf());
         let base_ref = base.as_ref();
         for node in &ast.nodes {
-            if let crate::parse::ast::Node::Use { url, .. } = node {
-                if !url.starts_with("sass:") {
-                    if let Some(path) = Self::resolve_file(base_ref, url, load_paths) {
-                        if let Some(v) = cache.get(&path) {
-                            selectors.extend(Self::collect_selectors(&v.css).into_iter());
+            if let crate::parse::ast::Node::Use { url, .. } = node
+                && !url.starts_with("sass:")
+                    && let Some(path) = Self::resolve_file(base_ref, url, load_paths)
+                        && let Some(v) = cache.get(&path) {
+                            selectors.extend(Self::collect_selectors(&v.css));
                             selectors.extend(v.selectors.iter().cloned());
                         }
-                    }
-                }
-            }
         }
         selectors
     }

@@ -13,7 +13,7 @@ fn test_rule_to_scss() {
     let scss = node.to_scss(0);
     assert!(scss.contains("a {"));
     assert!(scss.contains("color: red;"));
-    assert!(scss.contains("}"));
+    assert!(scss.contains('}'));
 }
 
 #[test]

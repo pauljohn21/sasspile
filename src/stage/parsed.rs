@@ -39,8 +39,9 @@ impl Parsed {
     /// 当携带 `base_path` 时，自动设置文件路径和 plain CSS 模式。
     /// 当携带 `load_paths` 时，自动设置模块搜索路径。
     ///
-    /// # 返回
-    /// 成功返回 `Evaluated`（包含 CSS 节点树），失败返回求值错误。
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果求值遇到错误。
     pub fn evaluate(self) -> Result<Evaluated> {
         use crate::eval::{Env, Evaluator};
 

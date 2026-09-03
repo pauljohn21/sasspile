@@ -32,6 +32,7 @@ pub struct HrxArchive {
 impl HrxArchive {
     /// 获取所有文件路径（不含目录分隔段）
     #[allow(dead_code)]
+    #[must_use]
     pub fn file_paths(&self) -> Vec<&str> {
         self.entries
             .iter()
@@ -42,6 +43,7 @@ impl HrxArchive {
 
     /// 获取指定路径的文件内容
     #[allow(dead_code)]
+    #[must_use]
     pub fn get_file(&self, path: &str) -> Option<&str> {
         self.entries
             .iter()
@@ -131,6 +133,7 @@ pub struct VfsNode {
 
 impl VfsNode {
     #[allow(dead_code)]
+    #[must_use]
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -146,7 +149,8 @@ pub struct Vfs {
 }
 
 impl Vfs {
-    /// 从 HrxArchive 构建 VFS 树
+    /// 从 `HrxArchive` 构建 VFS 树
+    #[must_use]
     pub fn from_archive(archive: &HrxArchive) -> Self {
         let mut root = VfsNode::new(".");
 
@@ -182,6 +186,7 @@ impl Vfs {
 
     /// 计算最大嵌套深度
     #[allow(dead_code)]
+    #[must_use]
     pub fn max_depth(&self) -> usize {
         Self::node_depth(&self.root)
     }
@@ -199,7 +204,8 @@ impl Vfs {
         }
     }
 
-    /// 递归遍历，返回 (dir_path, files) 列表
+    /// 递归遍历，返回 (`dir_path`, files) 列表
+    #[must_use]
     pub fn walk(&self) -> Vec<(String, Vec<(String, String)>)> {
         let mut result = Vec::new();
         Self::walk_node(&self.root, ".", &mut result);
@@ -339,8 +345,7 @@ pub fn run_case(case: &HrxCase) -> bool {
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
+            .map_or(0, |d| d.as_nanos())
     ));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).ok();
@@ -382,6 +387,7 @@ pub struct ParsedCase {
 }
 
 /// 解析 HRX 为 `ParsedCase` 列表（兼容旧 `ParsedHrx` 接口）。
+#[must_use]
 pub fn parse_hrx_legacy(content: &str) -> Vec<ParsedCase> {
     let archive = match parse_hrx(content) {
         Ok(a) => a,

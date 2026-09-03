@@ -39,18 +39,15 @@ pub(crate) fn merge_args(
     kw_args: &HashMap<String, Value>,
     param_names: &[&str],
 ) -> Vec<Value> {
-    let mut result = Vec::with_capacity(param_names.len());
-    for (i, pname) in param_names.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-        // 如果两个地方都没有，就不添加——让函数自身处理缺少参数的情况
-    }
-    // 如果 pos_args 比 param_names 多（如 rest 参数），追加剩余
+    let mut result: Vec<Value> = param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(i, pname)| {
+            pos_args.get(i).cloned()
+                .or_else(|| kw_args.get(*pname).cloned())
+                .or_else(|| kw_args.get(&format!("${pname}")).cloned())
+        })
+        .collect();
     if pos_args.len() > param_names.len() {
         result.extend_from_slice(&pos_args[param_names.len()..]);
     }

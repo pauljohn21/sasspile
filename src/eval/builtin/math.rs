@@ -11,6 +11,7 @@ use super::super::Evaluator;
 use super::math_css::{css_mod, css_rem, css_round};
 use super::math_helpers::{merge_math_args, validate_single_number};
 use crate::error::{Result, SassError};
+use std::fmt::Write;
 use crate::parse::ast::*;
 use std::collections::HashMap;
 
@@ -199,12 +200,12 @@ pub fn call(
                                 if let Some(u) = u1
                                     && !u.is_empty()
                                 {
-                                    calc.push_str(&format!(" * 1{u}"));
+                                    let _ = write!(calc, " * 1{u}");
                                 }
                                 if let Some(u) = u2
                                     && !u.is_empty()
                                 {
-                                    calc.push_str(&format!(" / 1{u}"));
+                                    let _ = write!(calc, " / 1{u}");
                                 }
                                 calc.push(')');
                                 return Ok(Some(Value::Calc(calc)));
@@ -218,12 +219,12 @@ pub fn call(
                             if let Some(u) = u1
                                 && !u.is_empty()
                             {
-                                calc.push_str(&format!(" * 1{u}"));
+                                let _ = write!(calc, " * 1{u}");
                             }
                             if let Some(u) = u2
                                 && !u.is_empty()
                             {
-                                calc.push_str(&format!(" / 1{u}"));
+                                let _ = write!(calc, " / 1{u}");
                             }
                             calc.push(')');
                             return Ok(Some(Value::Calc(calc)));

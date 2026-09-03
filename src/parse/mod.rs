@@ -31,6 +31,10 @@ impl<'tok> Parser<'tok> {
     }
 
     /// 解析入口。
+    ///
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果遇到语法错误。
     pub fn parse(tokens: &'tok [Token]) -> Result<Ast> {
         let mut p = Self::new(tokens);
         let mut nodes = Vec::new();

@@ -228,7 +228,7 @@ impl Parser<'_> {
                     Some(Token::And | Token::Or) => {
                         let found = self
                             .peek()
-                            .map_or("EOF".to_string(), |t| t.to_string());
+                            .map_or("EOF".to_string(), std::string::ToString::to_string);
                         Err(SassError::Parse {
                             expected: "expression".into(),
                             found,

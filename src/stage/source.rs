@@ -45,8 +45,8 @@ impl Source {
     /// # 参数
     /// - `path`: SCSS 文件路径。
     ///
-    /// # 错误
-    /// 返回 [`SassError`] 如果文件不存在或读取失败。
+/// # Errors
+/// 返回 [`SassError`] 如果文件不存在或读取失败。
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let text = std::fs::read_to_string(path)?;
         Ok(Self {
@@ -79,6 +79,10 @@ impl Source {
     /// let source = Source::new("a { color: red; }".to_string());
     /// let lexed = source.lex().unwrap();
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果词法分析遇到非法字符。
     pub fn lex(self) -> Result<Lexed> {
         use crate::lex::Lexer;
         use crate::lex::token::Token;

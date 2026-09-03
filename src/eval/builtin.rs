@@ -244,6 +244,31 @@ fn map_param_names(name: &str) -> &'static [&'static str] {
     }
 }
 
+/// 通用参数合并——按 `param_names` 顺序填充：先取 `pos_args` 对应位置，
+/// 不足的从 `kw_args` 按参数名查找（含 `$` 前缀回退）。
+/// 超出 `param_names` 的 `pos_args` 追加到末尾。
+fn merge_params_impl(
+    pos_args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    param_names: &[&str],
+) -> Vec<Value> {
+    let mut result: Vec<Value> = param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(i, pname)| {
+            pos_args
+                .get(i)
+                .cloned()
+                .or_else(|| kw_args.get(*pname).cloned())
+                .or_else(|| kw_args.get(&format!("${pname}")).cloned())
+        })
+        .collect();
+    if pos_args.len() > param_names.len() {
+        result.extend_from_slice(&pos_args[param_names.len()..]);
+    }
+    result
+}
+
 /// 将位置参数和命名参数合并为统一的位置参数列表。
 /// 按 `param_names` 顺序填充：先取 `pos_args` 对应位置，不足的从 `kw_args` 按参数名查找。
 /// 可变参数函数（如 map-get 的多 key）支持从 `pos_args` 追加。
@@ -256,65 +281,22 @@ pub(crate) fn merge_map_args(
     if param_names.is_empty() {
         return pos_args.to_vec();
     }
-    let mut result = Vec::with_capacity(param_names.len().max(pos_args.len()));
-    for (i, pname) in param_names.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
-    // 追加多余的 pos_args（如 map-get(map, k1, k2, k3) 的多 key）
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
-    }
-    result
+    merge_params_impl(pos_args, kw_args, param_names)
 }
 
 /// 合并 meta 函数（if/inspect/type-of）的位置参数和命名参数。
-///
-/// 与 `merge_args` 逻辑相同：按 `param_names` 顺序填充，
-/// 先取位置参数，不足的从命名参数查找。
 pub(crate) fn merge_meta_args(
     pos_args: &[Value],
     kw_args: &HashMap<String, Value>,
     param_names: &[&str],
 ) -> Vec<Value> {
-    let mut result = Vec::with_capacity(param_names.len().max(pos_args.len()));
-    for (i, pname) in param_names.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
-    }
-    result
+    merge_params_impl(pos_args, kw_args, param_names)
 }
 
 /// 合并 rgba/rgb 的位置参数和命名参数（$red/$green/$blue/$alpha）。
 pub(crate) fn merge_color_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
     const PARAMS: &[&str] = &["red", "green", "blue", "alpha"];
-    let mut result = Vec::with_capacity(PARAMS.len().max(pos_args.len()));
-    for (i, pname) in PARAMS.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
-    if pos_args.len() > PARAMS.len() {
-        result.extend_from_slice(&pos_args[PARAMS.len()..]);
-    }
-    result
+    merge_params_impl(pos_args, kw_args, PARAMS)
 }
 
 /// 合并 darken/lighten 的位置参数和命名参数（$color/$amount）。
@@ -324,38 +306,11 @@ pub(crate) fn merge_two_args(
     p1: &str,
     p2: &str,
 ) -> Vec<Value> {
-    const PARAMS_COUNT: usize = 2;
-    let mut result = Vec::with_capacity(PARAMS_COUNT.max(pos_args.len()));
-    for (i, pname) in [p1, p2].iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
-    if pos_args.len() > PARAMS_COUNT {
-        result.extend_from_slice(&pos_args[PARAMS_COUNT..]);
-    }
-    result
+    merge_params_impl(pos_args, kw_args, &[p1, p2])
 }
 
 /// 合并 mix 的位置参数和命名参数（$color1/$color2/$weight）。
 pub(crate) fn merge_mix_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
     const PARAMS: &[&str] = &["color1", "color2", "weight"];
-    let mut result = Vec::with_capacity(PARAMS.len().max(pos_args.len()));
-    for (i, pname) in PARAMS.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
-    if pos_args.len() > PARAMS.len() {
-        result.extend_from_slice(&pos_args[PARAMS.len()..]);
-    }
-    result
+    merge_params_impl(pos_args, kw_args, PARAMS)
 }

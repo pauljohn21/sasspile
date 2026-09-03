@@ -321,7 +321,7 @@ impl Env {
             .filter(|v| v.len() > 1)
             .map(Vec::as_slice)
     }
-    /// 检查 `as *` 模块是否已记录到 star_members。
+    /// 检查 `as *` 模块是否已记录到 `star_members`。
     pub(crate) fn star_module_loaded(&self, module_name: &str) -> bool {
         self.star_members
             .values()
@@ -425,43 +425,27 @@ impl Env {
         self.forwarded_mixins = saved_forwarded_mixins;
         self.forwarded_functions = saved_forwarded_functions;
 
-        // 传播命名空间变量赋值（名字含 . 的）
-        for (name, val) in &rule_local_vars {
-            if name.contains('.') {
-                self.local_vars.insert(name.clone(), val.clone());
-            }
-        }
-        // 传播 !global 变量赋值
-        for (name, val) in &rule_global_writes {
-            self.local_vars.insert(name.clone(), val.clone());
-        }
+        // 传播命名空间变量赋值（名字含 . 的）+ !global 变量赋值
+        self.local_vars.extend(
+            rule_local_vars.into_iter()
+                .filter(|(name, _)| name.contains('.')),
+        );
+        self.local_vars.extend(rule_global_writes);
         // 传播新增 mixin/function（规则体内定义的）
-        for (name, def) in &rule_local_mixins {
-            self.local_mixins
-                .entry(name.clone())
-                .or_insert_with(|| def.clone());
-        }
-        for (name, def) in &rule_local_functions {
-            self.local_functions
-                .entry(name.clone())
-                .or_insert_with(|| def.clone());
-        }
+        #[allow(clippy::needless_for_each)]
+        rule_local_mixins.into_iter()
+            .for_each(|(name, def)| { self.local_mixins.entry(name).or_insert(def); });
+        #[allow(clippy::needless_for_each)]
+        rule_local_functions.into_iter()
+            .for_each(|(name, def)| { self.local_functions.entry(name).or_insert(def); });
         // 传播新增 forwarded 成员
-        for (name, def) in &rule_forwarded_mixins {
-            self.forwarded_mixins
-                .entry(name.clone())
-                .or_insert_with(|| def.clone());
-        }
-        for (name, def) in &rule_forwarded_functions {
-            self.forwarded_functions
-                .entry(name.clone())
-                .or_insert_with(|| def.clone());
-        }
-        for (name, val) in &rule_forwarded_vars {
-            self.forwarded_vars
-                .entry(name.clone())
-                .or_insert_with(|| val.clone());
-        }
+        #[allow(clippy::needless_for_each)]
+        rule_forwarded_mixins.into_iter()
+            .for_each(|(name, def)| { self.forwarded_mixins.entry(name).or_insert(def); });
+        #[allow(clippy::needless_for_each)]
+        rule_forwarded_functions.into_iter()
+            .for_each(|(name, def)| { self.forwarded_functions.entry(name).or_insert(def); });
+        self.forwarded_vars.extend(rule_forwarded_vars);
         self
     }
 }
@@ -471,32 +455,42 @@ pub struct Evaluator;
 const MAX_DEPTH: usize = 100000;
 
 impl Evaluator {
+    /// 求值 AST 为 CSS 节点树。
+    ///
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果求值遇到错误（如未定义变量、类型错误等）。
     pub fn evaluate(ast: &Ast) -> Result<Vec<CssNode>> {
         let (css, final_env) = Self::eval_nodes(&ast.nodes, Env::default())?;
         let extends = final_env.get_extends().to_vec();
         let css = if extends.is_empty() {
             css
         } else {
-            let module_selectors = Self::build_module_selectors(&final_env.get_module_cache());
+            let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
             let css = Self::apply_extends(css, &extends, &module_selectors);
             Self::check_extend_targets(&css, &extends)?;
             css
         };
-        Ok(hoist_css_imports(css))
+        Ok(hoist::hoist_css_imports(css))
     }
 
+    /// 求值 AST 为 CSS 节点树（带初始 Env）。
+    ///
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果求值遇到错误。
     pub(crate) fn evaluate_with_env(ast: &Ast, env: Env) -> Result<Vec<CssNode>> {
         let (css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         let extends = final_env.get_extends().to_vec();
         let css = if extends.is_empty() {
             css
         } else {
-            let module_selectors = Self::build_module_selectors(&final_env.get_module_cache());
+            let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
             let css = Self::apply_extends(css, &extends, &module_selectors);
             Self::check_extend_targets(&css, &extends)?;
             css
         };
-        Ok(hoist_css_imports(css))
+        Ok(hoist::hoist_css_imports(css))
     }
 
     /// CSS @import 提升策略——将所有 `@import` `AtRule` 提升到输出顶部。
@@ -742,39 +736,6 @@ fn eval_error_node(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
     Err(SassError::Eval(msg.to_string()))
 }
 
-/// CSS @import 提升——纯函数版（消费 Vec 返回新 Vec）。
-fn hoist_css_imports(nodes: Vec<CssNode>) -> Vec<CssNode> {
-    let span = crate::__tracing::debug_span!("hoist_css_imports", n = nodes.len());
-    let _enter = span.enter();
-    // 先递归处理嵌套节点，再按 @import 分流
-    let processed: Vec<CssNode> = nodes
-        .into_iter()
-        .map(|node| match node {
-            CssNode::AtRule {
-                name,
-                params,
-                children,
-                has_body: true,
-            } => CssNode::AtRule {
-                name,
-                params,
-                children: hoist_css_imports(children),
-                has_body: true,
-            },
-            CssNode::AtRoot(kids, q) => CssNode::AtRoot(hoist_css_imports(kids), q),
-            other => other,
-        })
-        .collect();
-    let (imports, rest): (Vec<CssNode>, Vec<CssNode>) = processed.into_iter().partition(
-        |node| matches!(node, CssNode::AtRule { name, has_body: false, .. } if name == "import"),
-    );
-    if !imports.is_empty() {
-        crate::__tracing::debug!(n_imports = imports.len(), "hoisted css imports");
-    }
-    let mut result = imports;
-    result.extend(rest);
-    result
-}
 
 mod at_params;
 mod builtin;
@@ -784,6 +745,7 @@ mod control_flow;
 pub(crate) mod error_msgs;
 mod extend;
 mod file_resolver;
+mod hoist;
 mod import;
 mod meta_ops;
 mod mixin;

@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write;
 
 /// `inspect()` 专用格式化——比 Display 更详细。
 pub(crate) fn inspect_value(v: &Value) -> String {
@@ -172,7 +173,7 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
             if let Some(val) = env.lookup(&var_name) {
                 result.push_str(&val.to_string());
             } else {
-                result.push_str(&format!("${var_name}"));
+                let _ = write!(result, "${var_name}");
             }
         } else {
             result.push(c);
@@ -281,7 +282,7 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
                 };
                 result.push_str(&s);
             } else {
-                result.push_str(&format!("${var_name}"));
+                let _ = write!(result, "${var_name}");
             }
         } else {
             result.push(c);

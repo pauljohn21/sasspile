@@ -160,14 +160,14 @@ fn test_compile_hsl() {
 #[test]
 fn test_compile_append() {
     let css = compile_expanded("$l: append((1 2), 3); a { v: $l; }").unwrap();
-    assert!(css.contains("1"), "应该包含 1: {css}");
-    assert!(css.contains("3"), "应该包含 3: {css}");
+    assert!(css.contains('1'), "应该包含 1: {css}");
+    assert!(css.contains('3'), "应该包含 3: {css}");
 }
 
 #[test]
 fn test_compile_clamp() {
     let css = compile_expanded("a { w: clamp(1, 5, 10); }").unwrap();
-    assert!(css.contains("5"), "应该包含 5: {css}");
+    assert!(css.contains('5'), "应该包含 5: {css}");
 }
 
 #[test]

@@ -99,15 +99,15 @@ fn run_case(case: &HrxCase) -> Result<(), String> {
         let actual_trimmed = actual.trim();
         let expected_trimmed = case.expected_output.trim();
 
-        if actual_trimmed != expected_trimmed {
+        if actual_trimmed == expected_trimmed {
+            Ok(())
+        } else {
             Err(format!(
                 "不匹配 [{}]: 期望 {} 字节, 实际 {} 字节",
                 case.name,
                 expected_trimmed.len(),
                 actual_trimmed.len()
             ))
-        } else {
-            Ok(())
         }
     }
 }

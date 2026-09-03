@@ -35,8 +35,9 @@ impl Lexed {
     ///
     /// 消费自身，返回抽象语法树（AST）或错误。
     ///
-    /// # 返回
-    /// 成功返回 `Parsed`（包含 AST 和路径信息），失败返回语法错误。
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果语法分析遇到错误。
     pub fn parse(self) -> Result<Parsed> {
         use crate::parse::Parser;
 

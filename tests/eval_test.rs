@@ -52,9 +52,8 @@ fn test_eval_variable() {
         .evaluate()
         .unwrap();
     // 验证变量求值结果——a 规则的第一个声明值应为 10px
-    if let Some(CssNode::Rule { declarations, .. }) = nodes.nodes.first() {
-        if let Some(CssNode::Declaration { value, .. }) = declarations.first() {
+    if let Some(CssNode::Rule { declarations, .. }) = nodes.nodes.first()
+        && let Some(CssNode::Declaration { value, .. }) = declarations.first() {
             assert_eq!(value, "10px");
         }
-    }
 }

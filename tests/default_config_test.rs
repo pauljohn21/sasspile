@@ -6,7 +6,7 @@ use sasspile::{OutputStyle, compile_expanded, compile_file, init_tracing_otel};
 
 /// 辅助函数：创建唯一临时目录 + 多文件 + 编译。
 fn compile_multi_file(files: &[(&str, &str)]) -> String {
-    let _ = init_tracing_otel();
+    let () = init_tracing_otel();
     let dir = std::env::temp_dir().join(format!("sasspile_default_cfg_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut main_path = dir.join("input.scss");
@@ -87,7 +87,7 @@ fn through_forward_show() {
 
 #[test]
 fn distributed_vars() {
-    let _ = init_tracing_otel();
+    let () = init_tracing_otel();
     let dir = std::env::temp_dir().join(format!("sasspile_distributed_{}", std::process::id()));
     std::fs::create_dir_all(dir.join("module/a")).unwrap();
     std::fs::create_dir_all(dir.join("module/b")).unwrap();

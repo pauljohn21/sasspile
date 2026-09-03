@@ -32,16 +32,15 @@ fn merge_selector_args(
     if param_names.is_empty() {
         return pos_args.to_vec();
     }
-    let mut result = Vec::with_capacity(param_names.len().max(pos_args.len()));
-    for (i, pname) in param_names.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
+    let mut result: Vec<Value> = param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(i, pname)| {
+            pos_args.get(i).cloned()
+                .or_else(|| kw_args.get(*pname).cloned())
+                .or_else(|| kw_args.get(&format!("${pname}")).cloned())
+        })
+        .collect();
     if pos_args.len() > param_names.len() {
         result.extend_from_slice(&pos_args[param_names.len()..]);
     }

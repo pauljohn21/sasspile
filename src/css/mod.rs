@@ -79,7 +79,7 @@ impl Serializer {
     /// 状态 = `(next_group, prev_output)`，每步产出 `Vec<(CssNode, usize)>`，
     /// `flat_map` 展平为最终序列。
     fn flatten_nodes(nodes: &[CssNode], start_group: usize) -> Vec<(CssNode, usize)> {
-        /// scan 状态：下一个可用 group_id + 前一个输出节点（用于 AtRoot/other 回看）
+        /// scan 状态：下一个可用 `group_id` + 前一个输出节点（用于 AtRoot/other 回看）
         struct ScanState {
             next_group: usize,
             prev: Option<(CssNode, usize)>,
@@ -150,7 +150,7 @@ impl Serializer {
                         Some((prev_n, _)) if matches!(prev_n, CssNode::AtRoot(_, None))
                     );
                     let gid = if marker.is_none() && prev_is_unconfigured_atroot {
-                        state.prev.as_ref().map(|(_, g)| *g).unwrap_or(0)
+                        state.prev.as_ref().map_or(0, |(_, g)| *g)
                     } else {
                         let g = state.next_group;
                         state.next_group += 1;
@@ -165,8 +165,7 @@ impl Serializer {
                     let gid = state
                         .prev
                         .as_ref()
-                        .map(|(_, g)| *g)
-                        .unwrap_or(state.next_group);
+                        .map_or(state.next_group, |(_, g)| *g);
                     let item = (other.clone(), gid);
                     state.prev = Some(item.clone());
                     vec![item]
@@ -195,28 +194,30 @@ impl Serializer {
         children
             .iter()
             .flat_map(|child| {
-                let mut result = Vec::new();
                 match child {
                     CssNode::Rule {
                         selector,
                         declarations,
                         children: nested,
                     } => {
-                        if !declarations.is_empty() {
-                            result.push((
+                        let decls: Vec<(CssNode, usize)> = if declarations.is_empty() {
+                            Vec::new()
+                        } else {
+                            vec![(
                                 CssNode::Rule {
                                     selector: selector.clone(),
                                     declarations: declarations.clone(),
                                     children: vec![],
                                 },
                                 group_id,
-                            ));
-                        }
-                        result.extend(Self::flatten_children(selector, nested, group_id));
+                            )]
+                        };
+                        decls.into_iter()
+                            .chain(Self::flatten_children(selector, nested, group_id))
+                            .collect::<Vec<_>>()
                     }
-                    other => result.push((other.clone(), group_id)),
+                    other => vec![(other.clone(), group_id)],
                 }
-                result
             })
             .collect()
     }

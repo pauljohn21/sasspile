@@ -76,10 +76,10 @@ fn test_parse_interp_not_css_if() {
                                 assert!(matches!(&items[0], Value::Interp(_)));
                                 assert!(matches!(&items[1], Value::Calc(_)));
                             }
-                            _ => panic!("期望 List, 实际 {:#?}", cond),
+                            _ => panic!("期望 List, 实际 {cond:#?}"),
                         }
                     }
-                    _ => panic!("期望 Call, 实际 {:#?}", value),
+                    _ => panic!("期望 Call, 实际 {value:#?}"),
                 },
                 _ => panic!("期望 Decl"),
             }

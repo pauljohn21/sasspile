@@ -70,9 +70,7 @@ impl super::Evaluator {
 
             // 列表 — 检查每个元素
             Value::List(elements, _, _) => {
-                for e in elements {
-                    Self::check_plain_css_value(e)?;
-                }
+                elements.iter().try_for_each(|e| Self::check_plain_css_value(e))?;
                 Ok(())
             }
 
@@ -104,22 +102,18 @@ impl super::Evaluator {
             ));
         }
         // 检查参数中的命名参数（关键字参数含 $ 变量名）— 禁止
-        for arg in args {
-            if arg.name.is_some() {
-                return Err(SassError::Eval(
-                    "Sass variables aren't allowed in plain CSS.".into(),
-                ));
-            }
-            // 检查 spread 参数（args...）— 禁止
-            if arg.spread {
-                return Err(SassError::Eval("expected \")\".".into()));
-            }
+        if args.iter().any(|arg| arg.name.is_some()) {
+            return Err(SassError::Eval(
+                "Sass variables aren't allowed in plain CSS.".into(),
+            ));
+        }
+        // 检查 spread 参数（args...）— 禁止
+        if args.iter().any(|arg| arg.spread) {
+            return Err(SassError::Eval("expected \")\".".into()));
         }
         // CSS 原生函数 — 允许，但检查参数中是否有违规
         if Self::is_css_function(&lower) {
-            for arg in args {
-                Self::check_plain_css_value(&arg.value)?;
-            }
+            args.iter().try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
             return Ok(());
         }
         // 已知 Sass 内建函数（非 CSS 原生）— 禁止
@@ -130,9 +124,7 @@ impl super::Evaluator {
         }
         // 未知函数 — 可能是用户自定义函数，允许通过
         // eval_value 的正常流程会处理（找到则调用，找不到则 CSS 透传）
-        for arg in args {
-            Self::check_plain_css_value(&arg.value)?;
-        }
+        args.iter().try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
         Ok(())
     }
 

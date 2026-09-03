@@ -15,10 +15,10 @@ fn test_ep_full_stats() {
 
     let entries = std::fs::read_dir(&dir).expect("无法读取 element-plus 目录");
     let mut files: Vec<_> = entries
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "scss"))
         .collect();
-    files.sort_by_key(|e| e.path());
+    files.sort_by_key(std::fs::DirEntry::path);
 
     for entry in files {
         let name = entry.file_name().to_string_lossy().to_string();

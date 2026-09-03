@@ -8,59 +8,47 @@ impl Evaluator {
     /// 递归收集 AST 中所有 !global 变量名
     fn collect_global_vars(nodes: &[crate::parse::ast::Node]) -> Vec<String> {
         use crate::parse::ast::Node;
-        let mut vars = Vec::new();
-        for node in nodes {
-            match node {
-                Node::Variable {
-                    name,
-                    flags,
-                    ..
-                } => {
-                    if flags.global && !name.contains('.') {
-                        vars.push(name.clone());
+        nodes.iter()
+            .flat_map(|node| {
+                let vars: Vec<String> = match node {
+                    Node::Variable { name, flags, .. } => {
+                        if flags.global && !name.contains('.') {
+                            vec![name.clone()]
+                        } else {
+                            Vec::new()
+                        }
                     }
-                }
-                Node::If {
-                    branches,
-                    else_body,
-                } => {
-                    for (_, branch_body) in branches {
-                        vars.extend(Self::collect_global_vars(branch_body));
+                    Node::If { branches, else_body } => {
+                        let branch_vars: Vec<String> = branches.iter()
+                            .flat_map(|(_, branch_body)| Self::collect_global_vars(branch_body))
+                            .collect();
+                        let else_vars: Vec<String> = else_body.as_ref()
+                            .map(|e| Self::collect_global_vars(e))
+                            .unwrap_or_default();
+                        branch_vars.into_iter().chain(else_vars).collect()
                     }
-                    if let Some(else_nodes) = else_body {
-                        vars.extend(Self::collect_global_vars(else_nodes));
+                    Node::For { body, .. }
+                    | Node::Each { body, .. }
+                    | Node::While { body, .. }
+                    | Node::MixinDef { body, .. }
+                    | Node::FunctionDef { body, .. }
+                    | Node::AtRoot { body, .. } => Self::collect_global_vars(body),
+                    Node::Include { content, .. } => {
+                        content.as_ref()
+                            .map(|c| Self::collect_global_vars(c))
+                            .unwrap_or_default()
                     }
-                }
-                Node::For { body, .. }
-                | Node::Each { body, .. }
-                | Node::While { body, .. }
-                | Node::MixinDef { body, .. }
-                | Node::FunctionDef { body, .. }
-                | Node::AtRoot { body, .. } => {
-                    vars.extend(Self::collect_global_vars(body));
-                }
-                Node::Include {
-                    args,
-                    content,
-                    ..
-                } => {
-                    let _ = args;
-                    if let Some(content_nodes) = content {
-                        vars.extend(Self::collect_global_vars(content_nodes));
+                    Node::Rule { body, .. } => Self::collect_global_vars(body),
+                    Node::AtRule { body, .. } => {
+                        body.as_ref()
+                            .map(|b| Self::collect_global_vars(b))
+                            .unwrap_or_default()
                     }
-                }
-                Node::Rule { body, .. } => {
-                    vars.extend(Self::collect_global_vars(body));
-                }
-                Node::AtRule { body, .. } => {
-                    if let Some(b) = body {
-                        vars.extend(Self::collect_global_vars(b));
-                    }
-                }
-                _ => {}
-            }
-        }
-        vars
+                    _ => Vec::new(),
+                };
+                vars
+            })
+            .collect()
     }
 
     pub(crate) fn load_module(
@@ -154,7 +142,7 @@ impl Evaluator {
         }
         // extends 在顶层 evaluate 中统一应用（带模块路径标记）
         let selectors = Self::collect_all_selectors(
-            &final_env.get_module_cache(),
+            final_env.get_module_cache(),
             path,
             &module_css,
             &ast,
@@ -277,12 +265,13 @@ impl Evaluator {
                     .map(|(_, f)| f)
             {
                 // 注入模块的 vars 到函数环境，使函数体可访问模块变量
-                let mut func_env = env.clone();
-                for (k, v) in module.all_vars() {
-                    if !func_env.local_vars.contains_key(k) {
-                        func_env = func_env.bind(k.clone(), v.clone());
-                    }
-                }
+                let func_env = module.all_vars()
+                    .fold(env.clone(), |mut acc, (k, v)| {
+                        if !acc.local_vars.contains_key(k) {
+                            acc = acc.bind(k.clone(), v.clone());
+                        }
+                        acc
+                    });
                 return Self::call_user_function(func, pos_args, kw_args, func_env);
             }
         }
@@ -537,15 +526,16 @@ impl Evaluator {
                         })?;
                     // 追加 pending_config 中未被 with 覆盖的变量（透传），受 show/hide 过滤
                     let mut result = from_config;
-                    for (k, v) in env.get_pending_config() {
-                        let stripped = strip_prefix(k);
-                        if !configured_names.contains(&stripped)
-                            && !matches!(v, Value::Null)
-                            && passes_filter(k)
-                        {
-                            result.push((stripped, v.clone()));
-                        }
-                    }
+                    let extra: Vec<(String, Value)> = env.get_pending_config().iter()
+                        .filter(|(k, v)| {
+                            let stripped = strip_prefix(k);
+                            !configured_names.contains(&stripped)
+                                && !matches!(v, Value::Null)
+                                && passes_filter(k)
+                        })
+                        .map(|(k, v)| (strip_prefix(k), v.clone()))
+                        .collect();
+                    result.extend(extra);
                     result
                 }
             };

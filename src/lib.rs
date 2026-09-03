@@ -285,7 +285,7 @@ pub enum OutputStyle {
 /// assert!(css.contains("color: red"));
 /// ```
 ///
-/// # 错误
+/// # Errors
 ///
 /// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
@@ -310,7 +310,7 @@ pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
 /// assert_eq!(css, "a {\n  color: red;\n}\n");
 /// ```
 ///
-/// # 错误
+/// # Errors
 ///
 /// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile_expanded(input: &str) -> Result<String> {
@@ -330,7 +330,7 @@ pub fn compile_expanded(input: &str) -> Result<String> {
 /// assert_eq!(css, "a{color:red;}");
 /// ```
 ///
-/// # 错误
+/// # Errors
 ///
 /// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile_compressed(input: &str) -> Result<String> {
@@ -356,7 +356,7 @@ pub fn compile_compressed(input: &str) -> Result<String> {
 /// println!("{}", css);
 /// ```
 ///
-/// # 错误
+/// # Errors
 ///
 /// 返回 [`SassError`] 如果文件不存在或编译失败。
 pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
@@ -392,7 +392,7 @@ pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
 /// println!("{}", css);
 /// ```
 ///
-/// # 错误
+/// # Errors
 ///
 /// 返回 [`SassError`] 如果文件不存在或编译失败。
 pub fn compile_file_with_load_paths(

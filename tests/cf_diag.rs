@@ -1,6 +1,6 @@
-//! core_functions 诊断——显示前 N 个失败的摘要。
+//! `core_functions` 诊断——显示前 N 个失败的摘要。
 //! 集成 CSS diff 模块，逐行显示差异。
-//! 支持跨文件 @use——写入临时目录后用 compile_file_with_load_paths 编译。
+//! 支持跨文件 @use——写入临时目录后用 `compile_file_with_load_paths` 编译。
 //!
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 
@@ -115,7 +115,7 @@ fn collect_hrx(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-/// 编译单个测试用例——写入临时目录后用 compile_file_with_load_paths 编译。
+/// 编译单个测试用例——写入临时目录后用 `compile_file_with_load_paths` 编译。
 fn compile_case(
     case: &HrxCase,
     spec_root: &Path,

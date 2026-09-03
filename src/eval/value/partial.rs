@@ -23,14 +23,13 @@ impl Evaluator {
             // 括号——递归求值内部表达式
             Value::Paren(inner) => {
                 // (else) 不允许作为条件
-                if let Value::String(s, _) = inner.as_ref() {
-                    if s == "else" {
+                if let Value::String(s, _) = inner.as_ref()
+                    && s == "else" {
                         return Err(SassError::Parse {
                             expected: "(".into(),
                             found: "else".into(),
                         });
                     }
-                }
                 match Self::partial_eval_condition(inner, env)? {
                     PartialCond::True => Ok(PartialCond::True),
                     PartialCond::False => Ok(PartialCond::False),
@@ -53,14 +52,13 @@ impl Evaluator {
                     });
                 }
                 // not else 不允许
-                if let Value::String(s, _) = inner.as_ref() {
-                    if s == "else" {
+                if let Value::String(s, _) = inner.as_ref()
+                    && s == "else" {
                         return Err(SassError::Parse {
                             expected: "(".into(),
                             found: "else".into(),
                         });
                     }
-                }
                 // not 后面不能为空
                 if matches!(&**inner, Value::Null) {
                     return Err(SassError::Parse {
@@ -77,23 +75,21 @@ impl Evaluator {
             Value::BinOp(b) => match b.op {
                 BinOpKind::And => {
                     // and 的 LHS 不允许 or（不带括号的混用）
-                    if let Value::BinOp(lb) = &b.left {
-                        if lb.op == BinOpKind::Or {
+                    if let Value::BinOp(lb) = &b.left
+                        && lb.op == BinOpKind::Or {
                             return Err(SassError::Parse {
                                 expected: ":".into(),
                                 found: "or".into(),
                             });
                         }
-                    }
                     // and 后面不允许 or（不带括号的混用）
-                    if let Value::BinOp(rb) = &b.right {
-                        if rb.op == BinOpKind::Or {
+                    if let Value::BinOp(rb) = &b.right
+                        && rb.op == BinOpKind::Or {
                             return Err(SassError::Parse {
                                 expected: ":".into(),
                                 found: "or".into(),
                             });
                         }
-                    }
                     // and 后面不允许 not（不带括号）
                     if let Value::UnaryOp(UnaryOp::Not, _) = &b.right {
                         return Err(SassError::Parse {
@@ -102,14 +98,13 @@ impl Evaluator {
                         });
                     }
                     // and 后面不允许 else
-                    if let Value::String(s, _) = &b.right {
-                        if s == "else" {
+                    if let Value::String(s, _) = &b.right
+                        && s == "else" {
                             return Err(SassError::Parse {
                                 expected: "(".into(),
                                 found: "else".into(),
                             });
                         }
-                    }
                     // and 后面不能为空
                     if matches!(b.right, Value::Null) {
                         return Err(SassError::Parse {
@@ -133,23 +128,21 @@ impl Evaluator {
                 }
                 BinOpKind::Or => {
                     // or 的 LHS 不允许 and（不带括号的混用）
-                    if let Value::BinOp(lb) = &b.left {
-                        if lb.op == BinOpKind::And {
+                    if let Value::BinOp(lb) = &b.left
+                        && lb.op == BinOpKind::And {
                             return Err(SassError::Parse {
                                 expected: ":".into(),
                                 found: "and".into(),
                             });
                         }
-                    }
                     // or 后面不允许 and（不带括号的混用）
-                    if let Value::BinOp(rb) = &b.right {
-                        if rb.op == BinOpKind::And {
+                    if let Value::BinOp(rb) = &b.right
+                        && rb.op == BinOpKind::And {
                             return Err(SassError::Parse {
                                 expected: ":".into(),
                                 found: "and".into(),
                             });
                         }
-                    }
                     // or 后面不允许 not（不带括号）
                     if let Value::UnaryOp(UnaryOp::Not, _) = &b.right {
                         return Err(SassError::Parse {
@@ -158,14 +151,13 @@ impl Evaluator {
                         });
                     }
                     // or 后面不允许 else
-                    if let Value::String(s, _) = &b.right {
-                        if s == "else" {
+                    if let Value::String(s, _) = &b.right
+                        && s == "else" {
                             return Err(SassError::Parse {
                                 expected: "(".into(),
                                 found: "else".into(),
                             });
                         }
-                    }
                     // or 后面不能为空
                     if matches!(b.right, Value::Null) {
                         return Err(SassError::Parse {
@@ -325,13 +317,13 @@ impl Evaluator {
         }
     }
 
-    /// 检查条件中是否包含 sass() 调用。
+    /// 检查条件中是否包含 `sass()` 调用。
     pub(crate) fn contains_sass_call(value: &Value) -> bool {
         match value {
             Value::Call(name, _) if name == "sass" => true,
             Value::Call(_, args) => args.iter().any(|a| {
                 Self::contains_sass_call(&a.value)
-                    || a.condition.as_ref().is_some_and(|c| Self::contains_sass_call(c))
+                    || a.condition.as_ref().is_some_and(Self::contains_sass_call)
             }),
             Value::Paren(inner) => Self::contains_sass_call(inner),
             Value::UnaryOp(_, inner) => Self::contains_sass_call(inner),
@@ -348,7 +340,7 @@ impl Evaluator {
         }
     }
 
-    /// 检查条件中是否包含 CSS 不可求值部分（var()/css()/calc() 等）。
+    /// 检查条件中是否包含 CSS `不可求值部分（var()/css()/calc()` 等）。
     pub(crate) fn contains_css_value(value: &Value) -> bool {
         match value {
             Value::Calc(_) => true,
@@ -356,7 +348,7 @@ impl Evaluator {
             Value::Call(name, _) if matches!(name.as_str(), "attr" | "env" | "clamp" | "min" | "max" | "round" | "mod" | "rem") => true,
             Value::Call(_, args) => args.iter().any(|a| {
                 Self::contains_css_value(&a.value)
-                    || a.condition.as_ref().is_some_and(|c| Self::contains_css_value(c))
+                    || a.condition.as_ref().is_some_and(Self::contains_css_value)
             }),
             Value::Paren(inner) => Self::contains_css_value(inner),
             Value::UnaryOp(_, inner) => Self::contains_css_value(inner),

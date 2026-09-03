@@ -8,6 +8,7 @@
 use super::*;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
+use std::fmt::Write;
 
 pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
     let l = l.clone();
@@ -186,12 +187,12 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
                 if let Some(u) = u1
                     && !u.is_empty()
                 {
-                    calc.push_str(&format!(" * 1{u}"));
+                    let _ = write!(calc, " * 1{u}");
                 }
                 if let Some(u) = u2
                     && !u.is_empty()
                 {
-                    calc.push_str(&format!(" / 1{u}"));
+                    let _ = write!(calc, " / 1{u}");
                 }
                 calc.push(')');
                 return Ok(Value::Calc(calc));
@@ -263,14 +264,7 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
     ];
     let g1 = u1.expect("non-none unit after none check");
     let g2 = u2.expect("non-none unit after none check");
-    for group in GROUPS {
-        let has1 = group.contains(&g1);
-        let has2 = group.contains(&g2);
-        if has1 && has2 {
-            return true;
-        }
-    }
-    false
+    GROUPS.iter().any(|group| group.contains(&g1) && group.contains(&g2))
 }
 
 pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {

@@ -191,7 +191,7 @@ impl Evaluator {
                         .iter()
                         .find(|(k, _)| crate::eval::value::values_eq(k, key))
                     {
-                        current = v.clone()
+                        current = v.clone();
                     } else {
                         found = false;
                         break;

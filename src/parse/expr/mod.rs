@@ -18,12 +18,20 @@ impl Parser<'_> {
     // —— Pratt 表达式解析 ——
     /// 解析值表达式（顶层，到 ; 或 } 停止）。
     /// 用于变量赋值、函数参数等需要求值的上下文——`/` 做除法。
+    ///
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果表达式解析遇到错误。
     pub fn parse_value(&mut self) -> Result<Value> {
         self.parse_value_with_slash(false)
     }
 
     /// 解析声明值表达式——`/` 作为斜杠分隔符保留。
     /// 用于 CSS 声明值（如 `a {b: 1/2}` → `1/2`）。
+    ///
+    /// # Errors
+    ///
+    /// 返回 [`SassError`] 如果表达式解析遇到错误。
     pub fn parse_decl_value(&mut self) -> Result<Value> {
         self.parse_value_with_slash(true)
     }

@@ -1,6 +1,6 @@
 //! sass-spec manifest——目录索引 + 跳过列表。
 //!
-//! 跳过已弃用的目录（libsass 系列、non_conformant）和颜色相关目录。
+//! 跳过已弃用的目录（libsass `系列、non_conformant）和颜色相关目录`。
 //! 颜色目录跳过以防止在非颜色任务中反复触发颜色测试失败导致无限修复循环。
 //! 如需专门测试颜色功能，使用 `--ignored` 手动触发颜色相关测试。
 
@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 /// - `libsass` 系列：LibSass 实现的旧测试，已被 SCSS 规范弃用
 /// - `non_conformant`：不符合规范的旧测试
 /// - `core_functions/color`：颜色函数（adjust/change/scale/channel/mix/hsl/hwb/rgb/invert/
-///   is_powerless/lab/lch/oklab/oklch/color/to_space/to_gamut + adjust_color/adjust_hue 等）
-/// - `values/colors`：颜色值测试（alpha_hex, equality）
+///   `is_powerless/lab/lch/oklab/oklch/color/to_space/to_gamut` + `adjust_color/adjust_hue` 等）
+/// - `values/colors`：`颜色值测试（alpha_hex`, equality）
 ///
 /// **注意**：颜色相关测试已标记 `#[ignore]`，需要用 `--ignored` 手动触发。
 pub const SKIP_DIRS: &[&str] = &[
@@ -33,7 +33,7 @@ pub const SKIP_DIRS: &[&str] = &[
     "values/colors",
 ];
 
-/// 检查文件相对 spec_root 的路径是否在跳过列表中。
+/// 检查文件相对 `spec_root` 的路径是否在跳过列表中。
 #[allow(dead_code)]
 fn should_skip(rel_path: &str) -> bool {
     // 检查是否在跳过的顶层目录下
@@ -45,8 +45,9 @@ fn should_skip(rel_path: &str) -> bool {
 /// 收集 spec 目录下所有 HRX 文件，跳过 `SKIP_DIRS` 和 >100KB 的文件。
 ///
 /// 参数：`dir` 要扫描的目录，`spec_root` spec 根目录（用于计算相对路径）。
-/// 返回 (files, skipped_count)。
+/// 返回 (files, `skipped_count`)。
 #[allow(dead_code)]
+#[must_use]
 pub fn collect_hrx_files(dir: &Path, spec_root: &Path) -> (Vec<PathBuf>, usize) {
     let mut files = Vec::new();
     let mut skipped = 0;
@@ -83,6 +84,7 @@ fn collect_recursive(dir: &Path, spec_root: &Path, files: &mut Vec<PathBuf>, ski
 
 /// 递归收集所有 HRX 文件（含跳过的），用于 manifest 统计。
 #[allow(dead_code)]
+#[must_use]
 pub fn collect_all_hrx(spec_root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_all_recursive(spec_root, &mut files);
@@ -108,6 +110,7 @@ fn collect_all_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
 
 /// 按一级目录统计 HRX 文件分布。
 #[allow(dead_code)]
+#[must_use]
 pub fn stats_by_dir(spec_root: &Path) -> Vec<(String, usize)> {
     let all = collect_all_hrx(spec_root);
     let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();

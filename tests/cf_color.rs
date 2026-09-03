@@ -1,4 +1,4 @@
-//! core_functions/color 诊断——显示错误模式统计。
+//! `core_functions/color` 诊断——显示错误模式统计。
 //!
 //! HRX 解析使用 `hrx_auditor` crate（VFS + parser），正确支持 `===` 多层嵌套。
 //! 使用 tracing 进行问题追踪，不使用 println!。

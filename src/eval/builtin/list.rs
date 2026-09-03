@@ -32,16 +32,15 @@ fn list_param_names(name: &str) -> &'static [&'static str] {
 /// 合并位置参数和命名参数（复用 string 模块的 `merge_args` 逻辑）。
 fn merge_list_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
     let param_names = list_param_names(name);
-    let mut result = Vec::with_capacity(param_names.len());
-    for (i, pname) in param_names.iter().enumerate() {
-        if i < pos_args.len() {
-            result.push(pos_args[i].clone());
-        } else if let Some(v) = kw_args.get(*pname) {
-            result.push(v.clone());
-        } else if let Some(v) = kw_args.get(&format!("${pname}")) {
-            result.push(v.clone());
-        }
-    }
+    let mut result: Vec<Value> = param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(i, pname)| {
+            pos_args.get(i).cloned()
+                .or_else(|| kw_args.get(*pname).cloned())
+                .or_else(|| kw_args.get(&format!("${pname}")).cloned())
+        })
+        .collect();
     if pos_args.len() > param_names.len() {
         result.extend_from_slice(&pos_args[param_names.len()..]);
     }

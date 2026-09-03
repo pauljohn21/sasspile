@@ -121,11 +121,11 @@ fn diag_forward_extend() {
             fail += 1;
             match (&result, expect_error) {
                 (Ok(css), true) => {
-                    tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK")
+                    tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK");
                 }
                 (Err(e), true) => tracing::warn!(name = %name, error = %e, "wrong error"),
                 (Ok(css), false) => {
-                    tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF")
+                    tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF");
                 }
                 (Err(e), false) => tracing::warn!(name = %name, error = %e, "UNEXPECTED ERROR"),
             }
@@ -152,11 +152,11 @@ fn diag_forward_extend() {
             fail2 += 1;
             match (&result, expect_error) {
                 (Ok(css), true) => {
-                    tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK")
+                    tracing::warn!(name = %name, css = %css, "EXPECTED ERROR but got OK");
                 }
                 (Err(e), true) => tracing::warn!(name = %name, error = %e, "wrong error"),
                 (Ok(css), false) => {
-                    tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF")
+                    tracing::warn!(name = %name, css = %css, expected = ?expected, "CONTENT DIFF");
                 }
                 (Err(e), false) => tracing::warn!(name = %name, error = %e, "UNEXPECTED ERROR"),
             }

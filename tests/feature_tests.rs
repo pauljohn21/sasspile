@@ -1,6 +1,6 @@
 //! 功能测试——关键字参数、@forward as prefix-* 等特性的集成测试。
 //!
-//! 这些测试使用公共 API（compile_expanded / compile_file），
+//! 这些测试使用公共 `API（compile_expanded` / `compile_file`），
 //! 在独立编译单元中运行，与源码隔离。
 
 use sasspile::{OutputStyle, compile_expanded, compile_file};

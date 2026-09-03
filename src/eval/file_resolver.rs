@@ -92,12 +92,7 @@ impl Evaluator {
             url_normalized.join("_index.sass"),
             url_normalized.join("index.sass"),
         ]);
-        for c in &candidates {
-            if c.exists() {
-                return Some(c.clone());
-            }
-        }
-        None
+        candidates.into_iter().find(|c| c.exists())
     }
 
     /// 检查文件解析歧义：多种文件冲突场景检测。
@@ -137,16 +132,15 @@ impl Evaluator {
             };
 
             if !conflicts.is_empty() {
-                let mut all_files: Vec<String> = Vec::new();
-                for c in &conflicts {
-                    for f in c {
+                let mut all_files: Vec<String> = conflicts.iter()
+                    .flat_map(|c| c.iter())
+                    .map(|f| {
                         let s = f.display().to_string();
-                        let s = s.strip_prefix("./").unwrap_or(&s).to_string();
-                        if !all_files.contains(&s) {
-                            all_files.push(s);
-                        }
-                    }
-                }
+                        s.strip_prefix("./").unwrap_or(&s).to_string()
+                    })
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
                 all_files.sort();
                 return Err(SassError::Eval(format!(
                     "It's not clear which file to import. Found:\n  {}",

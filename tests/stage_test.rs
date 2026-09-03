@@ -43,7 +43,7 @@ fn test_lexed_parse() {
 #[test]
 fn test_parsed_evaluate() {
     // 链式：Source → Lexed → Parsed → Evaluated
-    let evaluated = Source::new("".to_string())
+    let evaluated = Source::new(String::new())
         .lex()
         .unwrap()
         .parse()
@@ -82,7 +82,7 @@ fn test_serialized_display() {
     let s = Serialized {
         css: "a{color:red;}".to_string(),
     };
-    assert_eq!(format!("{}", s), "a{color:red;}");
+    assert_eq!(format!("{s}"), "a{color:red;}");
 }
 
 #[test]

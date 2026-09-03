@@ -1,7 +1,7 @@
 //! 插值求值专项测试——覆盖 `eval_interp_segments` 修复后的各种场景。
 //!
 //! 参照 sass-spec 中的插值语义：
-//! - 裸插值 `#{$var}` → 变量值（distributed_vars.hrx）
+//! - 裸插值 `#{$var}` → `变量值（distributed_vars.hrx`）
 //! - 字符串内插 `"#{$var}"` → 带引号的插值结果
 //! - 前缀+插值+后缀 `prefix-#{$a}-suffix` → 拼接
 //! - 表达式插值 `#{1+2}px` → 求值后拼接
@@ -13,7 +13,7 @@ use sasspile::{compile_expanded, init_tracing_otel};
 
 /// 编译 SCSS 字符串为展开格式 CSS。
 fn compile(src: &str) -> String {
-    let _ = init_tracing_otel();
+    let () = init_tracing_otel();
     compile_expanded(src).expect("编译应成功")
 }
 

@@ -1,4 +1,5 @@
 use super::ast::*;
+use std::fmt::Write;
 
 /// AST 节点序列化——用于最小化工具将 AST 转回 SCSS 源码。
 impl Node {
@@ -58,7 +59,7 @@ impl Node {
                             .map(|n| n.to_scss(indent + 1))
                             .collect::<Vec<_>>()
                             .join("\n");
-                        acc.push_str(&format!("{pad}{kw} {cond} {{\n{body_s}\n{pad}}}"));
+                        let _ = write!(acc, "{pad}{kw} {cond} {{\n{body_s}\n{pad}}}");
                         if i < branches.len() - 1 || else_body.is_some() {
                             acc.push('\n');
                         }
@@ -71,7 +72,7 @@ impl Node {
                         .map(|n| n.to_scss(indent + 1))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    s.push_str(&format!("{pad}@else {{\n{body_s}\n{pad}}}"));
+                    let _ = write!(s, "{pad}@else {{\n{body_s}\n{pad}}}");
                 }
                 s
             }
@@ -202,7 +203,7 @@ impl Node {
                 if *star {
                     s.push_str(" as *");
                 } else if let Some(ns) = namespace {
-                    s.push_str(&format!(" as {ns}"));
+                    let _ = write!(s, " as {ns}");
                 }
                 if !config.is_empty() {
                     let cfg: String = config
@@ -210,7 +211,7 @@ impl Node {
                         .map(|c| format!("${}: {}", c.name, c.value))
                         .collect::<Vec<_>>()
                         .join(", ");
-                    s.push_str(&format!(" with ({cfg})"));
+                    let _ = write!(s, " with ({cfg})");
                 }
                 s.push(';');
                 s
@@ -224,13 +225,13 @@ impl Node {
             } => {
                 let mut s = format!("{pad}@forward \"{url}\"");
                 if let Some(p) = prefix {
-                    s.push_str(&format!(" as {p}-*"));
+                    let _ = write!(s, " as {p}-*");
                 }
                 if !show.is_empty() {
-                    s.push_str(&format!(" show {}", show.join(", ")));
+                    let _ = write!(s, " show {}", show.join(", "));
                 }
                 if !hide.is_empty() {
-                    s.push_str(&format!(" hide {}", hide.join(", ")));
+                    let _ = write!(s, " hide {}", hide.join(", "));
                 }
                 s.push(';');
                 s

@@ -2,7 +2,7 @@
 //!
 /// 测试 Bootstrap 使用的核心 SCSS 特性。
 /// 注意：完整 Bootstrap 编译需要 @import、@mixin、父选择器 & 等高级特性支持。
-/// 当前版本会将 hex 颜色转换为 rgba() 格式。
+/// 当前版本会将 hex 颜色转换为 `rgba()` 格式。
 /// 检查 CSS 是否包含颜色（支持 hex 和 rgba 格式）。
 fn assert_contains_color(css: &str, hex: &str) {
     // 将 hex 转换为 rgba 进行比较
@@ -29,7 +29,7 @@ fn hex_to_rgba(hex: &str) -> String {
 #[test]
 fn test_bootstrap_variables() {
     // Bootstrap 风格的变量定义
-    let scss = r##"
+    let scss = r"
 $primary: #0d6efd;
 $secondary: #6c757d;
 $success: #198754;
@@ -41,7 +41,7 @@ $success: #198754;
 .btn-secondary {
     background-color: $secondary;
 }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert_contains_color(&css, "#0d6efd");
@@ -51,7 +51,7 @@ $success: #198754;
 #[test]
 fn test_bootstrap_nesting() {
     // Bootstrap 风格的选择器嵌套
-    let scss = r##"
+    let scss = r"
 .navbar {
     display: flex;
     align-items: center;
@@ -70,7 +70,7 @@ fn test_bootstrap_nesting() {
         }
     }
 }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains(".navbar .navbar-brand"));
@@ -81,7 +81,7 @@ fn test_bootstrap_nesting() {
 #[test]
 fn test_bootstrap_math_operations() {
     // Bootstrap 使用的数学运算
-    let scss = r##"
+    let scss = r"
 $spacer: 1rem;
 
 .mt-1 { margin-top: $spacer * 0.25; }
@@ -90,7 +90,7 @@ $spacer: 1rem;
 .p-1 { padding: $spacer * 0.25; }
 .p-2 { padding: $spacer * 0.5; }
 .p-3 { padding: $spacer; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("margin-top: 0.25rem"));
@@ -102,7 +102,7 @@ $spacer: 1rem;
 #[test]
 fn test_bootstrap_media_queries() {
     // Bootstrap 使用的媒体查询
-    let scss = r##"
+    let scss = r"
 .container {
     width: 100%;
     padding-right: 0.75rem;
@@ -122,7 +122,7 @@ fn test_bootstrap_media_queries() {
 @media (min-width: 992px) {
     .container { max-width: 960px; }
 }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("@media"));
@@ -133,7 +133,7 @@ fn test_bootstrap_media_queries() {
 #[test]
 fn test_bootstrap_grid_system() {
     // Bootstrap 网格系统基础
-    let scss = r##"
+    let scss = r"
 .row {
     display: flex;
     flex-wrap: wrap;
@@ -144,7 +144,7 @@ fn test_bootstrap_grid_system() {
 
 .col { flex: 1 0 0%; }
 .col-auto { flex: 0 0 auto; width: auto; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("display: flex"));
@@ -155,13 +155,13 @@ fn test_bootstrap_grid_system() {
 #[test]
 fn test_bootstrap_utility_api() {
     // Bootstrap 工具类 API 风格
-    let scss = r##"
+    let scss = r"
 .w-25 { width: 25%; }
 .w-50 { width: 50%; }
 .w-75 { width: 75%; }
 .w-100 { width: 100%; }
 .w-auto { width: auto; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("width: 25%"));
@@ -174,7 +174,7 @@ fn test_bootstrap_utility_api() {
 #[test]
 fn test_bootstrap_core_css_output() {
     // 模拟 Bootstrap 的 _reboot.scss 部分功能
-    let scss = r##"
+    let scss = r#"
 *,
 *::before,
 *::after {
@@ -223,7 +223,7 @@ table {
     caption-side: bottom;
     border-collapse: collapse;
 }
-"##;
+"#;
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("box-sizing: border-box"));
@@ -237,7 +237,7 @@ table {
 #[test]
 fn test_bootstrap_color_values() {
     // Bootstrap 颜色值格式
-    let scss = r##"
+    let scss = r"
 .text-primary { color: #0d6efd; }
 .text-secondary { color: #6c757d; }
 .text-success { color: #198754; }
@@ -250,7 +250,7 @@ fn test_bootstrap_color_values() {
 .bg-primary { background-color: #0d6efd; }
 .bg-secondary { background-color: #6c757d; }
 .bg-success { background-color: #198754; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert_contains_color(&css, "#0d6efd");
@@ -266,7 +266,7 @@ fn test_bootstrap_color_values() {
 #[test]
 fn test_bootstrap_spacing_system() {
     // Bootstrap 间距系统
-    let scss = r##"
+    let scss = r"
 .m-0 { margin: 0; }
 .m-1 { margin: 0.25rem; }
 .m-2 { margin: 0.5rem; }
@@ -285,7 +285,7 @@ fn test_bootstrap_spacing_system() {
 .gap-1 { gap: 0.25rem; }
 .gap-2 { gap: 0.5rem; }
 .gap-3 { gap: 1rem; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("margin: 0"));
@@ -297,7 +297,7 @@ fn test_bootstrap_spacing_system() {
 #[test]
 fn test_bootstrap_border_utilities() {
     // Bootstrap 边框工具类
-    let scss = r##"
+    let scss = r"
 .border { border: 1px solid #dee2e6; }
 .border-0 { border: 0; }
 .border-top { border-top: 1px solid #dee2e6; }
@@ -312,7 +312,7 @@ fn test_bootstrap_border_utilities() {
 .rounded-3 { border-radius: 0.5rem; }
 .rounded-circle { border-radius: 50%; }
 .rounded-pill { border-radius: 50rem; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("border: 1px solid"));
@@ -325,7 +325,7 @@ fn test_bootstrap_border_utilities() {
 #[test]
 fn test_bootstrap_display_utilities() {
     // Bootstrap 显示工具类
-    let scss = r##"
+    let scss = r"
 .d-none { display: none; }
 .d-inline { display: inline; }
 .d-inline-block { display: inline-block; }
@@ -336,7 +336,7 @@ fn test_bootstrap_display_utilities() {
 .d-table-cell { display: table-cell; }
 .d-flex { display: flex; }
 .d-inline-flex { display: inline-flex; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("display: none"));
@@ -348,7 +348,7 @@ fn test_bootstrap_display_utilities() {
 #[test]
 fn test_bootstrap_flex_utilities() {
     // Bootstrap Flex 工具类
-    let scss = r##"
+    let scss = r"
 .flex-row { flex-direction: row; }
 .flex-column { flex-direction: column; }
 .flex-row-reverse { flex-direction: row-reverse; }
@@ -366,7 +366,7 @@ fn test_bootstrap_flex_utilities() {
 .align-items-center { align-items: center; }
 .align-items-baseline { align-items: baseline; }
 .align-items-stretch { align-items: stretch; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert!(css.contains("flex-direction: row"));
@@ -379,7 +379,7 @@ fn test_bootstrap_flex_utilities() {
 /// Bootstrap 兼容性总结测试。
 #[test]
 fn test_bootstrap_compatibility_summary() {
-    let scss = r##"
+    let scss = r"
 // Bootstrap 5.3.8 核心语法测试
 $primary: #0d6efd;
 
@@ -405,7 +405,7 @@ $primary: #0d6efd;
 .bg-primary { background-color: $primary; }
 .border { border: 1px solid #dee2e6; }
 .rounded { border-radius: 0.375rem; }
-"##;
+";
 
     let css = sasspile::compile_expanded(scss).unwrap();
     assert_contains_color(&css, "#0d6efd");
