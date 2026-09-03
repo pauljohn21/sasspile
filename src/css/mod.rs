@@ -15,6 +15,7 @@ impl Serializer {
     /// 序列化 `CssNode` 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
         let flattened = Self::flatten_nodes(nodes, 0);
+        crate::__tracing::debug!(count = flattened.len(), items = ?flattened.iter().map(|(n, g)| (n.to_string(), *g)).collect::<Vec<_>>(), "flatten result");
         let merged = Self::merge_at_rules(flattened);
         let css = match style {
             OutputStyle::Expanded => Self::serialize_expanded(&merged, 0),
@@ -73,89 +74,114 @@ impl Serializer {
 
     /// 展平嵌套规则。返回 (`CssNode`, `group_id`) 对——同源展平规则共享相同 `group_id`。
     /// 同一组顶层兄弟节点（来自同一个 `eval_rule` 输出）共享 `group_id`。
+    ///
+    /// 使用 `scan` 状态机替代 `fold` + 可变 Vec：
+    /// 状态 = `(next_group, prev_output)`，每步产出 `Vec<(CssNode, usize)>`，
+    /// `flat_map` 展平为最终序列。
     fn flatten_nodes(nodes: &[CssNode], start_group: usize) -> Vec<(CssNode, usize)> {
+        /// scan 状态：下一个可用 group_id + 前一个输出节点（用于 AtRoot/other 回看）
+        struct ScanState {
+            next_group: usize,
+            prev: Option<(CssNode, usize)>,
+        }
+
+        /// 对单个节点生成 0 或多个 `(CssNode, usize)` 输出，并更新状态
+        fn process_node(
+            node: &CssNode,
+            state: &mut ScanState,
+        ) -> Vec<(CssNode, usize)> {
+            match node {
+                CssNode::Rule {
+                    selector,
+                    declarations,
+                    children,
+                } => {
+                    let gid = state.next_group;
+                    state.next_group += 1;
+                    let mut out = Vec::new();
+                    if !declarations.is_empty() {
+                        out.push((
+                            CssNode::Rule {
+                                selector: selector.clone(),
+                                declarations: declarations.clone(),
+                                children: vec![],
+                            },
+                            gid,
+                        ));
+                    }
+                    let has_non_rule_children =
+                        children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
+                    let flat = Serializer::flatten_children(selector, children, gid);
+                    if has_non_rule_children {
+                        let (rule_kids, other_kids): (
+                            Vec<(CssNode, usize)>,
+                            Vec<(CssNode, usize)>,
+                        ) = flat
+                            .into_iter()
+                            .partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
+                        out.extend(rule_kids);
+                        if !other_kids.is_empty() {
+                            out.push((
+                                CssNode::Rule {
+                                    selector: selector.clone(),
+                                    declarations: vec![],
+                                    children: other_kids
+                                        .into_iter()
+                                        .map(|(n, _)| n)
+                                        .collect(),
+                                },
+                                gid,
+                            ));
+                        }
+                    } else {
+                        out.extend(flat);
+                    }
+                    if let Some(last) = out.last() {
+                        state.prev = Some(last.clone());
+                    }
+                    out
+                }
+                // AtRoot：保留为节点。连续 AtRoot（@forward 链）共享 group_id。
+                CssNode::AtRoot(_, _) => {
+                    let gid = match &state.prev {
+                        Some((prev_n, prev_gid)) if matches!(prev_n, CssNode::AtRoot(_, _)) => {
+                            *prev_gid
+                        }
+                        _ => {
+                            let g = state.next_group;
+                            state.next_group += 1;
+                            g
+                        }
+                    };
+                    let item = (node.clone(), gid);
+                    state.prev = Some(item.clone());
+                    vec![item]
+                }
+                // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
+                other => {
+                    let gid = state
+                        .prev
+                        .as_ref()
+                        .map(|(_, g)| *g)
+                        .unwrap_or(state.next_group);
+                    let item = (other.clone(), gid);
+                    state.prev = Some(item.clone());
+                    vec![item]
+                }
+            }
+        }
+
         nodes
             .iter()
-            .fold(
-                (Vec::new(), start_group),
-                |(mut result, mut next_group), node| {
-                    match node {
-                        CssNode::Rule {
-                            selector,
-                            declarations,
-                            children,
-                        } => {
-                            let gid = next_group;
-                            next_group += 1;
-                            if !declarations.is_empty() {
-                                result.push((
-                                    CssNode::Rule {
-                                        selector: selector.clone(),
-                                        declarations: declarations.clone(),
-                                        children: vec![],
-                                    },
-                                    gid,
-                                ));
-                            }
-                            let has_non_rule_children =
-                                children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
-                            if has_non_rule_children {
-                                let flat = Self::flatten_children(selector, children, gid);
-                                let (rule_kids, other_kids): (
-                                    Vec<(CssNode, usize)>,
-                                    Vec<(CssNode, usize)>,
-                                ) = flat
-                                    .into_iter()
-                                    .partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
-                                result.extend(rule_kids);
-                                if !other_kids.is_empty() {
-                                    result.push((
-                                        CssNode::Rule {
-                                            selector: selector.clone(),
-                                            declarations: vec![],
-                                            children: other_kids
-                                                .into_iter()
-                                                .map(|(n, _)| n)
-                                                .collect(),
-                                        },
-                                        gid,
-                                    ));
-                                }
-                            } else {
-                                result.extend(Self::flatten_children(selector, children, gid));
-                            }
-                        }
-                        // AtRoot：保留为节点
-                        // 连续 AtRoot（来自 @forward 链）共享 group_id（无空行）
-                        // AtRoot 和 Rule 之间有不同 group_id（有空行）
-                        CssNode::AtRoot(_, _) => {
-                            let gid = if let Some((prev_n, prev_gid)) = result.last() {
-                                if matches!(prev_n, CssNode::AtRoot(_, _)) {
-                                    *prev_gid
-                                } else {
-                                    next_group += 1;
-                                    next_group - 1
-                                }
-                            } else {
-                                next_group += 1;
-                                next_group - 1
-                            };
-                            result.push((node.clone(), gid));
-                        }
-                        // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
-                        other => {
-                            let gid = if let Some((_, prev_gid)) = result.last() {
-                                *prev_gid
-                            } else {
-                                next_group
-                            };
-                            result.push((other.clone(), gid));
-                        }
-                    }
-                    (result, next_group)
+            .scan(
+                ScanState {
+                    next_group: start_group,
+                    prev: None,
                 },
+                |state, node| Some(process_node(node, state)),
             )
-            .0
+            .flatten()
+            .collect()
     }
 
     fn flatten_children(
