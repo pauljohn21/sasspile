@@ -72,7 +72,7 @@ impl super::Evaluator {
             Value::List(elements, _, _) => {
                 elements
                     .iter()
-                    .try_for_each(|e| Self::check_plain_css_value(e))?;
+                    .try_for_each(Self::check_plain_css_value)?;
                 Ok(())
             }
 

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 impl Env {
-    /// 获取 scope 的可变所有权——try_unwrap 零 clone，fallback clone。
+    /// 获取 scope `的可变所有权——try_unwrap` 零 clone，fallback clone。
     fn mutate_scope(mut self) -> (Scope, Self) {
         let current = std::mem::take(&mut self.current);
         let scope = Rc::try_unwrap(current).unwrap_or_else(|rc| (*rc).clone());
@@ -62,7 +62,7 @@ impl Env {
         env.with_scope(scope)
     }
 
-    /// 直接写入 forwarded_vars（用于 @forward 绑定变量）。
+    /// 直接写入 `forwarded_vars（用于` @forward 绑定变量）。
     pub(crate) fn define_forwarded_var(self, name: String, val: Value) -> Self {
         let (mut scope, env) = self.mutate_scope();
         scope.forwarded_vars.insert(name, val);
@@ -321,7 +321,7 @@ impl Env {
 
     pub(crate) fn remove_star_imported(self) -> Self {
         let (mut scope, env) = self.mutate_scope();
-        for name in env.star_imported.iter() {
+        for name in &env.star_imported {
             scope.local_vars.remove(name);
             scope.local_mixins.remove(name);
             scope.local_functions.remove(name);
@@ -418,7 +418,7 @@ impl Env {
         }
     }
 
-    /// 合并 forwarded 表到 local 表（std::mem::take 模式）。
+    /// 合并 forwarded 表到 local `表（std::mem::take` 模式）。
     pub(crate) fn merge_forwarded_to_local(self) -> Self {
         let (mut scope, env) = self.mutate_scope();
         let forwarded_vars = std::mem::take(&mut scope.forwarded_vars);
@@ -476,22 +476,22 @@ impl Env {
         )
     }
 
-    /// 直接写入 forwarded_vars（用于 @forward 绑定）。
+    /// 直接写入 `forwarded_vars（用于` @forward 绑定）。
     pub(crate) fn forwarded_vars_contains(&self, key: &str) -> bool {
         self.current.forwarded_vars.contains_key(key)
     }
 
-    /// 获取 forwarded_vars 中的值引用。
+    /// 获取 `forwarded_vars` 中的值引用。
     pub(crate) fn get_forwarded_var(&self, key: &str) -> Option<&Value> {
         self.current.forwarded_vars.get(key)
     }
 
-    /// 获取 forwarded_mixins 中的值引用。
+    /// 获取 `forwarded_mixins` 中的值引用。
     pub(crate) fn get_forwarded_mixin(&self, key: &str) -> Option<&MixinDef> {
         self.current.forwarded_mixins.get(key)
     }
 
-    /// 获取 forwarded_functions 中的值引用。
+    /// 获取 `forwarded_functions` 中的值引用。
     pub(crate) fn get_forwarded_function(&self, key: &str) -> Option<&FunctionDef> {
         self.current.forwarded_functions.get(key)
     }

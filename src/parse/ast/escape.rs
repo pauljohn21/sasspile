@@ -14,7 +14,7 @@ impl Value {
     /// - 其他非 ASCII 字符保持原样（会触发 @charset 前缀）
     pub(crate) fn escape_quoted_string(s: &str) -> (char, String) {
         let has_double = s.contains('"');
-        let has_single = s.contains("'");
+        let has_single = s.contains('\'');
         let quote = if has_double && !has_single { '\'' } else { '"' };
 
         let escaped = Self::escape_css_chars(s, |c| {

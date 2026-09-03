@@ -273,10 +273,10 @@ impl Evaluator {
             {
                 // 注入模块的 vars 到函数环境，使函数体可访问模块变量
                 let func_env = module.all_vars().fold(env.clone(), |acc, (k, v)| {
-                    if !acc.has_var(k) {
-                        acc.bind(k.clone(), v.clone())
-                    } else {
+                    if acc.has_var(k) {
                         acc
+                    } else {
+                        acc.bind(k.clone(), v.clone())
                     }
                 });
                 return Self::call_user_function(func, pos_args, kw_args, func_env);

@@ -227,7 +227,7 @@ impl Evaluator {
         }
         // 求值函数体，找 @return
         let return_val = func.body.iter().try_fold::<_, _, Result<(Value, Env)>>(
-            Value, Env)>>(/* ANCHOR: func-body-return */ (Value::Null, func_env),
+            /* ANCHOR: func-body-return */ (Value::Null, func_env),
             |(rv, fe), node| {
                 if !matches!(rv, Value::Null) {
                     return Ok((rv, fe));

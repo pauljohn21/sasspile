@@ -1,4 +1,4 @@
-//! 求值环境——Env + ModuleExports 类型定义和方法。
+//! 求值环境——Env + `ModuleExports` 类型定义和方法。
 
 use crate::css::node::CssNode;
 use crate::eval::scope::Scope;

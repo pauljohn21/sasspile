@@ -1,4 +1,4 @@
-//! CSS @import 提升策略——将所有 `@import` AtRule 提升到输出顶部。
+//! CSS @import 提升策略——将所有 `@import` `AtRule` 提升到输出顶部。
 
 use crate::css::node::CssNode;
 
