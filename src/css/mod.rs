@@ -46,21 +46,19 @@ impl Serializer {
                         matches!(last, CssNode::AtRule { name: last_name, params: last_params, has_body: true, .. } if last_name == name && last_params == params)
                     });
                     if should_merge {
-                        let (merged_children, last_gid) = if let Some((CssNode::AtRule { children: last_children, .. }, last_gid)) = result.last() {
-                            let mut merged = last_children.clone();
-                            merged.extend(children.clone());
-                            (merged, *last_gid)
-                        } else {
-                            (children.clone(), gid)
-                        };
-                        if let Some((last_mut, last_gid_val)) = result.last_mut() {
-                            *last_mut = CssNode::AtRule {
-                                name: name.clone(),
-                                params: params.clone(),
-                                children: merged_children,
-                                has_body: true,
-                            };
-                            *last_gid_val = last_gid;
+                        // pop 出最后一个元素获取所有权，消除 clone
+                        match result.pop() {
+                            Some((CssNode::AtRule { children: last_children, name: last_name, params: last_params, .. }, last_gid)) => {
+                                let mut merged = last_children;
+                                merged.extend(children.clone());
+                                result.push((CssNode::AtRule {
+                                    name: last_name,
+                                    params: last_params,
+                                    children: merged,
+                                    has_body: true,
+                                }, last_gid));
+                            }
+                            _ => result.push((node, gid)),
                         }
                     } else {
                         result.push((node, gid));

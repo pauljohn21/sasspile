@@ -284,16 +284,21 @@ impl Parser<'_> {
             }
         }
         if segments.len() == 1 {
-            let expr = match &segments[0] {
-                InterpSegment::Expr(e) => e.clone(),
-                InterpSegment::Text(t) => t.clone(),
-            };
-            self.skip_ws();
-            if self.peek() == Some(&Token::LParen) {
-                let args = self.parse_args()?;
-                Ok(Value::Call(expr, args))
-            } else {
-                Ok(Value::Interp(segments))
+            let single = segments.into_iter().next().expect("segments has 1 element");
+            match &single {
+                InterpSegment::Expr(_) | InterpSegment::Text(_) => {
+                    self.skip_ws();
+                    if self.peek() == Some(&Token::LParen) {
+                        let expr = match single {
+                            InterpSegment::Expr(e) => e,
+                            InterpSegment::Text(t) => t,
+                        };
+                        let args = self.parse_args()?;
+                        Ok(Value::Call(expr, args))
+                    } else {
+                        Ok(Value::Interp(vec![single]))
+                    }
+                }
             }
         } else {
             let joined: String = segments

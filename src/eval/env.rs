@@ -352,30 +352,15 @@ impl Env {
         self.extends.clone()
     }
     pub(crate) fn merge_forwarded_to_local(mut self) -> Self {
-        for (k, v) in self
-            .forwarded_vars
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-        {
-            self.local_vars.entry(k).or_insert(v);
-        }
-        for (k, v) in self
-            .forwarded_mixins
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-        {
-            self.local_mixins.entry(k).or_insert(v);
-        }
-        for (k, v) in self
-            .forwarded_functions
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-        {
-            self.local_functions.entry(k).or_insert(v);
-        }
-        self.forwarded_vars.clear();
-        self.forwarded_mixins.clear();
-        self.forwarded_functions.clear();
+        let forwarded_vars = std::mem::take(&mut self.forwarded_vars);
+        forwarded_vars.into_iter()
+            .for_each(|(k, v)| { self.local_vars.entry(k).or_insert(v); });
+        let forwarded_mixins = std::mem::take(&mut self.forwarded_mixins);
+        forwarded_mixins.into_iter()
+            .for_each(|(k, v)| { self.local_mixins.entry(k).or_insert(v); });
+        let forwarded_functions = std::mem::take(&mut self.forwarded_functions);
+        forwarded_functions.into_iter()
+            .for_each(|(k, v)| { self.local_functions.entry(k).or_insert(v); });
         self
     }
     pub(crate) fn with_namespace_var(mut self, ns: &str, var_name: &str, val: Value) -> Self {

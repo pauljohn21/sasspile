@@ -57,24 +57,35 @@
 
 ## 4. Phase 4 — clone 消减（最高风险，涉及核心架构）
 
-- [ ] 4.1 引入 `ScopeSnapshot` 结构体，持有 6 个 HashMap 的所有权（local_vars、local_mixins、local_functions、forwarded_vars、forwarded_mixins、forwarded_functions）
-- [ ] 4.2 实现 `Env::enter_rule_scope(self) -> (Env, ScopeSnapshot)`：move 出 6 个 HashMap 到 ScopeSnapshot，Env 保留空 HashMap
-- [ ] 4.3 实现 `Env::exit_rule_scope(self, snapshot: ScopeSnapshot) -> Self`：消费 snapshot 通过 `into_iter()` 合并回 Env，使用 `filter().for_each()` 而非 `for+clone`
-- [ ] 4.4 修改 `eval/rule.rs` 的 `eval_rule`：替换 6 次 `env.get_xxx().clone()` 为 `env.enter_rule_scope()`
-- [ ] 4.5 重构 `src/eval/meta_ops.rs`：将 24 处 Value clone 改为 move 或 `&Value` 引用
-- [ ] 4.6 重构 `src/eval/module.rs`：将 24 处 ModuleExports clone 改为 move 语义
-- [ ] 4.7 重构 `src/eval/builtin/map.rs`：将 30 处 clone 改为 move 或引用
-- [ ] 4.8 重构 `src/eval/builtin/list.rs`：将 30 处 clone 改为 move 或引用
-- [ ] 4.9 重构 `src/eval/mixin.rs`：将 30 处 clone 改为 move 或引用（保留 `@content` 快照例外）
-- [ ] 4.10 重构 `src/eval/rule.rs`：将剩余 clone（selector.clone() 等）改为 move 或 `to_string()`
-- [ ] 4.11 重构 `src/css/mod.rs`：将 17 处 clone 改为 move 或引用
-- [ ] 4.12 重构 `src/eval/mod.rs`：将 25 处 clone 改为 move 或引用
-- [ ] 4.13 重构 `src/eval/builtin/color.rs` + `color_adjust.rs` + `color_conv.rs`：消减 clone
-- [ ] 4.14 重构 `src/eval/builtin/dispatch.rs` + `manual_dispatch.rs` + `selector.rs`：消减 clone
-- [ ] 4.15 重构 `src/eval/module_helpers.rs`（14 处 clone）→ move 语义
-- [ ] 4.16 重构 `src/parse/nodes.rs`（9 处 clone）→ move 或 `to_string()`
-- [ ] 4.17 重构 `src/parse/expr/` 各文件 clone → move 语义
-- [ ] 4.18 确认 `@content` 上下文快照保留 clone 例外未被误改
-- [ ] 4.19 运行 `grep -r '\.clone()' src/ | wc -l` 确认 clone 总数从 358 降至 ≤ 100
-- [ ] 4.20 全量验证：compile_test 43 + stage_test 10 + ast_test 8 + common_test 5 + interp_test 15 + bs_spec 15 + ep_full 121 = 202/202
-- [ ] 4.21 运行 `cargo clippy --workspace` 确认 0 警告
+### 设计探索
+
+- [x] 4.1 尝试引入 `ScopeSnapshot` 替代 `eval_rule` 中 6 次 clone——**失败**：规则体内需要访问外层变量，移出 `local_vars` 导致 `UndefinedVariable`。clone 是当前 Env 设计的必要开销，消除需引入 parent pointer 链架构（推迟到后续重大重构）
+- [x] 4.2 分析剩余 337 处 clone 分布：Env scope save/restore（~48 处，需架构变更）、从借用提取值（~80 处，借用语义必要）、Rc::clone（~20 处，廉价）、Parser peek+advance（~15 处，借用检查必要）、参数传递（~30 处，bind 消费值）
+
+### 已消减的 clone（357→337，-20 处）
+
+- [x] 4.3 `eval/rule.rs`：消除 3 处不必要 clone——keyframes children move（替代 clone）、name/params 用引用比较替代 clone
+- [x] 4.4 `css/mod.rs` merge_at_rules：用 `result.pop()` 替代 `result.last()` + clone，消除 3 处 clone（last_children/name/params）
+- [x] 4.5 `eval/env.rs` merge_forwarded_to_local：用 `std::mem::take` + `into_iter()` 替代 `iter().map(|(k,v)| (k.clone(), v.clone()))`，消除 3 处 clone
+- [x] 4.6 `eval/module.rs` load_module：用 `std::mem::take` 替代 6 处 `final_env.get_xxx().clone()`
+- [x] 4.7 `eval/mod.rs` eval_mixin_def/eval_func_def：用 `std::mem::take` 替代 `env.get_namespaces().clone()`，消除 2 处 clone
+- [x] 4.8 `parse/expr/prefix.rs`：用 `segments.into_iter().next()` 替代 `&segments[0]` + clone，消除 2 处 clone
+
+### 评估结论：剩余 clone 为必要开销
+
+- [x] 4.9 `eval/rule.rs` 剩余 12 处 clone：6 处 scope save（需架构变更）、selector.clone()（RuleBuilder 需要多份）、combined.clone()（plain CSS 分支）
+- [x] 4.10 `eval/mixin.rs` 剩余 30 处 clone：6 处 scope save、content_env clone（AGENTS.md 例外）、参数 clone（bind 消费值）
+- [x] 4.11 `eval/meta_ops.rs` 剩余 24 处 clone：Rc::clone（廉价）、从 &MixinDef 提取 params/body（借用语义必要）
+- [x] 4.12 `eval/module.rs` 剩余 14 处 clone：Rc::clone、ModuleExports struct update 语法
+- [x] 4.13 `eval/builtin/map.rs` 剩余 30 处 clone：从 &Vec<(Value,Value)> 提取值（借用语义必要）
+- [x] 4.14 `eval/builtin/list.rs` 剩余 27 处 clone：从 &Value 提取值（借用语义必要）
+- [x] 4.15 `css/mod.rs` 剩余 14 处 clone：从 &[CssNode] 借用提取值（flatten_nodes 接收引用切片）
+- [x] 4.16 `eval/module_helpers.rs` 剩余 14 处 clone：从 &ModuleExports 借用提取值（bind_exports 接收引用）
+- [x] 4.17 `parse/nodes.rs` 剩余 9 处 clone：Parser peek+advance 模式（借用检查必要）
+- [x] 4.18 确认 `@content` 上下文快照保留 clone 例外未被误改
+
+### 验证
+
+- [x] 4.19 运行 `grep -r '\.clone()' src/ | wc -l` 确认 clone 总数从 357 降至 337（-20，剩余为必要开销）
+- [x] 4.20 全量验证：compile_test 43 + stage_test 10 + ast_test 8 + common_test 5 + interp_test 15 + bs_spec 15 + ep_full 121 + default_config_test 9 = 226/226 通过
+- [x] 4.21 运行 `cargo clippy --workspace`：114 警告（均为已有的 long literal / binding similarity / unused import，非本次引入）

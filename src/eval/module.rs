@@ -114,7 +114,7 @@ impl Evaluator {
         }
         // 验证配置变量在上游模块中必须带 !default 声明
         // 验证在 eval_nodes 之后执行（运行时消费跟踪）
-        let (module_css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
+        let (module_css, mut final_env) = Self::eval_nodes(&ast.nodes, env)?;
         // 验证：config 中未被消费的 key 说明对应变量未声明 !default
         // 仅当 validate_config=true（@use with 调用）时验证
         if validate_config && !config.is_empty() {
@@ -156,12 +156,12 @@ impl Evaluator {
             module_css
         };
         let exports = ModuleExports {
-            local_vars: final_env.get_local_vars().clone(),
-            local_mixins: final_env.get_local_mixins().clone(),
-            local_functions: final_env.get_local_functions().clone(),
-            forwarded_vars: final_env.get_forwarded_vars().clone(),
-            forwarded_mixins: final_env.get_forwarded_mixins().clone(),
-            forwarded_functions: final_env.get_forwarded_functions().clone(),
+            local_vars: std::mem::take(&mut final_env.local_vars),
+            local_mixins: std::mem::take(&mut final_env.local_mixins),
+            local_functions: std::mem::take(&mut final_env.local_functions),
+            forwarded_vars: std::mem::take(&mut final_env.forwarded_vars),
+            forwarded_mixins: std::mem::take(&mut final_env.forwarded_mixins),
+            forwarded_functions: std::mem::take(&mut final_env.forwarded_functions),
             css,
             loaded_modules: final_env.get_loaded_modules_rc(),
             extends: final_env.get_extends_rc(),

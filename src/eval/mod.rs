@@ -201,9 +201,9 @@ fn eval_mixin_def(
     name: &str,
     params: &[Param],
     body: &[Node],
-    env: Env,
+    mut env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
-    let captured = env.get_namespaces().clone();
+    let captured = std::mem::take(&mut env.namespaces);
     Ok((
         vec![],
         env.define_mixin(
@@ -239,9 +239,9 @@ fn eval_func_def(
     name: &str,
     params: &[Param],
     body: &[Node],
-    env: Env,
+    mut env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
-    let captured = env.get_namespaces().clone();
+    let captured = std::mem::take(&mut env.namespaces);
     Ok((
         vec![],
         env.define_function(

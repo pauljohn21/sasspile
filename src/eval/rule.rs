@@ -113,19 +113,17 @@ impl RuleBuilder {
                         children,
                         has_body: true,
                     } => {
-                        let n = name.clone();
-                        let p = params.clone();
-                        let ch = if n == "keyframes"
-                            || n == "-webkit-keyframes"
-                            || n == "-moz-keyframes"
-                        {
+                        let is_kf = name == "keyframes"
+                            || name == "-webkit-keyframes"
+                            || name == "-moz-keyframes";
+                        let ch = if is_kf {
                             children
                         } else {
                             Evaluator::nest_rule_in_children(&self.selector, children)
                         };
                         CssNode::AtRule {
-                            name: n,
-                            params: p,
+                            name,
+                            params,
                             children: ch,
                             has_body: true,
                         }
@@ -226,6 +224,8 @@ impl Evaluator {
         }
 
         // 保存 local 表（规则体局部作用域不传播）
+        // Phase 4 尝试用 ScopeSnapshot 替代 clone，但规则体内需要访问外层变量，
+        // 移出 local_vars 会导致 UndefinedVariable——clone 是当前设计的必要开销
         let saved_local_vars = env.get_local_vars().clone();
         let saved_local_mixins = env.get_local_mixins().clone();
         let saved_local_functions = env.get_local_functions().clone();
@@ -403,7 +403,7 @@ impl Evaluator {
                         });
                     }
                     let ch = if CssAtRule::is_keyframes(&name) {
-                        children.clone()
+                        children
                     } else {
                         Self::nest_rule_in_children(parent, children)
                     };
