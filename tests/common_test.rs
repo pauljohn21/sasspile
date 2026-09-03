@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{diff_css, DiffLine};
+use common::{DiffLine, diff_css};
 
 #[test]
 fn test_diff_identical() {

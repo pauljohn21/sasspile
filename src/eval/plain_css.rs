@@ -70,7 +70,9 @@ impl super::Evaluator {
 
             // 列表 — 检查每个元素
             Value::List(elements, _, _) => {
-                elements.iter().try_for_each(|e| Self::check_plain_css_value(e))?;
+                elements
+                    .iter()
+                    .try_for_each(|e| Self::check_plain_css_value(e))?;
                 Ok(())
             }
 
@@ -113,7 +115,8 @@ impl super::Evaluator {
         }
         // CSS 原生函数 — 允许，但检查参数中是否有违规
         if Self::is_css_function(&lower) {
-            args.iter().try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
+            args.iter()
+                .try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
             return Ok(());
         }
         // 已知 Sass 内建函数（非 CSS 原生）— 禁止
@@ -124,7 +127,8 @@ impl super::Evaluator {
         }
         // 未知函数 — 可能是用户自定义函数，允许通过
         // eval_value 的正常流程会处理（找到则调用，找不到则 CSS 透传）
-        args.iter().try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
+        args.iter()
+            .try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
         Ok(())
     }
 

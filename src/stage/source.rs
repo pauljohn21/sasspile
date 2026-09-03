@@ -45,8 +45,8 @@ impl Source {
     /// # 参数
     /// - `path`: SCSS 文件路径。
     ///
-/// # Errors
-/// 返回 [`SassError`] 如果文件不存在或读取失败。
+    /// # Errors
+    /// 返回 [`SassError`] 如果文件不存在或读取失败。
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let text = std::fs::read_to_string(path)?;
         Ok(Self {

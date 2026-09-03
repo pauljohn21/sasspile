@@ -5,7 +5,6 @@ use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub(crate) use env::{Env, FunctionDef, MixinDef, ModuleExports};
@@ -298,6 +297,7 @@ mod color;
 mod color_names;
 mod control_flow;
 mod env;
+mod env_impl;
 pub(crate) mod error_msgs;
 mod extend;
 mod file_resolver;
@@ -310,4 +310,5 @@ mod module;
 mod module_helpers;
 mod plain_css;
 mod rule;
+mod scope;
 mod value;

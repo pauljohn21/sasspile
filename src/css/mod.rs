@@ -84,10 +84,7 @@ impl Serializer {
         }
 
         /// 对单个节点生成 0 或多个 `(CssNode, usize)` 输出，并更新状态
-        fn process_node(
-            node: &CssNode,
-            state: &mut ScanState,
-        ) -> Vec<(CssNode, usize)> {
+        fn process_node(node: &CssNode, state: &mut ScanState) -> Vec<(CssNode, usize)> {
             match node {
                 CssNode::Rule {
                     selector,
@@ -123,10 +120,7 @@ impl Serializer {
                                 CssNode::Rule {
                                     selector: selector.clone(),
                                     declarations: vec![],
-                                    children: other_kids
-                                        .into_iter()
-                                        .map(|(n, _)| n)
-                                        .collect(),
+                                    children: other_kids.into_iter().map(|(n, _)| n).collect(),
                                 },
                                 gid,
                             ));
@@ -160,10 +154,7 @@ impl Serializer {
                 }
                 // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
                 other => {
-                    let gid = state
-                        .prev
-                        .as_ref()
-                        .map_or(state.next_group, |(_, g)| *g);
+                    let gid = state.prev.as_ref().map_or(state.next_group, |(_, g)| *g);
                     let item = (other.clone(), gid);
                     state.prev = Some(item.clone());
                     vec![item]
@@ -191,31 +182,30 @@ impl Serializer {
     ) -> Vec<(CssNode, usize)> {
         children
             .iter()
-            .flat_map(|child| {
-                match child {
-                    CssNode::Rule {
-                        selector,
-                        declarations,
-                        children: nested,
-                    } => {
-                        let decls: Vec<(CssNode, usize)> = if declarations.is_empty() {
-                            Vec::new()
-                        } else {
-                            vec![(
-                                CssNode::Rule {
-                                    selector: selector.clone(),
-                                    declarations: declarations.clone(),
-                                    children: vec![],
-                                },
-                                group_id,
-                            )]
-                        };
-                        decls.into_iter()
-                            .chain(Self::flatten_children(selector, nested, group_id))
-                            .collect::<Vec<_>>()
-                    }
-                    other => vec![(other.clone(), group_id)],
+            .flat_map(|child| match child {
+                CssNode::Rule {
+                    selector,
+                    declarations,
+                    children: nested,
+                } => {
+                    let decls: Vec<(CssNode, usize)> = if declarations.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![(
+                            CssNode::Rule {
+                                selector: selector.clone(),
+                                declarations: declarations.clone(),
+                                children: vec![],
+                            },
+                            group_id,
+                        )]
+                    };
+                    decls
+                        .into_iter()
+                        .chain(Self::flatten_children(selector, nested, group_id))
+                        .collect::<Vec<_>>()
                 }
+                other => vec![(other.clone(), group_id)],
             })
             .collect()
     }
@@ -322,8 +312,11 @@ impl Serializer {
                 buf.push_str(" */");
             }
             CssNode::AtRoot(nodes, _) => {
-                let wrapped: Vec<(CssNode, usize)> =
-                    nodes.iter().enumerate().map(|(i, n)| (n.clone(), i + 1)).collect();
+                let wrapped: Vec<(CssNode, usize)> = nodes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, n)| (n.clone(), i + 1))
+                    .collect();
                 let inner = Self::serialize_expanded(&wrapped, depth);
                 let trimmed = inner.strip_suffix('\n').unwrap_or(&inner);
                 buf.push_str(trimmed);

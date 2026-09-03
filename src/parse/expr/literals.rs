@@ -121,9 +121,7 @@ impl Parser<'_> {
                 });
             }
             // 点号后既不是 $var 也不是 Ident——报 "Expected identifier."
-            return Err(crate::error::SassError::Eval(
-                "Expected identifier.".into(),
-            ));
+            return Err(crate::error::SassError::Eval("Expected identifier.".into()));
         }
         if self.peek() == Some(&Token::LParen) {
             // CSS 原生函数——原样保留内容，不解析参数

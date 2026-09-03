@@ -36,7 +36,9 @@ fn merge_list_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &
         .iter()
         .enumerate()
         .filter_map(|(i, pname)| {
-            pos_args.get(i).cloned()
+            pos_args
+                .get(i)
+                .cloned()
                 .or_else(|| kw_args.get(*pname).cloned())
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })

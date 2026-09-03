@@ -189,13 +189,12 @@ impl Evaluator {
             let trimmed = selector.trim_start();
             if let Some(rest) = trimmed.strip_prefix('&')
                 && let Some(c) = rest.chars().next()
-                    && (c.is_alphanumeric() || c == '-')
-                {
-                    return Err(SassError::Eval(
-                        "A top-level selector may not contain a parent selector with a suffix."
-                            .into(),
-                    ));
-                }
+                && (c.is_alphanumeric() || c == '-')
+            {
+                return Err(SassError::Eval(
+                    "A top-level selector may not contain a parent selector with a suffix.".into(),
+                ));
+            }
         }
 
         // & 位置检测：& 必须在 compound selector 开头
@@ -223,21 +222,13 @@ impl Evaluator {
             }
         }
 
-        // 保存 local 表（规则体局部作用域不传播）
-        // Phase 4 尝试用 ScopeSnapshot 替代 clone，但规则体内需要访问外层变量，
-        // 移出 local_vars 会导致 UndefinedVariable——clone 是当前设计的必要开销
-        let saved_local_vars = env.get_local_vars().clone();
-        let saved_local_mixins = env.get_local_mixins().clone();
-        let saved_local_functions = env.get_local_functions().clone();
-        let saved_forwarded_vars = env.get_forwarded_vars().clone();
-        let saved_forwarded_mixins = env.get_forwarded_mixins().clone();
-        let saved_forwarded_functions = env.get_forwarded_functions().clone();
-
         // 检查当前规则是否是 top-level（无父选择器或父选择器是 @at-rule）
         // 用于 plain CSS 模式判断 @media 是否提升
         let is_top_level = env.get_selector().is_none_or(|s| s.starts_with('@'));
 
-        let (css, new_env) = Self::eval_nodes(body, env.with_selector(selector.clone()))?;
+        // 进入子作用域——零 clone，parent 指向当前 scope
+        let env = env.enter_scope().with_selector(selector.clone());
+        let (css, new_env) = Self::eval_nodes(body, env)?;
 
         // plain CSS 模式——不合并选择器，保留嵌套结构
         if new_env.is_plain_css() {
@@ -305,15 +296,8 @@ impl Evaluator {
             .fold(RuleBuilder::new(selector), RuleBuilder::push)
             .build();
 
-        // 作用域传播：从 new_env 提取需要传播的字段，合并回 saved 状态
-        let return_env = new_env.exit_scope(
-            saved_local_vars,
-            saved_local_mixins,
-            saved_local_functions,
-            saved_forwarded_vars,
-            saved_forwarded_mixins,
-            saved_forwarded_functions,
-        );
+        // 退出子作用域——恢复父 scope，传播 !global 和新增 mixin/function
+        let return_env = new_env.exit_scope();
 
         Ok((result, return_env))
     }

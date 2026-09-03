@@ -179,38 +179,39 @@ fn test_directives_subdirs() {
     for hrx in &["debug", "each", "error", "return", "warn", "while"] {
         let dir = spec_root.join(format!("directives/{hrx}.hrx"));
         if dir.exists()
-            && let Ok(content) = std::fs::read_to_string(&dir) {
-                let hrx_rel = format!("directives/{hrx}.hrx");
-                let (mut hp, mut hf, mut hs, mut hc) = (0, 0, 0, 0);
-                for case in &parse_hrx_to_cases(&content, &hrx_rel) {
-                    hc += 1;
-                    if case.expected_output.is_empty() && !case.expect_error {
-                        hs += 1;
-                        continue;
-                    }
-                    if run_case(case) {
-                        hp += 1;
-                    } else {
-                        hf += 1;
-                    }
+            && let Ok(content) = std::fs::read_to_string(&dir)
+        {
+            let hrx_rel = format!("directives/{hrx}.hrx");
+            let (mut hp, mut hf, mut hs, mut hc) = (0, 0, 0, 0);
+            for case in &parse_hrx_to_cases(&content, &hrx_rel) {
+                hc += 1;
+                if case.expected_output.is_empty() && !case.expect_error {
+                    hs += 1;
+                    continue;
                 }
-                let heval = hc - hs;
-                let hpct = hp * 100 / heval.max(1);
-                info!(
-                    hrx,
-                    pass = hp,
-                    fail = hf,
-                    skip = hs,
-                    total = hc,
-                    evaluated = heval,
-                    pct = hpct,
-                    "hrx文件"
-                );
-                tp += hp;
-                tf += hf;
-                ts += hs;
-                tc += hc;
+                if run_case(case) {
+                    hp += 1;
+                } else {
+                    hf += 1;
+                }
             }
+            let heval = hc - hs;
+            let hpct = hp * 100 / heval.max(1);
+            info!(
+                hrx,
+                pass = hp,
+                fail = hf,
+                skip = hs,
+                total = hc,
+                evaluated = heval,
+                pct = hpct,
+                "hrx文件"
+            );
+            tp += hp;
+            tf += hf;
+            ts += hs;
+            tc += hc;
+        }
     }
 
     let evaluated = tc - ts;

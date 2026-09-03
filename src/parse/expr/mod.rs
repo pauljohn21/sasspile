@@ -157,9 +157,16 @@ impl Parser<'_> {
             // 检查 and/or 后面是否紧跟 ( 无空格
             if matches!(op, BinOpKind::And | BinOpKind::Or)
                 && matches!(self.peek(), Some(Token::LParen))
-                && !matches!(self.tokens.get(self.pos.saturating_sub(1)), Some(Token::Whitespace))
+                && !matches!(
+                    self.tokens.get(self.pos.saturating_sub(1)),
+                    Some(Token::Whitespace)
+                )
             {
-                let kw = if matches!(op, BinOpKind::And) { "and" } else { "or" };
+                let kw = if matches!(op, BinOpKind::And) {
+                    "and"
+                } else {
+                    "or"
+                };
                 return Err(SassError::Parse {
                     expected: format!("whitespace between \"{kw}\" and \"(\""),
                     found: "(".into(),

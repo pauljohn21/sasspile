@@ -1,8 +1,8 @@
 //! `@forward` 指令处理——模块成员转发。
 
+use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
 use super::*;
 use crate::error::{Result, SassError};
-use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
 
 impl Evaluator {
     pub(crate) fn eval_forward(
@@ -21,8 +21,8 @@ impl Evaluator {
         }
         // @forward 内建模块（sass:xxx）——注册内建模块命名空间
         if url.starts_with("sass:") {
-            let exports = crate::eval::module_helpers::builtin_module_exports(url)
-                .unwrap_or_default();
+            let exports =
+                crate::eval::module_helpers::builtin_module_exports(url).unwrap_or_default();
             let filter = FilterConfig {
                 show: show.to_vec(),
                 hide: hide.to_vec(),
@@ -100,7 +100,9 @@ impl Evaluator {
                             Ok::<_, SassError>(acc)
                         })?;
                     let mut result = from_config;
-                    let extra: Vec<(String, Value)> = env.get_pending_config().iter()
+                    let extra: Vec<(String, Value)> = env
+                        .get_pending_config()
+                        .iter()
                         .filter(|(k, v)| {
                             let stripped = strip_prefix(k);
                             !configured_names.contains(&stripped)
@@ -145,7 +147,11 @@ impl Evaluator {
                 if module_css.is_empty() {
                     vec![]
                 } else {
-                    let marker = if config.is_empty() { None } else { Some("configured".to_string()) };
+                    let marker = if config.is_empty() {
+                        None
+                    } else {
+                        Some("configured".to_string())
+                    };
                     vec![crate::css::node::CssNode::AtRoot(module_css, marker)]
                 }
             };

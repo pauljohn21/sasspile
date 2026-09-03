@@ -10,7 +10,8 @@ impl Evaluator {
     /// 递归收集 AST 中所有 !global 变量名
     fn collect_global_vars(nodes: &[crate::parse::ast::Node]) -> Vec<String> {
         use crate::parse::ast::Node;
-        nodes.iter()
+        nodes
+            .iter()
             .flat_map(|node| {
                 let vars: Vec<String> = match node {
                     Node::Variable { name, flags, .. } => {
@@ -20,11 +21,16 @@ impl Evaluator {
                             Vec::new()
                         }
                     }
-                    Node::If { branches, else_body } => {
-                        let branch_vars: Vec<String> = branches.iter()
+                    Node::If {
+                        branches,
+                        else_body,
+                    } => {
+                        let branch_vars: Vec<String> = branches
+                            .iter()
                             .flat_map(|(_, branch_body)| Self::collect_global_vars(branch_body))
                             .collect();
-                        let else_vars: Vec<String> = else_body.as_ref()
+                        let else_vars: Vec<String> = else_body
+                            .as_ref()
                             .map(|e| Self::collect_global_vars(e))
                             .unwrap_or_default();
                         branch_vars.into_iter().chain(else_vars).collect()
@@ -35,17 +41,15 @@ impl Evaluator {
                     | Node::MixinDef { body, .. }
                     | Node::FunctionDef { body, .. }
                     | Node::AtRoot { body, .. } => Self::collect_global_vars(body),
-                    Node::Include { content, .. } => {
-                        content.as_ref()
-                            .map(|c| Self::collect_global_vars(c))
-                            .unwrap_or_default()
-                    }
+                    Node::Include { content, .. } => content
+                        .as_ref()
+                        .map(|c| Self::collect_global_vars(c))
+                        .unwrap_or_default(),
                     Node::Rule { body, .. } => Self::collect_global_vars(body),
-                    Node::AtRule { body, .. } => {
-                        body.as_ref()
-                            .map(|b| Self::collect_global_vars(b))
-                            .unwrap_or_default()
-                    }
+                    Node::AtRule { body, .. } => body
+                        .as_ref()
+                        .map(|b| Self::collect_global_vars(b))
+                        .unwrap_or_default(),
                     _ => Vec::new(),
                 };
                 vars
@@ -155,13 +159,14 @@ impl Evaluator {
         } else {
             module_css
         };
+        let (lv, lm, lf, fv, fm, ff) = final_env.take_scope_fields();
         let exports = ModuleExports {
-            local_vars: std::mem::take(&mut final_env.local_vars),
-            local_mixins: std::mem::take(&mut final_env.local_mixins),
-            local_functions: std::mem::take(&mut final_env.local_functions),
-            forwarded_vars: std::mem::take(&mut final_env.forwarded_vars),
-            forwarded_mixins: std::mem::take(&mut final_env.forwarded_mixins),
-            forwarded_functions: std::mem::take(&mut final_env.forwarded_functions),
+            local_vars: lv,
+            local_mixins: lm,
+            local_functions: lf,
+            forwarded_vars: fv,
+            forwarded_mixins: fm,
+            forwarded_functions: ff,
             css,
             loaded_modules: final_env.get_loaded_modules_rc(),
             extends: final_env.get_extends_rc(),
@@ -267,13 +272,13 @@ impl Evaluator {
                     .map(|(_, f)| f)
             {
                 // 注入模块的 vars 到函数环境，使函数体可访问模块变量
-                let func_env = module.all_vars()
-                    .fold(env.clone(), |mut acc, (k, v)| {
-                        if !acc.local_vars.contains_key(k) {
-                            acc = acc.bind(k.clone(), v.clone());
-                        }
+                let func_env = module.all_vars().fold(env.clone(), |acc, (k, v)| {
+                    if !acc.has_var(k) {
+                        acc.bind(k.clone(), v.clone())
+                    } else {
                         acc
-                    });
+                    }
+                });
                 return Self::call_user_function(func, pos_args, kw_args, func_env);
             }
         }
@@ -294,9 +299,7 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         // @use 只能在顶层使用——在 style rule 或 mixin 内报错
         if env.get_selector().is_some() || env.get_content().is_some() {
-            return Err(SassError::Eval(
-                "This at-rule is not allowed here.".into(),
-            ));
+            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
         }
         // 空 URL 报错
         if url.is_empty() {
@@ -318,7 +321,12 @@ impl Evaluator {
                 .unwrap_or(url);
             let base = stem.split('.').next().unwrap_or(stem);
             let ns = base.trim_start_matches('_');
-            if !ns.is_empty() && !ns.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') {
+            if !ns.is_empty()
+                && !ns
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_alphabetic() || c == '_')
+            {
                 return Err(SassError::Eval(format!(
                     "The default namespace \"{ns}\" is not a valid Sass identifier."
                 )));

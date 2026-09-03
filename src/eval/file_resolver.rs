@@ -132,7 +132,8 @@ impl Evaluator {
             };
 
             if !conflicts.is_empty() {
-                let mut all_files: Vec<String> = conflicts.iter()
+                let mut all_files: Vec<String> = conflicts
+                    .iter()
                     .flat_map(|c| c.iter())
                     .map(|f| {
                         let s = f.display().to_string();

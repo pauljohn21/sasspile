@@ -58,7 +58,9 @@ impl Evaluator {
         // 绑定参数——move env，消除 env.clone()
         let mut mixin_env = Self::bind_params(&mixin.params, args, env)?.incr_depth();
         // 合并 mixin 定义时捕获的命名空间
-        mixin_env = mixin.captured_namespaces.iter()
+        mixin_env = mixin
+            .captured_namespaces
+            .iter()
             .fold(mixin_env, |mut acc, (ns, exports)| {
                 if acc.get_namespace(ns).is_none() {
                     acc = acc.add_namespace(ns.clone(), (**exports).clone());
@@ -190,17 +192,11 @@ impl Evaluator {
             n_args = pos_args.len()
         );
         let _enter = span.enter();
-        // 保存 local 表快照（函数作用域不传播）
-        let saved_local_vars = env.get_local_vars().clone();
-        let saved_local_mixins = env.get_local_mixins().clone();
-        let saved_local_functions = env.get_local_functions().clone();
-        let saved_forwarded_vars = env.get_forwarded_vars().clone();
-        let saved_forwarded_mixins = env.get_forwarded_mixins().clone();
-        let saved_forwarded_functions = env.get_forwarded_functions().clone();
-
-        let mut func_env = env.incr_depth();
+        let mut func_env = env.incr_depth().enter_scope();
         // 合并函数定义时捕获的命名空间
-        func_env = func.captured_namespaces.iter()
+        func_env = func
+            .captured_namespaces
+            .iter()
             .fold(func_env, |mut acc, (ns, exports)| {
                 if acc.get_namespace(ns).is_none() {
                     acc = acc.add_namespace(ns.clone(), (**exports).clone());
@@ -230,29 +226,29 @@ impl Evaluator {
             }
         }
         // 求值函数体，找 @return
-        let return_val = func.body.iter()
-            .try_fold::<_, _, Result<(Value, Env)>>(/* ANCHOR: func-body-return */ (Value::Null, func_env), |(rv, fe), node| {
+        let return_val = func.body.iter().try_fold::<_, _, Result<(Value, Env)>>(
+            Value, Env)>>(/* ANCHOR: func-body-return */ (Value::Null, func_env),
+            |(rv, fe), node| {
                 if !matches!(rv, Value::Null) {
                     return Ok((rv, fe));
                 }
                 let (out, e) = Self::eval_node(node, fe)?;
-                let new_rv = out.iter()
+                let new_rv = out
+                    .iter()
                     .find_map(|css| {
-                        if let CssNode::Return(val) = css { Some(val.clone()) } else { None }
+                        if let CssNode::Return(val) = css {
+                            Some(val.clone())
+                        } else {
+                            None
+                        }
                     })
                     .unwrap_or(rv);
                 Ok((new_rv, e))
-            })?;
+            },
+        )?;
         let (return_val, func_env) = return_val;
         // exit_scope 恢复外层作用域（仅传播命名空间变量和 !global 变量）
-        let _restored = func_env.exit_scope(
-            saved_local_vars,
-            saved_local_mixins,
-            saved_local_functions,
-            saved_forwarded_vars,
-            saved_forwarded_mixins,
-            saved_forwarded_functions,
-        );
+        let _restored = func_env.exit_scope();
         Ok(return_val)
     }
 

@@ -170,7 +170,10 @@ impl Parser<'_> {
                 // 检查 not 后面是否紧跟 ( 无空格
                 self.advance();
                 let next_is_paren_no_ws = matches!(self.peek(), Some(Token::LParen))
-                    && !matches!(self.tokens.get(self.pos.saturating_sub(1)), Some(Token::Whitespace));
+                    && !matches!(
+                        self.tokens.get(self.pos.saturating_sub(1)),
+                        Some(Token::Whitespace)
+                    );
                 if next_is_paren_no_ws {
                     return Err(SassError::Parse {
                         expected: "whitespace between \"not\" and \"(\"".into(),

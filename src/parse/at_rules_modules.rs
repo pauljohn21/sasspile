@@ -8,9 +8,7 @@ use crate::lex::token::Token;
 impl Parser<'_> {
     pub(crate) fn parse_use(&mut self) -> Result<Node> {
         if self.in_body {
-            return Err(SassError::Eval(
-                "This at-rule is not allowed here.".into(),
-            ));
+            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
         }
         if self.saw_other_rule {
             return Err(SassError::Eval(

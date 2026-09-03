@@ -61,12 +61,14 @@ impl Evaluator {
                             // 如果模块路径不在 cache 中（当前文件/顶层），
                             // 则检查所有已加载模块的选择器。
                             if let Some(module_path) = module {
-                                let in_scope = module_selectors
-                                    .get(module_path).map_or_else(|| {
+                                let in_scope = module_selectors.get(module_path).map_or_else(
+                                    || {
                                         module_selectors
                                             .values()
                                             .any(|s| s.contains(target_trimmed))
-                                    }, |s| s.contains(target_trimmed));
+                                    },
+                                    |s| s.contains(target_trimmed),
+                                );
                                 if !in_scope {
                                     continue;
                                 }
@@ -215,11 +217,12 @@ impl Evaluator {
         for node in &ast.nodes {
             if let crate::parse::ast::Node::Use { url, .. } = node
                 && !url.starts_with("sass:")
-                    && let Some(path) = Self::resolve_file(base_ref, url, load_paths)
-                        && let Some(v) = cache.get(&path) {
-                            selectors.extend(Self::collect_selectors(&v.css));
-                            selectors.extend(v.selectors.iter().cloned());
-                        }
+                && let Some(path) = Self::resolve_file(base_ref, url, load_paths)
+                && let Some(v) = cache.get(&path)
+            {
+                selectors.extend(Self::collect_selectors(&v.css));
+                selectors.extend(v.selectors.iter().cloned());
+            }
         }
         selectors
     }

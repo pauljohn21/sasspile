@@ -101,11 +101,10 @@ fn check_bogus_in_selector(selector: &str, allow_leading_combinator: bool) -> bo
     // 对逗号分隔的每个选择器部分单独检查
     selector.split(',').any(|part| {
         let part = part.trim();
-        !part.is_empty()
-            && {
-                let tokens = tokenize_selector_with_pseudo(part);
-                tokens_have_bogus(&tokens, allow_leading_combinator)
-            }
+        !part.is_empty() && {
+            let tokens = tokenize_selector_with_pseudo(part);
+            tokens_have_bogus(&tokens, allow_leading_combinator)
+        }
     })
 }
 
@@ -230,11 +229,10 @@ fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> boo
             // 处理逗号分隔的多个选择器
             inner.split(',').any(|part| {
                 let part = part.trim();
-                !part.is_empty()
-                    && {
-                        let inner_tokens = tokenize_selector_with_pseudo(part);
-                        tokens_have_bogus(&inner_tokens, *allow_leading)
-                    }
+                !part.is_empty() && {
+                    let inner_tokens = tokenize_selector_with_pseudo(part);
+                    tokens_have_bogus(&inner_tokens, *allow_leading)
+                }
             })
         } else {
             false

@@ -49,9 +49,10 @@ fn collect_subdirs(spec_root: &Path) -> Vec<String> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir()
-                && let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    subdirs.push(name.to_string());
-                }
+                && let Some(name) = path.file_name().and_then(|s| s.to_str())
+            {
+                subdirs.push(name.to_string());
+            }
         }
     }
     subdirs.sort();
@@ -264,8 +265,12 @@ fn test_use_top_level_hrx() {
     let evaluated = tc - ts;
     let pct = tp * 100 / evaluated.max(1);
     info!(
-        pass = tp, fail = tf, skip = ts, total = tc,
-        evaluated, pct,
+        pass = tp,
+        fail = tf,
+        skip = ts,
+        total = tc,
+        evaluated,
+        pct,
         "顶层HRX汇总"
     );
 }

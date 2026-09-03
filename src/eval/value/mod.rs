@@ -323,9 +323,8 @@ impl Evaluator {
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect();
-                let kw_parts: Vec<String> = kw_args.iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect();
+                let kw_parts: Vec<String> =
+                    kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect();
                 parts.extend(kw_parts);
                 Ok(Value::String(
                     format!("{name}({})", parts.join(", ")),

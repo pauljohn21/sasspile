@@ -38,7 +38,9 @@ pub(crate) fn merge_math_args(
         .iter()
         .enumerate()
         .filter_map(|(i, pname)| {
-            pos_args.get(i).cloned()
+            pos_args
+                .get(i)
+                .cloned()
                 .or_else(|| kw_args.get(*pname).cloned())
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })

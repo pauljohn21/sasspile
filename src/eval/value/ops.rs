@@ -19,9 +19,9 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             if u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
                 let u1_str = u1.as_deref().unwrap_or("");
                 let u2_str = u2.as_deref().unwrap_or("");
-                return Err(SassError::Eval(
-                    format!("{u1_str} and {u2_str} have incompatible units."),
-                ));
+                return Err(SassError::Eval(format!(
+                    "{u1_str} and {u2_str} have incompatible units."
+                )));
             }
             let unit = u1.or(u2);
             Ok(Value::Number(a + b, unit))
@@ -107,9 +107,9 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             if u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
                 let u1_str = u1.as_deref().unwrap_or("");
                 let u2_str = u2.as_deref().unwrap_or("");
-                return Err(SassError::Eval(
-                    format!("{u1_str} and {u2_str} have incompatible units."),
-                ));
+                return Err(SassError::Eval(format!(
+                    "{u1_str} and {u2_str} have incompatible units."
+                )));
             }
             let unit = u1.or(u2);
             Ok(Value::Number(a - b, unit))
@@ -264,7 +264,9 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
     ];
     let g1 = u1.expect("non-none unit after none check");
     let g2 = u2.expect("non-none unit after none check");
-    GROUPS.iter().any(|group| group.contains(&g1) && group.contains(&g2))
+    GROUPS
+        .iter()
+        .any(|group| group.contains(&g1) && group.contains(&g2))
 }
 
 pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {

@@ -82,18 +82,25 @@ pub(crate) fn bind_exports(
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("unknown");
-                let is_new_module = !new_env
-                    .star_module_loaded(stem);
+                let is_new_module = !new_env.star_module_loaded(stem);
                 if is_new_module {
-                    let member_names: Vec<&str> = merge_with_local_precedence(
-                        &exports.local_vars,
-                        &exports.forwarded_vars,
-                    )
-                    .map(|(k, _)| k.as_str())
-                    .filter(|k| !(k.starts_with('-') || k.starts_with('_')))
-                    .chain(exports.all_mixins().map(|(k, _)| k.as_str()).filter(|k| !(k.starts_with('-') || k.starts_with('_'))))
-                    .chain(exports.all_functions().map(|(k, _)| k.as_str()).filter(|k| !(k.starts_with('-') || k.starts_with('_'))))
-                    .collect();
+                    let member_names: Vec<&str> =
+                        merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
+                            .map(|(k, _)| k.as_str())
+                            .filter(|k| !(k.starts_with('-') || k.starts_with('_')))
+                            .chain(
+                                exports
+                                    .all_mixins()
+                                    .map(|(k, _)| k.as_str())
+                                    .filter(|k| !(k.starts_with('-') || k.starts_with('_'))),
+                            )
+                            .chain(
+                                exports
+                                    .all_functions()
+                                    .map(|(k, _)| k.as_str())
+                                    .filter(|k| !(k.starts_with('-') || k.starts_with('_'))),
+                            )
+                            .collect();
                     new_env = new_env.add_star_members(stem, &member_names);
                 }
             }
@@ -102,13 +109,16 @@ pub(crate) fn bind_exports(
             let star_imported = &exports.star_imported;
             // 检测 as * 引入的变量与当前作用域已有变量冲突
             if is_star {
-                for (k, _) in merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars) {
-                    if k.starts_with('-') || k.starts_with('_') || star_imported.contains(k.as_str()) {
+                for (k, _) in
+                    merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
+                {
+                    if k.starts_with('-')
+                        || k.starts_with('_')
+                        || star_imported.contains(k.as_str())
+                    {
                         continue;
                     }
-                    if new_env.local_vars.contains_key(k)
-                        && !new_env.star_imported.contains(k.as_str())
-                    {
+                    if new_env.has_var(k) && !new_env.star_imported.contains(k.as_str()) {
                         return Err(SassError::Eval(format!(
                             "This module and the new module both define a variable named \"${k}\"."
                         )));
@@ -129,7 +139,8 @@ pub(crate) fn bind_exports(
                         env
                     }
                 });
-            new_env = exports.all_mixins()
+            new_env = exports
+                .all_mixins()
                 .filter(|(k, _)| {
                     !is_star
                         || (!(k.starts_with('-') || k.starts_with('_'))
@@ -143,7 +154,8 @@ pub(crate) fn bind_exports(
                         env
                     }
                 });
-            new_env = exports.all_functions()
+            new_env = exports
+                .all_functions()
                 .filter(|(k, _)| {
                     !is_star
                         || (!(k.starts_with('-') || k.starts_with('_'))
@@ -200,7 +212,7 @@ pub(crate) fn bind_exports(
                 }
                 // 冲突检测：forwarded_vars 已存在同名时报错
                 // 但如果值相同（来自同一底层模块）则跳过不报错
-                if let Some(existing) = new_env.forwarded_vars.get(&key) {
+                if let Some(existing) = new_env.get_forwarded_var(&key) {
                     // 冲突检测：值相同则跳过（values_eq + Display 字符串后备）
                     if !values_eq(existing, v) && format!("{existing}") != format!("{v}") {
                         return Err(SassError::Eval(format!(
@@ -208,7 +220,7 @@ pub(crate) fn bind_exports(
                         )));
                     }
                 } else {
-                    new_env.forwarded_vars.insert(key, v.clone());
+                    new_env = new_env.define_forwarded_var(key, v.clone());
                 }
             }
             for (k, v) in &merged_mixins {
@@ -223,7 +235,7 @@ pub(crate) fn bind_exports(
                 if filter.hide.contains(&key) {
                     continue;
                 }
-                if let Some(existing) = new_env.forwarded_mixins.get(&key) {
+                if let Some(existing) = new_env.get_forwarded_mixin(&key) {
                     // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
                     let new_str = format!("{:?}", v.body);
@@ -247,7 +259,7 @@ pub(crate) fn bind_exports(
                 if filter.hide.contains(&key) {
                     continue;
                 }
-                if let Some(existing) = new_env.forwarded_functions.get(&key) {
+                if let Some(existing) = new_env.get_forwarded_function(&key) {
                     // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
                     let new_str = format!("{:?}", v.body);
