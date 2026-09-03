@@ -577,7 +577,12 @@ impl Evaluator {
             let css = if already_loaded {
                 vec![]
             } else {
-                exports.css.clone()
+                let module_css = exports.css.clone();
+                if module_css.is_empty() {
+                    vec![]
+                } else {
+                    vec![crate::css::node::CssNode::AtRoot(module_css, None)]
+                }
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let filter = FilterConfig {

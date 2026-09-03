@@ -125,6 +125,23 @@ impl Serializer {
                                 result.extend(Self::flatten_children(selector, children, gid));
                             }
                         }
+                        // AtRoot：保留为节点
+                        // 连续 AtRoot（来自 @forward 链）共享 group_id（无空行）
+                        // AtRoot 和 Rule 之间有不同 group_id（有空行）
+                        CssNode::AtRoot(_, _) => {
+                            let gid = if let Some((prev_n, prev_gid)) = result.last() {
+                                if matches!(prev_n, CssNode::AtRoot(_, _)) {
+                                    *prev_gid
+                                } else {
+                                    next_group += 1;
+                                    next_group - 1
+                                }
+                            } else {
+                                next_group += 1;
+                                next_group - 1
+                            };
+                            result.push((node.clone(), gid));
+                        }
                         // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
                         other => {
                             let gid = if let Some((_, prev_gid)) = result.last() {
@@ -277,9 +294,15 @@ impl Serializer {
                 buf.push_str(" */");
             }
             CssNode::AtRoot(nodes, _) => {
-                let wrapped: Vec<(CssNode, usize)> =
-                    nodes.iter().cloned().map(|n| (n, 0)).collect();
-                buf.push_str(&Self::serialize_expanded(&wrapped, depth));
+                let indent = "  ".repeat(depth);
+                let inner = nodes.iter().fold(String::new(), |mut acc, kid| {
+                    if !acc.is_empty() {
+                        acc.push('\n');
+                    }
+                    Self::write_node_expanded(&mut acc, kid, &indent, depth);
+                    acc
+                });
+                buf.push_str(&inner);
             }
             CssNode::Rule {
                 selector,
