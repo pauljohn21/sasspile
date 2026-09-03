@@ -294,15 +294,11 @@ impl Serializer {
                 buf.push_str(" */");
             }
             CssNode::AtRoot(nodes, _) => {
-                let indent = "  ".repeat(depth);
-                let inner = nodes.iter().fold(String::new(), |mut acc, kid| {
-                    if !acc.is_empty() {
-                        acc.push('\n');
-                    }
-                    Self::write_node_expanded(&mut acc, kid, &indent, depth);
-                    acc
-                });
-                buf.push_str(&inner);
+                let wrapped: Vec<(CssNode, usize)> =
+                    nodes.iter().enumerate().map(|(i, n)| (n.clone(), i + 1)).collect();
+                let inner = Self::serialize_expanded(&wrapped, depth);
+                let trimmed = inner.strip_suffix('\n').unwrap_or(&inner);
+                buf.push_str(trimmed);
             }
             CssNode::Rule {
                 selector,
