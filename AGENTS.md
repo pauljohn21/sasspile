@@ -448,13 +448,20 @@ Source::from_file(path)?
 - `Evaluated` — 携带 `Vec<CssNode>`
 - `Serialized` — 最终 CSS 字符串
 
-### Env 设计（move 语义，零 clone）
+### Env 设计（move 语义 + Scope Chain 零 clone）
 
+- `Env` 持有 `current: Rc<Scope>`（当前活跃作用域），通过 parent 链管理嵌套作用域
+- `Scope` 结构体包含 7 个 HashMap（local_vars/local_mixins/local_functions/forwarded_vars/forwarded_mixins/forwarded_functions/global_writes）+ `parent: Option<Rc<Scope>>`
 - `Env` 方法全部 `self -> Self`（链式）
 - `eval_xxx` 方法接收 `Env`（move），返回 `(Vec<CssNode>, Env)`
 - 只读辅助方法（`call_function` / `bind_params` / `load_module`）保持 `&Env`
+- 作用域进出用 `enter_scope()` / `exit_scope()` — 零 clone（`Rc::clone` 原子计数器递增）
+- 写操作通过 `Rc::try_unwrap` 获取 scope 所有权（引用计数为 1 时零 clone）
+- 变量查找沿 scope 链向上搜索（`Scope::lookup`）
+- flow control（`@if`/`@for`/`@each`）不创建新 scope — 符合 SCSS 规范
 - **禁止** `env.clone()`（除 `@content` 上下文快照）
-- **禁止** `Rc::make_mut`（字段已恢复为 `HashMap`）
+- **禁止** `Rc::make_mut`
+- 源文件：`scope.rs`（Scope 结构 + 方法）、`env.rs`（Env/ModuleExports/MixinDef/FunctionDef 类型定义）、`env_impl.rs`（Env 方法实现）
 
 ## 验证清单（修复后必跑）
 
@@ -468,7 +475,7 @@ cargo test --test bs_spec -- --nocapture    # 15 个
 cargo test --test ep_full -- --nocapture    # 121 个（约 38 秒）
 cargo test --test default_config_test -- --test-threads=1  # 9 个
 
-# sass-spec 全量统计（约 44 秒）
+# sass-spec 全量统计（约 4 分钟）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
 
 # sass-spec 全量统计 + OTel 追踪（输出 span 到 stdout）
@@ -476,7 +483,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：3216/5624 = 57%（hrx-auditor 依赖移除 + 内联 hrx_support 模块，非隔离模式 + 路径前缀，跳过 libsass/color/colors 目录）
+**sass-spec 基线**：3327/5624 = 59%（scope-chain-arch：Scope 结构体 + Rc<Scope> 父链零 clone 作用域管理，非隔离模式 + 路径前缀，跳过 libsass/color/colors 目录）
 **@directives 子目录**：forward 76%，import 32 FAIL（conflict 5/5 修复，pending_config 架构生效）
 **ep_full**：121/121 = 100%（file_resolver.rs 拆分 + module_helpers 统一后无回归）
 **core_functions/color 子目录**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
@@ -532,6 +539,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 - **fix-interp-eval**（2026-08-31 归档）：插值求值架构重构 — Value::Interp 从 String 改为 Vec<InterpSegment> 保留表达式与文本边界，parser parse_interp_adjacent 方法拼接相邻片段，eval_interp_segments 逐片段求值 — 1 个 spec（`interp-eval`）已同步到 `openspec/specs/`，15 个 interp_test 全通过
 - **hrx-auditor-removal**（2026-09-02 归档）：移除 hrx-auditor 外部依赖 — 创建内联 tests/hrx_support.rs 模块（parse_hrx + Vfs + parse_hrx_to_cases），9 个测试文件引用，sass_spec_full.rs 重写为非隔离模式（路径加 HRX 名前缀，@use 跨组引用正确解析），sass-spec 3216/5624=57%
 - **otel-integration**（2026-09-02 归档）：OpenTelemetry 0.32 集成 — `otel` feature + `init_tracing_otel()` stdout exporter（无需 gRPC/tokio），sass_spec_full.rs 所有测试改用 `init_tracing_otel()`，输出 TraceId/SpanId/busy_ns 精确耗时
+- **scope-chain-arch**（2026-09-03 归档）：Scope Chain 作用域管理架构 — `Scope` 结构体（7 HashMap + parent 链）+ `Rc<Scope>` 父链零 clone 进出 + `enter_scope`/`exit_scope` 替代 6 次 HashMap clone + `Rc::try_unwrap` 写操作零 clone + 变量查找沿 scope 链向上搜索 + flow control 不创建新 scope — 202/202 全通过，sass-spec 3324→3327 (+3)，1 个 spec（`scope-chain`）+ 1 个 delta（`fp-architecture`）已同步到 `openspec/specs/`
 
 ## 内建函数注册架构（builtin-dispatch-macro）
 
