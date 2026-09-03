@@ -19,6 +19,9 @@
 - [x] 2.1 拆分 `src/eval/mod.rs` (796 行)：提取 `hoist_css_imports` 到 `src/eval/hoist.rs`（796→774，Env+exit_scope 拆分推迟到 Phase 4 顺带处理）
 - [x] 2.2 拆分 `src/eval/mod.rs` (758 行)：提取 `Env` + `ModuleExports` 到 `src/eval/env.rs`（758→312 行 + 445 行）
 - [x] 2.3 拆分 `src/parse/ast/display.rs` (695 行)：提取 escape 方法到 `src/parse/ast/escape.rs`（695→607 + 87）
+- [x] 2.4 拆分 `src/eval/module.rs` (649 行)：提取 `eval_forward` 到 `src/eval/forward.rs`（649→426 + 213）
+- [ ] 2.5 拆分 `src/eval/builtin/color_adjust.rs` (663 行)：推迟——颜色模块高度内聚
+- [ ] 2.6 拆分 `src/parse/ast/display.rs` (607 行) + `src/eval/builtin/color.rs` (572 行) + `src/css/mod.rs` (515 行)：推迟——高度内聚的 impl 块
 - [x] 2.8 运行全部核心测试验证无回归：compile_test 43 + stage_test 10 + common_test 5（全部通过）
 
 ## 3. Phase 3 — for+push → iterator chain（高风险，逐文件重构）

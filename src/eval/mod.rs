@@ -301,6 +301,7 @@ mod env;
 pub(crate) mod error_msgs;
 mod extend;
 mod file_resolver;
+mod forward;
 mod hoist;
 mod import;
 mod meta_ops;
