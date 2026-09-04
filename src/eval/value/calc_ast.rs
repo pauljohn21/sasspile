@@ -75,8 +75,7 @@ impl fmt::Display for CalcNode {
                 write!(f, "var({name}")?;
                 if let Some(fb) = fallback {
                     write!(f, ", {fb}")?;
-                }
-                write!(f, ")")
+                }                write!(f, ")")
             }
         }
     }
@@ -84,15 +83,14 @@ impl fmt::Display for CalcNode {
 
 /// 格式化数字——避免显示 `-0`，整数不加 `.0`。
 fn format_number(f: &mut fmt::Formatter<'_>, n: f64, unit: Option<&str>) -> fmt::Result {
-    let n = if n == 0.0 { n.abs() } else { n };
-    if n.fract() == 0.0 && n.abs() < 1e15 {
-        write!(f, "{n:.0}")?;
-    } else {
-        write!(f, "{n}")?;
-    }
-    if let Some(u) = unit {
-        write!(f, "{u}")?;
-    }
+        let n = match n == 0.0 { true => n.abs(), false => n };
+        match n.fract() == 0.0 && n.abs() < 1e15 {
+            true => write!(f, "{n:.0}")?,
+            false => write!(f, "{n}")?,
+        }
+        if let Some(u) = unit {
+            write!(f, "{u}")?;
+        }
     Ok(())
 }
 
@@ -121,8 +119,9 @@ impl Parser {
 
     /// peek 当前字符。
     fn peek(&mut self) -> Option<char> {
-        if self.buf.is_empty() {
-            self.buf.push(self.chars.next()?);
+        match self.buf.is_empty() {
+            true => { self.buf.push(self.chars.next()?); }
+            false => {}
         }
         Some(self.buf[0])
     }
@@ -137,17 +136,20 @@ impl Parser {
 
     /// 消费当前字符。
     fn advance(&mut self) -> Option<char> {
-        if self.buf.is_empty() {
-            self.chars.next()
-        } else {
-            let c = self.buf.remove(0);
-            if !self.buf.is_empty() {
-                // 从 chars 补一个到 buf
-                if let Some(next) = self.chars.next() {
-                    self.buf.push(next);
+        match self.buf.is_empty() {
+            true => self.chars.next(),
+            false => {
+                let c = self.buf.remove(0);
+                match !self.buf.is_empty() {
+                    true => {
+                        if let Some(next) = self.chars.next() {
+                            self.buf.push(next);
+                        }
+                    }
+                    false => {}
                 }
+                Some(c)
             }
-            Some(c)
         }
     }
 
@@ -197,41 +199,49 @@ impl Parser {
         self.skip_ws();
         let c = self.peek()?;
 
-        // 括号
-        if c == '(' {
-            self.advance();
-            let inner = self.parse_expr()?;
-            self.skip_ws();
-            if self.peek().is_some_and(|c| c == ')') {
+        match c == '(' {
+            true => {
                 self.advance();
+                let inner = self.parse_expr()?;
+                self.skip_ws();
+                match self.peek().is_some_and(|c| c == ')') {
+                    true => { self.advance(); }
+                    false => {}
+                }
+                return Some(inner);
             }
-            return Some(inner);
+            false => {}
         }
 
-        // 负号 + 数字
-        if c == '-' {
-            let c2 = self.peek2();
-            if c2.is_some_and(|c| c.is_ascii_digit() || c == '.') {
-                self.advance(); // 消费 '-'
-                return self.parse_number().map(|n| match n {
-                    CalcNode::Number(v, u) => CalcNode::Number(-v, u),
-                    other => other,
-                });
+        match c == '-' {
+            true => {
+                let c2 = self.peek2();
+                match c2.is_some_and(|c| c.is_ascii_digit() || c == '.') {
+                    true => {
+                        self.advance();
+                        return self.parse_number().map(|n| match n {
+                            CalcNode::Number(v, u) => CalcNode::Number(-v, u),
+                            other => other,
+                        });
+                    }
+                    false => {}
+                }
+                match c2.is_some_and(|c| c == '-') {
+                    true => return self.parse_ident_or_func(),
+                    false => {}
+                }
             }
-            // CSS 自定义属性 --name
-            if c2.is_some_and(|c| c == '-') {
-                return self.parse_ident_or_func();
-            }
+            false => {}
         }
 
-        // 数字
-        if c.is_ascii_digit() || c == '.' {
-            return self.parse_number();
+        match c.is_ascii_digit() || c == '.' {
+            true => return self.parse_number(),
+            false => {}
         }
 
-        // 标识符（函数名或常量）
-        if c.is_ascii_alphabetic() || c == '_' {
-            return self.parse_ident_or_func();
+        match c.is_ascii_alphabetic() || c == '_' {
+            true => return self.parse_ident_or_func(),
+            false => {}
         }
 
         None
@@ -262,7 +272,7 @@ impl Parser {
         while self.peek().is_some_and(|c| is_unit_char(c)) {
             unit.push(self.advance().unwrap());
         }
-        let unit = if unit.is_empty() { None } else { Some(unit) };
+        let unit = match unit.is_empty() { true => None, false => Some(unit) };
         Some(CalcNode::Number(n, unit))
     }
 
@@ -277,26 +287,26 @@ impl Parser {
         }
         self.skip_ws();
 
-        // 函数调用
-        if self.peek().is_some_and(|c| c == '(') {
-            self.advance();
-            self.parse_func_args(&name)
-        } else {
-            // 常量
-            match name.to_lowercase().as_str() {
-                "pi" => Some(CalcNode::Number(std::f64::consts::PI, None)),
-                "e" => Some(CalcNode::Number(std::f64::consts::E, None)),
-                _ => None,
+        match self.peek().is_some_and(|c| c == '(') {
+            true => {
+                self.advance();
+                self.parse_func_args(&name)
+            }
+            false => {
+                match name.to_lowercase().as_str() {
+                    "pi" => Some(CalcNode::Number(std::f64::consts::PI, None)),
+                    "e" => Some(CalcNode::Number(std::f64::consts::E, None)),
+                    _ => None,
+                }
             }
         }
     }
 
     /// 解析函数参数——var() 特殊处理。
     fn parse_func_args(&mut self, name: &str) -> Option<CalcNode> {
-        if name == "var" {
-            self.parse_var_args()
-        } else {
-            self.parse_generic_func_args(name)
+        match name == "var" {
+            true => self.parse_var_args(),
+            false => self.parse_generic_func_args(name),
         }
     }
 
@@ -312,21 +322,22 @@ impl Parser {
         }
         self.skip_ws();
 
-        let fallback = if self.peek().is_some_and(|c| c == ',') {
-            self.advance();
-            self.skip_ws();
-            Some(Box::new(self.parse_expr()?))
-        } else {
-            None
+        let fallback = match self.peek().is_some_and(|c| c == ',') {
+            true => {
+                self.advance();
+                self.skip_ws();
+                Some(Box::new(self.parse_expr()?))
+            }
+            false => None,
         };
         self.skip_ws();
-        if self.peek().is_some_and(|c| c == ')') {
-            self.advance();
+        match self.peek().is_some_and(|c| c == ')') {
+            true => { self.advance(); }
+            false => {}
         }
-        if var_name.is_empty() {
-            None
-        } else {
-            Some(CalcNode::Var { name: var_name, fallback })
+        match var_name.is_empty() {
+            true => None,
+            false => Some(CalcNode::Var { name: var_name, fallback }),
         }
     }
 
@@ -335,17 +346,19 @@ impl Parser {
         let mut args: Vec<CalcNode> = Vec::new();
         loop {
             self.skip_ws();
-            if !self.has_more() {
-                return None;
+            match !self.has_more() {
+                true => return None,
+                false => {}
             }
-            if self.peek().is_some_and(|c| c == ')') {
-                self.advance();
-                break;
+            match self.peek().is_some_and(|c| c == ')') {
+                true => { self.advance(); break; }
+                false => {}
             }
             args.push(self.parse_expr()?);
             self.skip_ws();
-            if self.peek().is_some_and(|c| c == ',') {
-                self.advance();
+            match self.peek().is_some_and(|c| c == ',') {
+                true => { self.advance(); }
+                false => {}
             }
         }
         Some(CalcNode::Func {
@@ -369,14 +382,15 @@ fn is_unit_char(c: char) -> bool {
 #[tracing::instrument(level = "debug", fields(input = %input))]
 pub fn parse_calc_expr(input: &str) -> Option<CalcNode> {
     let input = input.trim();
-    if input.is_empty() {
-        return None;
+    match input.is_empty() {
+        true => return None,
+        false => {}
     }
     let mut parser = Parser::new(input);
     let result = parser.parse_expr()?;
     parser.skip_ws();
-    if parser.has_more() {
-        return None;
+    match parser.has_more() {
+        true => return None,
+        false => Some(result),
     }
-    Some(result)
 }

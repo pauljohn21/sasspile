@@ -17,11 +17,13 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
     // 处理相邻复合选择器（[a]b → [a] b）
     let selector = normalize_adjacent_compounds(&selector);
     // 组合器验证——无效组合器返回空字符串
-    if has_bogus_combinators(&selector) {
-        return String::new();
+    match has_bogus_combinators(&selector) {
+        true => return String::new(),
+        false => {}
     }
-    if !selector.contains('%') {
-        return selector;
+    match !selector.contains('%') {
+        true => return selector,
+        false => {}
     }
     // 顶层逗号分隔——移除纯占位符部分
     let parts: Vec<&str> = selector
@@ -43,8 +45,9 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
                     ')' => depth -= 1,
                     _ => {}
                 }
-                if depth > 0 {
-                    i += 1;
+                match depth > 0 {
+                    true => i += 1,
+                    false => {}
                 }
             }
             let end = i;
@@ -55,30 +58,28 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
                 .filter(|s| !s.trim().starts_with('%'))
                 .copied()
                 .collect();
-            if real_args.is_empty() {
-                if *pseudo == "not" {
-                    // :not(%placeholder) → 移除 :not()
-                    // 如果前面有选择器（如 a:not(%b)），直接移除 :not → a
-                    // 如果 :not 是整个选择器（如 :not(%b)），替换为 *（匹配所有元素）
-                    let before = &result[..pos];
-                    let after = &result[end + 1..];
-                    if before.trim().is_empty() {
-                        result = format!("*{after}");
-                    } else {
-                        result = format!("{before}{after}");
+            match real_args.is_empty() {
+                true => match *pseudo == "not" {
+                    true => {
+                        let before = &result[..pos];
+                        let after = &result[end + 1..];
+                        match before.trim().is_empty() {
+                            true => result = format!("*{after}"),
+                            false => result = format!("{before}{after}"),
+                        }
                     }
-                } else {
-                    return String::new();
+                    false => return String::new(),
+                },
+                false => {
+                    let new_inner = real_args
+                        .iter()
+                        .map(|s| s.trim())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let before = &result[..paren_start];
+                    let after = &result[end + 1..];
+                    result = format!("{before}({new_inner}){after}");
                 }
-            } else {
-                let new_inner = real_args
-                    .iter()
-                    .map(|s| s.trim())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let before = &result[..paren_start];
-                let after = &result[end + 1..];
-                result = format!("{before}({new_inner}){after}");
             }
         }
     }
@@ -128,10 +129,12 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
                 current.push(c);
             }
             '(' if !in_brackets => {
-                // 找到伪类内部——提取完整内容
-                if !current.trim().is_empty() {
-                    tokens.push(SelToken::Selector(current.trim().to_string()));
-                    current = String::new();
+                match !current.trim().is_empty() {
+                    true => {
+                        tokens.push(SelToken::Selector(current.trim().to_string()));
+                        current = String::new();
+                    }
+                    false => {}
                 }
                 // 向前查看伪类名（向前回看）
                 let pseudo_name = find_pseudo_name(&tokens);
@@ -145,8 +148,9 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
                         ')' => depth -= 1,
                         _ => {}
                     }
-                    if depth > 0 {
-                        inner.push(chars[i]);
+                    match depth > 0 {
+                        true => inner.push(chars[i]),
+                        false => {}
                     }
                     i += 1;
                 }
@@ -160,16 +164,22 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
                 current.push(c);
             }
             '>' | '+' | '~' => {
-                if !current.trim().is_empty() {
-                    tokens.push(SelToken::Selector(current.trim().to_string()));
-                    current = String::new();
+                match !current.trim().is_empty() {
+                    true => {
+                        tokens.push(SelToken::Selector(current.trim().to_string()));
+                        current = String::new();
+                    }
+                    false => {}
                 }
                 tokens.push(SelToken::Combinator);
             }
             _ if c.is_whitespace() => {
-                if !current.trim().is_empty() {
-                    tokens.push(SelToken::Selector(current.trim().to_string()));
-                    current = String::new();
+                match !current.trim().is_empty() {
+                    true => {
+                        tokens.push(SelToken::Selector(current.trim().to_string()));
+                        current = String::new();
+                    }
+                    false => {}
                 }
             }
             _ => {
@@ -178,8 +188,9 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
         }
         i += 1;
     }
-    if !current.trim().is_empty() {
-        tokens.push(SelToken::Selector(current.trim().to_string()));
+    match !current.trim().is_empty() {
+        true => tokens.push(SelToken::Selector(current.trim().to_string())),
+        false => {}
     }
     tokens
 }
@@ -206,24 +217,29 @@ fn find_pseudo_name(tokens: &[SelToken]) -> Option<String> {
 
 /// 检查 token 序列是否包含无效组合器。
 fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> bool {
-    if tokens.is_empty() {
-        return false;
+    match tokens.is_empty() {
+        true => return false,
+        false => {}
     }
     // 检查尾部组合器
-    if matches!(tokens.last(), Some(SelToken::Combinator)) {
-        return true;
+    match matches!(tokens.last(), Some(SelToken::Combinator)) {
+        true => return true,
+        false => {}
     }
     // 检查前导组合器
-    if let Some(SelToken::Combinator) = tokens.first() {
-        if !allow_leading_combinator {
-            return true;
+    match tokens.first() {
+        Some(SelToken::Combinator) => {
+            match !allow_leading_combinator {
+                true => return true,
+                false => {}
+            }
+            // 单个前导组合器允许，但第二个不能是组合器
+            match (tokens.len() >= 2, &tokens[1]) {
+                (true, SelToken::Combinator) => return true,
+                _ => {}
+            }
         }
-        // 单个前导组合器允许，但第二个不能是组合器
-        if tokens.len() >= 2
-            && let SelToken::Combinator = tokens[1]
-        {
-            return true; // 连续组合器
-        }
+        _ => {}
     }
     // 检查中间连续组合器
     for window in tokens.windows(2) {
@@ -258,16 +274,16 @@ fn normalize_adjacent_compounds(selector: &str) -> String {
     while i < chars.len() {
         result.push(chars[i]);
         // 检查是否需要插入空格
-        if i + 1 < chars.len() {
-            let curr = chars[i];
-            let next = chars[i + 1];
-            if curr == ']' && !next.is_whitespace() {
-                // ] 后紧跟类型选择器（字母）或通配符 * 时加空格
-                // 但 . # : [ 后是同一复合选择器的延续，不加空格
-                if next == '*' || next.is_ascii_alphabetic() {
-                    result.push(' ');
+        match i + 1 < chars.len() {
+            true => {
+                let curr = chars[i];
+                let next = chars[i + 1];
+                match (curr == ']' && !next.is_whitespace(), next == '*' || next.is_ascii_alphabetic()) {
+                    (true, true) => result.push(' '),
+                    _ => {}
                 }
             }
+            false => {}
         }
         i += 1;
     }
@@ -281,37 +297,42 @@ fn normalize_attr_selectors(selector: &str) -> String {
     let mut result = String::new();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '[' {
-            // 找到匹配的 ]
-            let start = i;
-            let mut depth = 1;
-            i += 1;
-            while i < chars.len() && depth > 0 {
-                match chars[i] {
-                    '[' => depth += 1,
-                    ']' => depth -= 1,
-                    _ => {}
+        match chars[i] {
+            '[' => {
+                // 找到匹配的 ]
+                let start = i;
+                let mut depth = 1;
+                i += 1;
+                while i < chars.len() && depth > 0 {
+                    match chars[i] {
+                        '[' => depth += 1,
+                        ']' => depth -= 1,
+                        _ => {}
+                    }
+                    match depth > 0 {
+                        true => i += 1,
+                        false => {}
+                    }
                 }
-                if depth > 0 {
-                    i += 1;
+                match i < chars.len() {
+                    true => {
+                        let inner: String = chars[start + 1..i].iter().collect();
+                        let normalized = normalize_attr_content(&inner);
+                        result.push('[');
+                        result.push_str(&normalized);
+                        result.push(']');
+                        i += 1;
+                    }
+                    false => {
+                        result.extend(&chars[start..]);
+                        break;
+                    }
                 }
             }
-            if i < chars.len() {
-                // 提取属性选择器内容
-                let inner: String = chars[start + 1..i].iter().collect();
-                let normalized = normalize_attr_content(&inner);
-                result.push('[');
-                result.push_str(&normalized);
-                result.push(']');
-                i += 1; // 跳过 ]
-            } else {
-                // 未闭合的 [——直接复制剩余
-                result.extend(&chars[start..]);
-                break;
+            _ => {
+                result.push(chars[i]);
+                i += 1;
             }
-        } else {
-            result.push(chars[i]);
-            i += 1;
         }
     }
     result
@@ -324,51 +345,51 @@ fn normalize_attr_content(inner: &str) -> String {
     let mut result = String::new();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '"' || chars[i] == '\'' {
-            let quote = chars[i];
-            // 找到结束引号
-            let val_start = i + 1;
-            let mut j = val_start;
-            while j < chars.len() && chars[j] != quote {
-                j += 1;
+        match chars[i] {
+            '"' | '\'' => {
+                let quote = chars[i];
+                let val_start = i + 1;
+                let mut j = val_start;
+                while j < chars.len() && chars[j] != quote {
+                    j += 1;
+                }
+                match j < chars.len() {
+                    true => {
+                        let val: String = chars[val_start..j].iter().collect();
+                        let is_ident = !val.is_empty()
+                            && !val.starts_with("--")
+                            && val
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '-')
+                            && val
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+                        match is_ident {
+                            true => result.push_str(&val),
+                            false => {
+                                result.push(quote);
+                                result.push_str(&val);
+                                result.push(quote);
+                            }
+                        }
+                        let after = j + 1;
+                        match chars.get(after) {
+                            Some(c) if c.is_ascii_alphabetic() => result.push(' '),
+                            _ => {}
+                        }
+                        i = j + 1;
+                    }
+                    false => {
+                        result.push(chars[i]);
+                        i += 1;
+                    }
+                }
             }
-            if j < chars.len() {
-                // 提取引号内的值
-                let val: String = chars[val_start..j].iter().collect();
-                // 检查是否是合法 CSS 标识符（但 --foo 需保留引号）
-                let is_ident = !val.is_empty()
-                    && !val.starts_with("--")
-                    && val
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '-')
-                    && val
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-                if is_ident {
-                    // 去除引号
-                    result.push_str(&val);
-                } else {
-                    // 保留引号
-                    result.push(quote);
-                    result.push_str(&val);
-                    result.push(quote);
-                }
-                // 检查后面是否有修饰符（紧跟的字母）
-                let after = j + 1;
-                if after < chars.len() && chars[after].is_ascii_alphabetic() {
-                    // 在修饰符前加空格
-                    result.push(' ');
-                }
-                i = j + 1;
-            } else {
-                // 未闭合的引号——直接复制
+            _ => {
                 result.push(chars[i]);
                 i += 1;
             }
-        } else {
-            result.push(chars[i]);
-            i += 1;
         }
     }
     result

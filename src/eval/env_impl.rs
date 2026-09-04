@@ -113,8 +113,9 @@ impl Env {
     }
 
     pub fn add_module(mut self, name: String) -> Self {
-        if !self.builtin_modules.contains(&name) {
-            self.builtin_modules.push(name.clone());
+        match !self.builtin_modules.contains(&name) {
+            true => self.builtin_modules.push(name.clone()),
+            false => {}
         }
         let ns_name = name.strip_prefix("sass:").unwrap_or(&name).to_string();
         if let Some(exports) = super::module_helpers::builtin_module_exports(&name) {

@@ -25,13 +25,16 @@ impl RuleBuilder {
 
     /// flush 当前累积的声明为一条 Rule 节点。
     fn flush_decls(&mut self) {
-        if !self.current_decls.is_empty() {
-            let decls = std::mem::take(&mut self.current_decls);
-            self.result.push(CssNode::Rule {
-                selector: self.selector.clone(),
-                declarations: decls,
-                children: vec![],
-            });
+        match !self.current_decls.is_empty() {
+            true => {
+                let decls = std::mem::take(&mut self.current_decls);
+                self.result.push(CssNode::Rule {
+                    selector: self.selector.clone(),
+                    declarations: decls,
+                    children: vec![],
+                });
+            }
+            false => {}
         }
     }
 
@@ -60,14 +63,15 @@ impl RuleBuilder {
                 let with_rule = query
                     .as_ref()
                     .is_some_and(|q| q.contains("with: rule") || q.contains("with:rule"));
-                if without_media || without_supports || without_all || with_rule {
-                    // 保留 AtRoot 但嵌套父选择器——由 eval_at_rule 分流提升到 @media 外面
-                    let nested = Evaluator::nest_rule_in_children(&self.selector, nodes);
-                    self.flush_decls();
-                    self.result.push(CssNode::AtRoot(nested, query));
-                } else {
-                    // 默认行为——脱离父选择器，提升到 root
-                    self.root_nodes.extend(nodes);
+                match without_media || without_supports || without_all || with_rule {
+                    true => {
+                        let nested = Evaluator::nest_rule_in_children(&self.selector, nodes);
+                        self.flush_decls();
+                        self.result.push(CssNode::AtRoot(nested, query));
+                    }
+                    false => {
+                        self.root_nodes.extend(nodes);
+                    }
                 }
             }
             CssNode::Rule {
@@ -77,12 +81,15 @@ impl RuleBuilder {
             } => {
                 self.flush_decls();
                 let combined = Evaluator::combine_selectors(&self.selector, &child_sel);
-                if !child_decls.is_empty() {
-                    self.result.push(CssNode::Rule {
-                        selector: combined.clone(),
-                        declarations: child_decls,
-                        children: vec![],
-                    });
+                match !child_decls.is_empty() {
+                    true => {
+                        self.result.push(CssNode::Rule {
+                            selector: combined.clone(),
+                            declarations: child_decls,
+                            children: vec![],
+                        });
+                    }
+                    false => {}
                 }
                 for kid in child_kids {
                     if let CssNode::Rule {
@@ -92,12 +99,15 @@ impl RuleBuilder {
                     } = kid
                     {
                         let kid_combined = Evaluator::combine_selectors(&combined, &kid_sel);
-                        if !kid_decls.is_empty() {
-                            self.result.push(CssNode::Rule {
-                                selector: kid_combined,
-                                declarations: kid_decls,
-                                children: vec![],
-                            });
+                        match !kid_decls.is_empty() {
+                            true => {
+                                self.result.push(CssNode::Rule {
+                                    selector: kid_combined,
+                                    declarations: kid_decls,
+                                    children: vec![],
+                                });
+                            }
+                            false => {}
                         }
                     } else {
                         self.result.push(kid);
@@ -154,14 +164,17 @@ impl RuleBuilder {
     /// 消费构建器，返回最终节点列表。
     fn build(mut self) -> Vec<CssNode> {
         self.flush_decls();
-        if self.result.is_empty() && self.root_nodes.is_empty() {
-            self.result.push(CssNode::Rule {
-                selector: self.selector,
-                declarations: vec![],
-                children: vec![],
-            });
-        } else {
-            self.result.extend(self.root_nodes);
+        match self.result.is_empty() && self.root_nodes.is_empty() {
+            true => {
+                self.result.push(CssNode::Rule {
+                    selector: self.selector,
+                    declarations: vec![],
+                    children: vec![],
+                });
+            }
+            false => {
+                self.result.extend(self.root_nodes);
+            }
         }
         self.result
     }
@@ -185,41 +198,53 @@ impl Evaluator {
 
         // 顶层父选择器后缀检测：&a 在无父选择器或 AtRule 上下文时非法
         let is_top_level = env.get_selector().is_none_or(|s| s.starts_with('@'));
-        if is_top_level {
-            let trimmed = selector.trim_start();
-            if let Some(rest) = trimmed.strip_prefix('&')
-                && let Some(c) = rest.chars().next()
-                && (c.is_alphanumeric() || c == '-')
-            {
-                return Err(SassError::Eval(
-                    "A top-level selector may not contain a parent selector with a suffix.".into(),
-                ));
+        match is_top_level {
+            true => {
+                let trimmed = selector.trim_start();
+                match trimmed.strip_prefix('&')
+                    .and_then(|rest| rest.chars().next())
+                {
+                    Some(c) if c.is_alphanumeric() || c == '-' => {
+                        return Err(SassError::Eval(
+                            "A top-level selector may not contain a parent selector with a suffix.".into(),
+                        ));
+                    }
+                    _ => {}
+                }
             }
+            false => {}
         }
 
         // & 位置检测：& 必须在 compound selector 开头
         // compound selector 由空格、>、+、~、, 分隔
         // 伪选择器括号内的 & 也是合法的（如 :is(&), :where(&)）
-        if selector.contains('&') {
-            let chars: Vec<char> = selector.chars().collect();
-            for (i, &c) in chars.iter().enumerate() {
-                if c == '&' && i > 0 {
-                    let prev = chars[i - 1];
-                    if prev != ' '
-                        && prev != '>'
-                        && prev != '+'
-                        && prev != '~'
-                        && prev != ','
-                        && prev != '\t'
-                        && prev != '\n'
-                        && prev != '('
-                    {
-                        return Err(SassError::Eval(
-                            "\"&\" may only used at the beginning of a compound selector.".into(),
-                        ));
+        match selector.contains('&') {
+            true => {
+                let chars: Vec<char> = selector.chars().collect();
+                for (i, &c) in chars.iter().enumerate() {
+                    match c == '&' && i > 0 {
+                        true => {
+                            let prev = chars[i - 1];
+                            match prev != ' '
+                                && prev != '>'
+                                && prev != '+'
+                                && prev != '~'
+                                && prev != ','
+                                && prev != '\t'
+                                && prev != '\n'
+                                && prev != '('
+                            {
+                                true => return Err(SassError::Eval(
+                                    "\"&\" may only used at the beginning of a compound selector.".into(),
+                                )),
+                                false => {}
+                            }
+                        }
+                        false => {}
                     }
                 }
             }
+            false => {}
         }
 
         // 检查当前规则是否是 top-level（无父选择器或父选择器是 @at-rule）
@@ -231,7 +256,8 @@ impl Evaluator {
         let (css, new_env) = Self::eval_nodes(body, env)?;
 
         // plain CSS 模式——不合并选择器，保留嵌套结构
-        if new_env.is_plain_css() {
+        match new_env.is_plain_css() {
+            true => {
             let (declarations, children, root_nodes) = css.into_iter().fold(
                 (Vec::new(), Vec::new(), Vec::new()),
                 |(mut decls, mut kids, mut root), node| {
@@ -279,15 +305,20 @@ impl Evaluator {
                 },
             );
             let mut result = Vec::new();
-            if !declarations.is_empty() || !children.is_empty() {
-                result.push(CssNode::Rule {
-                    selector: selector.clone(),
-                    declarations,
-                    children,
-                });
+            match !declarations.is_empty() || !children.is_empty() {
+                true => {
+                    result.push(CssNode::Rule {
+                        selector: selector.clone(),
+                        declarations,
+                        children,
+                    });
+                }
+                false => {}
             }
             result.extend(root_nodes);
             return Ok((result, new_env));
+            }
+            false => {}
         }
 
         // 使用 RuleBuilder + fold 处理嵌套规则
@@ -316,11 +347,13 @@ impl Evaluator {
             .collect();
 
         // 空 parent 或空 child 时直接使用非空的一方
-        if parents.is_empty() {
-            return child.trim().to_string();
+        match parents.is_empty() {
+            true => return child.trim().to_string(),
+            false => {}
         }
-        if children.is_empty() {
-            return parent.trim().to_string();
+        match children.is_empty() {
+            true => return parent.trim().to_string(),
+            false => {}
         }
 
         // 迭代器笛卡尔积——flat_map 保持外层（parent）优先序
@@ -355,12 +388,15 @@ impl Evaluator {
                     declarations,
                     children,
                 } => {
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule {
-                            selector: parent.to_string(),
-                            declarations: std::mem::take(&mut current_decls),
-                            children: vec![],
-                        });
+                    match !current_decls.is_empty() {
+                        true => {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        false => {}
                     }
                     let combined = Self::combine_selectors(parent, &selector);
                     result.push(CssNode::Rule {
@@ -377,17 +413,19 @@ impl Evaluator {
                     has_body: true,
                 } => {
                     use crate::parse::at_rule_kinds::CssAtRule;
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule {
-                            selector: parent.to_string(),
-                            declarations: std::mem::take(&mut current_decls),
-                            children: vec![],
-                        });
+                    match !current_decls.is_empty() {
+                        true => {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        false => {}
                     }
-                    let ch = if CssAtRule::is_keyframes(&name) {
-                        children
-                    } else {
-                        Self::nest_rule_in_children(parent, children)
+                    let ch = match CssAtRule::is_keyframes(&name) {
+                        true => children,
+                        false => Self::nest_rule_in_children(parent, children),
                     };
                     result.push(CssNode::AtRule {
                         name,
@@ -398,28 +436,32 @@ impl Evaluator {
                     (result, current_decls)
                 }
                 other => {
-                    if !current_decls.is_empty() {
-                        result.push(CssNode::Rule {
-                            selector: parent.to_string(),
-                            declarations: std::mem::take(&mut current_decls),
-                            children: vec![],
-                        });
+                    match !current_decls.is_empty() {
+                        true => {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        false => {}
                     }
                     result.push(other);
                     (result, current_decls)
                 }
             },
         );
-        if current_decls.is_empty() {
-            result
-        } else {
-            let mut result = result;
-            result.push(CssNode::Rule {
-                selector: parent.to_string(),
-                declarations: current_decls,
-                children: vec![],
-            });
-            result
+        match current_decls.is_empty() {
+            true => result,
+            false => {
+                let mut result = result;
+                result.push(CssNode::Rule {
+                    selector: parent.to_string(),
+                    declarations: current_decls,
+                    children: vec![],
+                });
+                result
+            }
         }
     }
 }

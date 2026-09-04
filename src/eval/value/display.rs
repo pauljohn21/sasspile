@@ -5,12 +5,14 @@ use std::fmt::Write;
 pub(crate) fn inspect_value(v: &Value) -> String {
     match v {
         Value::List(elements, sep, bracketed) => {
-            if elements.is_empty() {
-                if *bracketed {
-                    return "[]".to_string();
+            match elements.is_empty() {
+                true => {
+                    match *bracketed {
+                        true => return "[]".to_string(),
+                        false => return "()".to_string(),
+                    }
                 }
-                // 空列表 inspect 输出 ()——不管什么 separator
-                return "()".to_string();
+                false => {}
             }
             let sep_str = match sep {
                 Separator::Comma => ", ",
@@ -30,7 +32,8 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                             Separator::Comma => true,
                             _ => inner_sep == sep,
                         };
-                        if needs_paren {
+                        match needs_paren {
+                            true => {
                             let inner_parts: Vec<String> =
                                 inner_items.iter().map(inspect_value).collect();
                             let inner_sep_str = match inner_sep {
@@ -41,51 +44,46 @@ pub(crate) fn inspect_value(v: &Value) -> String {
                                 Separator::Undecided => " ",
                             };
                             format!("({})", inner_parts.join(inner_sep_str))
-                        } else {
-                            inspect_value(e)
+                            }
+                            false => inspect_value(e),
                         }
                     }
                     _ => inspect_value(e),
                 })
                 .collect();
-            let inner = if elements.len() == 1 {
-                match sep {
+            let inner = match elements.len() == 1 {
+                true => match sep {
                     Separator::Comma => {
-                        if *bracketed {
-                            format!("{},", parts[0])
-                        } else {
-                            format!("({},)", parts[0])
+                        match *bracketed {
+                            true => format!("{},", parts[0]),
+                            false => format!("({},)", parts[0]),
                         }
                     }
                     Separator::Slash => {
-                        if *bracketed {
-                            format!("{} /", parts[0])
-                        } else {
-                            format!("({} /)", parts[0])
+                        match *bracketed {
+                            true => format!("{} /", parts[0]),
+                            false => format!("({} /)", parts[0]),
                         }
                     }
                     Separator::SlashLiteral => {
-                        if *bracketed {
-                            format!("{}/", parts[0])
-                        } else {
-                            format!("({}/)", parts[0])
+                        match *bracketed {
+                            true => format!("{}/", parts[0]),
+                            false => format!("({}/)", parts[0]),
                         }
                     }
-                    // Space 和 Undecided 单元素不需要特殊处理
                     _ => parts.join(sep_str),
-                }
-            } else {
-                parts.join(sep_str)
+                },
+                false => parts.join(sep_str),
             };
-            if *bracketed {
-                format!("[{inner}]")
-            } else {
-                inner
+            match *bracketed {
+                true => format!("[{inner}]"),
+                false => inner,
             }
         }
         Value::Map(pairs) => {
-            if pairs.is_empty() {
-                return "()".to_string();
+            match pairs.is_empty() {
+                true => return "()".to_string(),
+                false => {}
             }
             let parts: Vec<String> = pairs
                 .iter()
@@ -112,10 +110,9 @@ pub(crate) fn inspect_value(v: &Value) -> String {
             format!("({})", parts.join(", "))
         }
         Value::String(s, quoted) => {
-            if *quoted {
-                format!("\"{s}\"")
-            } else {
-                s.clone()
+            match *quoted {
+                true => format!("\"{s}\""),
+                false => s.clone(),
             }
         }
         Value::Null => "null".to_string(),
@@ -129,8 +126,9 @@ pub(crate) fn inspect_value(v: &Value) -> String {
 /// `border-#{$side}: 1px;` → `border-left: 1px;`
 pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
     // 快速路径：不含 $ 或 #{} 的属性名直接返回
-    if !property.contains('$') && !property.contains("#{") {
-        return property.to_string();
+    match !property.contains('$') && !property.contains("#{") {
+        true => return property.to_string(),
+        false => {}
     }
     // 处理 #{} 插值
     let mut result = String::new();
@@ -149,8 +147,9 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
                         }
                         '}' => {
                             depth -= 1;
-                            if depth == 0 {
-                                break;
+                            match depth == 0 {
+                                true => break,
+                                false => {}
                             }
                             expr.push(ch);
                         }
@@ -166,11 +165,12 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
                 // 读取变量名
                 let mut var_name = String::new();
                 while let Some(&ch) = chars.peek() {
-                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-                        var_name.push(ch);
-                        chars.next();
-                    } else {
-                        break;
+                    match ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        true => {
+                            var_name.push(ch);
+                            chars.next();
+                        }
+                        false => break,
                     }
                 }
                 match env.lookup(&var_name) {
@@ -221,17 +221,22 @@ pub(crate) fn eval_interp_segments(segments: &[InterpSegment], env: &Env) -> Str
 #[cfg_attr(feature = "tracing", tracing::instrument(level = "debug", skip(env), fields(input = %s)))]
 pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
     // 快速路径：不含 #{ 也不含 $ 的纯文本直接返回
-    if !s.contains("#{") && !s.contains('$') {
-        return s.to_string();
+    match !s.contains("#{") && !s.contains('$') {
+        true => return s.to_string(),
+        false => {}
     }
     // 不含 #{ 嵌套但含 $ → 尝试整体求值（纯变量 $a、表达式 1+2 等）
-    if !s.contains("#{")
-        && let Ok(val) = super::eval_simple_expr(s, env)
+    match (!s.contains("#{"))
+        .then(|| super::eval_simple_expr(s, env))
+        .and_then(|res| res.ok())
     {
-        return match &val {
-            Value::String(inner, _) => inner.clone(),
-            _ => val.to_string(),
-        };
+        Some(val) => {
+            return match &val {
+                Value::String(inner, _) => inner.clone(),
+                _ => val.to_string(),
+            };
+        }
+        None => {}
     }
     // 回退：逐字符扫描 #{} 嵌套 + $var 变量引用
     let mut result = String::new();
@@ -250,8 +255,9 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
                         }
                         '}' => {
                             depth -= 1;
-                            if depth == 0 {
-                                break;
+                            match depth == 0 {
+                                true => break,
+                                false => {}
                             }
                             expr.push(ch);
                         }
@@ -275,11 +281,12 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
                 // 读取变量名
                 let mut var_name = String::new();
                 while let Some(&ch) = chars.peek() {
-                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-                        var_name.push(ch);
-                        chars.next();
-                    } else {
-                        break;
+                    match ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        true => {
+                            var_name.push(ch);
+                            chars.next();
+                        }
+                        false => break,
                     }
                 }
                 match env.lookup(&var_name) {

@@ -77,13 +77,15 @@ pub(crate) fn bind_exports(
         BindMode::Use => {
             // `as *` 模式：追踪每个成员名到 star_members 以检测冲突
             // 只在第一次加载该模块时记录（避免同模块多次 @use 导致误报）
-            if prefix.is_none() {
-                let stem = source_path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("unknown");
-                let is_new_module = !new_env.star_module_loaded(stem);
-                if is_new_module {
+            match prefix.is_none() {
+                true => {
+                    let stem = source_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown");
+                    let is_new_module = !new_env.star_module_loaded(stem);
+                    match is_new_module {
+                        true => {
                     let member_names: Vec<&str> =
                         merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
                             .map(|(k, _)| k.as_str())
@@ -102,28 +104,35 @@ pub(crate) fn bind_exports(
                             )
                             .collect();
                     new_env = new_env.add_star_members(stem, &member_names);
+                        }
+                        false => {}
+                    }
                 }
+                false => {}
             }
             // `as *` 模式（prefix=None）：过滤私有成员和通过 @use ... as * 传递引入的成员
             let is_star = prefix.is_none();
             let star_imported = &exports.star_imported;
             // 检测 as * 引入的变量与当前作用域已有变量冲突
-            if is_star {
-                for (k, _) in
-                    merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
-                {
-                    if k.starts_with('-')
-                        || k.starts_with('_')
-                        || star_imported.contains(k.as_str())
+            match is_star {
+                true => {
+                    for (k, _) in
+                        merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
                     {
-                        continue;
-                    }
-                    if new_env.has_var(k) && !new_env.star_imported.contains(k.as_str()) {
-                        return Err(SassError::Eval(format!(
-                            "This module and the new module both define a variable named \"${k}\"."
-                        )));
+                        match k.starts_with('-')
+                            || k.starts_with('_')
+                            || star_imported.contains(k.as_str()) {
+                            true => continue,
+                            false => match new_env.has_var(k) && !new_env.star_imported.contains(k.as_str()) {
+                                true => return Err(SassError::Eval(format!(
+                                    "This module and the new module both define a variable named \"${k}\"."
+                                ))),
+                                false => {}
+                            },
+                        }
                     }
                 }
+                false => {}
             }
             new_env = merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
                 .filter(|(k, _)| {
@@ -134,10 +143,9 @@ pub(crate) fn bind_exports(
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.bind(fmt_key(k), v.clone());
-                    if is_star {
-                        env.add_star_imported(fmt_key(k))
-                    } else {
-                        env
+                    match is_star {
+                        true => env.add_star_imported(fmt_key(k)),
+                        false => env,
                     }
                 });
             new_env = exports
@@ -150,10 +158,9 @@ pub(crate) fn bind_exports(
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.define_local_mixin(fmt_key(k), v.clone());
-                    if is_star {
-                        env.add_star_imported(fmt_key(k))
-                    } else {
-                        env
+                    match is_star {
+                        true => env.add_star_imported(fmt_key(k)),
+                        false => env,
                     }
                 });
             new_env = exports
@@ -166,10 +173,9 @@ pub(crate) fn bind_exports(
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.define_local_function(fmt_key(k), v.clone());
-                    if is_star {
-                        env.add_star_imported(fmt_key(k))
-                    } else {
-                        env
+                    match is_star {
+                        true => env.add_star_imported(fmt_key(k)),
+                        false => env,
                     }
                 });
         }
@@ -202,74 +208,84 @@ pub(crate) fn bind_exports(
                 .collect();
             for (k, v) in &merged_vars {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
-                if k.starts_with('-') || k.starts_with('_') {
-                    continue;
+                match k.starts_with('-') || k.starts_with('_') {
+                    true => continue,
+                    false => {}
                 }
                 let key = fmt_key(k);
                 let var_key = format!("${key}");
-                if !filter.show.is_empty() && !filter.show.contains(&var_key) {
-                    continue;
+                match !filter.show.is_empty() && !filter.show.contains(&var_key) {
+                    true => continue,
+                    false => {}
                 }
-                if filter.hide.contains(&var_key) {
-                    continue;
+                match filter.hide.contains(&var_key) {
+                    true => continue,
+                    false => {}
                 }
                 // 冲突检测：forwarded_vars 已存在同名时报错
                 // 但如果值相同（来自同一底层模块）则跳过不报错
                 if let Some(existing) = new_env.get_forwarded_var(&key) {
                     // 冲突检测：值相同则跳过（values_eq + Display 字符串后备）
-                    if !values_eq(existing, v) && format!("{existing}") != format!("{v}") {
-                        return Err(SassError::Eval(format!(
-                            "Two forwarded modules both define a variable named ${key}."
-                        )));
-                    }
+                match !values_eq(existing, v) && format!("{existing}") != format!("{v}") {
+                    true => return Err(SassError::Eval(format!(
+                        "Two forwarded modules both define a variable named ${key}."
+                    ))),
+                    false => {}
+                }
                 } else {
                     new_env = new_env.define_forwarded_var(key, v.clone());
                 }
             }
             for (k, v) in &merged_mixins {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
-                if k.starts_with('-') || k.starts_with('_') {
-                    continue;
+                match k.starts_with('-') || k.starts_with('_') {
+                    true => continue,
+                    false => {}
                 }
                 let key = fmt_key(k);
-                if !filter.show.is_empty() && !filter.show.contains(&key) {
-                    continue;
+                match !filter.show.is_empty() && !filter.show.contains(&key) {
+                    true => continue,
+                    false => {}
                 }
-                if filter.hide.contains(&key) {
-                    continue;
+                match filter.hide.contains(&key) {
+                    true => continue,
+                    false => {}
                 }
                 if let Some(existing) = new_env.get_forwarded_mixin(&key) {
-                    // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
                     let new_str = format!("{:?}", v.body);
-                    if existing_str != new_str {
-                        return Err(SassError::Eval(format!(
+                    match existing_str != new_str {
+                        true => return Err(SassError::Eval(format!(
                             "Two forwarded modules both define a mixin named {key}."
-                        )));
+                        ))),
+                        false => {}
                     }
                 }
                 new_env = new_env.define_forwarded_mixin(key, v.clone());
             }
             for (k, v) in &merged_functions {
                 // Sass 私有成员约定：以 - 或 _ 开头的名称不通过 @forward 转发
-                if k.starts_with('-') || k.starts_with('_') {
-                    continue;
+                match k.starts_with('-') || k.starts_with('_') {
+                    true => continue,
+                    false => {}
                 }
                 let key = fmt_key(k);
-                if !filter.show.is_empty() && !filter.show.contains(&key) {
-                    continue;
+                match !filter.show.is_empty() && !filter.show.contains(&key) {
+                    true => continue,
+                    false => {}
                 }
-                if filter.hide.contains(&key) {
-                    continue;
+                match filter.hide.contains(&key) {
+                    true => continue,
+                    false => {}
                 }
                 if let Some(existing) = new_env.get_forwarded_function(&key) {
-                    // 用 body Debug 比较相同则跳过
                     let existing_str = format!("{:?}", existing.body);
                     let new_str = format!("{:?}", v.body);
-                    if existing_str != new_str {
-                        return Err(SassError::Eval(format!(
+                    match existing_str != new_str {
+                        true => return Err(SassError::Eval(format!(
                             "Two forwarded modules both define a function named {key}."
-                        )));
+                        ))),
+                        false => {}
                     }
                 }
                 new_env = new_env.define_forwarded_function(key, v.clone());

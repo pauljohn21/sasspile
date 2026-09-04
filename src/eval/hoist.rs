@@ -31,8 +31,9 @@ pub(crate) fn hoist_css_imports(nodes: Vec<CssNode>) -> Vec<CssNode> {
     let (imports, rest): (Vec<CssNode>, Vec<CssNode>) = processed.into_iter().partition(
         |node| matches!(node, CssNode::AtRule { name, has_body: false, .. } if name == "import"),
     );
-    if !imports.is_empty() {
-        crate::__tracing::debug!(n_imports = imports.len(), "hoisted css imports");
+    match !imports.is_empty() {
+        true => crate::__tracing::debug!(n_imports = imports.len(), "hoisted css imports"),
+        false => {}
     }
     let mut result = imports;
     result.extend(rest);

@@ -16,8 +16,9 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         for (cond, body) in branches {
             let c = Self::eval_value(cond, &env)?;
-            if Self::is_truthy(&c) {
-                return Self::eval_nodes(body, env);
+            match Self::is_truthy(&c) {
+                true => return Self::eval_nodes(body, env),
+                false => {}
             }
         }
         if let Some(body) = else_body {
@@ -45,8 +46,9 @@ impl Evaluator {
         };
         let (start, end) = match (&from_val, &to_val) {
             (Value::Number(s, su), Value::Number(e, eu)) => {
-                if s.fract() != 0.0 {
-                    return Err(SassError::Eval(format!("{s} is not an int.")));
+                match s.fract() != 0.0 {
+                    true => return Err(SassError::Eval(format!("{s} is not an int."))),
+                    false => {}
                 }
                 let s_eq_e = su == eu;
                 let either_none = su.is_none() || eu.is_none();
@@ -65,8 +67,9 @@ impl Evaluator {
                         )));
                     }
                 };
-                if end_val.fract() != 0.0 {
-                    return Err(SassError::Eval(format!("{end_val} is not an int.")));
+                match end_val.fract() != 0.0 {
+                    true => return Err(SassError::Eval(format!("{end_val} is not an int."))),
+                    false => {}
                 }
                 (*s as i64, end_val as i64)
             }
@@ -80,17 +83,17 @@ impl Evaluator {
         };
         let step: i64 = if start <= end { 1 } else { -1 };
         // inclusive: 正向 stop=end+1（不含 end+1，含 end），反向 stop=end（含 end）
-        let stop = if inclusive {
-            if step > 0 { end + step } else { end }
-        } else {
-            end
+        let stop = match inclusive {
+            true => match step > 0 { true => end + step, false => end },
+            false => end,
         };
         // 构建迭代范围：正向 (start..stop)，反向 (stop+1..=start).rev()
         let count = 0i64;
         let (css, env, _) = if step > 0 {
             (start..stop).try_fold((Vec::new(), env, count), |(mut css, env, mut count), i| {
-                if count > MAX_DEPTH as i64 {
-                    return Err(SassError::Eval("@for loop iteration limit exceeded".into()));
+                match count > MAX_DEPTH as i64 {
+                    true => return Err(SassError::Eval("@for loop iteration limit exceeded".into())),
+                    false => {}
                 }
                 count += 1;
                 let env = env.bind(var.to_string(), Value::Number(i as f64, loop_unit.clone()));
@@ -102,9 +105,10 @@ impl Evaluator {
             (stop..=start).rev().try_fold(
                 (Vec::new(), env, count),
                 |(mut css, env, mut count), i| {
-                    if count > MAX_DEPTH as i64 {
-                        return Err(SassError::Eval("@for loop iteration limit exceeded".into()));
-                    }
+                match count > MAX_DEPTH as i64 {
+                    true => return Err(SassError::Eval("@for loop iteration limit exceeded".into())),
+                    false => {}
+                }
                     count += 1;
                     let env = env.bind(var.to_string(), Value::Number(i as f64, loop_unit.clone()));
                     let (out, new_env) = Self::eval_nodes(body, env)?;
@@ -150,8 +154,9 @@ impl Evaluator {
         let (css, env) = items.iter().try_fold(
             (Vec::new(), env),
             |(mut css, env), item_group| -> Result<(Vec<CssNode>, Env)> {
-                if css.len() > 10000 {
-                    return Err(SassError::Eval("@each output node limit exceeded".into()));
+                match css.len() > 10000 {
+                    true => return Err(SassError::Eval("@each output node limit exceeded".into())),
+                    false => {}
                 }
                 let env = if vars.len() == 1 {
                     let val = item_group.first().cloned().unwrap_or(Value::Null);
@@ -178,23 +183,28 @@ impl Evaluator {
         let mut iteration = 0;
         loop {
             iteration += 1;
-            if iteration > MAX_DEPTH {
-                crate::__tracing::error!(iteration, cond_ast = %cond, "@while 超过 MAX_DEPTH");
-                return Err(SassError::Eval(
-                    "@while 循环次数超过限制（可能是无限循环）".into(),
-                ));
+            match iteration > MAX_DEPTH {
+                true => {
+                    crate::__tracing::error!(iteration, cond_ast = %cond, "@while 超过 MAX_DEPTH");
+                    return Err(SassError::Eval(
+                        "@while 循环次数超过限制（可能是无限循环）".into(),
+                    ));
+                }
+                false => {}
             }
             let c = Self::eval_value(cond, &env)?;
             let truthy = Self::is_truthy(&c);
             crate::__tracing::trace!(iteration, cond_value = %c, is_truthy = truthy, "@while 条件求值");
-            if !truthy {
-                break;
+            match !truthy {
+                true => break,
+                false => {}
             }
             let (out, new_env) = Self::eval_nodes(body, env)?;
             css.extend(out);
             env = new_env;
-            if css.len() > 10000 {
-                return Err(SassError::Eval("@while output node limit exceeded".into()));
+            match css.len() > 10000 {
+                true => return Err(SassError::Eval("@while output node limit exceeded".into())),
+                false => {}
             }
         }
         Ok((css, env))

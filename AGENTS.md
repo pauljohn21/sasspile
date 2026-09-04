@@ -510,12 +510,12 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **functional-cleanup**（2026-09-04）：函数式风格全量清理 — else-if 链→match（81处）、for+push→迭代器链（76处）、if-let 链→apply_kw 链式、&mut 参数→move 语义 — 105/105 核心测试通过，sass-spec 3366/5624 维持基线
 - **selector-ast**（2026-09-04）：选择器 AST + calc 简化函数式重构 — 226/226 全通过，sass-spec 3327→3366 (+39)
 - **scope-chain-arch**（2026-09-03）：Scope Chain 作用域管理架构 — 202/202 全通过，sass-spec 3324→3327
 - **otel-integration**（2026-09-02）：OpenTelemetry 0.32 集成
 - **hrx-auditor-removal**（2026-09-02）：移除 hrx-auditor 外部依赖，内联 hrx_support.rs
 - **calc-simplification**（2026-09-01）：calc 表达式简化 + CSS round/mod/rem — 2902→3068 (+166)
-- **chain-reaction**（2026-08-31）：全面链式反应重构 — 202/202 全通过，2828→2902 (+74)
 
 更早的归档记录详见 `openspec/changes/archive/` 目录。
 

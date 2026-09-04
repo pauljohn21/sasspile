@@ -76,8 +76,9 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
         .0
         .iter()
         .find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
-    if a_pe.is_some() && b_pe.is_some() && a_pe != b_pe {
-        return None;
+    match (a_pe, b_pe) {
+        (Some(pa), Some(pb)) if pa != pb => return None,
+        _ => {}
     }
 
     // 合并：优先保留 Type（覆盖 Universal），其余取并集
@@ -105,10 +106,13 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
     let rest: Vec<SimpleSelector> = rest
         .into_iter()
         .fold(Vec::new(), |mut acc, s| {
-            if !acc.contains(&s) {
-                acc.push(s);
+            match acc.contains(&s) {
+                false => {
+                    acc.push(s);
+                    acc
+                }
+                true => acc,
             }
-            acc
         });
 
     // 组装：Type → Universal → Id → rest
@@ -198,8 +202,9 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
             original.chain(extended)
         })
         .fold(Vec::new(), |mut acc, c| {
-            if !acc.contains(&c) {
-                acc.push(c);
+            match !acc.contains(&c) {
+                true => acc.push(c),
+                false => {}
             }
             acc
         });
@@ -216,8 +221,9 @@ fn extend_complex(
     let sel_compounds: Vec<&CompoundSelector> = selector.compounds.iter().map(|(_, c)| c).collect();
     let ext_compounds: Vec<&CompoundSelector> = extendee.compounds.iter().map(|(_, c)| c).collect();
 
-    if sel_compounds.len() < ext_compounds.len() {
-        return None;
+    match sel_compounds.len() < ext_compounds.len() {
+        true => return None,
+        false => {}
     }
 
     let start = sel_compounds.len() - ext_compounds.len();
@@ -228,8 +234,9 @@ fn extend_complex(
         .zip(ext_compounds.iter())
         .all(|(s, e)| is_super_compound(e, s) && is_super_compound(s, e));
 
-    if !matches {
-        return None;
+    match matches {
+        false => return None,
+        true => {}
     }
 
     let prefix = &selector.compounds[..start];
@@ -238,27 +245,29 @@ fn extend_complex(
         .0
         .iter()
         .map(|ext_complex| {
-            let compounds: Vec<(Option<Combinator>, CompoundSelector)> = if !prefix.is_empty()
-                && !ext_complex.compounds.is_empty()
-            {
-                // 有前缀：用后代组合器连接 extender 第一个元素
-                prefix
+            let compounds: Vec<(Option<Combinator>, CompoundSelector)> = match (
+                !prefix.is_empty(),
+                !ext_complex.compounds.is_empty(),
+            ) {
+                (true, true) => prefix
                     .iter()
                     .cloned()
-                    .chain(ext_complex.compounds.iter().enumerate().map(|(i, (c, comp))| {
-                        if i == 0 {
-                            (c.or(Some(Combinator::Descendant)), comp.clone())
-                        } else {
-                            (*c, comp.clone())
-                        }
-                    }))
-                    .collect()
-            } else {
-                prefix
+                    .chain(
+                        ext_complex
+                            .compounds
+                            .iter()
+                            .enumerate()
+                            .map(|(i, (c, comp))| match i {
+                                0 => (c.or(Some(Combinator::Descendant)), comp.clone()),
+                                _ => (*c, comp.clone()),
+                            }),
+                    )
+                    .collect(),
+                _ => prefix
                     .iter()
                     .cloned()
                     .chain(ext_complex.compounds.iter().cloned())
-                    .collect()
+                    .collect(),
             };
             ComplexSelector { compounds }
         })
@@ -286,10 +295,13 @@ pub fn replace_selector(
             }
         })
         .fold(Vec::new(), |mut acc, c| {
-            if !acc.contains(&c) {
-                acc.push(c);
+            match acc.contains(&c) {
+                false => {
+                    acc.push(c);
+                    acc
+                }
+                true => acc,
             }
-            acc
         });
 
     Selector(results)
@@ -304,8 +316,9 @@ fn replace_complex(
     let sel_compounds: Vec<&CompoundSelector> = selector.compounds.iter().map(|(_, c)| c).collect();
     let orig_compounds: Vec<&CompoundSelector> = original.compounds.iter().map(|(_, c)| c).collect();
 
-    if sel_compounds.len() < orig_compounds.len() {
-        return None;
+    match sel_compounds.len() < orig_compounds.len() {
+        true => return None,
+        false => {}
     }
 
     let start = sel_compounds.len() - orig_compounds.len();
@@ -316,8 +329,9 @@ fn replace_complex(
         .zip(orig_compounds.iter())
         .all(|(s, o)| is_super_compound(o, s) && is_super_compound(s, o));
 
-    if !matches {
-        return None;
+    match matches {
+        false => return None,
+        true => {}
     }
 
     let prefix = &selector.compounds[..start];

@@ -54,8 +54,9 @@ impl Parsed {
                 .with_plain_css(is_plain_css);
         }
 
-        if !self.load_paths.is_empty() {
-            env = env.with_load_paths(self.load_paths.clone());
+        match !self.load_paths.is_empty() {
+            true => { env = env.with_load_paths(self.load_paths.clone()); }
+            false => {}
         }
 
         let nodes = Evaluator::evaluate_with_env(&self.ast, env)?;

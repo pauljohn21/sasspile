@@ -52,8 +52,9 @@ impl Parser<'_> {
         // @else if / @else
         loop {
             self.skip_ws();
-            if !matches!(self.peek(), Some(Token::AtRule(n)) if n == "else") {
-                break;
+            match self.peek() {
+                Some(Token::AtRule(n)) if n == "else" => {}
+                _ => break,
             }
             self.advance(); // 消费 @else
             self.skip_ws();

@@ -46,16 +46,12 @@ impl Evaluator {
             .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."));
         // 先尝试相对于当前文件目录解析
-        if let Some(path) = Self::try_resolve_dir(&base_dir, url, is_import) {
-            return Some(path);
+        match Self::try_resolve_dir(&base_dir, url, is_import) {
+            Some(path) => return Some(path),
+            None => {}
         }
         // 回退到 load paths
-        for lp in load_paths {
-            if let Some(path) = Self::try_resolve_dir(lp, url, is_import) {
-                return Some(path);
-            }
-        }
-        None
+        load_paths.iter().find_map(|lp| Self::try_resolve_dir(lp, url, is_import))
     }
 
     /// 在指定目录下尝试解析 url 对应的文件。
@@ -69,15 +65,14 @@ impl Evaluator {
         let parent_normalized = normalize_path(&dir.join(parent));
         let url_normalized = normalize_path(&dir.join(url));
         // @import 时优先 import-only 文件；@use/@forward 时跳过 import-only 文件
-        let import_only_pairs = if is_import {
-            vec![
+        let import_only_pairs = match is_import {
+            true => vec![
                 parent_normalized.join(format!("_{filename}.import.scss")),
                 parent_normalized.join(format!("{filename}.import.scss")),
                 parent_normalized.join(format!("_{filename}.import.sass")),
                 parent_normalized.join(format!("{filename}.import.sass")),
-            ]
-        } else {
-            vec![]
+            ],
+            false => vec![],
         };
         let mut candidates = import_only_pairs;
         candidates.extend([
@@ -113,43 +108,46 @@ impl Evaluator {
             .as_ref()
             .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."));
-        for dir in std::iter::once(&base_dir).chain(load_paths.iter()) {
-            let url_path = std::path::Path::new(url);
-            let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
-            let filename = url_path
-                .file_stem()
-                .map_or_else(|| url.to_string(), |f| f.to_string_lossy().to_string());
+        std::iter::once(&base_dir)
+            .chain(load_paths.iter())
+            .try_for_each(|dir| {
+                let url_path = std::path::Path::new(url);
+                let parent = url_path.parent().unwrap_or(std::path::Path::new(""));
+                let filename = url_path
+                    .file_stem()
+                    .map_or_else(|| url.to_string(), |f| f.to_string_lossy().to_string());
 
-            let has_explicit_ext = url_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| e == "scss" || e == "sass" || e == "css");
+                let has_explicit_ext = url_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e == "scss" || e == "sass" || e == "css");
 
-            let conflicts = if has_explicit_ext {
-                Self::check_explicit_ext_conflicts(dir, parent, &filename)
-            } else {
-                Self::check_no_ext_conflicts(dir, parent, &filename, url)
-            };
+                let conflicts = match has_explicit_ext {
+                    true => Self::check_explicit_ext_conflicts(dir, parent, &filename),
+                    false => Self::check_no_ext_conflicts(dir, parent, &filename, url),
+                };
 
-            if !conflicts.is_empty() {
-                let mut all_files: Vec<String> = conflicts
-                    .iter()
-                    .flat_map(|c| c.iter())
-                    .map(|f| {
-                        let s = f.display().to_string();
-                        s.strip_prefix("./").unwrap_or(&s).to_string()
-                    })
-                    .collect::<std::collections::HashSet<_>>()
-                    .into_iter()
-                    .collect();
-                all_files.sort();
-                return Err(SassError::Eval(format!(
-                    "It's not clear which file to import. Found:\n  {}",
-                    all_files.join("\n  ")
-                )));
-            }
-        }
-        Ok(())
+                match conflicts.is_empty() {
+                    true => Ok(()),
+                    false => {
+                        let mut all_files: Vec<String> = conflicts
+                            .iter()
+                            .flat_map(|c| c.iter())
+                            .map(|f| {
+                                let s = f.display().to_string();
+                                s.strip_prefix("./").unwrap_or(&s).to_string()
+                            })
+                            .collect::<std::collections::HashSet<_>>()
+                            .into_iter()
+                            .collect();
+                        all_files.sort();
+                        Err(SassError::Eval(format!(
+                            "It's not clear which file to import. Found:\n  {}",
+                            all_files.join("\n  ")
+                        )))
+                    }
+                }
+            })
     }
 
     /// url 带了明确扩展名：只检测 partial vs non-partial（同扩展名）
@@ -158,20 +156,16 @@ impl Evaluator {
         parent: &Path,
         filename: &str,
     ) -> Vec<Vec<PathBuf>> {
-        let mut conflicts = Vec::new();
-        for ext in &["scss", "sass", "css"] {
+        ["scss", "sass", "css"].iter().flat_map(|ext| {
             let partial = dir.join(parent).join(format!("_{filename}.{ext}"));
             let non_partial = dir.join(parent).join(format!("{filename}.{ext}"));
-            if partial.exists() && non_partial.exists() {
-                conflicts.push(vec![partial, non_partial]);
-            }
             let partial_io = dir.join(parent).join(format!("_{filename}.import.{ext}"));
             let non_partial_io = dir.join(parent).join(format!("{filename}.import.{ext}"));
-            if partial_io.exists() && non_partial_io.exists() {
-                conflicts.push(vec![partial_io, non_partial_io]);
-            }
-        }
-        conflicts
+            [
+                (partial.exists() && non_partial.exists()).then(|| vec![partial, non_partial]),
+                (partial_io.exists() && non_partial_io.exists()).then(|| vec![partial_io, non_partial_io]),
+            ]
+        }).flatten().collect()
     }
 
     /// url 未带扩展名：检测所有冲突类型
@@ -181,68 +175,75 @@ impl Evaluator {
         filename: &str,
         url: &str,
     ) -> Vec<Vec<PathBuf>> {
-        let mut conflicts = Vec::new();
         // partial vs non-partial（同扩展名）
-        for ext in &["scss", "sass", "css"] {
-            let partial = dir.join(parent).join(format!("_{filename}.{ext}"));
-            let non_partial = dir.join(parent).join(format!("{filename}.{ext}"));
-            if partial.exists() && non_partial.exists() {
-                conflicts.push(vec![partial, non_partial]);
-            }
-        }
+        let partial_conflicts: Vec<Vec<PathBuf>> = ["scss", "sass", "css"]
+            .iter()
+            .filter_map(|ext| {
+                let partial = dir.join(parent).join(format!("_{filename}.{ext}"));
+                let non_partial = dir.join(parent).join(format!("{filename}.{ext}"));
+                (partial.exists() && non_partial.exists()).then(|| vec![partial, non_partial])
+            })
+            .collect();
         // 同 partial 状态下 scss vs sass 冲突
-        for is_partial in &[true, false] {
-            let prefix = if *is_partial { "_" } else { "" };
-            let scss = dir.join(parent).join(format!("{prefix}{filename}.scss"));
-            let sass = dir.join(parent).join(format!("{prefix}{filename}.sass"));
-            if scss.exists() && sass.exists() {
-                conflicts.push(vec![scss, sass]);
-            }
-        }
+        let ext_conflicts: Vec<Vec<PathBuf>> = [true, false]
+            .iter()
+            .filter_map(|is_partial| {
+                let prefix = match *is_partial { true => "_", false => "" };
+                let scss = dir.join(parent).join(format!("{prefix}{filename}.scss"));
+                let sass = dir.join(parent).join(format!("{prefix}{filename}.sass"));
+                (scss.exists() && sass.exists()).then(|| vec![scss, sass])
+            })
+            .collect();
         // import-only: scss vs sass 冲突
-        for is_partial in &[true, false] {
-            let prefix = if *is_partial { "_" } else { "" };
-            let scss_io = dir
-                .join(parent)
-                .join(format!("{prefix}{filename}.import.scss"));
-            let sass_io = dir
-                .join(parent)
-                .join(format!("{prefix}{filename}.import.sass"));
-            if scss_io.exists() && sass_io.exists() {
-                conflicts.push(vec![scss_io, sass_io]);
-            }
-        }
+        let import_conflicts: Vec<Vec<PathBuf>> = [true, false]
+            .iter()
+            .filter_map(|is_partial| {
+                let prefix = match *is_partial { true => "_", false => "" };
+                let scss_io = dir
+                    .join(parent)
+                    .join(format!("{prefix}{filename}.import.scss"));
+                let sass_io = dir
+                    .join(parent)
+                    .join(format!("{prefix}{filename}.import.sass"));
+                (scss_io.exists() && sass_io.exists()).then(|| vec![scss_io, sass_io])
+            })
+            .collect();
         // index: partial vs non-partial 冲突
         let index_dir = dir.join(url);
-        for ext in &["scss", "sass"] {
-            let partial_idx = index_dir.join(format!("_index.{ext}"));
-            let non_partial_idx = index_dir.join(format!("index.{ext}"));
-            if partial_idx.exists() && non_partial_idx.exists() {
-                conflicts.push(vec![partial_idx, non_partial_idx]);
-            }
-        }
-        conflicts
+        let index_conflicts: Vec<Vec<PathBuf>> = ["scss", "sass"]
+            .iter()
+            .filter_map(|ext| {
+                let partial_idx = index_dir.join(format!("_index.{ext}"));
+                let non_partial_idx = index_dir.join(format!("index.{ext}"));
+                (partial_idx.exists() && non_partial_idx.exists())
+                    .then(|| vec![partial_idx, non_partial_idx])
+            })
+            .collect();
+        partial_conflicts
+            .into_iter()
+            .chain(ext_conflicts)
+            .chain(import_conflicts)
+            .chain(index_conflicts)
+            .collect()
     }
 }
 
 /// 规范化路径——处理 `..` 和 `.` 组件，不要求路径存在。
 fn normalize_path(path: &Path) -> PathBuf {
-    let mut components = Vec::new();
-    for c in path.components() {
+    path.components().fold(Vec::new(), |mut acc, c| {
         match c {
             std::path::Component::ParentDir => {
-                if components.last().is_some_and(|last| {
+                match acc.last().is_some_and(|last| {
                     !matches!(last, std::path::Component::ParentDir)
                         && !matches!(last, std::path::Component::RootDir)
                 }) {
-                    components.pop();
-                } else {
-                    components.push(c);
+                    true => { acc.pop(); }
+                    false => { acc.push(c); }
                 }
             }
             std::path::Component::CurDir => {}
-            other => components.push(other),
+            other => acc.push(other),
         }
-    }
-    components.iter().collect()
+        acc
+    }).iter().collect()
 }

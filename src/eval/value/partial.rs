@@ -36,10 +36,9 @@ impl Evaluator {
                     PartialCond::False => Ok(PartialCond::False),
                     PartialCond::Css(s) => {
                         // List 不加括号；其他加括号
-                        if matches!(inner.as_ref(), Value::List(_, Separator::Space, _)) {
-                            Ok(PartialCond::Css(s))
-                        } else {
-                            Ok(PartialCond::Css(format!("({s})")))
+                        match matches!(inner.as_ref(), Value::List(_, Separator::Space, _)) {
+                            true => Ok(PartialCond::Css(s)),
+                            false => Ok(PartialCond::Css(format!("({s})"))),
                         }
                     }
                 }
@@ -62,11 +61,12 @@ impl Evaluator {
                     });
                 }
                 // not 后面不能为空
-                if matches!(&**inner, Value::Null) {
-                    return Err(SassError::Parse {
+                match matches!(&**inner, Value::Null) {
+                    true => return Err(SassError::Parse {
                         expected: "identifier".into(),
                         found: ":".into(),
-                    });
+                    }),
+                    false => {}
                 }
                 match Self::partial_eval_condition(inner, env)? {
                     PartialCond::True => Ok(PartialCond::False),
@@ -111,11 +111,12 @@ impl Evaluator {
                         });
                     }
                     // and 后面不能为空
-                    if matches!(b.right, Value::Null) {
-                        return Err(SassError::Parse {
+                    match matches!(b.right, Value::Null) {
+                        true => return Err(SassError::Parse {
                             expected: "identifier".into(),
                             found: ":".into(),
-                        });
+                        }),
+                        false => {}
                     }
                     match Self::partial_eval_condition(&b.left, env)? {
                         PartialCond::False => Ok(PartialCond::False),
@@ -167,11 +168,12 @@ impl Evaluator {
                         });
                     }
                     // or 后面不能为空
-                    if matches!(b.right, Value::Null) {
-                        return Err(SassError::Parse {
+                    match matches!(b.right, Value::Null) {
+                        true => return Err(SassError::Parse {
                             expected: "identifier".into(),
                             found: ":".into(),
-                        });
+                        }),
+                        false => {}
                     }
                     match Self::partial_eval_condition(&b.left, env)? {
                         PartialCond::True => Ok(PartialCond::True),
@@ -189,10 +191,9 @@ impl Evaluator {
                 }
                 _ => {
                     let val = Self::eval_value(condition, env)?;
-                    if Self::is_truthy(&val) {
-                        Ok(PartialCond::True)
-                    } else {
-                        Ok(PartialCond::False)
+                    match Self::is_truthy(&val) {
+                        true => Ok(PartialCond::True),
+                        false => Ok(PartialCond::False),
                     }
                 }
             },
@@ -225,35 +226,35 @@ impl Evaluator {
                         }
                     }
                 }
-                if has_css {
-                    Ok(PartialCond::Css(css_parts.join(" ")))
-                } else {
-                    Ok(PartialCond::True)
+                match has_css {
+                    true => Ok(PartialCond::Css(css_parts.join(" "))),
+                    false => Ok(PartialCond::True),
                 }
             }
             // sass() 函数——求值参数
             Value::Call(name, _args) if name == "sass" => {
-                if env.is_plain_css() {
-                    return Err(SassError::Eval(
+                match env.is_plain_css() {
+                    true => return Err(SassError::Eval(
                         "sass() conditions aren't allowed in plain CSS".into(),
-                    ));
+                    )),
+                    false => {}
                 }
                 let val = Self::eval_value(condition, env)?;
-                if Self::is_truthy(&val) {
-                    Ok(PartialCond::True)
-                } else {
-                    Ok(PartialCond::False)
+                match Self::is_truthy(&val) {
+                    true => Ok(PartialCond::True),
+                    false => Ok(PartialCond::False),
                 }
             }
             // 插值——plain CSS 中不允许
             Value::Interp(segments) => {
-                if env.is_plain_css() {
-                    return Err(SassError::Eval(
+                match env.is_plain_css() {
+                    true => return Err(SassError::Eval(
                         "Interpolation isn't allowed in plain CSS.".into(),
-                    ));
+                    )),
+                    false => {}
                 }
                 let val_str = eval_interp_segments(segments, env);
-                if val_str == "and"
+                match val_str == "and"
                     || val_str == "or"
                     || val_str == "not"
                     || val_str.starts_with("css(")
@@ -263,13 +264,13 @@ impl Evaluator {
                     || val_str.starts_with("env(")
                     || val_str.starts_with("clamp(")
                 {
-                    Ok(PartialCond::Css(val_str))
-                } else {
-                    let val = Value::String(val_str, false);
-                    if Self::is_truthy(&val) {
-                        Ok(PartialCond::True)
-                    } else {
-                        Ok(PartialCond::False)
+                    true => Ok(PartialCond::Css(val_str)),
+                    false => {
+                        let val = Value::String(val_str, false);
+                        match Self::is_truthy(&val) {
+                            true => Ok(PartialCond::True),
+                            false => Ok(PartialCond::False),
+                        }
                     }
                 }
             }
@@ -297,10 +298,11 @@ impl Evaluator {
             Value::List(items, Separator::Space, _) => {
                 let has_sass = items.iter().any(Self::contains_sass_call);
                 let has_css = items.iter().any(Self::contains_css_value);
-                if has_sass && has_css {
-                    return Err(SassError::Eval(
+                match has_sass && has_css {
+                    true => return Err(SassError::Eval(
                         "if() conditions with arbitrary substitutions may not contain sass() expressions.".into(),
-                    ));
+                    )),
+                    false => {}
                 }
                 // 递归检查每个元素
                 for item in items {

@@ -22,8 +22,9 @@ use super::color_conv_ops::{is_same_space, space_to_srgb_f64};
 pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     let pos_count = args.len();
     let kw_count = kw_args.len();
-    if pos_count + kw_count > 3 {
-        return Err(err_wrong_arg_count_plural(3, pos_count + kw_count));
+    match pos_count + kw_count > 3 {
+        true => return Err(err_wrong_arg_count_plural(3, pos_count + kw_count)),
+        false => {}
     }
 
     let color_arg = args
@@ -45,8 +46,9 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     // 解析 $space
     let target_space: Option<String> = match space_arg {
         Some(Value::String(s, quoted)) => {
-            if *quoted {
-                return Err(err_expected_unquoted_str_display("space", s));
+            match *quoted {
+                true => return Err(err_expected_unquoted_str_display("space", s)),
+                false => {}
             }
             Some(s.clone())
         }
@@ -58,8 +60,9 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     // 解析 $method
     let method: String = match method_arg {
         Some(Value::String(s, quoted)) => {
-            if *quoted {
-                return Err(err_expected_unquoted_str_display("method", s));
+            match *quoted {
+                true => return Err(err_expected_unquoted_str_display("method", s)),
+                false => {}
             }
             s.clone()
         }
@@ -69,12 +72,13 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     };
 
     // 验证 method
-    if method != "clip" && method != "local-minde" {
-        return Err(err_expected_exactly(
+    match method != "clip" && method != "local-minde" {
+        true => return Err(err_expected_exactly(
             "method",
             &method,
             &["clip", "local-minde"],
-        ));
+        )),
+        false => {}
     }
 
     // 如果指定了 $space，验证是否已知
@@ -91,11 +95,14 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
     });
 
     // 如果颜色已在目标空间中且在色域内，直接返回
-    if target_space.is_none() || is_same_space(c.space, &effective_space) {
-        // 检查是否在色域内
-        if is_in_gamut(&c, &effective_space) {
-            return Ok(Some(Value::Color(c.clone())));
+    match target_space.is_none() || is_same_space(c.space, &effective_space) {
+        true => {
+            match is_in_gamut(&c, &effective_space) {
+                true => return Ok(Some(Value::Color(c.clone()))),
+                false => {}
+            }
         }
+        false => {}
     }
 
     // 如果指定了空间且与颜色空间不同，需要先转换
@@ -150,21 +157,19 @@ fn is_in_gamut(c: &Color, space: &str) -> bool {
             let (r, g, b) = get_rgb_channels(c, space);
             r >= 0.0 && g >= 0.0 && b >= 0.0
         }
-        "hsl" => {
-            if c.space == ColorSpace::Hsl {
+        "hsl" => match c.space == ColorSpace::Hsl {
+            true => {
                 let (_, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
                 (0.0..=1.0).contains(&s) && (0.0..=1.0).contains(&l)
-            } else {
-                true // legacy 颜色始终在色域内
             }
+            false => true,
         }
-        "hwb" => {
-            if c.space == ColorSpace::Hwb {
+        "hwb" => match c.space == ColorSpace::Hwb {
+            true => {
                 let (_, w, b) = (c.channels[0], c.channels[1], c.channels[2]);
                 (0.0..=1.0).contains(&w) && (0.0..=1.0).contains(&b) && (w + b) <= 1.0
-            } else {
-                true
             }
+            false => true,
         }
         "lab" | "oklab" | "lch" | "oklch" | "xyz" | "xyz-d65" | "xyz-d50" => {
             // 这些空间没有明确色域限制
@@ -187,14 +192,13 @@ fn get_rgb_channels(c: &Color, space: &str) -> (f64, f64, f64) {
         }
         _ => {
             // Legacy RGB → 0-1
-            if space == "rgb" || space == "srgb" {
-                (
+            match space == "rgb" || space == "srgb" {
+                true => (
                     c.legacy_rgb[0] / 255.0,
                     c.legacy_rgb[1] / 255.0,
                     c.legacy_rgb[2] / 255.0,
-                )
-            } else {
-                space_to_srgb_f64(c.space, c.channels, c.legacy_rgb)
+                ),
+                false => space_to_srgb_f64(c.space, c.channels, c.legacy_rgb),
             }
         }
     }
@@ -226,10 +230,9 @@ fn clip_to_gamut(c: &Color, space: &str) -> Value {
                 let w = w.clamp(0.0, 1.0);
                 let b = b.clamp(0.0, 1.0);
                 let sum = w + b;
-                if sum > 1.0 {
-                    (h, w / sum, b / sum)
-                } else {
-                    (h, w, b)
+                match sum > 1.0 {
+                    true => (h, w / sum, b / sum),
+                    false => (h, w, b),
                 }
             } else {
                 (0.0, 0.0, 0.0)
@@ -244,8 +247,9 @@ fn clip_to_gamut(c: &Color, space: &str) -> Value {
 /// 简化实现：通过减小 chroma 直到颜色在色域内。
 fn local_minde_mapping(c: &Color, space: &str) -> Value {
     // 先检查是否在色域内
-    if is_in_gamut(c, space) {
-        return Value::Color(c.clone());
+    match is_in_gamut(c, space) {
+        true => return Value::Color(c.clone()),
+        false => {}
     }
 
     match space {
@@ -277,16 +281,16 @@ fn local_minde_rgb(c: &Color, space: &str) -> Value {
     for _ in 0..50 {
         let mid = f64::midpoint(lo, hi);
         let (r_test, g_test, b_test) = color_conv::oklch_to_srgb(l_ok, mid, h_ok);
-        if (0.0..=1.0).contains(&r_test)
+        match (0.0..=1.0).contains(&r_test)
             && (0.0..=1.0).contains(&g_test)
             && (0.0..=1.0).contains(&b_test)
         {
-            lo = mid;
-        } else {
-            hi = mid;
+            true => { lo = mid; }
+            false => { hi = mid; }
         }
-        if (hi - lo).abs() < epsilon {
-            break;
+        match (hi - lo).abs() < epsilon {
+            true => break,
+            false => {}
         }
     }
 

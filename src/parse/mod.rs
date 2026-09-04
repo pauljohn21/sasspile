@@ -70,8 +70,9 @@ impl<'tok> Parser<'tok> {
     }
     fn advance(&mut self) -> Option<&Token> {
         let t = self.tokens.get(self.pos);
-        if !matches!(t, Some(Token::Eof) | None) {
-            self.pos += 1;
+        match t {
+            Some(Token::Eof) | None => {}
+            _ => self.pos += 1,
         }
         t
     }

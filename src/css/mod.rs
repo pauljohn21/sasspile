@@ -25,13 +25,12 @@ impl Serializer {
             OutputStyle::Compressed => Self::serialize_compressed(&merged),
         };
         // 当输出包含非 ASCII 字符时，SCSS 规范要求 expanded 模式下添加 @charset 前缀
-        if css.is_ascii() {
-            css
-        } else {
-            match style {
+        match css.is_ascii() {
+            true => css,
+            false => match style {
                 OutputStyle::Expanded => format!("@charset \"UTF-8\";\n{css}"),
                 OutputStyle::Compressed => format!("@charset\"UTF-8\";{css}"),
-            }
+            },
         }
     }
 
@@ -48,9 +47,8 @@ impl Serializer {
                     let should_merge = result.last().is_some_and(|(last, _)| {
                         matches!(last, CssNode::AtRule { name: last_name, params: last_params, has_body: true, .. } if last_name == name && last_params == params)
                     });
-                    if should_merge {
-                        // pop 出最后一个元素获取所有权，消除 clone
-                        match result.pop() {
+                    match should_merge {
+                        true => match result.pop() {
                             Some((CssNode::AtRule { children: last_children, name: last_name, params: last_params, .. }, last_gid)) => {
                                 let mut merged = last_children;
                                 merged.extend(children.clone());
@@ -62,9 +60,8 @@ impl Serializer {
                                 }, last_gid));
                             }
                             _ => result.push((node, gid)),
-                        }
-                    } else {
-                        result.push((node, gid));
+                        },
+                        false => result.push((node, gid)),
                     }
                 }
                 _ => result.push((node, gid)),
@@ -97,39 +94,42 @@ impl Serializer {
                     let gid = state.next_group;
                     state.next_group += 1;
                     let mut out = Vec::new();
-                    if !declarations.is_empty() {
-                        out.push((
+                    match !declarations.is_empty() {
+                        true => out.push((
                             CssNode::Rule {
                                 selector: selector.clone(),
                                 declarations: declarations.clone(),
                                 children: vec![],
                             },
                             gid,
-                        ));
+                        )),
+                        false => {}
                     }
                     let has_non_rule_children =
                         children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
                     let flat = Serializer::flatten_children(selector, children, gid);
-                    if has_non_rule_children {
-                        let (rule_kids, other_kids): (
-                            Vec<(CssNode, usize)>,
-                            Vec<(CssNode, usize)>,
-                        ) = flat
-                            .into_iter()
-                            .partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
-                        out.extend(rule_kids);
-                        if !other_kids.is_empty() {
-                            out.push((
-                                CssNode::Rule {
-                                    selector: selector.clone(),
-                                    declarations: vec![],
-                                    children: other_kids.into_iter().map(|(n, _)| n).collect(),
-                                },
-                                gid,
-                            ));
+                    match has_non_rule_children {
+                        true => {
+                            let (rule_kids, other_kids): (
+                                Vec<(CssNode, usize)>,
+                                Vec<(CssNode, usize)>,
+                            ) = flat
+                                .into_iter()
+                                .partition(|(k, _)| matches!(k, CssNode::Rule { .. }));
+                            out.extend(rule_kids);
+                            match !other_kids.is_empty() {
+                                true => out.push((
+                                    CssNode::Rule {
+                                        selector: selector.clone(),
+                                        declarations: vec![],
+                                        children: other_kids.into_iter().map(|(n, _)| n).collect(),
+                                    },
+                                    gid,
+                                )),
+                                false => {}
+                            }
                         }
-                    } else {
-                        out.extend(flat);
+                        false => out.extend(flat),
                     }
                     if let Some(last) = out.last() {
                         state.prev = Some(last.clone());
@@ -216,35 +216,37 @@ impl Serializer {
     fn serialize_expanded(nodes: &[(CssNode, usize)], depth: usize) -> String {
         let indent = "  ".repeat(depth);
         let mut result = nodes.iter().enumerate().fold(String::new(), |mut acc, (i, (n, gid))| {
-            if i > 0 {
-                acc.push('\n');
-                // 顶层规则之间添加空行（SCSS expanded 模式）
-                // 但以下情况不加空行：
-                // - @import 等无 body 的 @规则之间
-                // - 连续注释之间
-                // - 同源展平规则（group_id 相同）
-                if depth == 0 {
-                    let (prev_n, prev_gid) = &nodes[i - 1];
-                    let prev_is_import = matches!(prev_n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
-                    let curr_is_import = matches!(n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
-                    let prev_is_comment = matches!(prev_n, CssNode::Comment(_));
-                    let same_group = prev_gid == gid;
-                    let same_origin = !same_group && Self::is_same_origin(prev_n, n);
-                    if !prev_is_import
-                        && !curr_is_import
-                        && !prev_is_comment
-                        && !same_group
-                        && !same_origin
-                    {
-                        acc.push('\n');
+            match i > 0 {
+                true => {
+                    acc.push('\n');
+                    match depth == 0 {
+                        true => {
+                            let (prev_n, prev_gid) = &nodes[i - 1];
+                            let prev_is_import = matches!(prev_n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
+                            let curr_is_import = matches!(n, CssNode::AtRule { name, has_body: false, .. } if name == "import");
+                            let prev_is_comment = matches!(prev_n, CssNode::Comment(_));
+                            let same_group = prev_gid == gid;
+                            let same_origin = !same_group && Self::is_same_origin(prev_n, n);
+                            match !prev_is_import
+                                && !curr_is_import
+                                && !prev_is_comment
+                                && !same_group
+                                && !same_origin {
+                                true => acc.push('\n'),
+                                false => {}
+                            }
+                        }
+                        false => {}
                     }
                 }
+                false => {}
             }
             Self::write_node_expanded(&mut acc, n, &indent, depth);
             acc
         });
-        if depth == 0 {
-            result.push('\n');
+        match depth == 0 {
+            true => result.push('\n'),
+            false => {}
         }
         result
     }
@@ -264,8 +266,9 @@ impl Serializer {
                 let prev_sel = prev_sel.trim();
                 let curr_sel = curr_sel.trim();
                 // 选择器完全相同时不通过启发式判断——依赖 group_id
-                if prev_sel == curr_sel {
-                    return false;
+                match prev_sel == curr_sel {
+                    true => return false,
+                    false => {}
                 }
                 // 后代关系：curr 以 prev 为前缀，或反过来
                 let is_descendant = |a: &str, b: &str| {
@@ -302,8 +305,9 @@ impl Serializer {
                 buf.push_str(property);
                 buf.push_str(": ");
                 buf.push_str(value);
-                if *important {
-                    buf.push_str(" !important");
+                match *important {
+                    true => buf.push_str(" !important"),
+                    false => {}
                 }
                 buf.push(';');
             }
@@ -329,39 +333,53 @@ impl Serializer {
                 children,
             } => {
                 let selector = sanitize_selector(selector);
-                if selector.is_empty() {
-                    return;
+                match selector.is_empty() {
+                    true => return,
+                    false => {}
                 }
                 let inner = "  ".repeat(depth + 1);
                 buf.push_str(indent);
                 buf.push_str(&selector);
                 buf.push_str(" {\n");
-                for decl in declarations {
-                    if let CssNode::Declaration {
-                        property,
-                        value,
-                        important,
-                    } = decl
-                    {
-                        buf.push_str(&inner);
-                        buf.push_str(property);
-                        buf.push_str(": ");
-                        buf.push_str(value);
-                        if *important {
-                            buf.push_str(" !important");
+                let decls_css: String = declarations
+                    .iter()
+                    .filter_map(|decl| match decl {
+                        CssNode::Declaration {
+                            property,
+                            value,
+                            important,
+                        } => {
+                            let mut s = String::new();
+                            s.push_str(&inner);
+                            s.push_str(property);
+                            s.push_str(": ");
+                            s.push_str(value);
+                            match *important {
+                                true => s.push_str(" !important"),
+                                false => {}
+                            }
+                            s.push(';');
+                            s.push('\n');
+                            Some(s)
                         }
-                        buf.push(';');
-                        buf.push('\n');
+                        _ => None,
+                    })
+                    .collect();
+                buf.push_str(&decls_css);
+                match !children.is_empty() {
+                    true => {
+                        let wrapped: Vec<(CssNode, usize)> =
+                            children.iter().cloned().map(|n| (n, 0)).collect();
+                        let child_css = Self::serialize_expanded(&wrapped, depth + 1);
+                        match !child_css.is_empty() {
+                            true => {
+                                buf.push_str(&child_css);
+                                buf.push('\n');
+                            }
+                            false => {}
+                        }
                     }
-                }
-                if !children.is_empty() {
-                    let wrapped: Vec<(CssNode, usize)> =
-                        children.iter().cloned().map(|n| (n, 0)).collect();
-                    let child_css = Self::serialize_expanded(&wrapped, depth + 1);
-                    if !child_css.is_empty() {
-                        buf.push_str(&child_css);
-                        buf.push('\n');
-                    }
+                    false => {}
                 }
                 buf.push_str(indent);
                 buf.push('}');
@@ -373,33 +391,45 @@ impl Serializer {
                 children,
             } => {
                 let p = params.as_deref().unwrap_or("");
-                if children.is_empty() {
-                    buf.push_str(indent);
-                    buf.push('@');
-                    buf.push_str(name);
-                    if !p.is_empty() {
-                        buf.push(' ');
-                        buf.push_str(p);
+                match children.is_empty() {
+                    true => {
+                        buf.push_str(indent);
+                        buf.push('@');
+                        buf.push_str(name);
+                        match !p.is_empty() {
+                            true => {
+                                buf.push(' ');
+                                buf.push_str(p);
+                            }
+                            false => {}
+                        }
+                        buf.push_str(" {}");
                     }
-                    buf.push_str(" {}");
-                } else {
-                    buf.push_str(indent);
-                    buf.push('@');
-                    buf.push_str(name);
-                    if !p.is_empty() {
-                        buf.push(' ');
-                        buf.push_str(p);
+                    false => {
+                        buf.push_str(indent);
+                        buf.push('@');
+                        buf.push_str(name);
+                        match !p.is_empty() {
+                            true => {
+                                buf.push(' ');
+                                buf.push_str(p);
+                            }
+                            false => {}
+                        }
+                        buf.push_str(" {\n");
+                        let wrapped: Vec<(CssNode, usize)> =
+                            children.iter().cloned().map(|n| (n, 0)).collect();
+                        let child_css = Self::serialize_expanded(&wrapped, depth + 1);
+                        match !child_css.is_empty() {
+                            true => {
+                                buf.push_str(&child_css);
+                                buf.push('\n');
+                            }
+                            false => {}
+                        }
+                        buf.push_str(indent);
+                        buf.push('}');
                     }
-                    buf.push_str(" {\n");
-                    let wrapped: Vec<(CssNode, usize)> =
-                        children.iter().cloned().map(|n| (n, 0)).collect();
-                    let child_css = Self::serialize_expanded(&wrapped, depth + 1);
-                    if !child_css.is_empty() {
-                        buf.push_str(&child_css);
-                        buf.push('\n');
-                    }
-                    buf.push_str(indent);
-                    buf.push('}');
                 }
             }
             CssNode::AtRule {
@@ -412,9 +442,12 @@ impl Serializer {
                 buf.push_str(indent);
                 buf.push('@');
                 buf.push_str(name);
-                if !p.is_empty() {
-                    buf.push(' ');
-                    buf.push_str(p);
+                match !p.is_empty() {
+                    true => {
+                        buf.push(' ');
+                        buf.push_str(p);
+                    }
+                    false => {}
                 }
                 buf.push(';');
             }
@@ -435,8 +468,9 @@ impl Serializer {
                 buf.push_str(property);
                 buf.push(':');
                 buf.push_str(value);
-                if *important {
-                    buf.push_str(" !important");
+                match *important {
+                    true => buf.push_str(" !important"),
+                    false => {}
                 }
                 buf.push(';');
             }
@@ -452,17 +486,18 @@ impl Serializer {
                 children,
             } => {
                 let sel = sanitize_selector(selector);
-                if sel.is_empty() {
-                    return;
+                match sel.is_empty() {
+                    true => return,
+                    false => {}
                 }
                 buf.push_str(&sel);
                 buf.push('{');
-                for decl in declarations {
-                    Self::write_node_compressed(buf, decl);
-                }
-                for kid in children {
-                    Self::write_node_compressed(buf, kid);
-                }
+                declarations
+                    .iter()
+                    .for_each(|decl| Self::write_node_compressed(buf, decl));
+                children
+                    .iter()
+                    .for_each(|kid| Self::write_node_compressed(buf, kid));
                 buf.push('}');
             }
             CssNode::AtRule {
@@ -474,14 +509,17 @@ impl Serializer {
                 let p = params.as_deref().unwrap_or("");
                 buf.push('@');
                 buf.push_str(name);
-                if !p.is_empty() {
-                    buf.push(' ');
-                    buf.push_str(p);
+                match !p.is_empty() {
+                    true => {
+                        buf.push(' ');
+                        buf.push_str(p);
+                    }
+                    false => {}
                 }
                 buf.push('{');
-                for kid in children {
-                    Self::write_node_compressed(buf, kid);
-                }
+                children
+                    .iter()
+                    .for_each(|kid| Self::write_node_compressed(buf, kid));
                 buf.push('}');
             }
             CssNode::AtRule {
@@ -493,9 +531,12 @@ impl Serializer {
                 let p = params.as_deref().unwrap_or("");
                 buf.push('@');
                 buf.push_str(name);
-                if !p.is_empty() {
-                    buf.push(' ');
-                    buf.push_str(p);
+                match !p.is_empty() {
+                    true => {
+                        buf.push(' ');
+                        buf.push_str(p);
+                    }
+                    false => {}
                 }
                 buf.push(';');
             }

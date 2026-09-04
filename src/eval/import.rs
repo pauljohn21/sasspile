@@ -56,17 +56,20 @@ impl Evaluator {
         if let Some(path) = Self::resolve_file_import(base, url, &load_paths) {
             return Self::load_import(&path, env);
         }
-        if !(Path::new(url)
+        let is_plain_css = !(Path::new(url)
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("css")))
             && !url.starts_with("http://")
             && !url.starts_with("https://")
             && !url.starts_with("url(")
-            && modifier.is_empty()
-        {
-            return Err(SassError::Module(format!(
-                "Can't find stylesheet to import: {url}"
-            )));
+            && modifier.is_empty();
+        match is_plain_css {
+            true => {
+                return Err(SassError::Module(format!(
+                    "Can't find stylesheet to import: {url}"
+                )));
+            }
+            false => {}
         }
         let params = if modifier.is_empty() {
             format!("\"{url}\"")

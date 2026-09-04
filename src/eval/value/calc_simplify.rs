@@ -74,8 +74,9 @@ fn simplify_number_op(
             Ok(CalcNode::Number(a * b, unit))
         }
         CalcOp::Div => {
-            if b == 0.0 {
-                return Err(CalcError::DivisionByZero);
+            match b == 0.0 {
+                true => return Err(CalcError::DivisionByZero),
+                false => {}
             }
             Ok(CalcNode::Number(a / b, ua.clone()))
         }
@@ -91,26 +92,35 @@ fn simplify_add_sub(
     ub: &Option<String>,
 ) -> Result<CalcNode, CalcError> {
     // 同单位或都无单位
-    if ua == ub {
-        let result = match op {
-            CalcOp::Add => a + b,
-            CalcOp::Sub => a - b,
-            _ => unreachable!(),
-        };
-        return Ok(CalcNode::Number(result, ua.clone()));
-    }
-    // 兼容单位转换
-    if let (Some(u1), Some(u2)) = (ua, ub) {
-        if calc_units::units_compatible(u1, u2) {
-            let converted = calc_units::convert_unit(b, u2, u1)
-                .ok_or(CalcError::CannotSimplify)?;
+    match ua == ub {
+        true => {
             let result = match op {
-                CalcOp::Add => a + converted,
-                CalcOp::Sub => a - converted,
+                CalcOp::Add => a + b,
+                CalcOp::Sub => a - b,
                 _ => unreachable!(),
             };
             return Ok(CalcNode::Number(result, ua.clone()));
         }
+        false => {}
+    }
+    // 兼容单位转换
+    match (ua, ub) {
+        (Some(u1), Some(u2)) => {
+            match calc_units::units_compatible(u1, u2) {
+                true => {
+                    let converted = calc_units::convert_unit(b, u2, u1)
+                        .ok_or(CalcError::CannotSimplify)?;
+                    let result = match op {
+                        CalcOp::Add => a + converted,
+                        CalcOp::Sub => a - converted,
+                        _ => unreachable!(),
+                    };
+                    return Ok(CalcNode::Number(result, ua.clone()));
+                }
+                false => {}
+            }
+        }
+        _ => {}
     }
     Err(CalcError::IncompatibleUnits(
         ua.clone().unwrap_or_default(),
@@ -140,13 +150,15 @@ fn simplify_func(name: &str, args: Vec<CalcNode>) -> Result<CalcNode, CalcError>
 /// 简化 min()/max()——所有参数都是同单位纯数字时计算。
 fn simplify_min_max(name: &str, args: Vec<CalcNode>) -> Result<CalcNode, CalcError> {
     let numbers = extract_numbers(&args);
-    if numbers.is_empty() || numbers.len() != args.len() {
-        return preserve_func(name, args);
+    match numbers.is_empty() || numbers.len() != args.len() {
+        true => return preserve_func(name, args),
+        false => {}
     }
     let first_unit = &numbers[0].1;
     let all_same_unit = numbers.iter().all(|(_, u)| u == first_unit);
-    if !all_same_unit {
-        return preserve_func(name, args);
+    match !all_same_unit {
+        true => return preserve_func(name, args),
+        false => {}
     }
     let result = match name {
         "min" => numbers.iter().fold(f64::INFINITY, |acc, (v, _)| acc.min(*v)),
@@ -158,16 +170,19 @@ fn simplify_min_max(name: &str, args: Vec<CalcNode>) -> Result<CalcNode, CalcErr
 
 /// 简化 clamp(min, val, max)——同单位时计算。
 fn simplify_clamp(args: Vec<CalcNode>) -> Result<CalcNode, CalcError> {
-    if args.len() != 3 {
-        return preserve_func("clamp", args);
+    match args.len() != 3 {
+        true => return preserve_func("clamp", args),
+        false => {}
     }
     let nums = extract_numbers(&args);
-    if nums.len() != 3 {
-        return preserve_func("clamp", args);
+    match nums.len() != 3 {
+        true => return preserve_func("clamp", args),
+        false => {}
     }
     let all_same_unit = nums.windows(2).all(|w| w[0].1 == w[1].1);
-    if !all_same_unit {
-        return preserve_func("clamp", args);
+    match !all_same_unit {
+        true => return preserve_func("clamp", args),
+        false => {}
     }
     let result = nums[1].0.clamp(nums[0].0, nums[2].0);
     Ok(CalcNode::Number(result, nums[0].1.clone()))
@@ -176,8 +191,9 @@ fn simplify_clamp(args: Vec<CalcNode>) -> Result<CalcNode, CalcError> {
 /// 简化 round/mod/rem。
 fn simplify_round_mod_rem(name: &str, args: Vec<CalcNode>) -> Result<CalcNode, CalcError> {
     let nums = extract_numbers(&args);
-    if nums.is_empty() || nums.len() != args.len() {
-        return preserve_func(name, args);
+    match nums.is_empty() || nums.len() != args.len() {
+        true => return preserve_func(name, args),
+        false => {}
     }
     match name {
         "round" => simplify_round(&nums, &args),
@@ -200,19 +216,17 @@ fn simplify_round(nums: &[(f64, Option<String>)], args: &[CalcNode]) -> Result<C
 
 /// 简化 mod(a, b)。
 fn simplify_mod(nums: &[(f64, Option<String>)], args: &[CalcNode]) -> Result<CalcNode, CalcError> {
-    if nums.len() == 2 && nums[1].0 != 0.0 {
-        Ok(CalcNode::Number(nums[0].0 % nums[1].0, nums[0].1.clone()))
-    } else {
-        preserve_func("mod", args.to_vec())
+    match nums.len() == 2 && nums[1].0 != 0.0 {
+        true => Ok(CalcNode::Number(nums[0].0 % nums[1].0, nums[0].1.clone())),
+        false => preserve_func("mod", args.to_vec()),
     }
 }
 
 /// 简化 rem(a, b)。
 fn simplify_rem(nums: &[(f64, Option<String>)], args: &[CalcNode]) -> Result<CalcNode, CalcError> {
-    if nums.len() == 2 && nums[1].0 != 0.0 {
-        Ok(CalcNode::Number(nums[0].0.rem_euclid(nums[1].0), nums[0].1.clone()))
-    } else {
-        preserve_func("rem", args.to_vec())
+    match nums.len() == 2 && nums[1].0 != 0.0 {
+        true => Ok(CalcNode::Number(nums[0].0.rem_euclid(nums[1].0), nums[0].1.clone())),
+        false => preserve_func("rem", args.to_vec()),
     }
 }
 

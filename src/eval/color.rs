@@ -54,18 +54,14 @@ impl Evaluator {
         let mut w = w;
         let mut b = b;
         let sum = w + b;
-        if sum > 1.0 {
-            w /= sum;
-            b /= sum;
+        match sum > 1.0 {
+            true => { w /= sum; b /= sum; }
+            false => {}
         }
         let factor = 1.0 - w - b;
         let hue_to_rgb = |m1: f64, m2: f64, mut hue: f64| -> f64 {
-            if hue < 0.0 {
-                hue += 1.0;
-            }
-            if hue > 1.0 {
-                hue -= 1.0;
-            }
+            match hue < 0.0 { true => hue += 1.0, false => {} }
+            match hue > 1.0 { true => hue -= 1.0, false => {} }
             match hue {
                 h if h < 1.0 / 6.0 => m1 + (m2 - m1) * hue * 6.0,
                 h if h < 0.5 => m2,
@@ -94,8 +90,9 @@ impl Evaluator {
         let max = r.max(g).max(b);
         let min = r.min(g).min(b);
         let l = f64::midpoint(max, min);
-        if (max - min).abs() < f64::EPSILON {
-            return (0.0, 0.0, l);
+        match (max - min).abs() < f64::EPSILON {
+            true => return (0.0, 0.0, l),
+            false => {}
         }
         let d = max - min;
         let s = if l > 0.5 {
@@ -136,8 +133,9 @@ impl Evaluator {
             Some(Value::List(items, Separator::Space, false)) if is_space_sep => {
                 let mut flat = items.clone();
                 // alpha 参数追加到末尾
-                if args.len() > 1 {
-                    flat.extend(args[1..].iter().cloned());
+                match args.len() > 1 {
+                    true => flat.extend(args[1..].iter().cloned()),
+                    false => {}
                 }
                 flat
             }
@@ -151,8 +149,9 @@ impl Evaluator {
                     flat.extend(items[..items.len().saturating_sub(1)].iter().cloned());
                 }
                 // 最后一个元素是 alpha
-                if items.len() >= 2 {
-                    flat.push(items[items.len() - 1].clone());
+                match items.len() >= 2 {
+                    true => flat.push(items[items.len() - 1].clone()),
+                    false => {}
                 }
                 flat
             }
@@ -270,10 +269,9 @@ impl Evaluator {
                     .collect::<Vec<_>>()
                     .join(sep);
                 let full_str = if let Some(a) = alpha {
-                    if is_space_sep {
-                        format!("{rgb_str} / {a}")
-                    } else {
-                        format!("{rgb_str}, {a}")
+                    match is_space_sep {
+                        true => format!("{rgb_str} / {a}"),
+                        false => format!("{rgb_str}, {a}"),
                     }
                 } else {
                     rgb_str

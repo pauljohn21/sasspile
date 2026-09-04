@@ -153,22 +153,26 @@ impl Parser<'_> {
                                         let mod_id = id.clone();
                                         // 检查 modifier 后面是否是 ]
                                         let after_mod = self.peek_n(look + 1);
-                                        if matches!(after_mod, Some(Token::RBracket)) {
-                                            // 跳过空白
-                                            for _ in 0..look {
+                                        match matches!(after_mod, Some(Token::RBracket)) {
+                                            true => {
+                                                // 跳过空白
+                                                for _ in 0..look {
+                                                    self.advance();
+                                                }
+                                                // 消费 modifier 字符
+                                                match !s.ends_with(' ') {
+                                                    true => { s.push(' '); }
+                                                    false => {}
+                                                }
+                                                s.push_str(&mod_id);
                                                 self.advance();
                                             }
-                                            // 消费 modifier 字符
-                                            if !s.ends_with(' ') {
-                                                s.push(' ');
+                                            false => {
+                                                return Err(SassError::Parse {
+                                                    expected: "]".into(),
+                                                    found: "modifier".into(),
+                                                });
                                             }
-                                            s.push_str(&mod_id);
-                                            self.advance();
-                                        } else {
-                                            return Err(SassError::Parse {
-                                                expected: "]".into(),
-                                                found: "modifier".into(),
-                                            });
                                         }
                                     }
                                     _ => {

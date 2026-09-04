@@ -162,8 +162,9 @@ pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
             }
             ',' if depth == 0 => {
                 let trimmed = current.trim();
-                if !trimmed.is_empty() {
-                    args.push(parse_calc_arg_value(trimmed));
+                match !trimmed.is_empty() {
+                    true => args.push(parse_calc_arg_value(trimmed)),
+                    false => {}
                 }
                 current.clear();
             }
@@ -171,8 +172,9 @@ pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
         }
     }
     let trimmed = current.trim();
-    if !trimmed.is_empty() {
-        args.push(parse_calc_arg_value(trimmed));
+    match !trimmed.is_empty() {
+        true => args.push(parse_calc_arg_value(trimmed)),
+        false => {}
     }
     args
 }
@@ -267,8 +269,11 @@ fn merge_params_impl(
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })
         .collect();
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
+    match pos_args.len() > param_names.len() {
+        true => {
+            result.extend_from_slice(&pos_args[param_names.len()..]);
+        }
+        false => {}
     }
     result
 }
@@ -282,8 +287,11 @@ pub(crate) fn merge_map_args(
     name: &str,
 ) -> Vec<Value> {
     let param_names = map_param_names(name);
-    if param_names.is_empty() {
-        return pos_args.to_vec();
+    match param_names.is_empty() {
+        true => {
+            return pos_args.to_vec();
+        }
+        false => {}
     }
     merge_params_impl(pos_args, kw_args, param_names)
 }

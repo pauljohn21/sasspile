@@ -15,10 +15,9 @@ impl Evaluator {
             .flat_map(|node| {
                 let vars: Vec<String> = match node {
                     Node::Variable { name, flags, .. } => {
-                        if flags.global && !name.contains('.') {
-                            vec![name.clone()]
-                        } else {
-                            Vec::new()
+                        match (flags.global, !name.contains('.')) {
+                            (true, true) => vec![name.clone()],
+                            _ => Vec::new(),
                         }
                     }
                     Node::If {
@@ -64,19 +63,23 @@ impl Evaluator {
         validate_config: bool,
     ) -> Result<ModuleExports> {
         // 防止循环导入导致栈溢出
-        if caller_env.depth > 50 {
-            return Ok(ModuleExports::default());
+        match caller_env.depth > 50 {
+            true => return Ok(ModuleExports::default()),
+            false => {}
         }
         // 模块缓存：如果路径已加载过，从缓存返回 exports（CSS 为空，不重复输出）。
-        if caller_env.loaded_modules.contains(path) {
-            if let Some(cached) = caller_env.get_module_cache().get(path) {
-                let cached_exports = ModuleExports {
-                    css: vec![],
-                    ..cached.clone()
-                };
-                return Ok(cached_exports);
-            }
-            return Ok(ModuleExports::default());
+        match caller_env.loaded_modules.contains(path) {
+            true => match caller_env.get_module_cache().get(path) {
+                Some(cached) => {
+                    let cached_exports = ModuleExports {
+                        css: vec![],
+                        ..cached.clone()
+                    };
+                    return Ok(cached_exports);
+                }
+                None => return Ok(ModuleExports::default()),
+            },
+            false => {}
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
@@ -100,20 +103,21 @@ impl Evaluator {
         let mut null_configs: Vec<String> = Vec::new();
         for (name, value) in config {
             let val = Self::eval_value(value, caller_env)?;
-            if matches!(val, Value::Null) {
-                // null 值配置不注入，但记录用于验证时跳过
-                null_configs.push(name.replace('-', "_"));
-            } else {
-                let key = name.replace('-', "_");
-                crate::__tracing::debug!(name = %key, "load_module: inject pending_config");
-                env = env.add_pending_config(key, val);
+            match matches!(val, Value::Null) {
+                true => null_configs.push(name.replace('-', "_")),
+                false => {
+                    let key = name.replace('-', "_");
+                    crate::__tracing::debug!(name = %key, "load_module: inject pending_config");
+                    env = env.add_pending_config(key, val);
+                }
             }
         }
         // 预扫描 AST 中所有 !global 变量声明，预先初始化为 null
         // SCSS 规范要求模块始终暴露这些变量，即使所在代码路径未执行
         for global_var in Self::collect_global_vars(&ast.nodes) {
-            if !env.has_var(&global_var) {
-                env = env.bind(global_var, crate::parse::ast::Value::Null);
+            match !env.has_var(&global_var) {
+                true => env = env.bind(global_var, crate::parse::ast::Value::Null),
+                false => {}
             }
         }
         // 验证配置变量在上游模块中必须带 !default 声明
@@ -121,30 +125,35 @@ impl Evaluator {
         let (module_css, mut final_env) = Self::eval_nodes(&ast.nodes, env)?;
         // 验证：config 中未被消费的 key 说明对应变量未声明 !default
         // 仅当 validate_config=true（@use with 调用）时验证
-        if validate_config && !config.is_empty() {
-            let consumed = final_env.get_consumed_config();
-            crate::__tracing::debug!(
-                consumed = ?consumed,
-                pending = ?final_env.get_pending_config().keys().collect::<Vec<_>>(),
-                "load_module: validation check"
-            );
-            for (name, _) in config {
-                let normalized = name.replace('-', "_");
-                // null 值配置跳过验证（不覆盖 !default）
-                if null_configs.contains(&normalized) {
-                    continue;
-                }
-                if !consumed.contains(&normalized) && !consumed.contains(name) {
-                    crate::__tracing::warn!(
-                        name = %name,
-                        normalized = %normalized,
-                        "load_module: config var not consumed — not !default"
-                    );
-                    return Err(SassError::Eval(
-                        "This variable was not declared with !default in the @used module.".into(),
-                    ));
+        match (validate_config, !config.is_empty()) {
+            (true, true) => {
+                let consumed = final_env.get_consumed_config();
+                crate::__tracing::debug!(
+                    consumed = ?consumed,
+                    pending = ?final_env.get_pending_config().keys().collect::<Vec<_>>(),
+                    "load_module: validation check"
+                );
+                for (name, _) in config {
+                    let normalized = name.replace('-', "_");
+                    match null_configs.contains(&normalized) {
+                        true => continue,
+                        false => match !consumed.contains(&normalized) && !consumed.contains(name) {
+                            true => {
+                                crate::__tracing::warn!(
+                                    name = %name,
+                                    normalized = %normalized,
+                                    "load_module: config var not consumed — not !default"
+                                );
+                                return Err(SassError::Eval(
+                                    "This variable was not declared with !default in the @used module.".into(),
+                                ));
+                            }
+                            false => {}
+                        },
+                    }
                 }
             }
+            _ => {}
         }
         // extends 在顶层 evaluate 中统一应用（带模块路径标记）
         let selectors = Self::collect_all_selectors(
@@ -199,15 +208,15 @@ impl Evaluator {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(caller_env), fields(path = %path.display(), depth = caller_env.depth)))]
     pub(crate) fn load_import(path: &Path, caller_env: Env) -> Result<(Vec<CssNode>, Env)> {
         // 循环加载检测
-        if caller_env.loaded_modules.contains(path)
-            && !caller_env.get_module_cache().contains_key(path)
-        {
-            return Err(SassError::Module(
+        match (caller_env.loaded_modules.contains(path), !caller_env.get_module_cache().contains_key(path)) {
+            (true, true) => return Err(SassError::Module(
                 "This file is already being loaded.".into(),
-            ));
+            )),
+            _ => {}
         }
-        if caller_env.depth > 50 {
-            return Ok((vec![], caller_env));
+        match caller_env.depth > 50 {
+            true => return Ok((vec![], caller_env)),
+            false => {}
         }
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
@@ -228,8 +237,9 @@ impl Evaluator {
         // 预扫描导入文件中的 !global 变量（确保未执行路径的变量也可见）
         let mut env = env;
         for global_var in Self::collect_global_vars(&ast.nodes) {
-            if !env.has_var(&global_var) {
-                env = env.bind(global_var, crate::parse::ast::Value::Null);
+            match !env.has_var(&global_var) {
+                true => env = env.bind(global_var, crate::parse::ast::Value::Null),
+                false => {}
             }
         }
         let (css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
@@ -273,10 +283,9 @@ impl Evaluator {
             {
                 // 注入模块的 vars 到函数环境，使函数体可访问模块变量
                 let func_env = module.all_vars().fold(env.clone(), |acc, (k, v)| {
-                    if acc.has_var(k) {
-                        acc
-                    } else {
-                        acc.bind(k.clone(), v.clone())
+                    match acc.has_var(k) {
+                        true => acc,
+                        false => acc.bind(k.clone(), v.clone()),
                     }
                 });
                 return Self::call_user_function(func, pos_args, kw_args, func_env);
@@ -298,72 +307,78 @@ impl Evaluator {
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         // @use 只能在顶层使用——在 style rule 或 mixin 内报错
-        if env.get_selector().is_some() || env.get_content().is_some() {
-            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
+        match env.get_selector().is_some() || env.get_content().is_some() {
+            true => return Err(SassError::Eval("This at-rule is not allowed here.".into())),
+            false => {}
         }
-        // 空 URL 报错
-        if url.is_empty() {
-            return Err(SassError::Eval(
+        match url.is_empty() {
+            true => return Err(SassError::Eval(
                 "The default namespace \"\" is not a valid Sass identifier.".into(),
-            ));
+            )),
+            false => {}
         }
-        // 未知 scheme（如 "scheme:bar"）报错
-        if !url.starts_with("sass:") && url.contains(':') {
-            return Err(SassError::Module(format!(
+        match (!url.starts_with("sass:"), url.contains(':')) {
+            (true, true) => return Err(SassError::Module(format!(
                 "Can't find stylesheet to import: {url}"
-            )));
+            ))),
+            _ => {}
         }
-        // 非 sass: URL 的默认命名空间必须是合法标识符
-        if !url.starts_with("sass:") && namespace.is_none() && !star {
+        match (!url.starts_with("sass:"), namespace.is_none(), !star) {
+            (true, true, true) => {
             let stem = std::path::Path::new(url)
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or(url);
             let base = stem.split('.').next().unwrap_or(stem);
             let ns = base.trim_start_matches('_');
-            if !ns.is_empty()
-                && !ns
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_alphabetic() || c == '_')
-            {
-                return Err(SassError::Eval(format!(
+            match (!ns.is_empty(), !ns.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')) {
+                (true, true) => return Err(SassError::Eval(format!(
                     "The default namespace \"{ns}\" is not a valid Sass identifier."
-                )));
+                ))),
+                _ => {}
             }
+            }
+            _ => {}
         }
         // 内建模块 sass:math/string/list/map/color/meta/selector
-        if url.starts_with("sass:") {
-            if !config.is_empty() {
-                return Err(SassError::Eval(
-                    "Built-in modules can't be configured.".into(),
-                ));
+        match url.starts_with("sass:") {
+            true => {
+                match !config.is_empty() {
+                    true => return Err(SassError::Eval(
+                        "Built-in modules can't be configured.".into(),
+                    )),
+                    false => {}
+                }
+                let ns = url.strip_prefix("sass:").unwrap_or(url);
+                match env.get_namespace(ns).is_some() {
+                    true => return Err(SassError::Eval(format!(
+                        "There's already a module with namespace \"{ns}\"."
+                    ))),
+                    false => {}
+                }
+                return Ok((vec![], env.add_module(url.to_string())));
             }
-            // 检查内建模块命名空间冲突
-            let ns = url.strip_prefix("sass:").unwrap_or(url);
-            if env.get_namespace(ns).is_some() {
-                return Err(SassError::Eval(format!(
-                    "There's already a module with namespace \"{ns}\"."
-                )));
-            }
-            return Ok((vec![], env.add_module(url.to_string())));
+            false => {}
         }
         let base = env.get_base_path().cloned();
         let load_paths = env.get_load_paths().to_vec();
         // @use 文件歧义检测（与 @import 相同的四种冲突场景）
         Self::check_resolve_ambiguity(base.as_ref(), url, &load_paths)?;
-        if let Some(path) = Self::resolve_file(base.as_ref(), url, &load_paths) {
+        match Self::resolve_file(base.as_ref(), url, &load_paths) {
+            Some(path) => {
             let already_loaded = env.get_loaded_modules().contains(&path);
-            if already_loaded && !env.get_module_cache().contains_key(&path) {
-                return Err(SassError::Module(
+            match (already_loaded, !env.get_module_cache().contains_key(&path)) {
+                (true, true) => return Err(SassError::Module(
                     "Module loop: this module is already being loaded.".into(),
-                ));
+                )),
+                _ => {}
             }
-            if already_loaded && !config.is_empty() {
-                return Err(SassError::Eval(
+            match (already_loaded, !config.is_empty()) {
+                (true, true) => return Err(SassError::Eval(
                     "This module was already loaded, so it can't be configured using \"with\"."
                         .into(),
-                ));
+                )),
+                _ => {}
             }
             let exports = if already_loaded {
                 env.get_module_cache()
@@ -375,10 +390,11 @@ impl Evaluator {
                 let mut seen = std::collections::HashSet::new();
                 for c in config {
                     let normalized = c.name.replace('-', "_");
-                    if !seen.insert(normalized) {
-                        return Err(SassError::Eval(
+                    match !seen.insert(normalized) {
+                        true => return Err(SassError::Eval(
                             "The same variable may only be configured once.".into(),
-                        ));
+                        )),
+                        false => {}
                     }
                 }
                 let config_pairs: Vec<(String, Value)> = config
@@ -392,21 +408,23 @@ impl Evaluator {
             };
             let env_with_cache = merge_module_cache(env, &path, &exports);
             let mut exports = exports;
-            let css = if already_loaded {
-                Vec::new()
-            } else {
-                std::mem::take(&mut exports.css)
+            let css = match already_loaded {
+                true => Vec::new(),
+                false => std::mem::take(&mut exports.css),
             };
-            if star {
-                let new_env = bind_exports(
-                    env_with_cache,
-                    &exports,
-                    None,
-                    BindMode::Use,
-                    &path,
-                    &FilterConfig::default(),
-                )?;
-                return Ok((css, new_env));
+            match star {
+                true => {
+                    let new_env = bind_exports(
+                        env_with_cache,
+                        &exports,
+                        None,
+                        BindMode::Use,
+                        &path,
+                        &FilterConfig::default(),
+                    )?;
+                    return Ok((css, new_env));
+                }
+                false => {}
             }
             let ns = namespace.clone().unwrap_or_else(|| {
                 let url_stem = std::path::Path::new(url)
@@ -419,16 +437,20 @@ impl Evaluator {
             // 检查命名空间冲突
             // 如果模块已加载（already_loaded），命名空间可能来自 @import 继承的 env
             // 此时不应报冲突，而是从缓存返回
-            if !already_loaded && env_with_cache.get_namespace(&ns).is_some() {
-                return Err(SassError::Eval(format!(
+            match (!already_loaded, env_with_cache.get_namespace(&ns).is_some()) {
+                (true, true) => return Err(SassError::Eval(format!(
                     "There's already a module with namespace \"{ns}\"."
-                )));
+                ))),
+                _ => {}
             }
             return Ok((css, env_with_cache.add_namespace(ns, exports)));
+            }
+            _ => {
+                // @use 找不到文件时必须报错（不像 @import 可以输出 CSS @import 语句）
+                Err(SassError::Module(format!(
+                    "Can't find stylesheet to import: {url}"
+                )))
+            }
         }
-        // @use 找不到文件时必须报错（不像 @import 可以输出 CSS @import 语句）
-        Err(SassError::Module(format!(
-            "Can't find stylesheet to import: {url}"
-        )))
     }
 }

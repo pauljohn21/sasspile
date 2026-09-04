@@ -33,8 +33,9 @@ fn kw_get<'a>(kw_args: &'a HashMap<String, Value>, key: &str) -> Option<&'a Valu
 pub fn channel(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     let pos_count = args.len();
     let kw_count = kw_args.len();
-    if pos_count + kw_count > 3 {
-        return Err(err_wrong_arg_count_plural(3, pos_count + kw_count));
+    match pos_count + kw_count > 3 {
+        true => return Err(err_wrong_arg_count_plural(3, pos_count + kw_count)),
+        false => {}
     }
 
     let color_arg = args.first().or_else(|| kw_get(kw_args, "color"));
@@ -49,8 +50,9 @@ pub fn channel(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Optio
 
     let ch = match channel_arg {
         Some(Value::String(s, quoted)) => {
-            if !quoted {
-                return Err(err_expected_quoted_str_display("channel", s));
+            match !quoted {
+                true => return Err(err_expected_quoted_str_display("channel", s)),
+                false => {}
             }
             s.clone()
         }
@@ -60,8 +62,9 @@ pub fn channel(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Optio
 
     let space = match space_arg {
         Some(Value::String(s, quoted)) => {
-            if *quoted {
-                return Err(err_expected_unquoted_str_display("space", s));
+            match *quoted {
+                true => return Err(err_expected_unquoted_str_display("space", s)),
+                false => {}
             }
             Some(s.clone())
         }
@@ -118,18 +121,18 @@ pub fn same(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<V
 /// 从颜色中提取通道值，带正确单位。
 fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Value> {
     // alpha 通道对所有颜色空间通用
-    if channel == "alpha" {
-        return Ok(Value::Number(c.a, None));
+    match channel == "alpha" {
+        true => return Ok(Value::Number(c.a, None)),
+        false => {}
     }
     let effective_space = space.unwrap_or_else(|| c.space.as_str());
 
     match effective_space {
         "rgb" | "srgb" => get_rgb_channel(c, channel),
         "hsl" => {
-            let (h, s, l) = if c.space == ColorSpace::Hsl {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2])
+            let (h, s, l) = match c.space == ColorSpace::Hsl {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]),
             };
             match channel {
                 "hue" => Ok(Value::Number(h, Some(DEG_UNIT.into()))),
@@ -139,17 +142,18 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
             }
         }
         "hwb" => {
-            let (h, w, bk) = if c.space == ColorSpace::Hwb {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                let (h, _s, _l) =
-                    Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
-                let r = c.legacy_rgb[0] / RGB_MAX;
-                let g = c.legacy_rgb[1] / RGB_MAX;
-                let b = c.legacy_rgb[2] / RGB_MAX;
-                let w = r.min(g).min(b);
-                let bk = 1.0 - r.max(g).max(b);
-                (h, w, bk)
+            let (h, w, bk) = match c.space == ColorSpace::Hwb {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => {
+                    let (h, _s, _l) =
+                        Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
+                    let r = c.legacy_rgb[0] / RGB_MAX;
+                    let g = c.legacy_rgb[1] / RGB_MAX;
+                    let b = c.legacy_rgb[2] / RGB_MAX;
+                    let w = r.min(g).min(b);
+                    let bk = 1.0 - r.max(g).max(b);
+                    (h, w, bk)
+                }
             };
             match channel {
                 "hue" => Ok(Value::Number(h, Some(DEG_UNIT.into()))),
@@ -159,14 +163,15 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
             }
         }
         "lab" => {
-            let (l, a, b) = if c.space == ColorSpace::Lab {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                use super::color_conv;
-                let r = c.legacy_rgb[0] / RGB_MAX;
-                let g = c.legacy_rgb[1] / RGB_MAX;
-                let bl = c.legacy_rgb[2] / RGB_MAX;
-                color_conv::srgb_to_lab(r, g, bl)
+            let (l, a, b) = match c.space == ColorSpace::Lab {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => {
+                    use super::color_conv;
+                    let r = c.legacy_rgb[0] / RGB_MAX;
+                    let g = c.legacy_rgb[1] / RGB_MAX;
+                    let bl = c.legacy_rgb[2] / RGB_MAX;
+                    color_conv::srgb_to_lab(r, g, bl)
+                }
             };
             match channel {
                 "lightness" => Ok(Value::Number(l, Some(PERCENT_UNIT.into()))),
@@ -176,14 +181,15 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
             }
         }
         "lch" => {
-            let (l, ch, h) = if c.space == ColorSpace::Lch {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                use super::color_conv;
-                let r = c.legacy_rgb[0] / RGB_MAX;
-                let g = c.legacy_rgb[1] / RGB_MAX;
-                let bl = c.legacy_rgb[2] / RGB_MAX;
-                color_conv::srgb_to_lch(r, g, bl)
+            let (l, ch, h) = match c.space == ColorSpace::Lch {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => {
+                    use super::color_conv;
+                    let r = c.legacy_rgb[0] / RGB_MAX;
+                    let g = c.legacy_rgb[1] / RGB_MAX;
+                    let bl = c.legacy_rgb[2] / RGB_MAX;
+                    color_conv::srgb_to_lch(r, g, bl)
+                }
             };
             match channel {
                 "lightness" => Ok(Value::Number(l, Some(PERCENT_UNIT.into()))),
@@ -193,14 +199,15 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
             }
         }
         "oklab" => {
-            let (l, a, b) = if c.space == ColorSpace::Oklab {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                use super::color_conv;
-                let r = c.legacy_rgb[0] / RGB_MAX;
-                let g = c.legacy_rgb[1] / RGB_MAX;
-                let bl = c.legacy_rgb[2] / RGB_MAX;
-                color_conv::srgb_to_oklab(r, g, bl)
+            let (l, a, b) = match c.space == ColorSpace::Oklab {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => {
+                    use super::color_conv;
+                    let r = c.legacy_rgb[0] / RGB_MAX;
+                    let g = c.legacy_rgb[1] / RGB_MAX;
+                    let bl = c.legacy_rgb[2] / RGB_MAX;
+                    color_conv::srgb_to_oklab(r, g, bl)
+                }
             };
             match channel {
                 "lightness" => Ok(Value::Number(l * PCT_SCALE, Some(PERCENT_UNIT.into()))),
@@ -210,14 +217,15 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
             }
         }
         "oklch" => {
-            let (l, ch, h) = if c.space == ColorSpace::Oklch {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                use super::color_conv;
-                let r = c.legacy_rgb[0] / RGB_MAX;
-                let g = c.legacy_rgb[1] / RGB_MAX;
-                let bl = c.legacy_rgb[2] / RGB_MAX;
-                color_conv::srgb_to_oklch(r, g, bl)
+            let (l, ch, h) = match c.space == ColorSpace::Oklch {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => {
+                    use super::color_conv;
+                    let r = c.legacy_rgb[0] / RGB_MAX;
+                    let g = c.legacy_rgb[1] / RGB_MAX;
+                    let bl = c.legacy_rgb[2] / RGB_MAX;
+                    color_conv::srgb_to_oklch(r, g, bl)
+                }
             };
             match channel {
                 "lightness" => Ok(Value::Number(l * PCT_SCALE, Some(PERCENT_UNIT.into()))),
@@ -257,38 +265,33 @@ fn get_normalized_rgb(c: &Color, space: &str) -> (f64, f64, f64) {
     let b = c.legacy_rgb[2] / RGB_MAX;
     match space {
         "display-p3" => {
-            if c.space == ColorSpace::DisplayP3 {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                color_conv::srgb_to_display_p3(r, g, b)
+            match c.space == ColorSpace::DisplayP3 {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => color_conv::srgb_to_display_p3(r, g, b),
             }
         }
         "srgb-linear" => {
-            if c.space == ColorSpace::SrgbLinear {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                color_conv::srgb_to_linear_srgb(r, g, b)
+            match c.space == ColorSpace::SrgbLinear {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => color_conv::srgb_to_linear_srgb(r, g, b),
             }
         }
         "a98-rgb" => {
-            if c.space == ColorSpace::A98Rgb {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                color_conv::srgb_to_a98_rgb(r, g, b)
+            match c.space == ColorSpace::A98Rgb {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => color_conv::srgb_to_a98_rgb(r, g, b),
             }
         }
         "prophoto-rgb" => {
-            if c.space == ColorSpace::ProphotoRgb {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                color_conv::srgb_to_prophoto(r, g, b)
+            match c.space == ColorSpace::ProphotoRgb {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => color_conv::srgb_to_prophoto(r, g, b),
             }
         }
         "rec2020" => {
-            if c.space == ColorSpace::Rec2020 {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                color_conv::srgb_to_rec2020(r, g, b)
+            match c.space == ColorSpace::Rec2020 {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => color_conv::srgb_to_rec2020(r, g, b),
             }
         }
         _ => (r, g, b),
@@ -303,18 +306,18 @@ fn get_xyz(c: &Color, space: &str) -> (f64, f64, f64) {
     let b = c.legacy_rgb[2] / RGB_MAX;
     match space {
         "xyz" | "xyz-d65" => {
-            if c.space == ColorSpace::XyzD65 {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                color_conv::srgb_to_xyz_d65(r, g, b)
+            match c.space == ColorSpace::XyzD65 {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => color_conv::srgb_to_xyz_d65(r, g, b),
             }
         }
         "xyz-d50" => {
-            if c.space == ColorSpace::XyzD50 {
-                (c.channels[0], c.channels[1], c.channels[2])
-            } else {
-                let (x65, y65, z65) = color_conv::srgb_to_xyz_d65(r, g, b);
-                color_conv::xyz_d65_to_xyz_d50(x65, y65, z65)
+            match c.space == ColorSpace::XyzD50 {
+                true => (c.channels[0], c.channels[1], c.channels[2]),
+                false => {
+                    let (x65, y65, z65) = color_conv::srgb_to_xyz_d65(r, g, b);
+                    color_conv::xyz_d65_to_xyz_d50(x65, y65, z65)
+                }
             }
         }
         _ => color_conv::srgb_to_xyz_d65(r, g, b),

@@ -16,12 +16,10 @@ impl Evaluator {
     /// `calc(1px + 2px)` → `Value::Number(3, "px")`（同单位简化）
     /// `calc(1px + 2%)` → `Value::Calc("calc(1px + 2%)")`（不同单位保留）
     pub(crate) fn simplify_calc(s: &str) -> Value {
-        // 尝试 AST 简化
-        if let Some(result) = Self::try_ast_simplify(s) {
-            return result;
+        match Self::try_ast_simplify(s) {
+            Some(result) => result,
+            None => Self::simplify_calc_str(s),
         }
-        // 降级到字符串处理
-        Self::simplify_calc_str(s)
     }
 
     /// AST 简化——解析为 CalcNode，简化，返回 Value。
@@ -41,12 +39,10 @@ impl Evaluator {
                 Some(Value::Number(n, unit))
             }
             other => {
-                // 包含 var/func 或无法完全简化——包装为 calc
                 let s = other.to_string();
-                if s.starts_with("calc(") || s.contains('(') {
-                    Some(Value::Calc(s))
-                } else {
-                    Some(Value::Calc(format!("calc({s})")))
+                match s.starts_with("calc(") || s.contains('(') {
+                    true => Some(Value::Calc(s)),
+                    false => Some(Value::Calc(format!("calc({s})"))),
                 }
             }
         }
@@ -63,14 +59,14 @@ impl Evaluator {
         } else {
             None
         };
-        let inner = if let Some(i) = inner {
-            i.trim()
-        } else {
-            // 尝试 clamp() 简化
-            if let Some(v) = Self::try_simplify_clamp(s) {
-                return v;
+        let inner = match inner {
+            Some(i) => i.trim(),
+            None => {
+                match Self::try_simplify_clamp(s) {
+                    Some(v) => return v,
+                    None => return Value::Calc(s.to_string()),
+                }
             }
-            return Value::Calc(s.to_string());
         };
         // CSS 常量替换：pi/PI/pI → 3.1415926536, e/E → 2.7182818285
         let inner = match inner.to_lowercase().as_str() {
@@ -80,33 +76,39 @@ impl Evaluator {
         };
         // 去除多余括号：((1px)) → (1px) → 1px
         let inner = Self::strip_parens(inner);
-        // 尝试解析为纯数字 + 可选单位
-        if let Some(v) = Self::parse_simple_number(inner) {
-            return v;
+        match Self::parse_simple_number(inner) {
+            Some(v) => return v,
+            None => {}
         }
-        // 尝试解析同单位加减法：1px + 2px, 1px - 2px
-        if let Some(v) = Self::try_simplify_same_unit_arith(inner) {
-            return v;
+        match Self::try_simplify_same_unit_arith(inner) {
+            Some(v) => return v,
+            None => {}
         }
-        // 尝试简化嵌套 min()/max()
-        if let Some(v) = Self::try_simplify_min_max(inner) {
-            return v;
+        match Self::try_simplify_min_max(inner) {
+            Some(v) => return v,
+            None => {}
         }
         // 常量替换：在表达式中将 pi/e 替换为数字值
         let substituted = Self::replace_calc_constants(inner);
-        if substituted != inner {
-            if let Some(v) = Self::parse_simple_number(&substituted) {
-                return v;
+        match substituted != inner {
+            true => {
+                match Self::parse_simple_number(&substituted) {
+                    Some(v) => return v,
+                    None => {}
+                }
+                match Self::try_simplify_same_unit_arith(&substituted) {
+                    Some(v) => return v,
+                    None => {}
+                }
+                return Value::Calc(format!("calc({substituted})"));
             }
-            if let Some(v) = Self::try_simplify_same_unit_arith(&substituted) {
-                return v;
-            }
-            return Value::Calc(format!("calc({substituted})"));
+            false => {}
         }
         // 去除多余的乘除法括号
         let simplified = Self::remove_unnecessary_parens(inner);
-        if simplified != inner {
-            return Value::Calc(format!("calc({simplified})"));
+        match simplified != inner {
+            true => return Value::Calc(format!("calc({simplified})")),
+            false => {}
         }
         Value::Calc(s.to_string())
     }
@@ -115,8 +117,9 @@ impl Evaluator {
     fn try_simplify_clamp(s: &str) -> Option<Value> {
         let inner = s.strip_prefix("clamp(").and_then(|s| s.strip_suffix(")"))?;
         let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
-        if parts.len() != 3 {
-            return None;
+        match parts.len() != 3 {
+            true => return None,
+            false => {}
         }
         let min = Self::parse_simple_number(parts[0])?;
         let val = Self::parse_simple_number(parts[1])?;
@@ -141,8 +144,9 @@ impl Evaluator {
             _ => return None,
         };
         let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
-        if parts.len() < 2 {
-            return None;
+        match parts.len() < 2 {
+            true => return None,
+            false => {}
         }
         let nums: Vec<Value> = parts
             .iter()
@@ -152,8 +156,9 @@ impl Evaluator {
             (Value::Number(_, u1), Value::Number(_, u2)) => u1 == u2,
             _ => false,
         });
-        if !all_same_unit {
-            return None;
+        match !all_same_unit {
+            true => return None,
+            false => {}
         }
         match nums.first() {
             Some(Value::Number(_, unit)) => {
@@ -216,12 +221,13 @@ impl Evaluator {
                 ')' | ']' => depth -= 1,
                 ' ' if depth == 0 => {
                     let rest = &s[i..];
-                    if rest.starts_with(" + ")
+                    match rest.starts_with(" + ")
                         || rest.starts_with(" - ")
                         || rest.starts_with(" * ")
                         || rest.starts_with(" / ")
                     {
-                        return Some(i);
+                        true => return Some(i),
+                        false => {}
                     }
                 }
                 _ => {}
@@ -233,29 +239,39 @@ impl Evaluator {
     /// 去除字符串外层的多余括号：((1px)) → 1px，但 (var(--c)) 保留。
     pub(crate) fn strip_parens(s: &str) -> &str {
         let s = s.trim();
-        if s.starts_with('(') && s.ends_with(')') {
-            let inner = &s[1..s.len() - 1];
-            let mut depth = 0i32;
-            let mut ok = true;
-            for c in inner.chars() {
-                match c {
-                    '(' | '[' => depth += 1,
-                    ')' | ']' => {
-                        depth -= 1;
-                        if depth < 0 {
-                            ok = false;
-                            break;
+        match s.starts_with('(') && s.ends_with(')') {
+            true => {
+                let inner = &s[1..s.len() - 1];
+                let mut depth = 0i32;
+                let mut ok = true;
+                for c in inner.chars() {
+                    match c {
+                        '(' | '[' => depth += 1,
+                        ')' | ']' => {
+                            depth -= 1;
+                            match depth < 0 {
+                                true => {
+                                    ok = false;
+                                    break;
+                                }
+                                false => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                match (ok, depth == 0) {
+                    (true, true) => {
+                        let inner_trimmed = inner.trim();
+                        match Self::parse_simple_number(inner_trimmed).is_some() {
+                            true => return inner_trimmed,
+                            false => {}
                         }
                     }
                     _ => {}
                 }
             }
-            if ok && depth == 0 {
-                let inner_trimmed = inner.trim();
-                if Self::parse_simple_number(inner_trimmed).is_some() {
-                    return inner_trimmed;
-                }
-            }
+            false => {}
         }
         s
     }
@@ -278,11 +294,12 @@ impl Evaluator {
                     let is_standalone_before = matches!(before, None | Some(' ' | '(' | '['));
                     let is_standalone_after =
                         matches!(after, None | Some(' ' | ')' | ']' | '+' | '-' | '*' | '/'));
-                    if is_standalone_before && is_standalone_after {
-                        result = format!("{}{val}{}", &result[..pos], &result[pos + word.len()..]);
-                        idx = pos + val.len();
-                    } else {
-                        idx = pos + word.len();
+                    match is_standalone_before && is_standalone_after {
+                        true => {
+                            result = format!("{}{val}{}", &result[..pos], &result[pos + word.len()..]);
+                            idx = pos + val.len();
+                        }
+                        false => idx = pos + word.len(),
                     }
                 } else {
                     break;
@@ -297,10 +314,10 @@ impl Evaluator {
         let mut result = s.to_string();
         loop {
             let new = Self::strip_one_unnecessary_paren(&result);
-            if new == result {
-                break;
+            match new == result {
+                true => break,
+                false => result = new,
             }
-            result = new;
         }
         result
     }
@@ -310,36 +327,47 @@ impl Evaluator {
         let bytes = s.as_bytes();
         let mut i = 0;
         while i < s.len() {
-            if bytes[i] == b'(' {
-                let mut depth = 1i32;
-                let mut j = i + 1;
-                while j < s.len() && depth > 0 {
-                    match bytes[j] {
-                        b'(' => depth += 1,
-                        b')' => depth -= 1,
-                        _ => {}
-                    }
-                    if depth > 0 {
-                        j += 1;
-                    }
-                }
-                if depth == 0 && j < s.len() {
-                    let inner = &s[i + 1..j];
-                    if Self::is_simple_mul_div(inner) {
-                        let before = if i > 0 { &s[..i] } else { "" };
-                        let after = if j + 1 < s.len() { &s[j + 1..] } else { "" };
-                        let is_in_addsub = before.ends_with(" + ")
-                            || before.ends_with(" - ")
-                            || before.ends_with('(')
-                            || before.is_empty()
-                            || after.starts_with(" + ")
-                            || after.starts_with(" - ")
-                            || after.is_empty();
-                        if is_in_addsub {
-                            return format!("{before}{inner}{after}");
+            match bytes[i] == b'(' {
+                true => {
+                    let mut depth = 1i32;
+                    let mut j = i + 1;
+                    while j < s.len() && depth > 0 {
+                        match bytes[j] {
+                            b'(' => depth += 1,
+                            b')' => depth -= 1,
+                            _ => {}
+                        }
+                        match depth > 0 {
+                            true => j += 1,
+                            false => {}
                         }
                     }
+                    match (depth == 0, j < s.len()) {
+                        (true, true) => {
+                            let inner = &s[i + 1..j];
+                            match Self::is_simple_mul_div(inner) {
+                                true => {
+                                    let before = match i > 0 { true => &s[..i], false => "" };
+                                    let after = match j + 1 < s.len() { true => &s[j + 1..], false => "" };
+                                    let is_in_addsub = before.ends_with(" + ")
+                                        || before.ends_with(" - ")
+                                        || before.ends_with('(')
+                                        || before.is_empty()
+                                        || after.starts_with(" + ")
+                                        || after.starts_with(" - ")
+                                        || after.is_empty();
+                                    match is_in_addsub {
+                                        true => return format!("{before}{inner}{after}"),
+                                        false => {}
+                                    }
+                                }
+                                false => {}
+                            }
+                        }
+                        _ => {}
+                    }
                 }
+                false => {}
             }
             i += 1;
         }
@@ -355,12 +383,10 @@ impl Evaluator {
             match c {
                 '(' | '[' => depth += 1,
                 ')' | ']' => depth -= 1,
-                '*' | '/' if depth == 0 => {
-                    if found {
-                        return false;
-                    }
-                    found = true;
-                }
+                '*' | '/' if depth == 0 => match found {
+                    true => return false,
+                    false => found = true,
+                },
                 _ => {}
             }
         }
@@ -385,11 +411,13 @@ impl Evaluator {
                 let (num_str, unit) = s.split_at(idx);
                 let n = num_str.parse::<f64>().ok()?;
                 let unit = unit.trim();
-                if unit.is_empty() {
-                    return Some(Value::Number(n, None));
+                match unit.is_empty() {
+                    true => return Some(Value::Number(n, None)),
+                    false => {}
                 }
-                if !unit.chars().all(|c| c.is_ascii_alphabetic()) {
-                    return None;
+                match !unit.chars().all(|c| c.is_ascii_alphabetic()) {
+                    true => return None,
+                    false => {}
                 }
                 Some(Value::Number(n, Some(unit.to_string())))
             }

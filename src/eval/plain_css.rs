@@ -91,35 +91,40 @@ impl super::Evaluator {
         let lower = name.to_lowercase();
         // if/css 有自己的 plain CSS 逻辑，不拦截
         // sass() 在 plain CSS 中禁止
-        if lower == "if" || lower == "css" {
-            return Ok(());
-        }
-        if lower == "sass" {
-            return Err(SassError::Eval(
+        match lower.as_str() {
+            "if" | "css" => return Ok(()),
+            "sass" => return Err(SassError::Eval(
                 "sass() conditions aren't allowed in plain CSS".into(),
-            ));
+            )),
+            _ => {}
         }
         // 检查参数中的命名参数（关键字参数含 $ 变量名）— 禁止
-        if args.iter().any(|arg| arg.name.is_some()) {
-            return Err(SassError::Eval(
+        match args.iter().any(|arg| arg.name.is_some()) {
+            true => return Err(SassError::Eval(
                 "Sass variables aren't allowed in plain CSS.".into(),
-            ));
+            )),
+            false => {}
         }
         // 检查 spread 参数（args...）— 禁止
-        if args.iter().any(|arg| arg.spread) {
-            return Err(SassError::Eval("expected \")\".".into()));
+        match args.iter().any(|arg| arg.spread) {
+            true => return Err(SassError::Eval("expected \")\".".into())),
+            false => {}
         }
         // CSS 原生函数 — 允许，但检查参数中是否有违规
-        if Self::is_css_function(&lower) {
-            args.iter()
-                .try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
-            return Ok(());
+        match Self::is_css_function(&lower) {
+            true => {
+                args.iter()
+                    .try_for_each(|arg| Self::check_plain_css_value(&arg.value))?;
+                return Ok(());
+            }
+            false => {}
         }
         // 已知 Sass 内建函数（非 CSS 原生）— 禁止
-        if Self::is_known_builtin(&lower) {
-            return Err(SassError::Eval(
+        match Self::is_known_builtin(&lower) {
+            true => return Err(SassError::Eval(
                 "This function isn't allowed in plain CSS.".into(),
-            ));
+            )),
+            false => {}
         }
         // 未知函数 — 可能是用户自定义函数，允许通过
         // eval_value 的正常流程会处理（找到则调用，找不到则 CSS 透传）
@@ -138,11 +143,9 @@ impl super::Evaluator {
             Node::AtRule { name, .. } => {
                 use crate::parse::at_rule_kinds::AtRuleKind;
                 // Sass 内建 at-rule（@if/@for/@each/@while/@mixin/@include/@function 等）— 禁止
-                if AtRuleKind::from_str(name).is_known() {
-                    Err(err_plain_css_at_rule())
-                } else {
-                    // CSS 标准 at-rule 和未知 at-rule — 允许
-                    Ok(())
+                match AtRuleKind::from_str(name).is_known() {
+                    true => Err(err_plain_css_at_rule()),
+                    false => Ok(()),
                 }
             }
             // 静默注释 — 禁止
@@ -169,13 +172,15 @@ impl super::Evaluator {
     /// 禁止：插值 `#{}`、占位符 `%foo`、父选择器后缀 `&b`
     pub(crate) fn check_plain_css_selector(selector: &str) -> Result<()> {
         // 插值 — 禁止
-        if selector.contains("#{") {
-            return Err(SassError::Eval(
+        match selector.contains("#{") {
+            true => return Err(SassError::Eval(
                 "Interpolation isn't allowed in plain CSS.".into(),
-            ));
+            )),
+            false => {}
         }
         // 占位符选择器 — 禁止
-        if selector.contains('%') {
+        match selector.contains('%') {
+            true => {
             // 简单检查：% 后跟标识符字符
             let has_placeholder = selector.chars().enumerate().any(|(i, c)| {
                 c == '%'
@@ -185,32 +190,39 @@ impl super::Evaluator {
                         .next()
                         .is_some_and(|nc| nc.is_alphanumeric() || nc == '-')
             });
-            if has_placeholder {
-                return Err(SassError::Eval(
+            match has_placeholder {
+                true => return Err(SassError::Eval(
                     "Placeholder selectors aren't allowed in plain CSS.".into(),
-                ));
+                )),
+                false => {}
             }
+            }
+            false => {}
         }
         // 父选择器后缀 — 禁止 & 直接跟标识符
         // 如 `&b` 但不是 `& > b` 或 `&.b`
         let chars: Vec<char> = selector.chars().collect();
         for (i, &c) in chars.iter().enumerate() {
-            if c == '&' && i + 1 < chars.len() {
-                let next = chars[i + 1];
-                // & 后直接跟字母/数字/连字符 = 后缀
-                if next.is_alphanumeric() || next == '-' {
-                    return Err(SassError::Eval(
-                        "Parent selectors can't have suffixes in plain CSS.".into(),
-                    ));
+            match c == '&' && i + 1 < chars.len() {
+                true => {
+                    let next = chars[i + 1];
+                    match next.is_alphanumeric() || next == '-' {
+                        true => return Err(SassError::Eval(
+                            "Parent selectors can't have suffixes in plain CSS.".into(),
+                        )),
+                        false => {}
+                    }
                 }
+                false => {}
             }
         }
         // 顶层前导组合器 — 禁止
         let trimmed = selector.trim_start();
-        if trimmed.starts_with('>') || trimmed.starts_with('+') || trimmed.starts_with('~') {
-            return Err(SassError::Eval(
+        match trimmed.starts_with('>') || trimmed.starts_with('+') || trimmed.starts_with('~') {
+            true => return Err(SassError::Eval(
                 "Top-level leading combinators aren't allowed in plain CSS.".into(),
-            ));
+            )),
+            false => {}
         }
         Ok(())
     }

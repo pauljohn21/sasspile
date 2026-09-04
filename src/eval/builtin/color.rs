@@ -22,8 +22,9 @@ use std::collections::HashMap;
 /// 同时处理 `SlashLiteral` 分隔（声明值中 / 被解析为 `SlashLiteral`）。
 fn flatten_space_list(args: &[Value]) -> Vec<Value> {
     if let Some(Value::List(items, Separator::Space, false)) = args.first() {
-        if args.len() == 1 {
-            return items.clone();
+        match args.len() {
+            1 => return items.clone(),
+            _ => {}
         }
         // List + alpha 参数：展开列表并追加额外参数
         let mut flat = items.clone();
@@ -138,16 +139,18 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                     Value::Number(w, wu),
                     Value::Number(b, bu),
                 ] => {
-                    if wu.as_deref() != Some("%") {
-                        return Err(SassError::Eval(format!(
-                            "Expected whiteness to have unit \"%\", was {w}"
-                        )));
-                    }
-                    if bu.as_deref() != Some("%") {
-                        return Err(SassError::Eval(format!(
-                            "Expected blackness to have unit \"%\", was {b}"
-                        )));
-                    }
+    match wu.as_deref() != Some("%") {
+        true => return Err(SassError::Eval(format!(
+            "Expected whiteness to have unit \"%\", was {w}"
+        ))),
+        false => {}
+    }
+    match bu.as_deref() != Some("%") {
+        true => return Err(SassError::Eval(format!(
+            "Expected blackness to have unit \"%\", was {b}"
+        ))),
+        false => {}
+    }
                     let c = Evaluator::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, 1.0);
                     Ok(Some(Value::Color(Color::with_hwb(
                         *h,
@@ -163,20 +166,23 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                     Value::Number(b, bu),
                     Value::Number(a, au),
                 ] => {
-                    if wu.as_deref() != Some("%") {
-                        return Err(SassError::Eval(format!(
-                            "Expected whiteness to have unit \"%\", was {w}"
-                        )));
-                    }
-                    if bu.as_deref() != Some("%") {
-                        return Err(SassError::Eval(format!(
-                            "Expected blackness to have unit \"%\", was {b}"
-                        )));
-                    }
-                    if au.is_some() && au.as_deref() != Some("%") {
-                        return Err(SassError::Eval(format!(
+    match wu.as_deref() != Some("%") {
+        true => return Err(SassError::Eval(format!(
+            "Expected whiteness to have unit \"%\", was {w}"
+        ))),
+        false => {}
+    }
+    match bu.as_deref() != Some("%") {
+        true => return Err(SassError::Eval(format!(
+            "Expected blackness to have unit \"%\", was {b}"
+        ))),
+        false => {}
+    }
+                    match au.is_some() && au.as_deref() != Some("%") {
+                        true => return Err(SassError::Eval(format!(
                             "Expected alpha to have unit \"%\" or no units, was {a}"
-                        )));
+                        ))),
+                        false => {}
                     }
                     let c = Evaluator::hwb_to_rgb(*h, *w / 100.0, *b / 100.0, *a);
                     Ok(Some(Value::Color(Color::with_hwb(

@@ -191,15 +191,15 @@ fn change_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 fn scale_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
-        if let Some(Value::Number(n, _)) = kw_args.get(key) {
-            let pct = *n / 100.0;
-            if pct >= 0.0 {
-                Ok(val + (max - val) * pct)
-            } else {
-                Ok(val + val * pct)
+        match kw_args.get(key) {
+            Some(Value::Number(n, _)) => {
+                let pct = *n / 100.0;
+                Ok(match pct >= 0.0 {
+                    true => val + (max - val) * pct,
+                    false => val + val * pct,
+                })
             }
-        } else {
-            Ok(val)
+            _ => Ok(val),
         }
     };
     let l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
@@ -252,20 +252,20 @@ fn change_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 fn scale_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
-        if let Some(Value::Number(n, _)) = kw_args.get(key) {
-            let pct = *n / 100.0;
-            if pct >= 0.0 {
-                Ok(val + (max - val) * pct)
-            } else {
-                Ok(val + val * pct)
+        match kw_args.get(key) {
+            Some(Value::Number(n, _)) => {
+                let pct = *n / 100.0;
+                Ok(match pct >= 0.0 {
+                    true => val + (max - val) * pct,
+                    false => val + val * pct,
+                })
             }
-        } else {
-            Ok(val)
+            _ => Ok(val),
         }
     };
     let l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
-    let a_v = scale_val(a_v, if a_v >= 0.0 { 0.5 } else { -0.5 }, "a")?;
-    let b_v = scale_val(b_v, if b_v >= 0.0 { 0.5 } else { -0.5 }, "b")?;
+    let a_v = scale_val(a_v, match a_v >= 0.0 { true => 0.5, false => -0.5 }, "a")?;
+    let b_v = scale_val(b_v, match b_v >= 0.0 { true => 0.5, false => -0.5 }, "b")?;
     let a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(
@@ -318,15 +318,15 @@ fn change_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 fn scale_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
-        if let Some(Value::Number(n, _)) = kw_args.get(key) {
-            let pct = *n / 100.0;
-            if pct >= 0.0 {
-                Ok(val + (max - val) * pct)
-            } else {
-                Ok(val + val * pct)
+        match kw_args.get(key) {
+            Some(Value::Number(n, _)) => {
+                let pct = *n / 100.0;
+                Ok(match pct >= 0.0 {
+                    true => val + (max - val) * pct,
+                    false => val + val * pct,
+                })
             }
-        } else {
-            Ok(val)
+            _ => Ok(val),
         }
     };
     let l = scale_val(l, 100.0, "lightness")?.clamp(0.0, 100.0);
@@ -383,20 +383,20 @@ fn change_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 fn scale_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (l, a_v, b_v) = (c.channels[0], c.channels[1], c.channels[2]);
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
-        if let Some(Value::Number(n, _)) = kw_args.get(key) {
-            let pct = *n / 100.0;
-            if pct >= 0.0 {
-                Ok(val + (max - val) * pct)
-            } else {
-                Ok(val + val * pct)
+        match kw_args.get(key) {
+            Some(Value::Number(n, _)) => {
+                let pct = *n / 100.0;
+                Ok(match pct >= 0.0 {
+                    true => val + (max - val) * pct,
+                    false => val + val * pct,
+                })
             }
-        } else {
-            Ok(val)
+            _ => Ok(val),
         }
     };
     let l = scale_val(l, 100.0, "lightness")?.clamp(0.0, 100.0);
-    let a_v = scale_val(a_v, if a_v >= 0.0 { 125.0 } else { -125.0 }, "a")?;
-    let b_v = scale_val(b_v, if b_v >= 0.0 { 125.0 } else { -125.0 }, "b")?;
+    let a_v = scale_val(a_v, match a_v >= 0.0 { true => 125.0, false => -125.0 }, "a")?;
+    let b_v = scale_val(b_v, match b_v >= 0.0 { true => 125.0, false => -125.0 }, "b")?;
     let a = scale_val(c.a, 1.0, "alpha")?.clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(
@@ -437,15 +437,15 @@ fn change_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
 fn scale_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let (r, g, b) = get_rgb_channels(c);
     let scale_val = |val: f64, max: f64, key: &str| -> Result<f64> {
-        if let Some(Value::Number(n, _)) = kw_args.get(key) {
-            let pct = *n / 100.0;
-            if pct >= 0.0 {
-                Ok(val + (max - val) * pct)
-            } else {
-                Ok(val + val * pct)
+        match kw_args.get(key) {
+            Some(Value::Number(n, _)) => {
+                let pct = *n / 100.0;
+                Ok(match pct >= 0.0 {
+                    true => val + (max - val) * pct,
+                    false => val + val * pct,
+                })
             }
-        } else {
-            Ok(val)
+            _ => Ok(val),
         }
     };
     let r = scale_val(r, 1.0, "red")?;
@@ -501,10 +501,9 @@ fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
         }
         (false, false) => (r, g, b),
     };
-    let (output, space) = if h_changed {
-        (ColorOutput::RgbPercent, ColorSpace::Hsl)
-    } else {
-        (ColorOutput::Auto, ColorSpace::Rgb)
+    let (output, space) = match h_changed {
+        true => (ColorOutput::RgbPercent, ColorSpace::Hsl),
+        false => (ColorOutput::Auto, ColorSpace::Rgb),
     };
     Ok(Value::Color(Color::with_rgb(
         r.clamp(0.0, 255.0),
@@ -559,10 +558,9 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
         }
         (false, false) => (r, g, b),
     };
-    let (output, space) = if h_changed {
-        (ColorOutput::RgbPercent, ColorSpace::Hsl)
-    } else {
-        (ColorOutput::Auto, ColorSpace::Rgb)
+    let (output, space) = match h_changed {
+        true => (ColorOutput::RgbPercent, ColorSpace::Hsl),
+        false => (ColorOutput::Auto, ColorSpace::Rgb),
     };
     Ok(Value::Color(Color::with_rgb(
         r.clamp(0.0, 255.0),
@@ -592,23 +590,25 @@ fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
 
     let has_hsl = kw_args.contains_key("saturation") || kw_args.contains_key("lightness");
-    let s = if kw_args.contains_key("saturation") {
-        scale_val(s_init, 1.0, "saturation")?.clamp(0.0, 1.0)
-    } else { s_init };
-    let l = if kw_args.contains_key("lightness") {
-        scale_val(l_init, 1.0, "lightness")?.clamp(0.0, 1.0)
-    } else { l_init };
-
-    let (r, g, b) = if has_hsl {
-        let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
-    } else {
-        (r, g, b)
+    let s = match kw_args.contains_key("saturation") {
+        true => scale_val(s_init, 1.0, "saturation")?.clamp(0.0, 1.0),
+        false => s_init,
     };
-    let (output, space) = if has_hsl {
-        (ColorOutput::RgbPercent, ColorSpace::Hsl)
-    } else {
-        (ColorOutput::Auto, ColorSpace::Rgb)
+    let l = match kw_args.contains_key("lightness") {
+        true => scale_val(l_init, 1.0, "lightness")?.clamp(0.0, 1.0),
+        false => l_init,
+    };
+
+    let (r, g, b) = match has_hsl {
+        true => {
+            let new_c = Evaluator::hsl_to_rgb(h, s, l);
+            (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+        }
+        false => (r, g, b),
+    };
+    let (output, space) = match has_hsl {
+        true => (ColorOutput::RgbPercent, ColorSpace::Hsl),
+        false => (ColorOutput::Auto, ColorSpace::Rgb),
     };
     Ok(Value::Color(Color::with_rgb(
         r.clamp(0.0, 255.0),

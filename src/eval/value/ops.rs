@@ -16,12 +16,15 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
             // 不同单位不兼容时报错（如 1px + 1em）
-            if u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
-                let u1_str = u1.as_deref().unwrap_or("");
-                let u2_str = u2.as_deref().unwrap_or("");
-                return Err(SassError::Eval(format!(
-                    "{u1_str} and {u2_str} have incompatible units."
-                )));
+            match u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
+                true => {
+                    let u1_str = u1.as_deref().unwrap_or("");
+                    let u2_str = u2.as_deref().unwrap_or("");
+                    return Err(SassError::Eval(format!(
+                        "{u1_str} and {u2_str} have incompatible units."
+                    )));
+                }
+                false => {}
             }
             let unit = u1.or(u2);
             Ok(Value::Number(a + b, unit))
@@ -104,12 +107,15 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
             // 不同单位不兼容时报错（如 1px - 1em）
-            if u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
-                let u1_str = u1.as_deref().unwrap_or("");
-                let u2_str = u2.as_deref().unwrap_or("");
-                return Err(SassError::Eval(format!(
-                    "{u1_str} and {u2_str} have incompatible units."
-                )));
+            match u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
+                true => {
+                    let u1_str = u1.as_deref().unwrap_or("");
+                    let u2_str = u2.as_deref().unwrap_or("");
+                    return Err(SassError::Eval(format!(
+                        "{u1_str} and {u2_str} have incompatible units."
+                    )));
+                }
+                false => {}
             }
             let unit = u1.or(u2);
             Ok(Value::Number(a - b, unit))
@@ -166,7 +172,10 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
 pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
-            let unit = if u1.is_some() { u1.clone() } else { u2.clone() };
+            let unit = match u1.is_some() {
+                true => u1.clone(),
+                false => u2.clone(),
+            };
             Ok(Value::Number(a * b, unit))
         }
         _ => Err(SassError::Eval(format!("Cannot multiply {l} * {r}"))),
@@ -176,28 +185,29 @@ pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
 pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
-            if *b == 0.0 {
-                // SCSS: 1/0 = Infinity, -1/0 = -Infinity, 0/0 = NaN
-                if *a == 0.0 {
-                    return Ok(Value::Number(f64::NAN, u1.clone()));
+            match *b == 0.0 {
+                true => {
+                    // SCSS: 1/0 = Infinity, -1/0 = -Infinity, 0/0 = NaN
+                    match *a == 0.0 {
+                        true => return Ok(Value::Number(f64::NAN, u1.clone())),
+                        false => {}
+                    }
+                    // 除零产生 infinity——构建 calc(infinity) 表达式
+                    let sign = match *a < 0.0 { true => "-", false => "" };
+                    let mut calc = format!("calc({sign}infinity");
+                    match u1.as_ref() {
+                        Some(u) if !u.is_empty() => { let _ = write!(calc, " * 1{u}"); }
+                        _ => {}
+                    }
+                    match u2.as_ref() {
+                        Some(u) if !u.is_empty() => { let _ = write!(calc, " / 1{u}"); }
+                        _ => {}
+                    }
+                    calc.push(')');
+                    Ok(Value::Calc(calc))
                 }
-                // 除零产生 infinity——构建 calc(infinity) 表达式
-                let sign = if *a < 0.0 { "-" } else { "" };
-                let mut calc = format!("calc({sign}infinity");
-                if let Some(u) = u1
-                    && !u.is_empty()
-                {
-                    let _ = write!(calc, " * 1{u}");
-                }
-                if let Some(u) = u2
-                    && !u.is_empty()
-                {
-                    let _ = write!(calc, " / 1{u}");
-                }
-                calc.push(')');
-                return Ok(Value::Calc(calc));
+                false => Ok(Value::Number(a / b, u1.clone())),
             }
-            Ok(Value::Number(a / b, u1.clone()))
         }
         // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
         _ => Ok(Value::String(format!("{l}/{r}"), false)),
@@ -207,8 +217,9 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
 pub(crate) fn modulo(l: &Value, r: &Value) -> Result<Value> {
     match (l, r) {
         (Value::Number(a, u), Value::Number(b, _)) => {
-            if *b == 0.0 {
-                return Err(SassError::DivideByZero);
+            match *b == 0.0 {
+                true => return Err(SassError::DivideByZero),
+                false => {}
             }
             // Sass 使用 floored modulo: a - b * floor(a / b)
             // 结果符号跟随除数 b，而非被除数 a
@@ -257,11 +268,13 @@ const UNIT_COMPAT_GROUPS: &[&[&str]] = &[
 ];
 
 pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
-    if u1 == u2 {
-        return true;
+    match u1 == u2 {
+        true => return true,
+        false => {}
     }
-    if u1.is_none() || u2.is_none() {
-        return true;
+    match u1.is_none() || u2.is_none() {
+        true => return true,
+        false => {}
     }
     let g1 = u1.expect("non-none unit after none check");
     let g2 = u2.expect("non-none unit after none check");
@@ -273,11 +286,13 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
 pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
     match (l, r) {
         (Value::Number(a, _), Value::Number(b, _)) => {
-            if a.is_nan() && b.is_nan() {
-                return true;
+            match a.is_nan() && b.is_nan() {
+                true => return true,
+                false => {}
             }
-            if a.is_infinite() && b.is_infinite() && a.signum() == b.signum() {
-                return true;
+            match a.is_infinite() && b.is_infinite() && a.signum() == b.signum() {
+                true => return true,
+                false => {}
             }
             (a - b).abs() < f64::EPSILON
         }

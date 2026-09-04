@@ -27,76 +27,88 @@ impl Evaluator {
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         // 命名空间变量赋值（namespace.$var）——更新模块变量
-        if name.contains('.') {
-            let val = Self::eval_value(value, &env)?;
-            let parts: Vec<&str> = name.splitn(2, '.').collect();
-            if parts.len() == 2 {
-                let ns = parts[0];
-                let var_name = parts[1];
-                if let Some(module) = env.get_namespace(ns) {
-                    // 验证变量在模块中是否存在
-                    if module.all_vars().any(|(k, _)| k == var_name) {
-                        let env = env.with_namespace_var(ns, var_name, val);
-                        return Ok((vec![], env));
+        match name.contains('.') {
+            true => {
+                let val = Self::eval_value(value, &env)?;
+                let parts: Vec<&str> = name.splitn(2, '.').collect();
+                match parts.len() == 2 {
+                    true => {
+                        let ns = parts[0];
+                        let var_name = parts[1];
+                        match env.get_namespace(ns).cloned() {
+                            Some(module) => {
+                                match module.all_vars().any(|(k, _)| k == var_name) {
+                                    true => {
+                                        let env = env.with_namespace_var(ns, var_name, val);
+                                        return Ok((vec![], env));
+                                    }
+                                    false => return Err(SassError::Eval(format!("Undefined variable: ${name}"))),
+                                }
+                            }
+                            None => return Err(SassError::Eval(format!(
+                                "There is no module with the namespace \"{ns}\"."
+                            ))),
+                        }
                     }
-                    return Err(SassError::Eval(format!("Undefined variable: ${name}")));
+                    false => return Ok((vec![], env)),
                 }
-                // 命名空间不存在——报错
-                return Err(SassError::Eval(format!(
-                    "There is no module with the namespace \"{ns}\"."
-                )));
             }
-            return Ok((vec![], env));
+            false => {}
         }
-        if flags.default {
+        match flags.default {
             // !default 赋值：只在顶层（无 current_selector）时消费 pending_config
             // 嵌套规则内的 !default 不算模块级声明，不能消费 with() 配置
-            if env.get_selector().is_none() {
-                // 先检查 star_conflict：如果变量来自多个 as * 模块，报冲突
-                if env.star_conflict(name).is_some() {
-                    return Err(SassError::Eval(
-                        "This variable is available from multiple global modules.".into(),
-                    ));
-                }
-                // !default 赋值：先检查 pending_config（with 配置覆盖值）
-                let normalized = name.replace('-', "_");
-                let config_val = env
-                    .get_pending_config()
-                    .get(&normalized)
-                    .or_else(|| env.get_pending_config().get(name))
-                    .cloned();
-                if let Some(val) = config_val {
-                    let consumed_key = env
+            true => {
+            match env.get_selector().is_none() {
+                true => {
+                    match env.star_conflict(name).is_some() {
+                        true => return Err(SassError::Eval(
+                            "This variable is available from multiple global modules.".into(),
+                        )),
+                        false => {}
+                    }
+                    let normalized = name.replace('-', "_");
+                    let config_val = env
                         .get_pending_config()
                         .get(&normalized)
-                        .map(|_| normalized.clone())
-                        .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
-                    debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
-                    let new_env = env.bind(name.to_string(), val);
-                    let new_env = if let Some(key) = consumed_key {
-                        new_env.add_consumed_config(key)
-                    } else {
-                        new_env
-                    };
-                    return Ok((vec![], new_env));
-                }
-                if env.has_var(name) {
-                    // 如果变量来自多个 as * 模块，报冲突
-                    if env.star_conflict(name).is_some() {
-                        return Err(SassError::Eval(
-                            "This variable is available from multiple global modules.".into(),
-                        ));
+                        .or_else(|| env.get_pending_config().get(name))
+                        .cloned();
+                    match config_val {
+                        Some(val) => {
+                            let consumed_key = env
+                                .get_pending_config()
+                                .get(&normalized)
+                                .map(|_| normalized.clone())
+                                .or_else(|| env.get_pending_config().get(name).map(|_| name.to_string()));
+                            debug!(name = %name, consumed_key = ?consumed_key, "eval_variable: !default consumed from pending_config");
+                            let new_env = env.bind(name.to_string(), val);
+                            let new_env = match consumed_key {
+                                Some(key) => new_env.add_consumed_config(key),
+                                None => new_env,
+                            };
+                            return Ok((vec![], new_env));
+                        }
+                        None => match env.has_var(name) {
+                            true => match env.star_conflict(name).is_some() {
+                                true => return Err(SassError::Eval(
+                                    "This variable is available from multiple global modules.".into(),
+                                )),
+                                false => return Ok((vec![], env)),
+                            },
+                            false => {}
+                        },
                     }
-                    return Ok((vec![], env));
                 }
+                false => {}
             }
+            }
+            false => {}
         }
         let val = Self::eval_value(value, &env)?;
         let new_env = env.bind(name.to_string(), val.clone());
-        if flags.global {
-            Ok((vec![], new_env.add_global_write(name.to_string(), val)))
-        } else {
-            Ok((vec![], new_env))
+        match flags.global {
+            true => Ok((vec![], new_env.add_global_write(name.to_string(), val))),
+            false => Ok((vec![], new_env)),
         }
     }
 
@@ -140,10 +152,11 @@ impl Evaluator {
                         )));
                     }
                 }
-                if env.star_conflict(name).is_some() {
-                    return Err(SassError::Eval(
+                match env.star_conflict(name).is_some() {
+                    true => return Err(SassError::Eval(
                         "This variable is available from multiple global modules.".into(),
-                    ));
+                    )),
+                    false => {}
                 }
                 env.lookup(name)
                     .cloned()
@@ -188,25 +201,30 @@ impl Evaluator {
     /// 求值函数调用。
     fn eval_call(name: &str, args: &[Arg], env: &Env) -> Result<Value> {
         // if() 惰性求值：只求值选中的分支
-        if name == "if"
+        match name == "if"
             && args.len() == 3
             && args
                 .iter()
                 .all(|a| a.name.is_none() && a.condition.is_none())
         {
-            let cond = Self::eval_value(&args[0].value, env)?;
-            if Self::is_truthy(&cond) {
-                return Self::eval_value(&args[1].value, env);
+            true => {
+                let cond = Self::eval_value(&args[0].value, env)?;
+                match Self::is_truthy(&cond) {
+                    true => return Self::eval_value(&args[1].value, env),
+                    false => return Self::eval_value(&args[2].value, env),
+                }
             }
-            return Self::eval_value(&args[2].value, env);
+            false => {}
         }
         // if() 命名参数语法
-        if name == "if" && args.iter().any(|a| a.name.is_some()) {
-            let pos_args: Vec<&Arg> = args
-                .iter()
-                .filter(|a| a.name.is_none() && a.condition.is_none())
-                .collect();
-            if pos_args.len() == 1 {
+        match name == "if" && args.iter().any(|a| a.name.is_some()) {
+            true => {
+                let pos_args: Vec<&Arg> = args
+                    .iter()
+                    .filter(|a| a.name.is_none() && a.condition.is_none())
+                    .collect();
+                match pos_args.len() == 1 {
+                    true => {
                 let cond = Self::eval_value(&pos_args[0].value, env)?;
                 let if_true = args.iter().find(|a| {
                     a.name.as_deref() == Some("if-true") || a.name.as_deref() == Some("$if-true")
@@ -220,18 +238,24 @@ impl Evaluator {
                     (false, _, Some(f)) => return Self::eval_value(&f.value, env),
                     (false, _, None) => return Ok(Value::Null),
                 }
+                    }
+                    false => {}
+                }
             }
+            false => {}
         }
         // if() 冒号语法：if(cond1: val1; cond2: val2; else: default)
-        if name == "if" && args.iter().any(|a| a.condition.is_some()) {
-            return Self::eval_if_colon(args, env);
+        match name == "if" && args.iter().any(|a| a.condition.is_some()) {
+            true => return Self::eval_if_colon(args, env),
+            false => {}
         }
         // if(else: value) — else-only 语法
-        if name == "if"
+        match name == "if"
             && !args.is_empty()
             && args.iter().all(|a| a.name.as_deref() == Some("else"))
         {
-            return Self::eval_value(&args[0].value, env);
+            true => return Self::eval_value(&args[0].value, env),
+            false => {}
         }
         // 分离位置参数和关键字参数，展开 spread
         let (pos_args, kw_args) = Self::collect_args(args, env)?;
@@ -357,17 +381,17 @@ impl Evaluator {
         match op {
             BinOpKind::And => {
                 let l = Self::eval_value(left, env)?;
-                if !Self::is_truthy(&l) {
-                    return Ok(l);
+                match !Self::is_truthy(&l) {
+                    true => return Ok(l),
+                    false => return Self::eval_value(right, env),
                 }
-                return Self::eval_value(right, env);
             }
             BinOpKind::Or => {
                 let l = Self::eval_value(left, env)?;
-                if Self::is_truthy(&l) {
-                    return Ok(l);
+                match Self::is_truthy(&l) {
+                    true => return Ok(l),
+                    false => return Self::eval_value(right, env),
                 }
-                return Self::eval_value(right, env);
             }
             _ => {}
         }

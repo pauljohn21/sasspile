@@ -14,20 +14,18 @@ use crate::consts::{
 /// 格式化浮点数——截断到 10 位小数（与 SCSS 规范一致）。
 fn format_num(n: f64) -> String {
     let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
-    if n.fract() == 0.0 {
-        format!("{}", n as i64)
-    } else {
-        format!("{n}")
+    match n.fract() == 0.0 {
+        true => format!("{}", n as i64),
+        false => format!("{n}"),
     }
 }
 
 /// 清理颜色分量的浮点噪声——将极小值归零。
 /// 当 |v| < `FLOAT_NOISE_THRESHOLD` 时视为 0，避免矩阵系数精度不足导致的残留。
 fn clean_num(v: f64) -> f64 {
-    if v.abs() < FLOAT_NOISE_THRESHOLD {
-        0.0
-    } else {
-        v
+    match v.abs() < FLOAT_NOISE_THRESHOLD {
+        true => 0.0,
+        false => v,
     }
 }
 
@@ -43,26 +41,22 @@ fn clean_pct(v: f64) -> f64 {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Number(n, None) => {
-                if n.is_infinite() {
-                    let sign = if *n < 0.0 { "-" } else { "" };
-                    return write!(f, "calc({sign}infinity)");
+            Value::Number(n, None) => match (*n < 0.0, n.is_infinite(), n.is_nan()) {
+                (_, true, _) => {
+                    let sign = match *n < 0.0 { true => "-", false => "" };
+                    write!(f, "calc({sign}infinity)")
                 }
-                if n.is_nan() {
-                    return write!(f, "calc(NaN)");
+                (_, _, true) => write!(f, "calc(NaN)"),
+                _ => write!(f, "{}", format_num(*n)),
+            },
+            Value::Number(n, Some(unit)) => match (*n < 0.0, n.is_infinite(), n.is_nan()) {
+                (_, true, _) => {
+                    let sign = match *n < 0.0 { true => "-", false => "" };
+                    write!(f, "calc({sign}infinity * 1{unit})")
                 }
-                write!(f, "{}", format_num(*n))
-            }
-            Value::Number(n, Some(unit)) => {
-                if n.is_infinite() {
-                    let sign = if *n < 0.0 { "-" } else { "" };
-                    return write!(f, "calc({sign}infinity * 1{unit})");
-                }
-                if n.is_nan() {
-                    return write!(f, "calc(NaN * 1{unit})");
-                }
-                write!(f, "{}{unit}", format_num(*n))
-            }
+                (_, _, true) => write!(f, "calc(NaN * 1{unit})"),
+                _ => write!(f, "{}{unit}", format_num(*n)),
+            },
             Value::String(s, true) => {
                 let (quote, escaped) = Self::escape_quoted_string(s);
                 write!(f, "{quote}{escaped}{quote}")
@@ -74,23 +68,22 @@ impl std::fmt::Display for Value {
             Value::Color(c) => {
                 match c.output {
                     ColorOutput::RgbExplicit => {
-                        if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                            write!(
+                        match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                            true => write!(
                                 f,
                                 "rgb({}, {}, {})",
                                 c.legacy_rgb[0].round() as u8,
                                 c.legacy_rgb[1].round() as u8,
                                 c.legacy_rgb[2].round() as u8
-                            )
-                        } else {
-                            write!(
+                            ),
+                            false => write!(
                                 f,
                                 "rgba({}, {}, {}, {})",
                                 c.legacy_rgb[0].round() as u8,
                                 c.legacy_rgb[1].round() as u8,
                                 c.legacy_rgb[2].round() as u8,
                                 format_alpha(c.a)
-                            )
+                            ),
                         }
                     }
                     ColorOutput::RgbPercent => {
@@ -122,39 +115,37 @@ impl std::fmt::Display for Value {
                         ColorSpace::Hsl => {
                             let (h, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
                             let hue_str = format_hue(h);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "hsl({}, {}%, {}%)",
                                     hue_str,
                                     format_pct(s),
                                     format_pct(l)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "hsla({}, {}%, {}%, {})",
                                     hue_str,
                                     format_pct(s),
                                     format_pct(l),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Hwb => {
                             let (h, w, bk) = (c.channels[0], c.channels[1], c.channels[2]);
                             let hue_str = format_hue(h);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(f, "hwb({} {}% {}%)", hue_str, format_pct(w), format_pct(bk))
-                            } else {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(f, "hwb({} {}% {}%)", hue_str, format_pct(w), format_pct(bk)),
+                                false => write!(
                                     f,
                                     "hwb({} {}% {}% / {})",
                                     hue_str,
                                     format_pct(w),
                                     format_pct(bk),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Lab => {
@@ -162,51 +153,48 @@ impl std::fmt::Display for Value {
                             let l_clean = clean_pct(l);
                             let a_clean = clean_num(a);
                             let b_clean = clean_num(b);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "lab({}% {} {})",
                                     format_num(l_clean),
                                     format_num(a_clean),
                                     format_num(b_clean)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "lab({}% {} {} / {})",
                                     format_num(l_clean),
                                     format_num(a_clean),
                                     format_num(b_clean),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Lch => {
                             let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
                             let l_clean = clean_pct(l);
                             let ch_clean = clean_num(ch);
-                            let h_str = if ch_clean == 0.0 {
-                                "none".to_string()
-                            } else {
-                                format!("{}{}", format_hue(h), DEG_UNIT)
+                            let h_str = match ch_clean == 0.0 {
+                                true => "none".to_string(),
+                                false => format!("{}{}", format_hue(h), DEG_UNIT),
                             };
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "lch({}% {} {})",
                                     format_num(l_clean),
                                     format_num(ch_clean),
                                     h_str
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "lch({}% {} {} / {})",
                                     format_num(l_clean),
                                     format_num(ch_clean),
                                     h_str,
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Oklab => {
@@ -214,278 +202,265 @@ impl std::fmt::Display for Value {
                             let l_pct = clean_pct(l * PCT_SCALE);
                             let a_clean = clean_num(a);
                             let b_clean = clean_num(b);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "oklab({}% {} {})",
                                     format_num(l_pct),
                                     format_num(a_clean),
                                     format_num(b_clean)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "oklab({}% {} {} / {})",
                                     format_num(l_pct),
                                     format_num(a_clean),
                                     format_num(b_clean),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Oklch => {
                             let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
                             let l_pct = clean_pct(l * PCT_SCALE);
                             let ch_clean = clean_num(ch);
-                            let h_str = if ch_clean == 0.0 {
-                                "none".to_string()
-                            } else {
-                                format!("{}{}", format_hue(h), DEG_UNIT)
+                            let h_str = match ch_clean == 0.0 {
+                                true => "none".to_string(),
+                                false => format!("{}{}", format_hue(h), DEG_UNIT),
                             };
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "oklch({}% {} {})",
                                     format_num(l_pct),
                                     format_num(ch_clean),
                                     h_str
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "oklch({}% {} {} / {})",
                                     format_num(l_pct),
                                     format_num(ch_clean),
                                     h_str,
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::DisplayP3 => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(display-p3 {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(display-p3 {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::DisplayP3Linear => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(display-p3-linear {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(display-p3-linear {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Srgb => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(srgb {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(srgb {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::SrgbLinear => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(srgb-linear {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(srgb-linear {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::A98Rgb => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(a98-rgb {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(a98-rgb {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::ProphotoRgb => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(prophoto-rgb {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(prophoto-rgb {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Rec2020 => {
                             let (r, g, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(rec2020 {} {} {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(rec2020 {} {} {} / {})",
                                     format_num(r),
                                     format_num(g),
                                     format_num(b),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::XyzD65 => {
                             let (x, y, z) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(xyz {} {} {})",
                                     format_num(x),
                                     format_num(y),
                                     format_num(z)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(xyz {} {} {} / {})",
                                     format_num(x),
                                     format_num(y),
                                     format_num(z),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::XyzD50 => {
                             let (x, y, z) = (c.channels[0], c.channels[1], c.channels[2]);
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => write!(
                                     f,
                                     "color(xyz-d50 {} {} {})",
                                     format_num(x),
                                     format_num(y),
                                     format_num(z)
-                                )
-                            } else {
-                                write!(
+                                ),
+                                false => write!(
                                     f,
                                     "color(xyz-d50 {} {} {} / {})",
                                     format_num(x),
                                     format_num(y),
                                     format_num(z),
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                         ColorSpace::Rgb => {
                             // Auto + Rgb = hex / 命名色 / rgba
-                            if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                if let Some(name) =
-                                    crate::eval::Evaluator::reverse_lookup_named_color(c)
-                                {
-                                    write!(f, "{name}")
-                                } else {
-                                    write!(
+                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                true => match crate::eval::Evaluator::reverse_lookup_named_color(c) {
+                                    Some(name) => write!(f, "{name}"),
+                                    None => write!(
                                         f,
                                         "#{:02x}{:02x}{:02x}",
                                         c.legacy_rgb[0].round() as u8,
                                         c.legacy_rgb[1].round() as u8,
                                         c.legacy_rgb[2].round() as u8
-                                    )
-                                }
-                            } else {
-                                write!(
+                                    ),
+                                },
+                                false => write!(
                                     f,
                                     "rgba({}, {}, {}, {})",
                                     c.legacy_rgb[0].round() as u8,
                                     c.legacy_rgb[1].round() as u8,
                                     c.legacy_rgb[2].round() as u8,
                                     format_alpha(c.a)
-                                )
+                                ),
                             }
                         }
                     },
                 }
             }
             Value::List(elements, sep, bracketed) => {
-                if elements.is_empty() {
-                    if *bracketed {
-                        return write!(f, "[]");
+                match elements.is_empty() {
+                    true => {
+                        return match *bracketed {
+                            true => write!(f, "[]"),
+                            false => Ok(()),
+                        };
                     }
-                    return Ok(());
+                    false => {}
                 }
                 let sep_str = match sep {
                     Separator::Comma => ", ",
@@ -494,25 +469,29 @@ impl std::fmt::Display for Value {
                     Separator::SlashLiteral => "/",
                     Separator::Undecided => " ",
                 };
-                if *bracketed {
-                    f.write_str("[")?;
+                match *bracketed {
+                    true => f.write_str("[")?,
+                    false => {}
                 }
                 for (i, e) in elements.iter().enumerate() {
-                    if i > 0 {
-                        f.write_str(sep_str)?;
+                    match i > 0 {
+                        true => f.write_str(sep_str)?,
+                        false => {}
                     }
                     e.fmt(f)?;
                 }
-                if *bracketed {
-                    f.write_str("]")?;
+                match *bracketed {
+                    true => f.write_str("]")?,
+                    false => {}
                 }
                 Ok(())
             }
             Value::Map(pairs) => {
                 f.write_str("(")?;
                 for (i, (k, v)) in pairs.iter().enumerate() {
-                    if i > 0 {
-                        f.write_str(", ")?;
+                    match i > 0 {
+                        true => f.write_str(", ")?,
+                        false => {}
                     }
                     k.fmt(f)?;
                     f.write_str(": ")?;
@@ -526,41 +505,46 @@ impl std::fmt::Display for Value {
             Value::Null => f.write_str("null"),
             Value::Call(name, args) => {
                 // if() 冒号语法：condition: value; else: other
-                if name == "if"
+                match name == "if"
                     && args
                         .iter()
                         .any(|a| a.condition.is_some() || a.name.as_deref() == Some("else"))
                 {
-                    write!(f, "{name}(")?;
-                    for (i, a) in args.iter().enumerate() {
-                        if i > 0 {
-                            f.write_str("; ")?;
+                    true => {
+                        write!(f, "{name}(")?;
+                        for (i, a) in args.iter().enumerate() {
+                            match i > 0 {
+                                true => f.write_str("; ")?,
+                                false => {}
+                            }
+                            match (&a.condition, &a.name) {
+                                (Some(cond), _) => {
+                                    cond.fmt(f)?;
+                                    f.write_str(": ")?;
+                                    a.value.fmt(f)?;
+                                }
+                                (None, Some(n)) => {
+                                    write!(f, "{n}: ")?;
+                                    a.value.fmt(f)?;
+                                }
+                                (None, None) => {
+                                    a.value.fmt(f)?;
+                                }
+                            }
                         }
-                        match (&a.condition, &a.name) {
-                            (Some(cond), _) => {
-                                cond.fmt(f)?;
-                                f.write_str(": ")?;
-                                a.value.fmt(f)?;
-                            }
-                            (None, Some(n)) => {
-                                write!(f, "{n}: ")?;
-                                a.value.fmt(f)?;
-                            }
-                            (None, None) => {
-                                a.value.fmt(f)?;
-                            }
-                        }
+                        f.write_str(")")
                     }
-                    f.write_str(")")
-                } else {
-                    write!(f, "{name}(")?;
-                    for (i, a) in args.iter().enumerate() {
-                        if i > 0 {
-                            f.write_str(", ")?;
+                    false => {
+                        write!(f, "{name}(")?;
+                        for (i, a) in args.iter().enumerate() {
+                            match i > 0 {
+                                true => f.write_str(", ")?,
+                                false => {}
+                            }
+                            a.value.fmt(f)?;
                         }
-                        a.value.fmt(f)?;
+                        f.write_str(")")
                     }
-                    f.write_str(")")
                 }
             }
             Value::Interp(segments) => {

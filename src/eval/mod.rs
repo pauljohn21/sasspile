@@ -57,11 +57,14 @@ impl Evaluator {
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(nodes, env), fields(depth = env.get_depth(), n = nodes.len())))]
     fn eval_nodes(nodes: &[Node], env: Env) -> Result<(Vec<CssNode>, Env)> {
-        if env.get_depth() > MAX_DEPTH {
-            warn!(depth = env.get_depth(), "recursion limit exceeded");
-            return Err(SassError::Eval(
-                "Recursion depth limit exceeded (possible infinite loop)".into(),
-            ));
+        match env.get_depth() > MAX_DEPTH {
+            true => {
+                warn!(depth = env.get_depth(), "recursion limit exceeded");
+                return Err(SassError::Eval(
+                    "Recursion depth limit exceeded (possible infinite loop)".into(),
+                ));
+            }
+            false => {}
         }
         let (css, env) = nodes.iter().try_fold(
             (Vec::new(), env),
@@ -80,18 +83,20 @@ impl Evaluator {
     /// 求值单个节点——纯函数分发，每个 arm 委托独立函数。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(node, env), fields(depth = env.get_depth())))]
     fn eval_node(node: &Node, env: Env) -> Result<(Vec<CssNode>, Env)> {
-        if env.is_plain_css()
+        match env.is_plain_css()
             && !matches!(
                 node,
                 Node::Use { .. } | Node::Forward { .. } | Node::Import { .. }
             )
         {
-            Self::check_plain_css_node(node)?;
+            true => Self::check_plain_css_node(node)?,
+            false => {}
         }
         match node {
             Node::Rule { selector, body } => {
-                if env.is_plain_css() {
-                    Self::check_plain_css_selector(selector)?;
+                match env.is_plain_css() {
+                    true => Self::check_plain_css_selector(selector)?,
+                    false => {}
                 }
                 Self::eval_rule(selector, body, env)
             }
@@ -156,24 +161,30 @@ fn eval_decl(
     env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
     use crate::eval::Evaluator;
-    if env.is_plain_css() {
-        Evaluator::check_plain_css_value(value)?;
-        if property.contains("#{") {
-            return Err(SassError::Eval(
-                "Interpolation isn't allowed in plain CSS.".into(),
-            ));
+    match env.is_plain_css() {
+        true => {
+            Evaluator::check_plain_css_value(value)?;
+            match property.contains("#{") {
+                true => return Err(SassError::Eval(
+                    "Interpolation isn't allowed in plain CSS.".into(),
+                )),
+                false => {}
+            }
         }
+        false => {}
     }
     // 顶层声明检测：不在样式规则内的裸声明是非法的
-    if env.get_selector().is_none() {
-        return Err(SassError::Eval(
+    match env.get_selector().is_none() {
+        true => return Err(SassError::Eval(
             "Declarations may only be used within style rules.".into(),
-        ));
+        )),
+        false => {}
     }
     let val = Evaluator::eval_value(value, &env)?;
     // plain CSS 模式保留 null 值（如 `x: null`）
-    if matches!(val, Value::Null) && !env.is_plain_css() {
-        return Ok((vec![], env));
+    match matches!(val, Value::Null) && !env.is_plain_css() {
+        true => return Ok((vec![], env)),
+        false => {}
     }
     let property = crate::eval::value::eval_property_name(property, &env);
     Ok((
@@ -188,10 +199,9 @@ fn eval_decl(
 
 /// 求值注释节点。
 fn eval_comment(text: &str, silent: bool, env: Env) -> Result<(Vec<CssNode>, Env)> {
-    if silent {
-        Ok((vec![], env))
-    } else {
-        Ok((vec![CssNode::Comment(text.to_string())], env))
+    match silent {
+        true => Ok((vec![], env)),
+        false => Ok((vec![CssNode::Comment(text.to_string())], env)),
     }
 }
 
@@ -219,17 +229,18 @@ fn eval_mixin_def(
 /// 求值 @content 节点。
 fn eval_content(env: Env) -> Result<(Vec<CssNode>, Env)> {
     use crate::eval::Evaluator;
-    if let Some((content_nodes, content_env)) = env.get_content() {
-        // @content 在 mixin body 内执行，继承当前 current_selector
-        let content_env = content_env.clone().with_selector(
-            env.get_selector()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_default(),
-        );
-        let content_nodes = content_nodes.to_vec();
-        Evaluator::eval_nodes(&content_nodes, content_env)
-    } else {
-        Ok((vec![], env))
+    match env.get_content() {
+        Some((content_nodes, content_env)) => {
+            // @content 在 mixin body 内执行，继承当前 current_selector
+            let content_env = content_env.clone().with_selector(
+                env.get_selector()
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_default(),
+            );
+            let content_nodes = content_nodes.to_vec();
+            Evaluator::eval_nodes(&content_nodes, content_env)
+        }
+        None => Ok((vec![], env)),
     }
 }
 
@@ -263,14 +274,15 @@ fn eval_return(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 
 /// 求值 @extend 节点。
 fn eval_extend_node(selector: &str, optional: bool, env: Env) -> Result<(Vec<CssNode>, Env)> {
-    if let Some(extender) = env.get_selector().map(std::string::ToString::to_string) {
-        let module = env.get_base_path().cloned();
-        Ok((
-            vec![],
-            env.add_extend(extender, selector.to_string(), optional, module),
-        ))
-    } else {
-        Ok((vec![], env))
+    match env.get_selector().map(std::string::ToString::to_string) {
+        Some(extender) => {
+            let module = env.get_base_path().cloned();
+            Ok((
+                vec![],
+                env.add_extend(extender, selector.to_string(), optional, module),
+            ))
+        }
+        None => Ok((vec![], env)),
     }
 }
 

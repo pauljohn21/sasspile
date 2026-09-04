@@ -13,10 +13,9 @@ impl Node {
                     .map(|n| n.to_scss(indent + 1))
                     .collect::<Vec<_>>()
                     .join("\n");
-                if body.is_empty() {
-                    format!("{pad}{selector} {{}}")
-                } else {
-                    format!("{pad}{selector} {{\n{body}\n{pad}}}")
+                match body.is_empty() {
+                    true => format!("{pad}{selector} {{}}"),
+                    false => format!("{pad}{selector} {{\n{body}\n{pad}}}"),
                 }
             }
             Node::Decl {
@@ -29,20 +28,21 @@ impl Node {
             }
             Node::Variable { name, value, flags } => {
                 let mut s = format!("{pad}${name}: {value}");
-                if flags.default {
-                    s.push_str(" !default");
+                match flags.default {
+                    true => s.push_str(" !default"),
+                    false => {}
                 }
-                if flags.global {
-                    s.push_str(" !global");
+                match flags.global {
+                    true => s.push_str(" !global"),
+                    false => {}
                 }
                 s.push(';');
                 s
             }
             Node::Comment(text, silent) => {
-                if *silent {
-                    format!("{pad}// {text}")
-                } else {
-                    format!("{pad}/* {text} */")
+                match *silent {
+                    true => format!("{pad}// {text}"),
+                    false => format!("{pad}/* {text} */"),
                 }
             }
             // —— 控制流 ——
@@ -60,8 +60,9 @@ impl Node {
                             .collect::<Vec<_>>()
                             .join("\n");
                         let _ = write!(acc, "{pad}{kw} {cond} {{\n{body_s}\n{pad}}}");
-                        if i < branches.len() - 1 || else_body.is_some() {
-                            acc.push('\n');
+                        match i < branches.len() - 1 || else_body.is_some() {
+                            true => acc.push('\n'),
+                            false => {}
                         }
                         acc
                     },
@@ -201,13 +202,16 @@ impl Node {
                     (false, Some(ns)) => { let _ = write!(s, " as {ns}"); }
                     (false, None) => {}
                 }
-                if !config.is_empty() {
-                    let cfg: String = config
-                        .iter()
-                        .map(|c| format!("${}: {}", c.name, c.value))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let _ = write!(s, " with ({cfg})");
+                match !config.is_empty() {
+                    true => {
+                        let cfg: String = config
+                            .iter()
+                            .map(|c| format!("${}: {}", c.name, c.value))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let _ = write!(s, " with ({cfg})");
+                    }
+                    false => {}
                 }
                 s.push(';');
                 s
@@ -223,20 +227,21 @@ impl Node {
                 if let Some(p) = prefix {
                     let _ = write!(s, " as {p}-*");
                 }
-                if !show.is_empty() {
-                    let _ = write!(s, " show {}", show.join(", "));
+                match !show.is_empty() {
+                    true => { let _ = write!(s, " show {}", show.join(", ")); }
+                    false => {}
                 }
-                if !hide.is_empty() {
-                    let _ = write!(s, " hide {}", hide.join(", "));
+                match !hide.is_empty() {
+                    true => { let _ = write!(s, " hide {}", hide.join(", ")); }
+                    false => {}
                 }
                 s.push(';');
                 s
             }
             Node::Import { url, modifier } => {
-                if modifier.is_empty() {
-                    format!("{pad}@import \"{url}\";")
-                } else {
-                    format!("{pad}@import \"{url}\" {modifier};")
+                match modifier.is_empty() {
+                    true => format!("{pad}@import \"{url}\";"),
+                    false => format!("{pad}@import \"{url}\" {modifier};"),
                 }
             }
             // —— 其他指令 ——
@@ -265,17 +270,15 @@ impl Node {
                             .map(|n| n.to_scss(indent + 1))
                             .collect::<Vec<_>>()
                             .join("\n");
-                        if params_s.is_empty() {
-                            format!("{pad}@{name} {{\n{body_s}\n{pad}}}")
-                        } else {
-                            format!("{pad}@{name} {params_s} {{\n{body_s}\n{pad}}}")
+                        match params_s.is_empty() {
+                            true => format!("{pad}@{name} {{\n{body_s}\n{pad}}}"),
+                            false => format!("{pad}@{name} {params_s} {{\n{body_s}\n{pad}}}"),
                         }
                     }
                     None => {
-                        if params_s.is_empty() {
-                            format!("{pad}@{name};")
-                        } else {
-                            format!("{pad}@{name} {params_s};")
+                        match params_s.is_empty() {
+                            true => format!("{pad}@{name};"),
+                            false => format!("{pad}@{name} {params_s};"),
                         }
                     }
                 }

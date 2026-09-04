@@ -18,24 +18,28 @@
 /// sRGB 通道值 (0-1) → 线性 sRGB。
 /// 扩展传递函数：负值在轴上反射后用幂函数。
 fn srgb_to_linear(c: f64) -> f64 {
-    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let sign = match c < 0.0 {
+        true => -1.0,
+        false => 1.0,
+    };
     let abs = c.abs();
-    if abs <= 0.04045 {
-        c / 12.92
-    } else {
-        sign * ((abs + 0.055) / 1.055).powf(2.4)
+    match abs <= 0.04045 {
+        true => c / 12.92,
+        false => sign * ((abs + 0.055) / 1.055).powf(2.4),
     }
 }
 
 /// 线性 sRGB → sRGB 通道值 (0-1)。
 /// 扩展传递函数：负值在轴上反射后用幂函数。
 fn linear_to_srgb(c: f64) -> f64 {
-    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let sign = match c < 0.0 {
+        true => -1.0,
+        false => 1.0,
+    };
     let abs = c.abs();
-    if abs > 0.0031308 {
-        sign * (1.055 * abs.powf(1.0 / 2.4) - 0.055)
-    } else {
-        12.92 * c
+    match abs > 0.0031308 {
+        true => sign * (1.055 * abs.powf(1.0 / 2.4) - 0.055),
+        false => 12.92 * c,
     }
 }
 
@@ -93,19 +97,17 @@ const LAB_EPSILON: f64 = 216.0 / 24389.0;
 const LAB_KAPPA: f64 = 24389.0 / 27.0;
 
 fn lab_f(t: f64) -> f64 {
-    if t > LAB_EPSILON {
-        t.cbrt()
-    } else {
-        (LAB_KAPPA * t + 16.0) / 116.0
+    match t > LAB_EPSILON {
+        true => t.cbrt(),
+        false => (LAB_KAPPA * t + 16.0) / 116.0,
     }
 }
 
 fn lab_f_inv(t: f64) -> f64 {
     let t3 = t * t * t;
-    if t3 > LAB_EPSILON {
-        t3
-    } else {
-        (116.0 * t - 16.0) / LAB_KAPPA
+    match t3 > LAB_EPSILON {
+        true => t3,
+        false => (116.0 * t - 16.0) / LAB_KAPPA,
     }
 }
 
@@ -145,10 +147,11 @@ fn lab_to_xyz_d50(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
 /// Lab → Lch。
 fn lab_to_lch(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
     let c = (a * a + b * b).sqrt();
-    let mut h = b.atan2(a).to_degrees();
-    if h < 0.0 {
-        h += 360.0;
-    }
+    let h = b.atan2(a).to_degrees();
+    let h = match h < 0.0 {
+        true => h + 360.0,
+        false => h,
+    };
     (l, c, h)
 }
 
@@ -222,10 +225,11 @@ pub fn oklab_to_srgb(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
 /// Oklab → Oklch。
 pub fn oklab_to_oklch(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
     let c = (a * a + b * b).sqrt();
-    let mut h = b.atan2(a).to_degrees();
-    if h < 0.0 {
-        h += 360.0;
-    }
+    let h = b.atan2(a).to_degrees();
+    let h = match h < 0.0 {
+        true => h + 360.0,
+        false => h,
+    };
     (l, c, h)
 }
 
@@ -343,7 +347,10 @@ pub fn srgb_to_display_p3(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 pub fn a98_rgb_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     // A98 RGB gamma 563/256 → linear (扩展传递函数，支持负值)
     let to_lin = |c: f64| {
-        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        let sign = match c < 0.0 {
+            true => -1.0,
+            false => 1.0,
+        };
         sign * c.abs().powf(563.0 / 256.0)
     };
     let rl = to_lin(r);
@@ -365,7 +372,10 @@ pub fn srgb_to_a98_rgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let bl = 16779.0 / 1248040.0 * x - 147721.0 / 1248040.0 * y + 1266979.0 / 1248040.0 * z;
     // linear → A98 gamma 256/563 (扩展传递函数)
     let to_gam = |c: f64| {
-        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        let sign = match c < 0.0 {
+            true => -1.0,
+            false => 1.0,
+        };
         sign * c.abs().powf(256.0 / 563.0)
     };
     (to_gam(rl), to_gam(gl), to_gam(bl))
@@ -379,12 +389,14 @@ pub fn srgb_to_a98_rgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 pub fn prophoto_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     // ProPhoto gamma decode (Et2 = 16/512 = 1/32)
     fn prophoto_gamma_decode(c: f64) -> f64 {
-        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        let sign = match c < 0.0 {
+            true => -1.0,
+            false => 1.0,
+        };
         let abs = c.abs();
-        if abs <= 16.0 / 512.0 {
-            c / 16.0
-        } else {
-            sign * abs.powf(1.0 / 1.8)
+        match abs <= 16.0 / 512.0 {
+            true => c / 16.0,
+            false => sign * abs.powf(1.0 / 1.8),
         }
     }
     let rl = prophoto_gamma_decode(r);
@@ -415,12 +427,14 @@ pub fn srgb_to_prophoto(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 
 /// `ProPhoto` gamma encode (Et = 1/512)。
 fn prophoto_gamma_encode(c: f64) -> f64 {
-    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let sign = match c < 0.0 {
+        true => -1.0,
+        false => 1.0,
+    };
     let abs = c.abs();
-    if abs >= 1.0 / 512.0 {
-        sign * abs.powf(1.0 / 1.8)
-    } else {
-        16.0 * c
+    match abs >= 1.0 / 512.0 {
+        true => sign * abs.powf(1.0 / 1.8),
+        false => 16.0 * c,
     }
 }
 
@@ -432,7 +446,10 @@ fn prophoto_gamma_encode(c: f64) -> f64 {
 pub fn rec2020_to_srgb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     // Rec2020 gamma decode: pow(2.4) (扩展传递函数)
     fn rec2020_decode(c: f64) -> f64 {
-        let sign = if c < 0.0 { -1.0 } else { 1.0 };
+        let sign = match c < 0.0 {
+            true => -1.0,
+            false => 1.0,
+        };
         sign * c.abs().powf(2.4)
     }
     let rl = rec2020_decode(r);
@@ -462,7 +479,10 @@ pub fn srgb_to_rec2020(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
 
 /// Rec2020 gamma encode: pow(1/2.4)。
 fn rec2020_encode(c: f64) -> f64 {
-    let sign = if c < 0.0 { -1.0 } else { 1.0 };
+    let sign = match c < 0.0 {
+        true => -1.0,
+        false => 1.0,
+    };
     sign * c.abs().powf(1.0 / 2.4)
 }
 

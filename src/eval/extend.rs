@@ -71,8 +71,9 @@ impl Evaluator {
                                         },
                                         |s| s.contains(target_trimmed),
                                     );
-                                    if !in_scope {
-                                        return sel_ast;
+                                    match !in_scope {
+                                        true => return sel_ast,
+                                        false => {}
                                     }
                                 }
                                 let extendee = parse_selector(target_trimmed);
@@ -194,8 +195,9 @@ impl Evaluator {
                 let crate::parse::ast::Node::Use { url, .. } = node else {
                     return None;
                 };
-                if url.starts_with("sass:") {
-                    return None;
+                match url.starts_with("sass:") {
+                    true => return None,
+                    false => {}
                 }
                 let path = Self::resolve_file(base_ref, url, load_paths)?;
                 let v = cache.get(&path)?;

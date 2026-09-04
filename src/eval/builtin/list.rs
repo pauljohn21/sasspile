@@ -43,8 +43,9 @@ fn merge_list_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })
         .collect();
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
+    match pos_args.len() > param_names.len() {
+        true => result.extend_from_slice(&pos_args[param_names.len()..]),
+        false => {}
     }
     result
 }
@@ -131,15 +132,13 @@ pub fn call(
                 Ok(Some(Value::List(new_items, new_sep, *bracketed)))
             }
             [Value::Map(pairs), val] => {
-                if pairs.is_empty() {
-                    // 空映射 = 空列表 → 返回单元素 space 列表
-                    Ok(Some(Value::List(
+                match pairs.is_empty() {
+                    true => Ok(Some(Value::List(
                         vec![val.clone()],
                         Separator::Space,
                         false,
-                    )))
-                } else {
-                    // 非空 Map → comma-separated list of space-separated pairs
+                    ))),
+                    false => {
                     let items: Vec<Value> = pairs
                         .iter()
                         .map(|(k, v)| {
@@ -149,6 +148,7 @@ pub fn call(
                     let mut new_items = items;
                     new_items.push(val.clone());
                     Ok(Some(Value::List(new_items, Separator::Comma, false)))
+                    }
                 }
             }
             [other, val] => {
@@ -165,8 +165,9 @@ pub fn call(
             _ => Err(SassError::Eval("append requires 2-3 arguments".into())),
         },
         "join" => {
-            if args.len() < 2 || args.len() > 4 {
-                return Err(SassError::Eval("join requires 2-4 arguments".into()));
+            match args.len() < 2 || args.len() > 4 {
+                true => return Err(SassError::Eval("join requires 2-4 arguments".into())),
+                false => {}
             }
             // 提取 list1 的 items 和 separator
             let (a_items, a_sep, a_bracketed) = match &args[0] {
@@ -208,10 +209,9 @@ pub fn call(
                         } else {
                             a_sep
                         };
-                        if auto_sep == Separator::SlashLiteral {
-                            Separator::Slash
-                        } else {
-                            auto_sep
+                        match auto_sep == Separator::SlashLiteral {
+                            true => Separator::Slash,
+                            false => auto_sep,
                         }
                     }
                 }
@@ -222,10 +222,9 @@ pub fn call(
                 } else {
                     a_sep
                 };
-                if auto_sep == Separator::SlashLiteral {
-                    Separator::Slash
-                } else {
-                    auto_sep
+                match auto_sep == Separator::SlashLiteral {
+                    true => Separator::Slash,
+                    false => auto_sep,
                 }
             };
             // 解析 bracketed 参数
@@ -241,28 +240,29 @@ pub fn call(
         "index" => match args {
             [Value::List(items, _, _), needle] => {
                 for (i, item) in items.iter().enumerate() {
-                    if crate::eval::value::values_eq(item, needle) {
-                        return Ok(Some(Value::Number((i + 1) as f64, None)));
-                    }
+                match crate::eval::value::values_eq(item, needle) {
+                    true => return Ok(Some(Value::Number((i + 1) as f64, None))),
+                    false => {}
+                }
                 }
                 Ok(Some(Value::Null))
             }
             [other, needle] => {
-                if crate::eval::value::values_eq(other, needle) {
-                    Ok(Some(Value::Number(1.0, None)))
-                } else {
-                    Ok(Some(Value::Null))
+                match crate::eval::value::values_eq(other, needle) {
+                    true => Ok(Some(Value::Number(1.0, None))),
+                    false => Ok(Some(Value::Null)),
                 }
             }
             _ => Err(SassError::Eval("index requires 2 arguments".into())),
         },
         "list-separator" | "separator" => {
-            if args.len() != 1 {
-                return Err(SassError::Eval(format!(
+            match args.len() != 1 {
+                true => return Err(SassError::Eval(format!(
                     "Only 1 argument allowed, but {} {} passed.",
                     args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+                    match args.len() == 1 { true => "was", false => "were" }
+                ))),
+                false => {}
             }
             match &args[0] {
                 Value::List(_, Separator::Comma, _) => {
@@ -281,10 +281,9 @@ pub fn call(
                     Ok(Some(Value::String("space".into(), false)))
                 }
                 Value::Map(pairs) => {
-                    if pairs.is_empty() {
-                        Ok(Some(Value::String("space".into(), false)))
-                    } else {
-                        Ok(Some(Value::String("comma".into(), false)))
+                    match pairs.is_empty() {
+                        true => Ok(Some(Value::String("space".into(), false))),
+                        false => Ok(Some(Value::String("comma".into(), false))),
                     }
                 }
                 _ => Ok(Some(Value::String("space".into(), false))),
@@ -302,12 +301,11 @@ pub fn call(
                     }
                 };
                 let mut new_items = items.clone();
-                if actual < new_items.len() {
-                    new_items[actual] = val.clone();
-                } else {
-                    return Err(SassError::Eval(format!(
+                match actual < new_items.len() {
+                    true => new_items[actual] = val.clone(),
+                    false => return Err(SassError::Eval(format!(
                         "List index {idx} is out of bounds for list of length {len}"
-                    )));
+                    ))),
                 }
                 Ok(Some(Value::List(new_items, sep.clone(), *bracketed)))
             }
@@ -318,14 +316,16 @@ pub fn call(
             _ => Ok(Some(Value::Bool(false))),
         },
         "list-slash" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("list-slash requires 1+ arguments".into()));
+            match args.is_empty() {
+                true => return Err(SassError::Eval("list-slash requires 1+ arguments".into())),
+                false => {}
             }
             Ok(Some(Value::List(args.to_vec(), Separator::Slash, false)))
         }
         "zip" => {
-            if args.len() < 2 {
-                return Err(SassError::Eval("zip requires 2+ list arguments".into()));
+            match args.len() < 2 {
+                true => return Err(SassError::Eval("zip requires 2+ list arguments".into())),
+                false => {}
             }
             // 将每个参数转为列表（非列表值视为单元素列表）
             let lists: Vec<Vec<Value>> = args
