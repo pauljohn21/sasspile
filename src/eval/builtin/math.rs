@@ -36,7 +36,7 @@ pub fn call(
                         .unwrap_or(c.as_str());
                     Ok(Some(Value::String(format!("abs({inner})"), false)))
                 }
-                _ => unreachable!(),
+                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "ceil" => {
@@ -50,7 +50,7 @@ pub fn call(
                         .unwrap_or(c.as_str());
                     Ok(Some(Value::String(format!("ceil({inner})"), false)))
                 }
-                _ => unreachable!(),
+                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "floor" => {
@@ -64,7 +64,7 @@ pub fn call(
                         .unwrap_or(c.as_str());
                     Ok(Some(Value::String(format!("floor({inner})"), false)))
                 }
-                _ => unreachable!(),
+                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "round" => {
@@ -86,7 +86,7 @@ pub fn call(
                                 .unwrap_or(c.as_str());
                             Ok(Some(Value::String(format!("round({inner})"), false)))
                         }
-                        _ => unreachable!(),
+                        _ => Err(SassError::Eval("$number is not a number.".into())),
                     }
                 }
                 2 => css_round("nearest", &args[0], &args[1]),
@@ -177,7 +177,7 @@ pub fn call(
             validate_single_number(args)?;
             match &args[0] {
                 Value::Number(n, _) => Ok(Some(Value::Number(n * 100.0, Some("%".into())))),
-                _ => unreachable!(),
+                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "div" => {
@@ -237,12 +237,14 @@ pub fn call(
                         (false, _) => Ok(Some(Value::Number(a / b, u1.clone()))),
                     }
                 }
-                (other, Value::Number(..)) => Err(SassError::Eval(format!(
-                    "$number1: {other} is not a number."
-                ))),
                 (Value::Number(..), other) => Err(SassError::Eval(format!(
                     "$number2: {other} is not a number."
                 ))),
+                // Calc 参数 — 委托给 value::ops::div 处理
+                (Value::Calc(..), _) | (_, Value::Calc(..)) => {
+                    let result = crate::eval::value::div(&args[0], &args[1])?;
+                    Ok(Some(result))
+                }
                 (other, _) => Err(SassError::Eval(format!(
                     "$number1: {other} is not a number."
                 ))),
@@ -278,7 +280,7 @@ pub fn call(
                     )))
                 }
                 [other] => Err(SassError::Eval(format!("$limit: {other} is not a number."))),
-                _ => unreachable!(),
+                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "clamp" => {
@@ -311,7 +313,10 @@ pub fn call(
             match &args[0] {
                 Value::Number(_, Some(u)) => Ok(Some(Value::String(u.clone(), false))),
                 Value::Number(_, None) => Ok(Some(Value::String(String::new(), false))),
-                _ => unreachable!(),
+                Value::Calc(_) => Err(SassError::Eval(
+                    "$number: calc expressions can't be used to determine units.".into(),
+                )),
+                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "is-unitless" => {

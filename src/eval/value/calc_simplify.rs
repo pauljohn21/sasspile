@@ -49,6 +49,21 @@ fn simplify_recursive(node: CalcNode) -> Result<CalcNode, CalcError> {
 fn simplify_op(op: CalcOp, left: CalcNode, right: CalcNode) -> Result<CalcNode, CalcError> {
     // 两个都是纯数字
     if let (CalcNode::Number(a, ua), CalcNode::Number(b, ub)) = (&left, &right) {
+        // 除法：除数有单位且与左侧不抵消 → 保留 BinaryOp
+        if let CalcOp::Div = op {
+            if let Some(u2) = ub.as_ref() {
+                match ua.as_ref() {
+                    Some(u1) if u1 == u2 => {}
+                    _ => {
+                        return Ok(CalcNode::Op {
+                            op,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        });
+                    }
+                }
+            }
+        }
         return simplify_number_op(op, *a, ua, *b, ub);
     }
     // 无法简化——保留原样
@@ -60,6 +75,8 @@ fn simplify_op(op: CalcOp, left: CalcNode, right: CalcNode) -> Result<CalcNode, 
 }
 
 /// 简化两个数字的运算。
+///
+/// 调用前已确保乘除法的不兼容单位已在 `simplify_op` 中拦截保留。
 fn simplify_number_op(
     op: CalcOp,
     a: f64,
@@ -74,9 +91,8 @@ fn simplify_number_op(
             Ok(CalcNode::Number(a * b, unit))
         }
         CalcOp::Div => {
-            match b == 0.0 {
-                true => return Err(CalcError::DivisionByZero),
-                false => {}
+            if b == 0.0 {
+                return Err(CalcError::DivisionByZero);
             }
             Ok(CalcNode::Number(a / b, ua.clone()))
         }

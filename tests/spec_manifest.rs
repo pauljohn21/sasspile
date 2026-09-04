@@ -3,6 +3,11 @@
 //! 跳过已弃用的目录（libsass `系列、non_conformant）和颜色相关目录`。
 //! 颜色目录跳过以防止在非颜色任务中反复触发颜色测试失败导致无限修复循环。
 //! 如需专门测试颜色功能，使用 `--ignored` 手动触发颜色相关测试。
+//!
+//! **.sass 缩进式语法跳过**：sasspile 只支持 `.scss` 大括号语法，
+//! 不支持 `.sass` 缩进式语法。`sass_spec_full.rs` 的 `run_spec_dir`
+//! 在 case 级别跳过所有 `input.sass` 测试用例（不跳过整个 HRX 文件，
+//! 因为同一文件可能同时包含 `.scss` 和 `.sass` 用例）。
 
 use std::path::{Path, PathBuf};
 

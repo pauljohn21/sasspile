@@ -342,6 +342,8 @@ pub enum BinOpKind {
 /// 一元运算。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOp {
+    /// 一元正号 `+`。
+    Pos,
     /// 一元负号 `-`。
     Neg,
     /// 逻辑非 `not`。

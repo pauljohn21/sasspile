@@ -8,7 +8,6 @@
 use super::*;
 use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
-use std::fmt::Write;
 
 pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
     let l = l.clone();
@@ -178,6 +177,23 @@ pub(crate) fn mul(l: &Value, r: &Value) -> Result<Value> {
             };
             Ok(Value::Number(a * b, unit))
         }
+        // Number * Calc — 拼 calc 表达式
+        (Value::Number(n, u), Value::Calc(c)) => {
+            let n_str = format_number_with_unit(*n, u.as_deref());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({n_str} * {c_inner})")))
+        }
+        (Value::Calc(c), Value::Number(n, u)) => {
+            let n_str = format_number_with_unit(*n, u.as_deref());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({c_inner} * {n_str})")))
+        }
         _ => Err(SassError::Eval(format!("Cannot multiply {l} * {r}"))),
     }
 }
@@ -193,21 +209,60 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
                         false => {}
                     }
                     // 除零产生 infinity——构建 calc(infinity) 表达式
-                    let sign = match *a < 0.0 { true => "-", false => "" };
-                    let mut calc = format!("calc({sign}infinity");
-                    match u1.as_ref() {
-                        Some(u) if !u.is_empty() => { let _ = write!(calc, " * 1{u}"); }
-                        _ => {}
-                    }
-                    match u2.as_ref() {
-                        Some(u) if !u.is_empty() => { let _ = write!(calc, " / 1{u}"); }
-                        _ => {}
-                    }
-                    calc.push(')');
+                    let neg = *a < 0.0;
+                    let calc = format_infinity_with_units(
+                        neg,
+                        u1.as_ref().map(std::string::String::as_str).into_iter().collect::<Vec<_>>().as_slice(),
+                        u2.as_ref().map(std::string::String::as_str).into_iter().collect::<Vec<_>>().as_slice(),
+                    );
                     Ok(Value::Calc(calc))
                 }
                 false => Ok(Value::Number(a / b, u1.clone())),
             }
+        }
+        // Calc / Number — 拼接 calc 表达式（含除零处理）
+        (Value::Calc(c), Value::Number(b, u2)) => {
+            match *b == 0.0 {
+                true => {
+                    // 从 calc 表达式中提取单位信息
+                    let (numerators, denominators) = extract_units_from_calc(c);
+                    let num_refs: Vec<&str> = numerators.iter().map(|s| s.as_str()).collect();
+                    let den_refs: Vec<&str> = denominators.iter().map(|s| s.as_str()).collect();
+                    // 检测 calc 内部是否有负号（如 calc(-1px * 1em)）
+                    let calc_inner = c
+                        .strip_prefix("calc(")
+                        .and_then(|s| s.strip_suffix(')'))
+                        .unwrap_or(c.as_str());
+                    let neg = calc_inner.trim_start().starts_with('-');
+                    let calc = format_infinity_with_units(neg, &num_refs, &den_refs);
+                    // 合并除数的单位到分母
+                    let calc = match u2.as_ref() {
+                        Some(u) if !u.is_empty() => {
+                            let calc_inner = calc.strip_prefix("calc(").and_then(|s| s.strip_suffix(')')).unwrap_or(&calc);
+                            format!("calc({calc_inner} / 1{u})")
+                        }
+                        _ => calc,
+                    };
+                    Ok(Value::Calc(calc))
+                }
+                false => {
+                    let b_str = format_number_with_unit(*b, u2.as_deref());
+                    let c_inner = c
+                        .strip_prefix("calc(")
+                        .and_then(|s| s.strip_suffix(')'))
+                        .unwrap_or(c.as_str());
+                    Ok(Value::Calc(format!("calc({c_inner} / {b_str})")))
+                }
+            }
+        }
+        // Number / Calc — 拼接 calc 表达式
+        (Value::Number(n, u), Value::Calc(c)) => {
+            let n_str = format_number_with_unit(*n, u.as_deref());
+            let c_inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(c.as_str());
+            Ok(Value::Calc(format!("calc({n_str} / {c_inner})")))
         }
         // 非数字 / —— 作为斜杠分隔列表保留（如 font: 16px/24px）
         _ => Ok(Value::String(format!("{l}/{r}"), false)),
@@ -281,6 +336,92 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
     UNIT_COMPAT_GROUPS
         .iter()
         .any(|group| group.contains(&g1) && group.contains(&g2))
+}
+
+/// 格式化数字+单位为字符串（如 `1px`, `2.5`, `0`）。
+fn format_number_with_unit(n: f64, unit: Option<&str>) -> String {
+    let n_str = match n.fract() == 0.0 && n.abs() < 1e15 {
+        true => format!("{n:.0}"),
+        false => format!("{n}"),
+    };
+    match unit {
+        Some(u) if !u.is_empty() => format!("{n_str}{u}"),
+        _ => n_str,
+    }
+}
+
+/// 格式化 infinity + 单位为 calc 表达式。
+///
+/// `calc(infinity * 1px * 1em)`, `calc(infinity / 1px)`, `calc(-infinity * 1px * 1em)`
+fn format_infinity_with_units(
+    neg: bool,
+    numerators: &[&str],
+    denominators: &[&str],
+) -> String {
+    let sign = if neg { "-" } else { "" };
+    let numer_parts: Vec<String> = std::iter::once(format!("{sign}infinity"))
+        .chain(
+            numerators
+                .iter()
+                .filter(|u| !u.is_empty())
+                .map(|u| format!("1{u}")),
+        )
+        .collect();
+    let denom_parts: Vec<String> = denominators
+        .iter()
+        .filter(|u| !u.is_empty())
+        .map(|u| format!("1{u}"))
+        .collect();
+    let numer_str = numer_parts.join(" * ");
+    match denom_parts.is_empty() {
+        true => format!("calc({numer_str})"),
+        false => format!("calc({numer_str} / {})", denom_parts.join(" / ")),
+    }
+}
+
+/// 从 calc 字符串中提取分子和分母单位。
+///
+/// 如 `calc(1px * 1em)` → (["px", "em"], [])
+/// 如 `calc(1px / 1s)` → (["px"], ["s"])
+fn extract_units_from_calc(c: &str) -> (Vec<String>, Vec<String>) {
+    let inner = c
+        .strip_prefix("calc(")
+        .and_then(|s| s.strip_suffix(')'))
+        .unwrap_or(c);
+    let (numerators, denominators) = inner
+        .split_whitespace()
+        .try_fold((Vec::new(), Vec::new()), |(mut nums, mut dens), part| {
+            match part {
+                "*" => Some((nums, dens)),
+                "/" => {
+                    // 切换到分母模式——用插入哨兵标记
+                    nums.push(String::new());
+                    Some((nums, dens))
+                }
+                _ => {
+                    let unit = part
+                        .chars()
+                        .position(|c| c.is_alphabetic() || c == '%')
+                        .map(|start| &part[start..])
+                        .filter(|u| !u.is_empty());
+                    match unit {
+                        Some(u) => {
+                            // 检查是否已切换到分母（nums 中有哨兵）
+                            if nums.last().map(|s| s.is_empty()).unwrap_or(false) {
+                                nums.pop();
+                                dens.push(u.to_string());
+                            } else {
+                                nums.push(u.to_string());
+                            }
+                        }
+                        None => {}
+                    }
+                    Some((nums, dens))
+                }
+            }
+        })
+        .unwrap_or_default();
+    (numerators, denominators)
 }
 
 pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {

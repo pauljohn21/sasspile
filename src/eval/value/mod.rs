@@ -184,6 +184,10 @@ impl Evaluator {
             Value::UnaryOp(op, v) => {
                 let val = Self::eval_value(v, env)?;
                 match op {
+                    UnaryOp::Pos => match val {
+                        Value::Number(..) => Ok(val),
+                        _ => Err(SassError::Eval(format!("Cannot unary plus {val}"))),
+                    },
                     UnaryOp::Neg => match val {
                         Value::Number(n, u) => Ok(Value::Number(-n, u)),
                         _ => Err(SassError::Eval(format!("Cannot negate {val}"))),

@@ -575,6 +575,7 @@ impl std::fmt::Display for Value {
                 write!(f, "{}{}{}", b.left, op_str, b.right)
             }
             Value::UnaryOp(op, v) => match op {
+                UnaryOp::Pos => write!(f, "+{v}"),
                 UnaryOp::Neg => write!(f, "-{v}"),
                 UnaryOp::Not => write!(f, "not {v}"),
             },

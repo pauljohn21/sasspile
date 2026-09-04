@@ -94,7 +94,9 @@ impl Parser<'_> {
                                 self.skip_ws();
                             }
                             match slash_items.len() > 1 {
-                                true => { lhs = Value::List(slash_items, Separator::SlashLiteral, false); }
+                                true => {
+                                    lhs = Value::List(slash_items, Separator::SlashLiteral, false);
+                                }
                                 false => {}
                             }
                             // 斜杠列表后面可能有空格列表——继续循环
