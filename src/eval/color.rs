@@ -24,18 +24,13 @@ impl Evaluator {
         let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
         let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
         let m = l - c / 2.0;
-        let (r1, g1, b1) = if h < 60.0 {
-            (c, x, 0.0)
-        } else if h < 120.0 {
-            (x, c, 0.0)
-        } else if h < 180.0 {
-            (0.0, c, x)
-        } else if h < 240.0 {
-            (0.0, x, c)
-        } else if h < 300.0 {
-            (x, 0.0, c)
-        } else {
-            (c, 0.0, x)
+        let (r1, g1, b1) = match h {
+            h if h < 60.0 => (c, x, 0.0),
+            h if h < 120.0 => (x, c, 0.0),
+            h if h < 180.0 => (0.0, c, x),
+            h if h < 240.0 => (0.0, x, c),
+            h if h < 300.0 => (x, 0.0, c),
+            _ => (c, 0.0, x),
         };
         let result = Color::rgb((r1 + m) * 255.0, (g1 + m) * 255.0, (b1 + m) * 255.0);
         crate::__tracing::trace!(
@@ -71,14 +66,11 @@ impl Evaluator {
             if hue > 1.0 {
                 hue -= 1.0;
             }
-            if hue < 1.0 / 6.0 {
-                m1 + (m2 - m1) * hue * 6.0
-            } else if hue < 0.5 {
-                m2
-            } else if hue < 2.0 / 3.0 {
-                m1 + (m2 - m1) * (2.0 / 3.0 - hue) * 6.0
-            } else {
-                m1
+            match hue {
+                h if h < 1.0 / 6.0 => m1 + (m2 - m1) * hue * 6.0,
+                h if h < 0.5 => m2,
+                h if h < 2.0 / 3.0 => m1 + (m2 - m1) * (2.0 / 3.0 - hue) * 6.0,
+                _ => m1,
             }
         };
         let to_rgb = |hue: f64| -> f64 { hue_to_rgb(0.0, 1.0, hue) * factor + w };
@@ -111,12 +103,10 @@ impl Evaluator {
         } else {
             d / (max + min)
         };
-        let h = if max == r {
-            ((g - b) / d + if g < b { 6.0 } else { 0.0 }) * 60.0
-        } else if max == g {
-            ((b - r) / d + 2.0) * 60.0
-        } else {
-            ((r - g) / d + 4.0) * 60.0
+        let h = match max {
+            _ if max == r => ((g - b) / d + if g < b { 6.0 } else { 0.0 }) * 60.0,
+            _ if max == g => ((b - r) / d + 2.0) * 60.0,
+            _ => ((r - g) / d + 4.0) * 60.0,
         };
         let result = (h, s, l);
         crate::__tracing::trace!(
@@ -142,28 +132,17 @@ impl Evaluator {
         let is_space_sep = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
         // 展开空格分隔的 List（CSS Level 4 语法：rgb(R G B / A)）
         // 同时处理 SlashLiteral 分隔的情况（rgb(R G B / A) 中 / 被解析为 SlashLiteral）
-        let args: Vec<Value> = if is_space_sep {
-            if let Value::List(items, Separator::Space, false) = &args[0] {
+        let args: Vec<Value> = match args.first() {
+            Some(Value::List(items, Separator::Space, false)) if is_space_sep => {
                 let mut flat = items.clone();
                 // alpha 参数追加到末尾
                 if args.len() > 1 {
                     flat.extend(args[1..].iter().cloned());
                 }
                 flat
-            } else {
-                args.to_vec()
             }
-        } else if matches!(
-            args.first(),
-            Some(Value::List(
-                _,
-                Separator::SlashLiteral | Separator::Slash,
-                false
-            ))
-        ) {
-            // rgb(R G B / A) — SlashLiteral 分隔的列表
-            if let Some(Value::List(items, sep, false)) = args.first() {
-                let _ = sep;
+            Some(Value::List(items, Separator::SlashLiteral | Separator::Slash, false)) => {
+                // rgb(R G B / A) — SlashLiteral 分隔的列表
                 let mut flat = Vec::new();
                 // 第一个元素可能是 Space 分隔的 [R, G, B]
                 if let Some(Value::List(rgb_items, Separator::Space, false)) = items.first() {
@@ -176,11 +155,8 @@ impl Evaluator {
                     flat.push(items[items.len() - 1].clone());
                 }
                 flat
-            } else {
-                args.to_vec()
             }
-        } else {
-            args.to_vec()
+            _ => args.to_vec(),
         };
         // 检测是否有 none 参数——有则 CSS 原样透传
         let has_none = args

@@ -314,21 +314,22 @@ impl Evaluator {
                     (result, false),
                     |(mut acc, _found), (k, v)| -> Result<(Vec<(Value, Value)>, bool)> {
                         if crate::eval::value::values_eq(k, target_key) {
-                            if remaining_keys.is_empty() {
-                                // skip this key — already filtered out above
-                                Ok((acc, true))
-                            } else if let Value::Map(inner) = v {
-                                let new_inner = Self::call_builtin(
-                                    "map-deep-remove",
-                                    &[Value::Map(inner.clone()), remaining_keys[0].clone()],
-                                    &std::collections::HashMap::new(),
-                                    env,
-                                )?;
-                                acc.push((k.clone(), new_inner));
-                                Ok((acc, true))
-                            } else {
-                                acc.push((k.clone(), v.clone()));
-                                Ok((acc, true))
+                            match (remaining_keys.is_empty(), v) {
+                                (true, _) => Ok((acc, true)),
+                                (false, Value::Map(inner)) => {
+                                    let new_inner = Self::call_builtin(
+                                        "map-deep-remove",
+                                        &[Value::Map(inner.clone()), remaining_keys[0].clone()],
+                                        &std::collections::HashMap::new(),
+                                        env,
+                                    )?;
+                                    acc.push((k.clone(), new_inner));
+                                    Ok((acc, true))
+                                }
+                                (false, _) => {
+                                    acc.push((k.clone(), v.clone()));
+                                    Ok((acc, true))
+                                }
                             }
                         } else {
                             Ok((acc, false))

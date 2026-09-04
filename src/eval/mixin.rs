@@ -92,8 +92,8 @@ impl Evaluator {
         let mut keyword: HashMap<String, Value> = HashMap::new();
         for arg in args {
             let val = Self::eval_value(&arg.value, &env)?;
-            if arg.spread {
-                match &val {
+            match (arg.spread, &arg.name) {
+                (true, _) => match &val {
                     Value::List(items, _, _) => {
                         positional.extend(items.iter().cloned());
                     }
@@ -107,11 +107,13 @@ impl Evaluator {
                     _ => {
                         positional.push(val);
                     }
+                },
+                (false, Some(name)) => {
+                    keyword.insert(name.clone(), val);
                 }
-            } else if let Some(name) = &arg.name {
-                keyword.insert(name.clone(), val);
-            } else {
-                positional.push(val);
+                (false, None) => {
+                    positional.push(val);
+                }
             }
         }
 
@@ -127,16 +129,21 @@ impl Evaluator {
                 );
                 break;
             }
-            if let Some(val) = keyword.get(&param.name) {
-                new_env = new_env.bind(param.name.clone(), val.clone());
-            } else if pos_idx < positional.len() {
-                new_env = new_env.bind(param.name.clone(), positional[pos_idx].clone());
-                pos_idx += 1;
-            } else if let Some(default) = &param.default {
-                let val = Self::eval_value(default, &new_env)?;
-                new_env = new_env.bind(param.name.clone(), val);
-            } else {
-                new_env = new_env.bind(param.name.clone(), Value::Null);
+            match keyword.get(&param.name) {
+                Some(val) => {
+                    new_env = new_env.bind(param.name.clone(), val.clone());
+                }
+                None if pos_idx < positional.len() => {
+                    new_env = new_env.bind(param.name.clone(), positional[pos_idx].clone());
+                    pos_idx += 1;
+                }
+                None if param.default.is_some() => {
+                    let val = Self::eval_value(param.default.as_ref().expect("checked"), &new_env)?;
+                    new_env = new_env.bind(param.name.clone(), val);
+                }
+                None => {
+                    new_env = new_env.bind(param.name.clone(), Value::Null);
+                }
             }
         }
         Ok(new_env)
@@ -213,16 +220,21 @@ impl Evaluator {
                 );
                 break;
             }
-            if let Some(val) = kw_args.get(&param.name) {
-                func_env = func_env.bind(param.name.clone(), val.clone());
-            } else if pos_idx < pos_args.len() {
-                func_env = func_env.bind(param.name.clone(), pos_args[pos_idx].clone());
-                pos_idx += 1;
-            } else if let Some(default) = &param.default {
-                let val = Self::eval_value(default, &func_env)?;
-                func_env = func_env.bind(param.name.clone(), val);
-            } else {
-                func_env = func_env.bind(param.name.clone(), Value::Null);
+            match kw_args.get(&param.name) {
+                Some(val) => {
+                    func_env = func_env.bind(param.name.clone(), val.clone());
+                }
+                None if pos_idx < pos_args.len() => {
+                    func_env = func_env.bind(param.name.clone(), pos_args[pos_idx].clone());
+                    pos_idx += 1;
+                }
+                None if param.default.is_some() => {
+                    let val = Self::eval_value(param.default.as_ref().expect("checked"), &func_env)?;
+                    func_env = func_env.bind(param.name.clone(), val);
+                }
+                None => {
+                    func_env = func_env.bind(param.name.clone(), Value::Null);
+                }
             }
         }
         // 求值函数体，找 @return

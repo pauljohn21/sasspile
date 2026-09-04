@@ -206,12 +206,10 @@ impl Parser<'_> {
                 if self.peek() == Some(&Token::RBracket) {
                     self.advance();
                 }
-                let sep = if saw_comma {
-                    Separator::Comma
-                } else if items.len() <= 1 {
-                    Separator::Undecided
-                } else {
-                    Separator::Space
+                let sep = match (saw_comma, items.len()) {
+                    (true, _) => Separator::Comma,
+                    (false, n) if n <= 1 => Separator::Undecided,
+                    (false, _) => Separator::Space,
                 };
                 Ok(Value::List(items, sep, true))
             }

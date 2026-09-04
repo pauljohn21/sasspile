@@ -135,12 +135,10 @@ impl Evaluator {
     /// 尝试简化嵌套 min()/max()。只在所有参数都是同单位纯数字时简化。
     fn try_simplify_min_max(s: &str) -> Option<Value> {
         let s = s.trim();
-        let (func, inner) = if s.starts_with("min(") && s.ends_with(')') {
-            ("min", &s[4..s.len() - 1])
-        } else if s.starts_with("max(") && s.ends_with(')') {
-            ("max", &s[4..s.len() - 1])
-        } else {
-            return None;
+        let (func, inner) = match (s.starts_with("min(") && s.ends_with(')'), s.starts_with("max(") && s.ends_with(')')) {
+            (true, _) => ("min", &s[4..s.len() - 1]),
+            (_, true) => ("max", &s[4..s.len() - 1]),
+            _ => return None,
         };
         let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
         if parts.len() < 2 {

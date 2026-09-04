@@ -53,7 +53,7 @@ impl Node {
                 let mut s = branches.iter().enumerate().fold(
                     String::new(),
                     |mut acc, (i, (cond, body))| {
-                        let kw = if i == 0 { "@if" } else { "@else if" };
+                        let kw = match i { 0 => "@if", _ => "@else if" };
                         let body_s: String = body
                             .iter()
                             .map(|n| n.to_scss(indent + 1))
@@ -118,12 +118,10 @@ impl Node {
                     .iter()
                     .map(|p| {
                         let s = format!("${}", p.name);
-                        if p.rest {
-                            format!("{s}...")
-                        } else if let Some(d) = &p.default {
-                            format!("{s}: {d}")
-                        } else {
-                            s
+                        match (p.rest, &p.default) {
+                            (true, _) => format!("{s}..."),
+                            (false, Some(d)) => format!("{s}: {d}"),
+                            (false, None) => s,
                         }
                     })
                     .collect::<Vec<_>>()
@@ -174,12 +172,10 @@ impl Node {
                     .iter()
                     .map(|p| {
                         let s = format!("${}", p.name);
-                        if p.rest {
-                            format!("{s}...")
-                        } else if let Some(d) = &p.default {
-                            format!("{s}: {d}")
-                        } else {
-                            s
+                        match (p.rest, &p.default) {
+                            (true, _) => format!("{s}..."),
+                            (false, Some(d)) => format!("{s}: {d}"),
+                            (false, None) => s,
                         }
                     })
                     .collect::<Vec<_>>()
@@ -200,10 +196,10 @@ impl Node {
                 config,
             } => {
                 let mut s = format!("{pad}@use \"{url}\"");
-                if *star {
-                    s.push_str(" as *");
-                } else if let Some(ns) = namespace {
-                    let _ = write!(s, " as {ns}");
+                match (*star, namespace) {
+                    (true, _) => s.push_str(" as *"),
+                    (false, Some(ns)) => { let _ = write!(s, " as {ns}"); }
+                    (false, None) => {}
                 }
                 if !config.is_empty() {
                     let cfg: String = config

@@ -29,15 +29,11 @@ impl Evaluator {
                 .map(|u| {
                     let u = u.trim_matches('"');
                     // http/https URL 用 url() 形式
-                    let params = if u.starts_with("http://")
-                        || u.starts_with("https://")
-                        || u.starts_with("//")
-                    {
-                        format!("url({u})")
-                    } else if modifier.is_empty() {
-                        format!("\"{u}\"")
-                    } else {
-                        format!("\"{u}\" {modifier}")
+                    let is_url = u.starts_with("http://") || u.starts_with("https://") || u.starts_with("//");
+                    let params = match (is_url, modifier.is_empty()) {
+                        (true, _) => format!("url({u})"),
+                        (false, true) => format!("\"{u}\""),
+                        (false, false) => format!("\"{u}\" {modifier}"),
                     };
                     CssNode::AtRule {
                         name: "import".to_string(),

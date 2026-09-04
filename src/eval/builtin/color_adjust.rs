@@ -459,66 +459,49 @@ fn scale_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result
 // ── Legacy (RGB/HSL/HWB) ──
 
 fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let mut r = c.legacy_rgb[0];
-    let mut g = c.legacy_rgb[1];
-    let mut b = c.legacy_rgb[2];
-    let mut a = c.a;
-    let mut has_hsl = false;
-    let (mut h, mut s, mut l) =
+    let r = apply_kw(c.legacy_rgb[0], kw_args, "red", |v, d| v + d)?;
+    let g = apply_kw(c.legacy_rgb[1], kw_args, "green", |v, d| v + d)?;
+    let b = apply_kw(c.legacy_rgb[2], kw_args, "blue", |v, d| v + d)?;
+    let a = apply_kw(c.a, kw_args, "alpha", |v, d| v + d)?;
+    let (h_init, s_init, l_init) =
         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
-    let mut has_hwb = false;
-    let (mut hw, mut hb) = {
+    let h = apply_kw(h_init, kw_args, "hue", |v, d| (v + d).rem_euclid(360.0))?;
+    let s = apply_pct_kw(s_init, kw_args, "saturation", |v, d| (v + d).clamp(0.0, 1.0))?;
+    let l = apply_pct_kw(l_init, kw_args, "lightness", |v, d| (v + d).clamp(0.0, 1.0))?;
+    let (hw_init, hb_init) = {
         let r = c.legacy_rgb[0] / 255.0;
         let g = c.legacy_rgb[1] / 255.0;
         let b = c.legacy_rgb[2] / 255.0;
         (r.min(g).min(b), 1.0 - r.max(g).max(b))
     };
+    let hw = apply_pct_kw(hw_init, kw_args, "whiteness", |v, d| (v + d).clamp(0.0, 1.0))?;
+    let hb = apply_pct_kw(hb_init, kw_args, "blackness", |v, d| (v + d).clamp(0.0, 1.0))?;
 
-    if let Some(v) = get_num(kw_args, "red")? {
-        r += v;
-    }
-    if let Some(v) = get_num(kw_args, "green")? {
-        g += v;
-    }
-    if let Some(v) = get_num(kw_args, "blue")? {
-        b += v;
-    }
-    if let Some(v) = get_num(kw_args, "alpha")? {
-        a += v;
-    }
-    if let Some(v) = get_num(kw_args, "hue")? {
-        h = (h + v).rem_euclid(360.0);
-        has_hsl = true;
-        has_hwb = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "saturation")? {
-        s = (s + v).clamp(0.0, 1.0);
-        has_hsl = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? {
-        l = (l + v).clamp(0.0, 1.0);
-        has_hsl = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "whiteness")? {
-        hw = (hw + v).clamp(0.0, 1.0);
-        has_hwb = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "blackness")? {
-        hb = (hb + v).clamp(0.0, 1.0);
-        has_hwb = true;
-    }
-    if has_hwb {
-        let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
-        r = new_c.legacy_rgb[0];
-        g = new_c.legacy_rgb[1];
-        b = new_c.legacy_rgb[2];
-    } else if has_hsl {
-        let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        r = new_c.legacy_rgb[0];
-        g = new_c.legacy_rgb[1];
-        b = new_c.legacy_rgb[2];
-    }
-    let (output, space) = if has_hsl || has_hwb {
+    let has_hwb = kw_args.contains_key("hue")
+        || kw_args.contains_key("whiteness")
+        || kw_args.contains_key("blackness");
+    let has_hsl = (kw_args.contains_key("hue")
+        || kw_args.contains_key("saturation")
+        || kw_args.contains_key("lightness"))
+        && !has_hwb;
+    let h_changed = kw_args.contains_key("hue")
+        || kw_args.contains_key("whiteness")
+        || kw_args.contains_key("blackness")
+        || kw_args.contains_key("saturation")
+        || kw_args.contains_key("lightness");
+
+    let (r, g, b) = match (has_hwb, has_hsl) {
+        (true, _) => {
+            let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
+            (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+        }
+        (false, true) => {
+            let new_c = Evaluator::hsl_to_rgb(h, s, l);
+            (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+        }
+        (false, false) => (r, g, b),
+    };
+    let (output, space) = if h_changed {
         (ColorOutput::RgbPercent, ColorSpace::Hsl)
     } else {
         (ColorOutput::Auto, ColorSpace::Rgb)
@@ -534,66 +517,49 @@ fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 }
 
 fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let mut r = c.legacy_rgb[0];
-    let mut g = c.legacy_rgb[1];
-    let mut b = c.legacy_rgb[2];
-    let mut a = c.a;
-    let mut has_hsl = false;
-    let (mut h, mut s, mut l) =
+    let r = apply_kw(c.legacy_rgb[0], kw_args, "red", |_v, d| d)?;
+    let g = apply_kw(c.legacy_rgb[1], kw_args, "green", |_v, d| d)?;
+    let b = apply_kw(c.legacy_rgb[2], kw_args, "blue", |_v, d| d)?;
+    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d)?;
+    let (h_init, s_init, l_init) =
         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
-    let mut has_hwb = false;
-    let (mut hw, mut hb) = {
+    let h = apply_kw(h_init, kw_args, "hue", |_v, d| d.rem_euclid(360.0))?;
+    let s = apply_pct_kw(s_init, kw_args, "saturation", |_v, d| d.clamp(0.0, 1.0))?;
+    let l = apply_pct_kw(l_init, kw_args, "lightness", |_v, d| d.clamp(0.0, 1.0))?;
+    let (hw_init, hb_init) = {
         let r = c.legacy_rgb[0] / 255.0;
         let g = c.legacy_rgb[1] / 255.0;
         let b = c.legacy_rgb[2] / 255.0;
         (r.min(g).min(b), 1.0 - r.max(g).max(b))
     };
+    let hw = apply_pct_kw(hw_init, kw_args, "whiteness", |_v, d| d.clamp(0.0, 1.0))?;
+    let hb = apply_pct_kw(hb_init, kw_args, "blackness", |_v, d| d.clamp(0.0, 1.0))?;
 
-    if let Some(v) = get_num(kw_args, "red")? {
-        r = v;
-    }
-    if let Some(v) = get_num(kw_args, "green")? {
-        g = v;
-    }
-    if let Some(v) = get_num(kw_args, "blue")? {
-        b = v;
-    }
-    if let Some(v) = get_num(kw_args, "alpha")? {
-        a = v;
-    }
-    if let Some(v) = get_num(kw_args, "hue")? {
-        h = v.rem_euclid(360.0);
-        has_hsl = true;
-        has_hwb = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "saturation")? {
-        s = v.clamp(0.0, 1.0);
-        has_hsl = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "lightness")? {
-        l = v.clamp(0.0, 1.0);
-        has_hsl = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "whiteness")? {
-        hw = v.clamp(0.0, 1.0);
-        has_hwb = true;
-    }
-    if let Some(v) = get_pct_or_num(kw_args, "blackness")? {
-        hb = v.clamp(0.0, 1.0);
-        has_hwb = true;
-    }
-    if has_hwb {
-        let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
-        r = new_c.legacy_rgb[0];
-        g = new_c.legacy_rgb[1];
-        b = new_c.legacy_rgb[2];
-    } else if has_hsl {
-        let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        r = new_c.legacy_rgb[0];
-        g = new_c.legacy_rgb[1];
-        b = new_c.legacy_rgb[2];
-    }
-    let (output, space) = if has_hsl || has_hwb {
+    let has_hwb = kw_args.contains_key("hue")
+        || kw_args.contains_key("whiteness")
+        || kw_args.contains_key("blackness");
+    let has_hsl = (kw_args.contains_key("hue")
+        || kw_args.contains_key("saturation")
+        || kw_args.contains_key("lightness"))
+        && !has_hwb;
+    let h_changed = kw_args.contains_key("hue")
+        || kw_args.contains_key("whiteness")
+        || kw_args.contains_key("blackness")
+        || kw_args.contains_key("saturation")
+        || kw_args.contains_key("lightness");
+
+    let (r, g, b) = match (has_hwb, has_hsl) {
+        (true, _) => {
+            let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
+            (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+        }
+        (false, true) => {
+            let new_c = Evaluator::hsl_to_rgb(h, s, l);
+            (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+        }
+        (false, false) => (r, g, b),
+    };
+    let (output, space) = if h_changed {
         (ColorOutput::RgbPercent, ColorSpace::Hsl)
     } else {
         (ColorOutput::Auto, ColorSpace::Rgb)
@@ -609,44 +575,36 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 }
 
 fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let mut r = c.legacy_rgb[0];
-    let mut g = c.legacy_rgb[1];
-    let mut b = c.legacy_rgb[2];
-    let mut a = c.a;
-    let mut has_hsl = false;
-    let (h, mut s, mut l) =
-        Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
-
     let scale_val = |val: f64, max: f64, kw: &str| -> Result<f64> {
-        if let Some(Value::Number(n, _)) = kw_args.get(kw) {
-            let pct = *n / 100.0;
-            if pct >= 0.0 {
-                Ok(val + (max - val) * pct)
-            } else {
-                Ok(val + val * pct)
+        match kw_args.get(kw) {
+            Some(Value::Number(n, _)) => {
+                let pct = *n / 100.0;
+                Ok(if pct >= 0.0 { val + (max - val) * pct } else { val + val * pct })
             }
-        } else {
-            Ok(val)
+            _ => Ok(val),
         }
     };
-    r = scale_val(r, 255.0, "red")?;
-    g = scale_val(g, 255.0, "green")?;
-    b = scale_val(b, 255.0, "blue")?;
-    a = scale_val(a, 1.0, "alpha")?;
-    if kw_args.contains_key("saturation") {
-        s = scale_val(s, 1.0, "saturation")?.clamp(0.0, 1.0);
-        has_hsl = true;
-    }
-    if kw_args.contains_key("lightness") {
-        l = scale_val(l, 1.0, "lightness")?.clamp(0.0, 1.0);
-        has_hsl = true;
-    }
-    if has_hsl {
+    let r = scale_val(c.legacy_rgb[0], 255.0, "red")?;
+    let g = scale_val(c.legacy_rgb[1], 255.0, "green")?;
+    let b = scale_val(c.legacy_rgb[2], 255.0, "blue")?;
+    let a = scale_val(c.a, 1.0, "alpha")?;
+    let (h, s_init, l_init) =
+        Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
+
+    let has_hsl = kw_args.contains_key("saturation") || kw_args.contains_key("lightness");
+    let s = if kw_args.contains_key("saturation") {
+        scale_val(s_init, 1.0, "saturation")?.clamp(0.0, 1.0)
+    } else { s_init };
+    let l = if kw_args.contains_key("lightness") {
+        scale_val(l_init, 1.0, "lightness")?.clamp(0.0, 1.0)
+    } else { l_init };
+
+    let (r, g, b) = if has_hsl {
         let new_c = Evaluator::hsl_to_rgb(h, s, l);
-        r = new_c.legacy_rgb[0];
-        g = new_c.legacy_rgb[1];
-        b = new_c.legacy_rgb[2];
-    }
+        (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+    } else {
+        (r, g, b)
+    };
     let (output, space) = if has_hsl {
         (ColorOutput::RgbPercent, ColorSpace::Hsl)
     } else {

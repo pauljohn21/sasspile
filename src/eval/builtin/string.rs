@@ -415,22 +415,16 @@ impl Evaluator {
             }
         };
 
-        let parts: Vec<String> = if s.is_empty() {
-            Vec::new()
-        } else if let Some(sep) = sep {
-            if sep.is_empty() {
-                s.chars().map(|c| c.to_string()).collect()
-            } else if let Some(limit) = limit {
-                s.splitn(limit + 1, &sep)
-                    .map(std::string::ToString::to_string)
-                    .collect()
-            } else {
-                s.split(&sep)
-                    .map(std::string::ToString::to_string)
-                    .collect()
-            }
-        } else {
-            s.chars().map(|c| c.to_string()).collect()
+        let parts: Vec<String> = match (s.is_empty(), &sep, limit) {
+            (true, _, _) => Vec::new(),
+            (false, None, _) => s.chars().map(|c| c.to_string()).collect(),
+            (false, Some(sep), _) if sep.is_empty() => s.chars().map(|c| c.to_string()).collect(),
+            (false, Some(sep), Some(limit)) => s.splitn(limit + 1, sep.as_str())
+                .map(std::string::ToString::to_string)
+                .collect(),
+            (false, Some(sep), None) => s.split(sep.as_str())
+                .map(std::string::ToString::to_string)
+                .collect(),
         };
         Ok(Value::List(
             parts

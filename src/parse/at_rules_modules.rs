@@ -7,13 +7,12 @@ use crate::lex::token::Token;
 
 impl Parser<'_> {
     pub(crate) fn parse_use(&mut self) -> Result<Node> {
-        if self.in_body {
-            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
-        }
-        if self.saw_other_rule {
-            return Err(SassError::Eval(
+        match (self.in_body, self.saw_other_rule) {
+            (true, _) => return Err(SassError::Eval("This at-rule is not allowed here.".into())),
+            (false, true) => return Err(SassError::Eval(
                 "@use rules must be written before any other rules.".into(),
-            ));
+            )),
+            (false, false) => {}
         }
         self.skip_ws();
         let url = match self.peek() {
@@ -28,26 +27,36 @@ impl Parser<'_> {
         let mut star = false;
         let mut config = Vec::new();
         self.skip_ws();
-        if self.peek_keyword("as") {
-            self.advance();
-            self.skip_ws();
-            if self.peek() == Some(&Token::Star) {
+        match self.peek_keyword("as") {
+            true => {
                 self.advance();
-                star = true;
-            } else {
-                namespace = Some(self.parse_ident_name()?);
+                self.skip_ws();
+                match self.peek() {
+                    Some(&Token::Star) => {
+                        self.advance();
+                        star = true;
+                    }
+                    _ => namespace = Some(self.parse_ident_name()?),
+                }
             }
+            false => {}
         }
         self.skip_ws();
-        if self.peek_keyword("with") {
-            self.advance();
-            self.skip_ws();
-            self.expect(&Token::LParen)?;
-            config = self.parse_config(false)?;
+        match self.peek_keyword("with") {
+            true => {
+                self.advance();
+                self.skip_ws();
+                self.expect(&Token::LParen)?;
+                config = self.parse_config(false)?;
+            }
+            false => {}
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(&Token::Semicolon) => {
+                self.advance();
+            }
+            _ => {}
         }
         Ok(Node::Use {
             url,
@@ -58,13 +67,12 @@ impl Parser<'_> {
     }
 
     pub(crate) fn parse_forward(&mut self) -> Result<Node> {
-        if self.in_body {
-            return Err(SassError::Eval("This at-rule is not allowed here.".into()));
-        }
-        if self.saw_other_rule {
-            return Err(SassError::Eval(
+        match (self.in_body, self.saw_other_rule) {
+            (true, _) => return Err(SassError::Eval("This at-rule is not allowed here.".into())),
+            (false, true) => return Err(SassError::Eval(
                 "@forward rules must be written before any other rules.".into(),
-            ));
+            )),
+            (false, false) => {}
         }
         self.skip_ws();
         let url = match self.peek() {
@@ -79,64 +87,83 @@ impl Parser<'_> {
         let mut hide = Vec::new();
         let mut prefix = None;
         self.skip_ws();
-        if self.peek_keyword("as") {
-            self.advance();
-            self.skip_ws();
-            match self.peek() {
-                Some(Token::Ident(s)) => {
-                    prefix = Some(s.clone());
-                    self.advance();
-                }
-                _ => return Err(SassError::Eval("Expected identifier.".into())),
-            }
-            self.skip_ws();
-            if self.peek() == Some(&Token::Star) {
+        match self.peek_keyword("as") {
+            true => {
                 self.advance();
-            } else {
-                return Err(SassError::Eval("expected \"*\".".into()));
+                self.skip_ws();
+                match self.peek() {
+                    Some(Token::Ident(s)) => {
+                        prefix = Some(s.clone());
+                        self.advance();
+                    }
+                    _ => return Err(SassError::Eval("Expected identifier.".into())),
+                }
+                self.skip_ws();
+                match self.peek() {
+                    Some(&Token::Star) => {
+                        self.advance();
+                    }
+                    _ => return Err(SassError::Eval("expected \"*\".".into())),
+                }
+                self.skip_ws();
             }
-            self.skip_ws();
+            false => {}
         }
-        if self.peek_keyword("show") {
-            self.advance();
-            show = self.parse_member_list()?;
-            if show.is_empty() {
-                return Err(SassError::Eval(
-                    "Expected variable, mixin, or function name".into(),
-                ));
+        match (self.peek_keyword("show"), self.peek_keyword("hide")) {
+            (true, _) => {
+                self.advance();
+                show = self.parse_member_list()?;
+                match show.is_empty() {
+                    true => return Err(SassError::Eval(
+                        "Expected variable, mixin, or function name".into(),
+                    )),
+                    false => {}
+                }
+                self.skip_ws();
+                match self.peek_keyword("hide") {
+                    true => return Err(SassError::Eval("expected \";\".".into())),
+                    false => {}
+                }
             }
-            self.skip_ws();
-            if self.peek_keyword("hide") {
-                return Err(SassError::Eval("expected \";\".".into()));
+            (false, true) => {
+                self.advance();
+                hide = self.parse_member_list()?;
+                match hide.is_empty() {
+                    true => return Err(SassError::Eval(
+                        "Expected variable, mixin, or function name".into(),
+                    )),
+                    false => {}
+                }
+                self.skip_ws();
+                match self.peek_keyword("show") {
+                    true => return Err(SassError::Eval("expected \";\".".into())),
+                    false => {}
+                }
             }
-        } else if self.peek_keyword("hide") {
-            self.advance();
-            hide = self.parse_member_list()?;
-            if hide.is_empty() {
-                return Err(SassError::Eval(
-                    "Expected variable, mixin, or function name".into(),
-                ));
-            }
-            self.skip_ws();
-            if self.peek_keyword("show") {
-                return Err(SassError::Eval("expected \";\".".into()));
-            }
+            _ => {}
         }
         self.skip_ws();
         let mut config = Vec::new();
-        if self.peek_keyword("with") {
-            self.advance();
-            self.skip_ws();
-            self.expect(&Token::LParen)?;
-            config = self.parse_config(true)?;
-            self.skip_ws();
-            if self.peek_keyword("as") || self.peek_keyword("show") || self.peek_keyword("hide") {
-                return Err(SassError::Eval("expected \";\".".into()));
+        match self.peek_keyword("with") {
+            true => {
+                self.advance();
+                self.skip_ws();
+                self.expect(&Token::LParen)?;
+                config = self.parse_config(true)?;
+                self.skip_ws();
+                match self.peek_keyword("as") || self.peek_keyword("show") || self.peek_keyword("hide") {
+                    true => return Err(SassError::Eval("expected \";\".".into())),
+                    false => {}
+                }
             }
+            false => {}
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(&Token::Semicolon) => {
+                self.advance();
+            }
+            _ => {}
         }
         Ok(Node::Forward {
             url,
@@ -152,83 +179,67 @@ impl Parser<'_> {
         loop {
             self.skip_ws_and_comments();
             // 支持 url() 函数形式
-            let url = if self.peek_keyword("url") {
-                self.advance();
-                self.skip_ws();
-                if self.peek() == Some(&Token::LParen) {
+            let url = match self.peek_keyword("url") {
+                true => {
                     self.advance();
-                    let mut url_content = String::new();
-                    while let Some(t) = self.peek() {
-                        match t {
-                            Token::RParen => {
-                                self.advance();
-                                break;
+                    self.skip_ws();
+                    match self.peek() {
+                        Some(&Token::LParen) => {
+                            self.advance();
+                            let mut url_content = String::new();
+                            while let Some(t) = self.peek() {
+                                match t {
+                                    Token::RParen => { self.advance(); break; }
+                                    Token::Whitespace => { url_content.push(' '); self.advance(); }
+                                    Token::Comment(_, _) => { self.advance(); }
+                                    _ => { url_content.push_str(&t.to_string()); self.advance(); }
+                                }
                             }
-                            Token::Whitespace => {
-                                url_content.push(' ');
-                                self.advance();
-                            }
-                            Token::Comment(_, _) => {
-                                self.advance();
-                            }
-                            _ => {
-                                url_content.push_str(&t.to_string());
-                                self.advance();
-                            }
+                            url_content.trim().to_string()
                         }
+                        _ => return Err(SassError::Parse {
+                            expected: "(".into(),
+                            found: "other".into(),
+                        }),
                     }
-                    url_content.trim().to_string()
-                } else {
-                    return Err(SassError::Parse {
-                        expected: "(".into(),
-                        found: "other".into(),
-                    });
                 }
-            } else {
-                self.parse_string_value()?
+                false => self.parse_string_value()?,
             };
             urls.push(url);
             self.skip_ws_and_comments();
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-                continue;
+            match self.peek() {
+                Some(&Token::Comma) => { self.advance(); continue; }
+                _ => break,
             }
-            break;
         }
         self.skip_ws_and_comments();
-        let modifier = if matches!(self.peek(), Some(Token::Semicolon | Token::RBrace) | None) {
-            String::new()
-        } else {
-            let mut s = String::new();
-            while let Some(t) = self.peek() {
-                match t {
-                    Token::Semicolon | Token::LBrace | Token::RBrace | Token::Eof => break,
-                    Token::Comment(_, _) => {
-                        self.advance();
-                    }
-                    Token::Whitespace => {
-                        s.push(' ');
-                        self.advance();
-                    }
-                    _ => {
-                        s.push_str(&t.to_string());
-                        self.advance();
+        let modifier = match self.peek() {
+            Some(Token::Semicolon | Token::RBrace) | None => String::new(),
+            _ => {
+                let mut s = String::new();
+                while let Some(t) = self.peek() {
+                    match t {
+                        Token::Semicolon | Token::LBrace | Token::RBrace | Token::Eof => break,
+                        Token::Comment(_, _) => { self.advance(); }
+                        Token::Whitespace => { s.push(' '); self.advance(); }
+                        _ => { s.push_str(&t.to_string()); self.advance(); }
                     }
                 }
+                s.trim().to_string()
             }
-            s.trim().to_string()
         };
         self.skip_ws_and_comments();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(&Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
-        let url = if urls.len() == 1 {
-            urls.into_iter().next().expect("urls has exactly 1 element")
-        } else {
-            urls.iter()
+        let url = match urls.len() {
+            1 => urls.into_iter().next().expect("urls has exactly 1 element"),
+            _ => urls
+                .iter()
                 .map(|u| format!("\"{u}\""))
                 .collect::<Vec<_>>()
-                .join("\", \"")
+                .join("\", \""),
         };
         Ok(Node::Import { url, modifier })
     }

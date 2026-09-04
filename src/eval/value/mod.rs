@@ -112,16 +112,14 @@ impl Evaluator {
             Value::Calc(s) => Ok(Self::simplify_calc(s)),
             Value::Paren(inner) => Self::eval_value(inner, env),
             Value::String(s, quoted) => {
-                if s.contains('#') && s.contains('{') {
-                    Ok(Value::String(eval_interp_str(s, env), *quoted))
-                } else if !*quoted {
-                    if let Some(color) = Self::lookup_named_color(s) {
-                        Ok(Value::Color(color))
-                    } else {
-                        Ok(value.clone())
-                    }
-                } else {
-                    Ok(value.clone())
+                let has_interp = s.contains('#') && s.contains('{');
+                match (has_interp, *quoted) {
+                    (true, _) => Ok(Value::String(eval_interp_str(s, env), *quoted)),
+                    (false, false) => match Self::lookup_named_color(s) {
+                        Some(color) => Ok(Value::Color(color)),
+                        None => Ok(value.clone()),
+                    },
+                    (false, true) => Ok(value.clone()),
                 }
             }
             Value::Variable(name) => {
@@ -216,14 +214,12 @@ impl Evaluator {
                 let if_false = args.iter().find(|a| {
                     a.name.as_deref() == Some("if-false") || a.name.as_deref() == Some("$if-false")
                 });
-                if Self::is_truthy(&cond) {
-                    if let Some(t) = if_true {
-                        return Self::eval_value(&t.value, env);
-                    }
-                } else if let Some(f) = if_false {
-                    return Self::eval_value(&f.value, env);
+                match (Self::is_truthy(&cond), &if_true, &if_false) {
+                    (true, Some(t), _) => return Self::eval_value(&t.value, env),
+                    (true, None, _) => return Ok(Value::Null),
+                    (false, _, Some(f)) => return Self::eval_value(&f.value, env),
+                    (false, _, None) => return Ok(Value::Null),
                 }
-                return Ok(Value::Null);
             }
         }
         // if() 冒号语法：if(cond1: val1; cond2: val2; else: default)
@@ -289,8 +285,8 @@ impl Evaluator {
         let mut kw_args: HashMap<String, Value> = HashMap::new();
         for arg in args {
             let val = Self::eval_value(&arg.value, env)?;
-            if arg.spread {
-                match &val {
+            match (arg.spread, &arg.name) {
+                (true, _) => match &val {
                     Value::List(items, _, _) => pos_args.extend(items.iter().cloned()),
                     Value::Map(pairs) => {
                         for (k, v) in pairs {
@@ -300,11 +296,13 @@ impl Evaluator {
                         }
                     }
                     other => pos_args.push(other.clone()),
+                },
+                (false, Some(n)) => {
+                    kw_args.insert(n.clone(), val);
                 }
-            } else if let Some(n) = &arg.name {
-                kw_args.insert(n.clone(), val);
-            } else {
-                pos_args.push(val);
+                (false, None) => {
+                    pos_args.push(val);
+                }
             }
         }
         Ok((pos_args, kw_args))

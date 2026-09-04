@@ -260,14 +260,11 @@ pub(crate) fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
         if hue > 1.0 {
             hue -= 1.0;
         }
-        if hue < 1.0 / 6.0 {
-            w + factor * hue * 6.0
-        } else if hue < 0.5 {
-            w + factor
-        } else if hue < 2.0 / 3.0 {
-            w + factor * (2.0 / 3.0 - hue) * 6.0
-        } else {
-            w
+        match hue {
+            h if h < 1.0 / 6.0 => w + factor * hue * 6.0,
+            h if h < 0.5 => w + factor,
+            h if h < 2.0 / 3.0 => w + factor * (2.0 / 3.0 - hue) * 6.0,
+            _ => w,
         }
     };
     let r = hue_to_rgb(h_norm + 1.0 / 3.0);
@@ -297,18 +294,13 @@ pub(crate) fn hsl_to_srgb_f64(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
     let m = l - c / 2.0;
-    let (r1, g1, b1) = if h < 60.0 {
-        (c, x, 0.0)
-    } else if h < 120.0 {
-        (x, c, 0.0)
-    } else if h < 180.0 {
-        (0.0, c, x)
-    } else if h < 240.0 {
-        (0.0, x, c)
-    } else if h < 300.0 {
-        (x, 0.0, c)
-    } else {
-        (c, 0.0, x)
+    let (r1, g1, b1) = match h {
+        h if h < 60.0 => (c, x, 0.0),
+        h if h < 120.0 => (x, c, 0.0),
+        h if h < 180.0 => (0.0, c, x),
+        h if h < 240.0 => (0.0, x, c),
+        h if h < 300.0 => (x, 0.0, c),
+        _ => (c, 0.0, x),
     };
     (r1 + m, g1 + m, b1 + m)
 }

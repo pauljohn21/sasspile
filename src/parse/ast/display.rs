@@ -33,12 +33,10 @@ fn clean_num(v: f64) -> f64 {
 
 /// 清理百分比分量——接近 0 或 100 时归整。
 fn clean_pct(v: f64) -> f64 {
-    if v.abs() < FLOAT_NOISE_THRESHOLD {
-        0.0
-    } else if (v - PCT_SCALE).abs() < PCT_ROUND_THRESHOLD {
-        PCT_SCALE
-    } else {
-        v
+    match v {
+        v if v.abs() < FLOAT_NOISE_THRESHOLD => 0.0,
+        v if (v - PCT_SCALE).abs() < PCT_ROUND_THRESHOLD => PCT_SCALE,
+        _ => v,
     }
 }
 
@@ -100,28 +98,24 @@ impl std::fmt::Display for Value {
                         let (h, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
                         let (rp, gp, bp) = hsl_to_rgb_percent(h, s, l);
                         // 检查是否匹配命名颜色，优先输出名称
-                        if (c.a - 1.0).abs() < ALPHA_TOLERANCE
-                            && let Some(name) =
-                                crate::eval::Evaluator::reverse_lookup_named_color(c)
-                        {
-                            write!(f, "{name}")
-                        } else if (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                            write!(
+                        let alpha_ok = (c.a - 1.0).abs() < ALPHA_TOLERANCE;
+                        match (alpha_ok, crate::eval::Evaluator::reverse_lookup_named_color(c)) {
+                            (true, Some(name)) => write!(f, "{name}"),
+                            (true, None) => write!(
                                 f,
                                 "rgb({}%, {}%, {}%)",
                                 format_pct_val(rp),
                                 format_pct_val(gp),
                                 format_pct_val(bp)
-                            )
-                        } else {
-                            write!(
+                            ),
+                            (false, _) => write!(
                                 f,
                                 "rgba({}%, {}%, {}%, {})",
                                 format_pct_val(rp),
                                 format_pct_val(gp),
                                 format_pct_val(bp),
                                 format_alpha(c.a)
-                            )
+                            ),
                         }
                     }
                     ColorOutput::Auto => match c.space {
@@ -542,15 +536,19 @@ impl std::fmt::Display for Value {
                         if i > 0 {
                             f.write_str("; ")?;
                         }
-                        if let Some(cond) = &a.condition {
-                            cond.fmt(f)?;
-                            f.write_str(": ")?;
-                            a.value.fmt(f)?;
-                        } else if let Some(n) = &a.name {
-                            write!(f, "{n}: ")?;
-                            a.value.fmt(f)?;
-                        } else {
-                            a.value.fmt(f)?;
+                        match (&a.condition, &a.name) {
+                            (Some(cond), _) => {
+                                cond.fmt(f)?;
+                                f.write_str(": ")?;
+                                a.value.fmt(f)?;
+                            }
+                            (None, Some(n)) => {
+                                write!(f, "{n}: ")?;
+                                a.value.fmt(f)?;
+                            }
+                            (None, None) => {
+                                a.value.fmt(f)?;
+                            }
                         }
                     }
                     f.write_str(")")

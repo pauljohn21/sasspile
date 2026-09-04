@@ -80,19 +80,19 @@ impl Evaluator {
                             let pending_val = env.get_pending_config().get(&name).or_else(|| {
                                 env.get_pending_config().get(&cfg.name.replace('-', "_"))
                             });
-                            let chosen = if cfg.is_default {
-                                pending_val
+                            let val_is_null = matches!(val, Value::Null);
+                            let chosen = match (cfg.is_default, val_is_null) {
+                                (true, false) => pending_val
                                     .filter(|v| !matches!(v, Value::Null))
                                     .cloned()
-                                    .or(if matches!(val, Value::Null) {
-                                        None
-                                    } else {
-                                        Some(val)
-                                    })
-                            } else if matches!(val, Value::Null) {
-                                pending_val.filter(|v| !matches!(v, Value::Null)).cloned()
-                            } else {
-                                Some(val)
+                                    .or(Some(val)),
+                                (true, true) => pending_val
+                                    .filter(|v| !matches!(v, Value::Null))
+                                    .cloned(),
+                                (false, true) => pending_val
+                                    .filter(|v| !matches!(v, Value::Null))
+                                    .cloned(),
+                                (false, false) => Some(val),
                             };
                             if let Some(v) = chosen {
                                 acc.push((name, v));

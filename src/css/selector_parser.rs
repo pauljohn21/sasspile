@@ -173,25 +173,30 @@ impl Parser {
     fn take_type_with_ns(&mut self) -> String {
         let mut s = String::new();
         while let Some(&c) = self.chars.peek() {
-            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
-                s.push(c);
-                self.chars.next();
-            } else if c == '|' {
-                s.push(c);
-                self.chars.next();
-                if self.chars.peek().is_some_and(|c| *c == '*') {
-                    s.push('*');
+            match c {
+                c if c.is_ascii_alphanumeric() || c == '_' || c == '-' => {
+                    s.push(c);
                     self.chars.next();
-                } else {
-                    // peek+next 循环收集命名空间类型名
-                    while self.chars.peek().is_some_and(|c| {
-                        c.is_ascii_alphanumeric() || *c == '_' || *c == '-'
-                    }) {
-                        s.push(self.chars.next().unwrap());
+                }
+                '|' => {
+                    s.push(c);
+                    self.chars.next();
+                    match self.chars.peek() {
+                        Some(&'*') => {
+                            s.push('*');
+                            self.chars.next();
+                        }
+                        _ => {
+                            // peek+next 循环收集命名空间类型名
+                            while self.chars.peek().is_some_and(|c| {
+                                c.is_ascii_alphanumeric() || *c == '_' || *c == '-'
+                            }) {
+                                s.push(self.chars.next().unwrap());
+                            }
+                        }
                     }
                 }
-            } else {
-                break;
+                _ => break,
             }
         }
         s

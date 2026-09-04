@@ -205,12 +205,10 @@ impl Evaluator {
             // 嵌套 if() 调用——如果返回 CSS 值则保留原始形式
             Value::Call(name, _args) if name == "if" => {
                 let val = Self::eval_value(condition, env)?;
-                if let Value::Calc(_) = val {
-                    Ok(PartialCond::Css(format!("{condition}")))
-                } else if Self::is_truthy(&val) {
-                    Ok(PartialCond::True)
-                } else {
-                    Ok(PartialCond::False)
+                match val {
+                    Value::Calc(_) => Ok(PartialCond::Css(format!("{condition}"))),
+                    v if Self::is_truthy(&v) => Ok(PartialCond::True),
+                    _ => Ok(PartialCond::False),
                 }
             }
             // 空格分隔列表作为条件（如 var(--not) css()）
@@ -283,12 +281,10 @@ impl Evaluator {
             // 其他值——正常求值
             _ => {
                 let val = Self::eval_value(condition, env)?;
-                if let Value::Calc(_) = val {
-                    Ok(PartialCond::Css(val.to_string()))
-                } else if Self::is_truthy(&val) {
-                    Ok(PartialCond::True)
-                } else {
-                    Ok(PartialCond::False)
+                match val {
+                    Value::Calc(_) => Ok(PartialCond::Css(val.to_string())),
+                    v if Self::is_truthy(&v) => Ok(PartialCond::True),
+                    _ => Ok(PartialCond::False),
                 }
             }
         }

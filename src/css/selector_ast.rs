@@ -85,20 +85,18 @@ impl fmt::Display for Selector {
 impl fmt::Display for ComplexSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, (comb, compound)) in self.compounds.iter().enumerate() {
-            if i > 0 {
-                match comb {
-                    Some(Combinator::Descendant) | None => write!(f, " ")?,
-                    Some(Combinator::Child) => write!(f, " > ")?,
-                    Some(Combinator::Adjacent) => write!(f, " + ")?,
-                    Some(Combinator::Sibling) => write!(f, " ~ ")?,
-                }
-            } else if let Some(c) = comb {
-                match c {
+            match (i, comb) {
+                (0, Some(c)) => match c {
                     Combinator::Descendant => write!(f, " ")?,
                     Combinator::Child => write!(f, "> ")?,
                     Combinator::Adjacent => write!(f, "+ ")?,
                     Combinator::Sibling => write!(f, "~ ")?,
-                }
+                },
+                (0, None) => {}
+                (_, Some(Combinator::Descendant)) | (_, None) => write!(f, " ")?,
+                (_, Some(Combinator::Child)) => write!(f, " > ")?,
+                (_, Some(Combinator::Adjacent)) => write!(f, " + ")?,
+                (_, Some(Combinator::Sibling)) => write!(f, " ~ ")?,
             }
             write!(f, "{compound}")?;
         }

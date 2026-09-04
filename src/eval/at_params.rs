@@ -53,21 +53,25 @@ impl Evaluator {
         let mut paren_content = String::new();
 
         for c in chars {
-            if c == '(' {
-                paren_depth += 1;
-                if paren_depth == 1 {
-                    paren_content.clear();
-                    continue;
+            match c {
+                '(' => {
+                    paren_depth += 1;
+                    if paren_depth == 1 {
+                        paren_content.clear();
+                        continue;
+                    }
                 }
-            } else if c == ')' {
-                paren_depth -= 1;
-                if paren_depth == 0 {
-                    let evaluated = Self::eval_paren_content(&paren_content, env);
-                    result.push('(');
-                    result.push_str(&evaluated);
-                    result.push(')');
-                    continue;
+                ')' => {
+                    paren_depth -= 1;
+                    if paren_depth == 0 {
+                        let evaluated = Self::eval_paren_content(&paren_content, env);
+                        result.push('(');
+                        result.push_str(&evaluated);
+                        result.push(')');
+                        continue;
+                    }
                 }
+                _ => {}
             }
             if paren_depth >= 1 {
                 paren_content.push(c);

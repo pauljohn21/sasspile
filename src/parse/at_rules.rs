@@ -210,11 +210,15 @@ impl Parser<'_> {
         // 检查 @content 块
         let mut content = None;
         self.skip_ws();
-        if self.peek() == Some(&Token::LBrace) {
-            self.advance();
-            content = Some(self.parse_body()?);
-        } else if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(&Token::LBrace) => {
+                self.advance();
+                content = Some(self.parse_body()?);
+            }
+            Some(&Token::Semicolon) => {
+                self.advance();
+            }
+            _ => {}
         }
         Ok(Node::Include {
             name,
@@ -438,13 +442,13 @@ impl Parser<'_> {
                 }
                 Token::Whitespace => {
                     // 压缩连续空白为单个，跳过括号内侧前导空白
-                    if paren_depth > 0 && s.ends_with('(') {
-                        self.advance();
-                    } else if !s.ends_with(' ') {
-                        s.push(' ');
-                        self.advance();
-                    } else {
-                        self.advance();
+                    match (paren_depth > 0 && s.ends_with('('), s.ends_with(' ')) {
+                        (true, _) => { self.advance(); }
+                        (false, false) => {
+                            s.push(' ');
+                            self.advance();
+                        }
+                        (false, true) => { self.advance(); }
                     }
                 }
                 _ => {

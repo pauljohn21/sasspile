@@ -92,19 +92,19 @@ impl Iterator for Lexer<'_> {
                 Token::Pipe
             }
             // 点——可能是小数开始或 Dot
-            '.' => {
-                if self.peek2().is_some_and(|c| c.is_ascii_digit()) {
-                    self.scan_number()
-                } else if self.peek2() == Some('.') && self.source[self.pos..].starts_with("...") {
+            '.' => match self.peek2() {
+                Some(c) if c.is_ascii_digit() => self.scan_number(),
+                Some('.') if self.source[self.pos..].starts_with("...") => {
                     self.next_char();
                     self.next_char();
                     self.next_char();
                     Token::DotDotDot
-                } else {
+                }
+                _ => {
                     self.next_char();
                     Token::Dot
                 }
-            }
+            },
             // 减号——可能是负数、标识符开头或减号运算符
             '-' => {
                 let next = self.peek2();

@@ -328,12 +328,10 @@ impl Evaluator {
             .iter()
             .flat_map(|p| {
                 children.iter().map(move |c| {
-                    if c.contains('&') {
-                        c.replace('&', p)
-                    } else if p.is_empty() {
-                        c.to_string()
-                    } else {
-                        format!("{p} {c}")
+                    match (c.contains('&'), p.is_empty()) {
+                        (true, _) => c.replace('&', p),
+                        (false, true) => c.to_string(),
+                        (false, false) => format!("{p} {c}"),
                     }
                 })
             })

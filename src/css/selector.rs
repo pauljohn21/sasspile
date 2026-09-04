@@ -38,10 +38,10 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
             let chars: Vec<char> = result.chars().collect();
             let mut i = paren_start + 1;
             while i < chars.len() && depth > 0 {
-                if chars[i] == '(' {
-                    depth += 1;
-                } else if chars[i] == ')' {
-                    depth -= 1;
+                match chars[i] {
+                    '(' => depth += 1,
+                    ')' => depth -= 1,
+                    _ => {}
                 }
                 if depth > 0 {
                     i += 1;
@@ -118,55 +118,63 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
 
     while i < chars.len() {
         let c = chars[i];
-        if c == '[' {
-            in_brackets = true;
-            current.push(c);
-        } else if c == ']' {
-            in_brackets = false;
-            current.push(c);
-        } else if c == '(' && !in_brackets {
-            // 找到伪类内部——提取完整内容
-            if !current.trim().is_empty() {
-                tokens.push(SelToken::Selector(current.trim().to_string()));
-                current = String::new();
+        match c {
+            '[' => {
+                in_brackets = true;
+                current.push(c);
             }
-            // 向前查看伪类名（向前回看）
-            let pseudo_name = find_pseudo_name(&tokens);
-            // 提取括号内容
-            let mut depth = 1;
-            let mut inner = String::new();
-            i += 1;
-            while i < chars.len() && depth > 0 {
-                if chars[i] == '(' {
-                    depth += 1;
-                } else if chars[i] == ')' {
-                    depth -= 1;
+            ']' => {
+                in_brackets = false;
+                current.push(c);
+            }
+            '(' if !in_brackets => {
+                // 找到伪类内部——提取完整内容
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
                 }
-                if depth > 0 {
-                    inner.push(chars[i]);
-                }
+                // 向前查看伪类名（向前回看）
+                let pseudo_name = find_pseudo_name(&tokens);
+                // 提取括号内容
+                let mut depth = 1;
+                let mut inner = String::new();
                 i += 1;
+                while i < chars.len() && depth > 0 {
+                    match chars[i] {
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        _ => {}
+                    }
+                    if depth > 0 {
+                        inner.push(chars[i]);
+                    }
+                    i += 1;
+                }
+                // :is/:where/:not/matches 不允许前导组合器
+                // :has 允许前导组合器（同顶层）
+                let allow_leading = pseudo_name.as_deref() == Some("has");
+                tokens.push(SelToken::PseudoInner(inner, allow_leading));
+                continue; // 已经推进了 i
             }
-            // :is/:where/:not/matches 不允许前导组合器
-            // :has 允许前导组合器（同顶层）
-            let allow_leading = pseudo_name.as_deref() == Some("has");
-            tokens.push(SelToken::PseudoInner(inner, allow_leading));
-            continue; // 已经推进了 i
-        } else if in_brackets {
-            current.push(c);
-        } else if c == '>' || c == '+' || c == '~' {
-            if !current.trim().is_empty() {
-                tokens.push(SelToken::Selector(current.trim().to_string()));
-                current = String::new();
+            _ if in_brackets => {
+                current.push(c);
             }
-            tokens.push(SelToken::Combinator);
-        } else if c.is_whitespace() {
-            if !current.trim().is_empty() {
-                tokens.push(SelToken::Selector(current.trim().to_string()));
-                current = String::new();
+            '>' | '+' | '~' => {
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
+                }
+                tokens.push(SelToken::Combinator);
             }
-        } else {
-            current.push(c);
+            _ if c.is_whitespace() => {
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
+                }
+            }
+            _ => {
+                current.push(c);
+            }
         }
         i += 1;
     }
@@ -279,10 +287,10 @@ fn normalize_attr_selectors(selector: &str) -> String {
             let mut depth = 1;
             i += 1;
             while i < chars.len() && depth > 0 {
-                if chars[i] == '[' {
-                    depth += 1;
-                } else if chars[i] == ']' {
-                    depth -= 1;
+                match chars[i] {
+                    '[' => depth += 1,
+                    ']' => depth -= 1,
+                    _ => {}
                 }
                 if depth > 0 {
                     i += 1;

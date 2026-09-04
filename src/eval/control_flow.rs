@@ -48,17 +48,22 @@ impl Evaluator {
                 if s.fract() != 0.0 {
                     return Err(SassError::Eval(format!("{s} is not an int.")));
                 }
-                let end_val = if su == eu || su.is_none() || eu.is_none() {
-                    *e
-                } else if crate::eval::value::units_compatible(su.as_deref(), eu.as_deref()) {
-                    let s_u = su.as_deref().unwrap_or("");
-                    let e_u = eu.as_deref().unwrap_or("");
-                    let conv = unit_conversion_factor(e_u, s_u);
-                    e * conv
-                } else {
-                    return Err(SassError::Eval(format!(
-                        "@for incompatible units: {su:?} and {eu:?}"
-                    )));
+                let s_eq_e = su == eu;
+                let either_none = su.is_none() || eu.is_none();
+                let compatible = crate::eval::value::units_compatible(su.as_deref(), eu.as_deref());
+                let end_val = match (s_eq_e, either_none, compatible) {
+                    (true, _, _) | (_, true, _) => *e,
+                    (false, false, true) => {
+                        let s_u = su.as_deref().unwrap_or("");
+                        let e_u = eu.as_deref().unwrap_or("");
+                        let conv = unit_conversion_factor(e_u, s_u);
+                        e * conv
+                    }
+                    (false, false, false) => {
+                        return Err(SassError::Eval(format!(
+                            "@for incompatible units: {su:?} and {eu:?}"
+                        )));
+                    }
                 };
                 if end_val.fract() != 0.0 {
                     return Err(SassError::Eval(format!("{end_val} is not an int.")));

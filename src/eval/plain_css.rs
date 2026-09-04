@@ -55,16 +55,14 @@ impl super::Evaluator {
 
             // 字符串 — 检查是否包含插值，以及是否为 & 父选择器
             Value::String(s, _) => {
-                if s.contains("#{") {
-                    Err(SassError::Eval(
+                match (s.contains("#{"), s == "&") {
+                    (true, _) => Err(SassError::Eval(
                         "Interpolation isn't allowed in plain CSS.".into(),
-                    ))
-                } else if s == "&" {
-                    Err(SassError::Eval(
+                    )),
+                    (false, true) => Err(SassError::Eval(
                         "The parent selector isn't allowed in plain CSS.".into(),
-                    ))
-                } else {
-                    Ok(())
+                    )),
+                    (false, false) => Ok(()),
                 }
             }
 

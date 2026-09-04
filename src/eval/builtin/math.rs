@@ -72,35 +72,35 @@ pub fn call(
             if args.is_empty() {
                 return Err(SassError::Eval("Missing argument $number.".into()));
             }
-            if args.len() == 1 {
-                // 传统 math.round(number)
-                validate_single_number(args)?;
-                match &args[0] {
-                    Value::Number(n, u) => Ok(Some(Value::Number(n.round(), u.clone()))),
-                    Value::Calc(c) => {
-                        let inner = c
-                            .strip_prefix("calc(")
-                            .and_then(|s| s.strip_suffix(")"))
-                            .unwrap_or(c.as_str());
-                        Ok(Some(Value::String(format!("round({inner})"), false)))
+            match args.len() {
+                1 => {
+                    // 传统 math.round(number)
+                    validate_single_number(args)?;
+                    match &args[0] {
+                        Value::Number(n, u) => Ok(Some(Value::Number(n.round(), u.clone()))),
+                        Value::Calc(c) => {
+                            let inner = c
+                                .strip_prefix("calc(")
+                                .and_then(|s| s.strip_suffix(")"))
+                                .unwrap_or(c.as_str());
+                            Ok(Some(Value::String(format!("round({inner})"), false)))
+                        }
+                        _ => unreachable!(),
                     }
-                    _ => unreachable!(),
                 }
-            } else if args.len() == 2 {
-                // round(number, step) = round(nearest, number, step)
-                css_round("nearest", &args[0], &args[1])
-            } else if args.len() == 3 {
-                // round(strategy, number, step)
-                let strategy = match &args[0] {
-                    Value::String(s, _) => s.as_str(),
-                    _ => return Err(SassError::Eval("$strategy: must be a string.".into())),
-                };
-                css_round(strategy, &args[1], &args[2])
-            } else {
-                Err(SassError::Eval(format!(
+                2 => css_round("nearest", &args[0], &args[1]),
+                3 => {
+                    // round(strategy, number, step)
+                    let strategy = match &args[0] {
+                        Value::String(s, _) => s.as_str(),
+                        _ => return Err(SassError::Eval("$strategy: must be a string.".into())),
+                    };
+                    css_round(strategy, &args[1], &args[2])
+                }
+                _ => Err(SassError::Eval(format!(
                     "Only 3 arguments allowed, but {} were passed.",
                     args.len()
-                )))
+                ))),
             }
         }
         "mod" => {

@@ -136,47 +136,49 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
     let mut result = String::new();
     let mut chars = property.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '#' && chars.peek() == Some(&'{') {
-            chars.next(); // 消费 {
-            let mut expr = String::new();
-            let mut depth = 1;
-            for ch in chars.by_ref() {
-                if ch == '{' {
-                    depth += 1;
-                    expr.push(ch);
-                } else if ch == '}' {
-                    depth -= 1;
-                    if depth == 0 {
+        match c {
+            '#' if chars.peek() == Some(&'{') => {
+                chars.next(); // 消费 {
+                let mut expr = String::new();
+                let mut depth = 1;
+                for ch in chars.by_ref() {
+                    match ch {
+                        '{' => {
+                            depth += 1;
+                            expr.push(ch);
+                        }
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                            expr.push(ch);
+                        }
+                        _ => expr.push(ch),
+                    }
+                }
+                match super::eval_simple_expr(&expr, env) {
+                    Ok(val) => result.push_str(&val.to_string()),
+                    Err(_) => result.push_str(&expr),
+                }
+            }
+            '$' => {
+                // 读取变量名
+                let mut var_name = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
                         break;
                     }
-                    expr.push(ch);
-                } else {
-                    expr.push(ch);
+                }
+                match env.lookup(&var_name) {
+                    Some(val) => result.push_str(&val.to_string()),
+                    None => { let _ = write!(result, "${var_name}"); }
                 }
             }
-            if let Ok(val) = super::eval_simple_expr(&expr, env) {
-                result.push_str(&val.to_string());
-            } else {
-                result.push_str(&expr);
-            }
-        } else if c == '$' {
-            // 读取变量名
-            let mut var_name = String::new();
-            while let Some(&ch) = chars.peek() {
-                if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-                    var_name.push(ch);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-            if let Some(val) = env.lookup(&var_name) {
-                result.push_str(&val.to_string());
-            } else {
-                let _ = write!(result, "${var_name}");
-            }
-        } else {
-            result.push(c);
+            _ => result.push(c),
         }
     }
     result
@@ -235,57 +237,63 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '#' && chars.peek() == Some(&'{') {
-            chars.next(); // 消费 {
-            let mut expr = String::new();
-            let mut depth = 1;
-            for ch in chars.by_ref() {
-                if ch == '{' {
-                    depth += 1;
-                    expr.push(ch);
-                } else if ch == '}' {
-                    depth -= 1;
-                    if depth == 0 {
+        match c {
+            '#' if chars.peek() == Some(&'{') => {
+                chars.next(); // 消费 {
+                let mut expr = String::new();
+                let mut depth = 1;
+                for ch in chars.by_ref() {
+                    match ch {
+                        '{' => {
+                            depth += 1;
+                            expr.push(ch);
+                        }
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                            expr.push(ch);
+                        }
+                        _ => expr.push(ch),
+                    }
+                }
+                // 尝试求值表达式
+                match super::eval_simple_expr(&expr, env) {
+                    Ok(val) => {
+                        // 插值上下文中字符串去引号
+                        let s = match &val {
+                            Value::String(s, _) => s.clone(),
+                            _ => val.to_string(),
+                        };
+                        result.push_str(&s);
+                    }
+                    Err(_) => result.push_str(&expr),
+                }
+            }
+            '$' => {
+                // 读取变量名
+                let mut var_name = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
                         break;
                     }
-                    expr.push(ch);
-                } else {
-                    expr.push(ch);
+                }
+                match env.lookup(&var_name) {
+                    Some(val) => {
+                        let s = match val {
+                            Value::String(s, _) => s.clone(),
+                            _ => val.to_string(),
+                        };
+                        result.push_str(&s);
+                    }
+                    None => { let _ = write!(result, "${var_name}"); }
                 }
             }
-            // 尝试求值表达式
-            if let Ok(val) = super::eval_simple_expr(&expr, env) {
-                // 插值上下文中字符串去引号
-                let s = match &val {
-                    Value::String(s, _) => s.clone(),
-                    _ => val.to_string(),
-                };
-                result.push_str(&s);
-            } else {
-                result.push_str(&expr);
-            }
-        } else if c == '$' {
-            // 读取变量名
-            let mut var_name = String::new();
-            while let Some(&ch) = chars.peek() {
-                if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-                    var_name.push(ch);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-            if let Some(val) = env.lookup(&var_name) {
-                let s = match val {
-                    Value::String(s, _) => s.clone(),
-                    _ => val.to_string(),
-                };
-                result.push_str(&s);
-            } else {
-                let _ = write!(result, "${var_name}");
-            }
-        } else {
-            result.push(c);
+            _ => result.push(c),
         }
     }
     result

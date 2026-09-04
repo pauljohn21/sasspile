@@ -462,23 +462,25 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.a, None))),
                 _ => {
                     // CSS 透传：旧 IE filter 语法 alpha(opacity=0) — 关键字参数直接透传
-                    if !kw_args.is_empty() {
-                        let kw_str = kw_args
-                            .iter()
-                            .map(|(k, v)| format!("{k}={v}"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        Ok(Some(Value::String(format!("{name}({kw_str})"), false)))
-                    } else if !args.is_empty() {
-                        // CSS 透传：非颜色位置参数原样输出（如 alpha(var(--x))）
-                        let arg_str = args
-                            .iter()
-                            .map(std::string::ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        Ok(Some(Value::String(format!("{name}({arg_str})"), false)))
-                    } else {
-                        Err(SassError::Eval("alpha requires 1 color argument".into()))
+                    match (!kw_args.is_empty(), !args.is_empty()) {
+                        (true, _) => {
+                            let kw_str = kw_args
+                                .iter()
+                                .map(|(k, v)| format!("{k}={v}"))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            Ok(Some(Value::String(format!("{name}({kw_str})"), false)))
+                        }
+                        (false, true) => {
+                            // CSS 透传：非颜色位置参数原样输出（如 alpha(var(--x))）
+                            let arg_str = args
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            Ok(Some(Value::String(format!("{name}({arg_str})"), false)))
+                        }
+                        (false, false) => Err(SassError::Eval("alpha requires 1 color argument".into())),
                     }
                 }
             }

@@ -56,20 +56,14 @@ impl<'src> Lexer<'src> {
             }
         }
         let text = &self.source[start..self.pos];
-        if text.eq_ignore_ascii_case("true") {
-            Token::True
-        } else if text.eq_ignore_ascii_case("false") {
-            Token::False
-        } else if text.eq_ignore_ascii_case("null") {
-            Token::Null
-        } else if text.eq_ignore_ascii_case("and") {
-            Token::And
-        } else if text.eq_ignore_ascii_case("or") {
-            Token::Or
-        } else if text.eq_ignore_ascii_case("not") {
-            Token::Not
-        } else {
-            Token::Ident(text.to_string())
+        match text.to_lowercase().as_str() {
+            "true" => Token::True,
+            "false" => Token::False,
+            "null" => Token::Null,
+            "and" => Token::And,
+            "or" => Token::Or,
+            "not" => Token::Not,
+            _ => Token::Ident(text.to_string()),
         }
     }
 
@@ -223,40 +217,42 @@ impl<'src> Lexer<'src> {
         self.next_char();
         let mut name = String::new();
         while let Some(c) = self.peek() {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                name.push(c);
-                self.next_char();
-            } else if c == '\\' {
-                self.next_char();
-                if let Some(next) = self.peek() {
-                    if next.is_ascii_hexdigit() {
-                        let mut hex = String::new();
-                        for _ in 0..6 {
-                            if let Some(h) = self.peek().filter(char::is_ascii_hexdigit) {
-                                hex.push(h);
-                                self.next_char();
-                            } else {
-                                break;
+            match c {
+                _ if c.is_ascii_alphanumeric() || c == '-' => {
+                    name.push(c);
+                    self.next_char();
+                }
+                '\\' => {
+                    self.next_char();
+                    if let Some(next) = self.peek() {
+                        if next.is_ascii_hexdigit() {
+                            let mut hex = String::new();
+                            for _ in 0..6 {
+                                if let Some(h) = self.peek().filter(char::is_ascii_hexdigit) {
+                                    hex.push(h);
+                                    self.next_char();
+                                } else {
+                                    break;
+                                }
                             }
-                        }
-                        if self
-                            .peek()
-                            .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
-                        {
+                            if self
+                                .peek()
+                                .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
+                            {
+                                self.next_char();
+                            }
+                            if let Ok(code) = u32::from_str_radix(&hex, 16)
+                                && let Some(ch) = char::from_u32(code)
+                            {
+                                name.push(ch);
+                            }
+                        } else {
                             self.next_char();
+                            name.push(next);
                         }
-                        if let Ok(code) = u32::from_str_radix(&hex, 16)
-                            && let Some(ch) = char::from_u32(code)
-                        {
-                            name.push(ch);
-                        }
-                    } else {
-                        self.next_char();
-                        name.push(next);
                     }
                 }
-            } else {
-                break;
+                _ => break,
             }
         }
         Token::AtRule(name)

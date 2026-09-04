@@ -126,66 +126,64 @@ impl Parser<'_> {
                             look += 1;
                         }
                         let next_non_ws = self.peek_n(look);
-                        if s.ends_with('[') || s.ends_with('=') {
-                            // [ 或 = 后的空白跳过
-                            self.advance();
-                        } else if matches!(
-                            next_non_ws,
-                            Some(
-                                Token::RBracket
-                                    | Token::Assign
-                                    | Token::Tilde
-                                    | Token::Pipe
-                                    | Token::Caret
-                                    | Token::Star
-                            )
-                        ) {
-                            // ] 前或属性操作符（= ~= |= ^= *=）前的空白跳过
-                            self.advance();
-                        } else if s.contains('=') {
-                            // 属性值后的空白 — 检查是否是合法 modifier（任意单字符标识符，前向兼容）
-                            match next_non_ws {
-                                Some(Token::Ident(id))
-                                    if id.len() == 1
-                                        && id
-                                            .chars()
-                                            .next()
-                                            .is_some_and(|c| c.is_ascii_alphabetic()) =>
-                                {
-                                    let mod_id = id.clone();
-                                    // 检查 modifier 后面是否是 ]
-                                    let after_mod = self.peek_n(look + 1);
-                                    if matches!(after_mod, Some(Token::RBracket)) {
-                                        // 跳过空白
-                                        for _ in 0..look {
+                        let s_ends_bracket = s.ends_with('[');
+                        let s_ends_eq = s.ends_with('=');
+                        let s_has_eq = s.contains('=');
+                        match (s_ends_bracket || s_ends_eq, next_non_ws, s_has_eq) {
+                            (true, _, _) => {
+                                // [ 或 = 后的空白跳过
+                                self.advance();
+                            }
+                            (false, Some(Token::RBracket | Token::Assign | Token::Tilde | Token::Pipe | Token::Caret | Token::Star), _) => {
+                                // ] 前或属性操作符（= ~= |= ^= *=）前的空白跳过
+                                self.advance();
+                            }
+                            (false, _, true) => {
+                                // 属性值后的空白 — 检查是否是合法 modifier（任意单字符标识符，前向兼容）
+                                match next_non_ws {
+                                    Some(Token::Ident(id))
+                                        if id.len() == 1
+                                            && id
+                                                .chars()
+                                                .next()
+                                                .is_some_and(|c| c.is_ascii_alphabetic()) =>
+                                    {
+                                        let mod_id = id.clone();
+                                        // 检查 modifier 后面是否是 ]
+                                        let after_mod = self.peek_n(look + 1);
+                                        if matches!(after_mod, Some(Token::RBracket)) {
+                                            // 跳过空白
+                                            for _ in 0..look {
+                                                self.advance();
+                                            }
+                                            // 消费 modifier 字符
+                                            if !s.ends_with(' ') {
+                                                s.push(' ');
+                                            }
+                                            s.push_str(&mod_id);
                                             self.advance();
+                                        } else {
+                                            return Err(SassError::Parse {
+                                                expected: "]".into(),
+                                                found: "modifier".into(),
+                                            });
                                         }
-                                        // 消费 modifier 字符
-                                        if !s.ends_with(' ') {
-                                            s.push(' ');
-                                        }
-                                        s.push_str(&mod_id);
-                                        self.advance();
-                                    } else {
+                                    }
+                                    _ => {
                                         return Err(SassError::Parse {
                                             expected: "]".into(),
                                             found: "modifier".into(),
                                         });
                                     }
                                 }
-                                _ => {
-                                    return Err(SassError::Parse {
-                                        expected: "]".into(),
-                                        found: "modifier".into(),
-                                    });
-                                }
                             }
-                        } else {
-                            // 属性名后空白后不是操作符 → 非法
-                            return Err(SassError::Parse {
-                                expected: "]".into(),
-                                found: "modifier".into(),
-                            });
+                            (false, _, false) => {
+                                // 属性名后空白后不是操作符 → 非法
+                                return Err(SassError::Parse {
+                                    expected: "]".into(),
+                                    found: "modifier".into(),
+                                });
+                            }
                         }
                     } else {
                         s.push(' ');

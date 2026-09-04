@@ -229,13 +229,10 @@ pub fn call(
                 }
             };
             // 解析 bracketed 参数
-            let bracketed = if let Some(Value::Bool(b)) = args.get(3) {
-                *b
-            } else if let Some(Value::String(s, _)) = args.get(3) {
-                s == "auto"
-            } else {
-                // auto → 使用 list1 的 bracketed
-                a_bracketed
+            let bracketed = match args.get(3) {
+                Some(Value::Bool(b)) => *b,
+                Some(Value::String(s, _)) => s == "auto",
+                _ => a_bracketed,
             };
             let mut items = a_items;
             items.extend(b_items);
