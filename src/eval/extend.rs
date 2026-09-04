@@ -1,5 +1,7 @@
 use super::*;
 use crate::css::node::CssNode;
+use crate::css::selector_parser::parse_selector;
+use crate::css::selector_ops;
 
 impl Evaluator {
     /// 收集 CSS 中所有选择器文本（用于 extend target 匹配检查）。
@@ -36,7 +38,7 @@ impl Evaluator {
             .map(|node| {
                 match node {
                     CssNode::Rule {
-                        mut selector,
+                        selector,
                         children,
                         declarations,
                     } => {
@@ -45,95 +47,62 @@ impl Evaluator {
                             selector = %selector,
                             "processing rule for extends"
                         );
-                        // 应用 extend
-                        for (extender, target, _optional, module) in extends {
-                            let target_trimmed = target.trim();
-                            let extender_trimmed = extender.trim();
-                            // bogus 选择器检测
-                            if extender_trimmed.ends_with('+')
-                                || extender_trimmed.ends_with('>')
-                                || extender_trimmed.ends_with('~')
-                            {
-                                continue;
-                            }
-                            // 模块 scope 检查：extend 带模块标记时，
-                            // 检查 target 是否在该模块的选择器中。
-                            // 如果模块路径不在 cache 中（当前文件/顶层），
-                            // 则检查所有已加载模块的选择器。
-                            if let Some(module_path) = module {
-                                let in_scope = module_selectors.get(module_path).map_or_else(
-                                    || {
-                                        module_selectors
-                                            .values()
-                                            .any(|s| s.contains(target_trimmed))
-                                    },
-                                    |s| s.contains(target_trimmed),
-                                );
-                                if !in_scope {
-                                    continue;
+                        // 用 AST 进行 extend——fold 累积扩展
+                        let sel_ast = extends.iter().fold(
+                            parse_selector(&selector),
+                            |sel_ast, (extender, target, _optional, module)| {
+                                let target_trimmed = target.trim();
+                                let extender_trimmed = extender.trim();
+                                // bogus 选择器检测
+                                if extender_trimmed.ends_with('+')
+                                    || extender_trimmed.ends_with('>')
+                                    || extender_trimmed.ends_with('~')
+                                {
+                                    return sel_ast;
                                 }
-                            }
-                            if target_trimmed.starts_with('%') {
-                                // 占位符：替换每个包含 target 的选择器部分
-                                let parts: Vec<&str> = selector.split(',').collect();
-                                let new_parts: Vec<String> = parts
-                                    .iter()
-                                    .map(|p| {
-                                        let trimmed = p.trim();
-                                        if trimmed == target_trimmed
-                                            || trimmed.contains(target_trimmed)
-                                        {
-                                            p.replace(target_trimmed, extender_trimmed)
-                                        } else {
-                                            p.to_string()
-                                        }
-                                    })
-                                    .collect();
-                                selector = new_parts.join(",");
-                                crate::__tracing::debug!(
-                                    target: "sasspile::extend",
-                                    new_selector = %selector,
-                                    "placeholder replaced"
-                                );
-                            } else {
-                                // 普通选择器：逐个逗号分隔部分检查匹配
-                                let parts: Vec<String> =
-                                    selector.split(',').map(|s| s.trim().to_string()).collect();
-                                let mut new_selectors: Vec<String> = Vec::new();
-                                for part in &parts {
-                                    if part == target_trimmed || part.contains(target_trimmed) {
-                                        // 替换 target 为 extender，生成新选择器
-                                        let replaced =
-                                            part.replace(target_trimmed, extender_trimmed);
-                                        if !replaced.is_empty()
-                                            && !new_selectors.contains(&replaced)
-                                        {
-                                            new_selectors.push(replaced);
-                                        }
+                                // 模块 scope 检查
+                                if let Some(module_path) = module {
+                                    let in_scope = module_selectors.get(module_path).map_or_else(
+                                        || {
+                                            module_selectors
+                                                .values()
+                                                .any(|s| s.contains(target_trimmed))
+                                        },
+                                        |s| s.contains(target_trimmed),
+                                    );
+                                    if !in_scope {
+                                        return sel_ast;
                                     }
                                 }
-                                // 追加新选择器（去重）
-                                for ns in &new_selectors {
-                                    if !selector.contains(ns.as_str()) {
-                                        selector.push_str(", ");
-                                        selector.push_str(ns);
-                                    }
-                                }
+                                let extendee = parse_selector(target_trimmed);
+                                let ext = parse_selector(extender_trimmed);
+                                let new_sel = selector_ops::extend_selector(&sel_ast, &extendee, &ext);
                                 crate::__tracing::debug!(
                                     target: "sasspile::extend",
-                                    final_selector = %selector,
-                                    "extender appended"
+                                    new_selector = %new_sel,
+                                    "extend applied"
                                 );
-                            }
-                        }
+                                new_sel
+                            },
+                        );
                         // 递归处理子规则
                         let children = Self::apply_extends(children, extends, module_selectors);
-                        // 移除未被继承的占位符选择器部分
-                        let parts: Vec<&str> = selector
-                            .split(',')
-                            .filter(|s| !s.trim().starts_with('%'))
-                            .collect();
-                        selector = parts.join(",").trim().to_string();
+                        // 移除未被继承的占位符选择器——filter + collect
+                        let selector = crate::css::selector_ast::Selector(
+                            sel_ast
+                                .0
+                                .into_iter()
+                                .filter(|c| {
+                                    !c.compounds.iter().all(|(_, comp)| {
+                                        comp.0.iter().all(|s| matches!(
+                                            s,
+                                            crate::css::selector_ast::SimpleSelector::Placeholder(_)
+                                        ))
+                                    })
+                                })
+                                .collect(),
+                        )
+                        .to_string();
                         CssNode::Rule {
                             selector,
                             declarations,
@@ -171,23 +140,25 @@ impl Evaluator {
         let span = crate::__tracing::debug_span!("check_extend_targets", n_extends = extends.len());
         let _enter = span.enter();
         let all_selectors = Self::collect_selectors(css);
-        for (_extender, target, optional, _module) in extends {
-            if *optional {
-                continue;
-            }
-            let target_trimmed = target.trim();
-            // 占位符选择器不需要在 CSS 中存在
-            if target_trimmed.starts_with('%') {
-                continue;
-            }
-            let found = all_selectors.iter().any(|s| s.contains(target_trimmed));
-            if !found {
-                return Err(SassError::Eval(format!(
-                    "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
-                )));
-            }
-        }
-        Ok(())
+        extends
+            .iter()
+            .try_fold((), |(), (_extender, target, optional, _module)| {
+                if *optional {
+                    return Ok(());
+                }
+                let target_trimmed = target.trim();
+                // 占位符选择器不需要在 CSS 中存在
+                if target_trimmed.starts_with('%') {
+                    return Ok(());
+                }
+                let found = all_selectors.iter().any(|s| s.contains(target_trimmed));
+                if !found {
+                    return Err(SassError::Eval(format!(
+                        "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
+                    )));
+                }
+                Ok(())
+            })
     }
 
     /// 从模块缓存构建路径→选择器集合的映射
@@ -209,21 +180,28 @@ impl Evaluator {
         ast: &crate::parse::ast::Ast,
         load_paths: &[PathBuf],
     ) -> std::collections::HashSet<String> {
-        let mut selectors: std::collections::HashSet<String> =
-            Self::collect_selectors(css).into_iter().collect();
-        // 从 AST 中提取 @use 的模块路径
+        // 从 AST 中提取 @use 的模块路径——flat_map + collect
         let base = Some(module_path.to_path_buf());
         let base_ref = base.as_ref();
-        for node in &ast.nodes {
-            if let crate::parse::ast::Node::Use { url, .. } = node
-                && !url.starts_with("sass:")
-                && let Some(path) = Self::resolve_file(base_ref, url, load_paths)
-                && let Some(v) = cache.get(&path)
-            {
-                selectors.extend(Self::collect_selectors(&v.css));
-                selectors.extend(v.selectors.iter().cloned());
-            }
-        }
-        selectors
+        let module_selectors: Vec<String> = ast
+            .nodes
+            .iter()
+            .filter_map(|node| {
+                let crate::parse::ast::Node::Use { url, .. } = node else {
+                    return None;
+                };
+                if url.starts_with("sass:") {
+                    return None;
+                }
+                let path = Self::resolve_file(base_ref, url, load_paths)?;
+                let v = cache.get(&path)?;
+                Some(Self::collect_selectors(&v.css).into_iter().chain(v.selectors.iter().cloned()))
+            })
+            .flatten()
+            .collect();
+        Self::collect_selectors(css)
+            .into_iter()
+            .chain(module_selectors)
+            .collect()
     }
 }

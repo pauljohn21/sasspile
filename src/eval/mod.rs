@@ -311,4 +311,4 @@ mod module_helpers;
 mod plain_css;
 mod rule;
 mod scope;
-mod value;
+pub mod value;

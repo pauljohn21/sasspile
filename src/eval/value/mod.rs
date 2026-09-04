@@ -5,6 +5,9 @@ use crate::error::{Result, SassError};
 use crate::parse::ast::BinOpKind;
 
 mod calc;
+pub mod calc_ast;
+pub mod calc_simplify;
+pub mod calc_units;
 mod display;
 mod ops;
 mod partial;

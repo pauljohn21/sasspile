@@ -1,7 +1,10 @@
 //! CSS 序列化器——CssNode 树 → CSS 字符串。
 
 pub mod node;
+pub mod selector_ast;
 mod selector;
+pub mod selector_ops;
+pub mod selector_parser;
 
 pub use node::CssNode;
 use selector::sanitize_selector;

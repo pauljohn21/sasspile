@@ -3,6 +3,8 @@
 //! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend/replace。
 //! 支持命名参数（如 `selector.parse($selector: "c")`）。
 
+use crate::css::selector_ops;
+use crate::css::selector_parser::parse_selector;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 use std::collections::HashMap;
@@ -79,7 +81,12 @@ pub fn call(
         }
         "selector-is-superselector" | "selector-is-super" => match args {
             [Value::String(a, _), Value::String(b, _)] => {
-                Ok(Some(Value::Bool(b.contains(a.as_str()))))
+                let super_sel = parse_selector(a);
+                let sub_sel = parse_selector(b);
+                Ok(Some(Value::Bool(selector_ops::is_superselector(
+                    &super_sel,
+                    &sub_sel,
+                ))))
             }
             _ => Ok(Some(Value::Bool(false))),
         },
@@ -161,12 +168,14 @@ pub fn call(
             }
             match args {
                 [Value::String(a, _), Value::String(b, _)] => {
-                    if a.contains(b.as_str()) {
-                        Ok(Some(Value::String(a.clone(), false)))
-                    } else if b.contains(a.as_str()) {
-                        Ok(Some(Value::String(b.clone(), false)))
-                    } else {
-                        Ok(Some(Value::String(format!("{a}{b}"), false)))
+                    let sel_a = parse_selector(a);
+                    let sel_b = parse_selector(b);
+                    match selector_ops::unify(&sel_a, &sel_b) {
+                        Some(unified) => Ok(Some(Value::String(
+                            unified.to_string(),
+                            false,
+                        ))),
+                        None => Ok(Some(Value::Null)),
                     }
                 }
                 _ => Ok(Some(Value::Null)),
@@ -192,12 +201,11 @@ pub fn call(
                     Value::String(target, _),
                     Value::String(extender, _),
                 ] => {
-                    let result = if selector.contains(target.as_str()) {
-                        format!("{selector}, {extender}")
-                    } else {
-                        selector.clone()
-                    };
-                    Ok(Some(Value::String(result, false)))
+                    let sel = parse_selector(selector);
+                    let extendee = parse_selector(target);
+                    let ext = parse_selector(extender);
+                    let result = selector_ops::extend_selector(&sel, &extendee, &ext);
+                    Ok(Some(Value::String(result.to_string(), false)))
                 }
                 _ => Err(SassError::Eval(format!(
                     "$selector: {} is not a string.",
@@ -225,8 +233,11 @@ pub fn call(
                     Value::String(original, _),
                     Value::String(replacement, _),
                 ] => {
-                    let result = selector.replace(original.as_str(), replacement.as_str());
-                    Ok(Some(Value::String(result, false)))
+                    let sel = parse_selector(selector);
+                    let orig = parse_selector(original);
+                    let repl = parse_selector(replacement);
+                    let result = selector_ops::replace_selector(&sel, &orig, &repl);
+                    Ok(Some(Value::String(result.to_string(), false)))
                 }
                 _ => Err(SassError::Eval(format!(
                     "$selector: {} is not a string.",

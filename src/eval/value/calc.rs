@@ -16,6 +16,44 @@ impl Evaluator {
     /// `calc(1px + 2px)` → `Value::Number(3, "px")`（同单位简化）
     /// `calc(1px + 2%)` → `Value::Calc("calc(1px + 2%)")`（不同单位保留）
     pub(crate) fn simplify_calc(s: &str) -> Value {
+        // 尝试 AST 简化
+        if let Some(result) = Self::try_ast_simplify(s) {
+            return result;
+        }
+        // 降级到字符串处理
+        Self::simplify_calc_str(s)
+    }
+
+    /// AST 简化——解析为 CalcNode，简化，返回 Value。
+    fn try_ast_simplify(s: &str) -> Option<Value> {
+        let inner = if s.len() >= 6
+            && s.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("calc("))
+            && s.ends_with(')')
+        {
+            &s[5..s.len() - 1]
+        } else {
+            s
+        };
+        let node = super::calc_ast::parse_calc_expr(inner)?;
+        let simplified = super::calc_simplify::simplify_calc_node(node).ok()?;
+        match simplified {
+            super::calc_ast::CalcNode::Number(n, unit) => {
+                Some(Value::Number(n, unit))
+            }
+            other => {
+                // 包含 var/func 或无法完全简化——包装为 calc
+                let s = other.to_string();
+                if s.starts_with("calc(") || s.contains('(') {
+                    Some(Value::Calc(s))
+                } else {
+                    Some(Value::Calc(format!("calc({s})")))
+                }
+            }
+        }
+    }
+
+    /// 字符串简化——降级路径。
+    fn simplify_calc_str(s: &str) -> Value {
         // 尝试提取 calc(内容) 的内部表达式——大小写不敏感
         let inner = if s.len() >= 6
             && s.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("calc("))
