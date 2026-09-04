@@ -22,15 +22,17 @@ impl Evaluator {
         match name {
             // ── sass-spec 测试辅助函数 ──
             "sass" => {
-                if env.is_plain_css() {
-                    return Err(SassError::Eval(
+                match env.is_plain_css() {
+                    true => return Err(SassError::Eval(
                         "sass() conditions aren't allowed in plain CSS".into(),
-                    ));
+                    )),
+                    false => {}
                 }
-                if pos_args.is_empty() {
-                    return Err(SassError::Eval(
+                match pos_args.is_empty() {
+                    true => return Err(SassError::Eval(
                         "sass() requires at least 1 argument".into(),
-                    ));
+                    )),
+                    false => {}
                 }
                 Ok(pos_args[0].clone())
             }
@@ -43,10 +45,9 @@ impl Evaluator {
             // darken/lighten/mix 合并 $color/$amount 命名参数
             "darken" | "lighten" => {
                 let merged = super::merge_two_args(pos_args, kw_args, "color", "amount");
-                if name == "darken" {
-                    Self::builtin_darken(&merged)
-                } else {
-                    Self::builtin_lighten(&merged)
+                match name {
+                    "darken" => Self::builtin_darken(&merged),
+                    _ => Self::builtin_lighten(&merged),
                 }
             }
             "mix" => {
@@ -72,15 +73,13 @@ impl Evaluator {
                 _ => Ok(Value::String("unknown".into(), false)),
             },
             "inspect" => {
-                if pos_args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $value.".into()));
-                }
-                if pos_args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        pos_args.len(),
-                        if pos_args.len() == 1 { "was" } else { "were" }
-                    )));
+                match pos_args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $value.".into())),
+                    1 => {}
+                    n => return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {n} {} passed.",
+                        match n == 1 { true => "was", false => "were" }
+                    ))),
                 }
                 Ok(Value::String(
                     crate::eval::value::inspect_value(&pos_args[0]),
@@ -88,10 +87,9 @@ impl Evaluator {
                 ))
             }
             "if" => match pos_args {
-                [cond, t, f] => Ok(if Self::is_truthy(cond) {
-                    t.clone()
-                } else {
-                    f.clone()
+                [cond, t, f] => Ok(match Self::is_truthy(cond) {
+                    true => t.clone(),
+                    false => f.clone(),
                 }),
                 _ => Err(SassError::Eval("if requires 3 arguments".into())),
             },

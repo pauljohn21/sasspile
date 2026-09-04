@@ -42,17 +42,19 @@ impl Parser<'_> {
         let first = self.parse_expr_slash(0, slash_as_sep)?;
         self.skip_ws();
         // 逗号分隔列表
-        if self.peek() == Some(&Token::Comma) {
-            let mut items = vec![first];
-            while self.peek() == Some(&Token::Comma) {
-                self.advance();
-                self.skip_ws();
-                items.push(self.parse_expr_slash(0, slash_as_sep)?);
-                self.skip_ws();
+        match self.peek() {
+            Some(&Token::Comma) => {
+                let mut items = vec![first];
+                while self.peek() == Some(&Token::Comma) {
+                    self.advance();
+                    self.skip_ws();
+                    items.push(self.parse_expr_slash(0, slash_as_sep)?);
+                    self.skip_ws();
+                }
+                Ok(Value::List(items, Separator::Comma, false))
             }
-            return Ok(Value::List(items, Separator::Comma, false));
+            _ => Ok(first),
         }
-        Ok(first)
     }
 
     pub(crate) fn parse_expr(&mut self, min_bp: u8) -> Result<Value> {
@@ -72,103 +74,119 @@ impl Parser<'_> {
             // 2. / 前面是括号表达式 (如 (1)/2)
             // 3. / 前面是变量引用 (如 $x/2)
             let is_division_context = matches!(lhs, Value::Paren(_) | Value::Variable(_));
-            if slash_as_sep
+            match slash_as_sep
                 && min_bp == 0
                 && matches!(self.peek(), Some(Token::Slash))
                 && !is_division_context
             {
-                // 检查 / 后面是否有其他算术运算符（+、-、*、%）
-                let has_outer_math = self.slash_followed_by_arith_op();
-                if !has_outer_math {
-                    let mut slash_items = vec![lhs.clone()];
-                    while self.peek() == Some(&Token::Slash) {
-                        self.advance(); // 消费 /
-                        self.skip_ws();
-                        // 解析下一个项（min_bp=6 确保不递归进入斜杠逻辑）
-                        let item = self.parse_expr_slash(6, false)?;
-                        slash_items.push(item);
-                        self.skip_ws();
-                    }
-                    if slash_items.len() > 1 {
-                        lhs = Value::List(slash_items, Separator::SlashLiteral, false);
-                    }
-                    // 斜杠列表后面可能有空格列表——继续循环
-                    continue;
-                }
-                // 有外部算术运算符 → / 做除法，走正常 Pratt 路径
-            }
-            let Some((op, bp)) = self.peek_binding_power() else {
-                // 空格分隔列表——仅顶层（min_bp=0）
-                if min_bp == 0 && self.is_value_start() {
-                    let mut items = vec![lhs.clone()];
-                    loop {
-                        self.skip_ws();
-                        // 空格列表中的 / 始终作为斜杠分隔符保留
-                        // 例如 1 2/3 4 → [1, 2/3, 4]
-                        if matches!(self.peek(), Some(Token::Slash)) {
-                            let last = items.pop().expect("items non-empty: just pushed lhs");
-                            let mut slash_items = vec![last];
+                true => {
+                    // 检查 / 后面是否有其他算术运算符（+、-、*、%）
+                    let has_outer_math = self.slash_followed_by_arith_op();
+                    match !has_outer_math {
+                        true => {
+                            let mut slash_items = vec![lhs.clone()];
                             while self.peek() == Some(&Token::Slash) {
-                                self.advance();
+                                self.advance(); // 消费 /
                                 self.skip_ws();
+                                // 解析下一个项（min_bp=6 确保不递归进入斜杠逻辑）
                                 let item = self.parse_expr_slash(6, false)?;
                                 slash_items.push(item);
                                 self.skip_ws();
                             }
-                            let slash_list = if slash_items.len() > 1 {
-                                Value::List(slash_items, Separator::SlashLiteral, false)
-                            } else {
-                                slash_items
-                                    .into_iter()
-                                    .next()
-                                    .expect("slash_items non-empty: at least one item pushed")
-                            };
-                            items.push(slash_list);
+                            match slash_items.len() > 1 {
+                                true => { lhs = Value::List(slash_items, Separator::SlashLiteral, false); }
+                                false => {}
+                            }
+                            // 斜杠列表后面可能有空格列表——继续循环
                             continue;
                         }
-                        // 先检查二元运算符——仅算术运算符（+,-,*,/,%）才在列表内消费
-                        // 低优先级运算符（or,and,==,!=,<,>,<=,>=）不在此消费
-                        if let Some((_, bp)) = self.peek_binding_power()
-                            && bp >= 4
-                        {
-                            let last = items.pop().expect("items non-empty: at least one element");
-                            let binop_result = self.parse_expr_rest(last, 4)?;
-                            items.push(binop_result);
-                            continue;
-                        }
-                        if !self.is_value_start() {
-                            break;
-                        }
-                        items.push(self.parse_prefix()?);
+                        false => {} // 有外部算术运算符 → / 做除法，走正常 Pratt 路径
                     }
-                    if items.len() > 1 {
-                        lhs = Value::List(items, Separator::Space, false);
-                        continue; // 继续检查后续运算符（如 / ）
+                }
+                false => {}
+            }
+            let Some((op, bp)) = self.peek_binding_power() else {
+                // 空格分隔列表——仅顶层（min_bp=0）
+                match min_bp == 0 && self.is_value_start() {
+                    true => {
+                        let mut items = vec![lhs.clone()];
+                        loop {
+                            self.skip_ws();
+                            // 空格列表中的 / 始终作为斜杠分隔符保留
+                            // 例如 1 2/3 4 → [1, 2/3, 4]
+                            match matches!(self.peek(), Some(Token::Slash)) {
+                                true => {
+                                    let last = items.pop().expect("items non-empty: just pushed lhs");
+                                    let mut slash_items = vec![last];
+                                    while self.peek() == Some(&Token::Slash) {
+                                        self.advance();
+                                        self.skip_ws();
+                                        let item = self.parse_expr_slash(6, false)?;
+                                        slash_items.push(item);
+                                        self.skip_ws();
+                                    }
+                                    let slash_list = match slash_items.len() > 1 {
+                                        true => Value::List(slash_items, Separator::SlashLiteral, false),
+                                        false => slash_items
+                                            .into_iter()
+                                            .next()
+                                            .expect("slash_items non-empty: at least one item pushed"),
+                                    };
+                                    items.push(slash_list);
+                                    continue;
+                                }
+                                false => {}
+                            }
+                            // 先检查二元运算符——仅算术运算符（+,-,*,/,%）才在列表内消费
+                            // 低优先级运算符（or,and,==,!=,<,>,<=,>=）不在此消费
+                            match self.peek_binding_power() {
+                                Some((_, bp)) if bp >= 4 => {
+                                    let last = items.pop().expect("items non-empty: at least one element");
+                                    let binop_result = self.parse_expr_rest(last, 4)?;
+                                    items.push(binop_result);
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                            match self.is_value_start() {
+                                false => break,
+                                true => {}
+                            }
+                            items.push(self.parse_prefix()?);
+                        }
+                        match items.len() > 1 {
+                            true => { lhs = Value::List(items, Separator::Space, false); continue; }
+                            false => {}
+                        }
                     }
+                    false => {}
                 }
                 break;
             };
-            if bp < min_bp {
-                break;
+            match bp < min_bp {
+                true => break,
+                false => {}
             }
             self.advance(); // 消费运算符
             // 检查 and/or 后面是否紧跟 ( 无空格
-            if matches!(op, BinOpKind::And | BinOpKind::Or)
+            match matches!(op, BinOpKind::And | BinOpKind::Or)
                 && matches!(self.peek(), Some(Token::LParen))
                 && !matches!(
                     self.tokens.get(self.pos.saturating_sub(1)),
                     Some(Token::Whitespace)
                 )
             {
-                let kw = if matches!(op, BinOpKind::And) {
-                    "and"
-                } else {
-                    "or"
-                };
-                return Err(SassError::Parse {
-                    expected: format!("whitespace between \"{kw}\" and \"(\""),
-                    found: "(".into(),
-                });
+                true => {
+                    let kw = match op {
+                        BinOpKind::And => "and",
+                        _ => "or",
+                    };
+                    return Err(SassError::Parse {
+                        expected: format!("whitespace between \"{kw}\" and \"(\""),
+                        found: "(".into(),
+                    });
+                }
+                false => {}
             }
             self.skip_ws();
             let rhs = self.parse_expr(bp + 1)?;
@@ -189,8 +207,9 @@ impl Parser<'_> {
             let Some((op, bp)) = self.peek_binding_power() else {
                 break;
             };
-            if bp < min_bp {
-                break;
+            match bp < min_bp {
+                true => break,
+                false => {}
             }
             self.advance();
             self.skip_ws();
@@ -226,44 +245,46 @@ impl Parser<'_> {
 
     /// 检查当前 token 是否是值起始 token（排除关键字）。
     pub(crate) fn is_value_start(&self) -> bool {
-        if let Some(Token::Ident(s)) = self.peek()
-            && matches!(
-                s.as_str(),
-                "through"
-                    | "from"
-                    | "to"
-                    | "and"
-                    | "or"
-                    | "not"
-                    | "in"
-                    | "with"
-                    | "show"
-                    | "hide"
-                    | "as"
-                    | "using"
-                    | "else"
-            )
-        {
-            return false;
+        match self.peek() {
+            Some(Token::Ident(s))
+                if matches!(
+                    s.as_str(),
+                    "through"
+                        | "from"
+                        | "to"
+                        | "and"
+                        | "or"
+                        | "not"
+                        | "in"
+                        | "with"
+                        | "show"
+                        | "hide"
+                        | "as"
+                        | "using"
+                        | "else"
+                ) =>
+            {
+                false
+            }
+            _ => matches!(
+                self.peek(),
+                Some(
+                    Token::Number(_)
+                        | Token::String(_, _)
+                        | Token::Ident(_)
+                        | Token::Hash(_)
+                        | Token::Dollar(_)
+                        | Token::Interp(_)
+                        | Token::LParen
+                        | Token::LBracket
+                        | Token::Minus
+                        | Token::Percent
+                        | Token::True
+                        | Token::False
+                        | Token::Null
+                )
+            ),
         }
-        matches!(
-            self.peek(),
-            Some(
-                Token::Number(_)
-                    | Token::String(_, _)
-                    | Token::Ident(_)
-                    | Token::Hash(_)
-                    | Token::Dollar(_)
-                    | Token::Interp(_)
-                    | Token::LParen
-                    | Token::LBracket
-                    | Token::Minus
-                    | Token::Percent
-                    | Token::True
-                    | Token::False
-                    | Token::Null
-            )
-        )
     }
 
     /// 检查当前位置的 / 后面是否有 +、-、*、% 算术运算符。
@@ -279,44 +300,29 @@ impl Parser<'_> {
         let mut paren_depth = 0i32;
         while i < self.tokens.len() {
             match &self.tokens[i] {
-                Token::Whitespace => {
-                    i += 1;
-                }
-                Token::Number(_) => {
-                    i += 1;
-                }
-                Token::Slash => {
-                    i += 1;
-                }
-                Token::Percent => {
-                    i += 1;
-                }
+                Token::Whitespace => { i += 1; }
+                Token::Number(_) => { i += 1; }
+                Token::Slash => { i += 1; }
+                Token::Percent => { i += 1; }
                 // 一元负号（space-before + no-space-after + Number）不算算术运算符
                 Token::Minus => {
                     let has_ws_before =
                         i > 0 && matches!(self.tokens.get(i - 1), Some(Token::Whitespace));
                     let next = self.tokens.get(i + 1);
                     let has_ws_after = matches!(next, Some(Token::Whitespace) | None);
-                    if has_ws_before && !has_ws_after && matches!(next, Some(Token::Number(_))) {
-                        // 一元负号，继续
-                        i += 1;
-                    } else {
-                        // 二元减法 → 有外部算术运算
-                        return true;
+                    match has_ws_before && !has_ws_after && matches!(next, Some(Token::Number(_))) {
+                        true => { i += 1; } // 一元负号，继续
+                        false => return true, // 二元减法 → 有外部算术运算
                     }
                 }
                 Token::Plus => return true,
                 Token::Star => return true,
-                Token::LParen => {
-                    paren_depth += 1;
-                    i += 1;
-                }
+                Token::LParen => { paren_depth += 1; i += 1; }
                 Token::RParen => {
-                    if paren_depth == 0 {
-                        break;
+                    match paren_depth == 0 {
+                        true => break,
+                        false => { paren_depth -= 1; i += 1; }
                     }
-                    paren_depth -= 1;
-                    i += 1;
                 }
                 Token::Semicolon
                 | Token::RBrace
@@ -331,9 +337,7 @@ impl Parser<'_> {
                 | Token::True
                 | Token::False
                 | Token::Null => break,
-                _ => {
-                    i += 1;
-                }
+                _ => { i += 1; }
             }
         }
         false
@@ -356,10 +360,9 @@ impl Parser<'_> {
                     && matches!(self.tokens.get(self.pos - 1), Some(Token::Whitespace));
                 let next = self.tokens.get(self.pos + 1);
                 let has_ws_after = matches!(next, Some(Token::Whitespace) | None);
-                if has_ws_before && !has_ws_after && matches!(next, Some(Token::Number(_))) {
-                    None // 一元负号，不是二元运算符
-                } else {
-                    Some((BinOpKind::Sub, 4))
+                match has_ws_before && !has_ws_after && matches!(next, Some(Token::Number(_))) {
+                    true => None, // 一元负号，不是二元运算符
+                    false => Some((BinOpKind::Sub, 4)),
                 }
             }
             Some(Token::Star) => Some((BinOpKind::Mul, 5)),

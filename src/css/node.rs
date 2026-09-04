@@ -67,10 +67,9 @@ impl std::fmt::Display for CssNode {
                 value,
                 important,
             } => {
-                if *important {
-                    write!(f, "{property}: {value} !important;")
-                } else {
-                    write!(f, "{property}: {value};")
+                match *important {
+                    true => write!(f, "{property}: {value} !important;"),
+                    false => write!(f, "{property}: {value};"),
                 }
             }
             CssNode::Comment(text) => write!(f, "/* {text} */"),

@@ -4,6 +4,7 @@
 //! - 公开 API `parse_selector` 消费 `&str`，返回 `Selector`（纯函数，无 `&mut` 参数）
 //! - 内部 `Parser` 封装游标状态（`&mut self` 仅在内部，不跨函数传递）
 //! - 字符累积用 peek+next 循环（Peekable 不消费非匹配字符）
+//! - 所有条件分派用 `match`，禁止裸 `if`
 
 use super::selector_ast::{
     Combinator, ComplexSelector, CompoundSelector, Selector, SimpleSelector,
@@ -35,28 +36,29 @@ impl Parser {
 
         while self.chars.peek().is_some() {
             self.skip_ws();
-            if self.chars.peek().is_none() {
-                break;
-            }
-            if let Some(complex) = self.parse_complex() {
-                complexes.push(complex);
-            } else {
-                break;
+            match self.chars.peek() {
+                None => break,
+                Some(_) => match self.parse_complex() {
+                    Some(complex) => complexes.push(complex),
+                    None => break,
+                },
             }
             self.skip_ws();
-            if self.chars.peek().is_some_and(|c| *c == ',') {
-                self.chars.next();
+            match self.chars.peek() {
+                Some(c) if *c == ',' => { self.chars.next(); }
+                _ => {}
             }
         }
 
-        if complexes.is_empty() {
-            // 降级：剩余字符串作为单个 Type
-            let rest: String = self.chars.by_ref().collect();
-            Selector(vec![ComplexSelector {
-                compounds: vec![(None, CompoundSelector(vec![SimpleSelector::Type(rest)]))],
-            }])
-        } else {
-            Selector(complexes)
+        match complexes.is_empty() {
+            true => {
+                // 降级：剩余字符串作为单个 Type
+                let rest: String = self.chars.by_ref().collect();
+                Selector(vec![ComplexSelector {
+                    compounds: vec![(None, CompoundSelector(vec![SimpleSelector::Type(rest)]))],
+                }])
+            }
+            false => Selector(complexes),
         }
     }
 
@@ -67,26 +69,22 @@ impl Parser {
 
         while self.chars.peek().is_some() {
             self.skip_ws();
-            if self.chars.peek().is_none() {
-                break;
-            }
-
-            // 组合器
-            if let Some(c) = self.chars.peek() {
-                if matches!(*c, '>' | '+' | '~') {
-                    pending_combinator = match *c {
-                        '>' => Some(Combinator::Child),
-                        '+' => Some(Combinator::Adjacent),
-                        '~' => Some(Combinator::Sibling),
-                        _ => unreachable!(),
-                    };
-                    self.chars.next();
-                    continue;
-                }
-                // 逗号——复杂选择器结束
-                if *c == ',' {
-                    break;
-                }
+            match self.chars.peek() {
+                None => break,
+                Some(c) => match *c {
+                    '>' | '+' | '~' => {
+                        pending_combinator = match c {
+                            '>' => Some(Combinator::Child),
+                            '+' => Some(Combinator::Adjacent),
+                            '~' => Some(Combinator::Sibling),
+                            _ => unreachable!(),
+                        };
+                        self.chars.next();
+                        continue;
+                    }
+                    ',' => break,
+                    _ => {}
+                },
             }
 
             // 复合选择器
@@ -95,8 +93,11 @@ impl Parser {
 
             // 空格可能是后代组合器（但逗号不算）
             let had_ws = self.skip_ws_count() > 0;
-            if had_ws && self.chars.peek().is_some_and(|c| !matches!(*c, '>' | '+' | '~' | ',')) {
-                pending_combinator = Some(Combinator::Descendant);
+            match (had_ws, self.chars.peek()) {
+                (true, Some(c)) if !matches!(*c, '>' | '+' | '~' | ',') => {
+                    pending_combinator = Some(Combinator::Descendant);
+                }
+                _ => {}
             }
         }
 
@@ -108,51 +109,56 @@ impl Parser {
         let mut simples: Vec<SimpleSelector> = Vec::new();
 
         while let Some(&c) = self.chars.peek() {
-            if c.is_whitespace() || matches!(c, '>' | '+' | '~' | ',') {
-                break;
-            }
-
-            let simple = match c {
+            match c {
+                _ if c.is_whitespace() || matches!(c, '>' | '+' | '~' | ',') => break,
                 '*' => {
                     self.chars.next();
-                    SimpleSelector::Universal
+                    simples.push(SimpleSelector::Universal);
                 }
                 '.' | '#' | '%' => {
                     self.chars.next();
                     let name = self.take_ident();
-                    match c {
+                    let simple = match c {
                         '.' => SimpleSelector::Class(name),
                         '#' => SimpleSelector::Id(name),
                         '%' => SimpleSelector::Placeholder(name),
                         _ => unreachable!(),
+                    };
+                    simples.push(simple);
+                }
+                '[' => {
+                    match self.parse_attribute() {
+                        Some(attr) => simples.push(attr),
+                        None => return None,
                     }
                 }
-                '[' => self.parse_attribute()?,
                 ':' => {
                     self.chars.next(); // 消费第一个 ':'
-                    if self.chars.peek().is_some_and(|c| *c == ':') {
-                        // 伪元素 ::name
-                        self.chars.next();
-                        let name = self.take_ident();
-                        let arg = self.take_pseudo_arg();
-                        SimpleSelector::PseudoElement { name, arg }
-                    } else {
-                        // 伪类 :name
-                        let name = self.take_ident();
-                        let arg = self.take_pseudo_arg();
-                        SimpleSelector::PseudoClass { name, arg }
+                    match self.chars.peek() {
+                        Some(c) if *c == ':' => {
+                            // 伪元素 ::name
+                            self.chars.next();
+                            let name = self.take_ident();
+                            let arg = self.take_pseudo_arg();
+                            simples.push(SimpleSelector::PseudoElement { name, arg });
+                        }
+                        _ => {
+                            // 伪类 :name
+                            let name = self.take_ident();
+                            let arg = self.take_pseudo_arg();
+                            simples.push(SimpleSelector::PseudoClass { name, arg });
+                        }
                     }
                 }
                 _ if c.is_ascii_alphabetic() || c == '_' || c == '-' => {
                     let name = self.take_type_with_ns();
-                    SimpleSelector::Type(name)
+                    simples.push(SimpleSelector::Type(name));
                 }
                 _ => {
                     self.chars.next();
                     break;
                 }
-            };
-            simples.push(simple);
+            }
         }
 
         (!simples.is_empty()).then_some(CompoundSelector(simples))
@@ -204,27 +210,30 @@ impl Parser {
 
     /// 消费伪类/伪元素参数 `(...)`。
     fn take_pseudo_arg(&mut self) -> Option<String> {
-        if !self.chars.peek().is_some_and(|c| *c == '(') {
-            return None;
-        }
-        self.chars.next(); // 跳过 (
-        let mut depth = 1i32;
-        let mut arg = String::new();
-        while self.chars.peek().is_some_and(|c| {
-            match c {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                _ => {}
+        match self.chars.peek() {
+            Some(c) if *c == '(' => {
+                self.chars.next(); // 跳过 (
+                let mut depth = 1i32;
+                let mut arg = String::new();
+                while self.chars.peek().is_some_and(|c| {
+                    match c {
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        _ => {}
+                    }
+                    depth > 0
+                }) {
+                    arg.push(self.chars.next().unwrap());
+                }
+                match self.chars.peek() {
+                    Some(c) if *c == ')' => { self.chars.next(); }
+                    _ => {}
+                }
+                let trimmed = arg.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_string())
             }
-            depth > 0
-        }) {
-            arg.push(self.chars.next().unwrap());
+            _ => None,
         }
-        if self.chars.peek().is_some_and(|c| *c == ')') {
-            self.chars.next();
-        }
-        let trimmed = arg.trim();
-        (!trimmed.is_empty()).then(|| trimmed.to_string())
     }
 
     /// 解析属性选择器 `[name=value mod]`。
@@ -248,16 +257,18 @@ impl Parser {
         let value = self.take_attr_value();
         self.skip_ws();
 
-        let modifier = if self.chars.peek().is_some_and(|c| *c != ']') {
-            let m = self.chars.next().unwrap().to_string();
-            self.skip_ws();
-            Some(m)
-        } else {
-            None
+        let modifier = match self.chars.peek() {
+            Some(c) if *c != ']' => {
+                let m = self.chars.next().unwrap().to_string();
+                self.skip_ws();
+                Some(m)
+            }
+            _ => None,
         };
 
-        if self.chars.peek().is_some_and(|c| *c == ']') {
-            self.chars.next();
+        match self.chars.peek() {
+            Some(c) if *c == ']' => { self.chars.next(); }
+            _ => {}
         }
 
         Some(SimpleSelector::Attribute {
@@ -275,9 +286,12 @@ impl Parser {
                 let first = *c;
                 self.chars.next();
                 let mut s = String::from(first);
-                if self.chars.peek().is_some_and(|c| *c == '=') {
-                    s.push('=');
-                    self.chars.next();
+                match self.chars.peek() {
+                    Some(c) if *c == '=' => {
+                        s.push('=');
+                        self.chars.next();
+                    }
+                    _ => {}
                 }
                 Some(s)
             }
@@ -299,8 +313,9 @@ impl Parser {
                 while self.chars.peek().is_some_and(|c| *c != quote) {
                     val.push(self.chars.next().unwrap());
                 }
-                if self.chars.peek().is_some_and(|c| *c == quote) {
-                    self.chars.next();
+                match self.chars.peek() {
+                    Some(c) if *c == quote => { self.chars.next(); }
+                    _ => {}
                 }
                 Some(val)
             }
@@ -311,7 +326,7 @@ impl Parser {
                 }
                 Some(val)
             }
-            _ => None,
+            None => None,
         }
     }
 
@@ -332,8 +347,8 @@ impl Parser {
 #[tracing::instrument(level = "debug", fields(sel = %input))]
 pub fn parse_selector(input: &str) -> Selector {
     let input = input.trim();
-    if input.is_empty() {
-        return Selector(Vec::new());
+    match input.is_empty() {
+        true => Selector(Vec::new()),
+        false => Parser::new(input).parse_selector(),
     }
-    Parser::new(input).parse_selector()
 }

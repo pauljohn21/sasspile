@@ -186,18 +186,20 @@ pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
 pub(crate) fn parse_calc_arg_value(s: &str) -> Value {
     let s = s.trim();
     // 嵌套 calc/min/max/clamp → Value::Calc
-    if s.starts_with("calc(")
+    match s.starts_with("calc(")
         || s.starts_with("min(")
         || s.starts_with("max(")
         || s.starts_with("clamp(")
         || s.starts_with("var(")
         || s.starts_with("env(")
     {
-        return Value::Calc(s.to_string());
+        true => return Value::Calc(s.to_string()),
+        false => {}
     }
     // 尝试解析为数字+单位
-    if let Some(val) = parse_number_with_unit(s) {
-        return val;
+    match parse_number_with_unit(s) {
+        Some(val) => return val,
+        None => {}
     }
     // 默认为未加引号字符串
     Value::String(s.to_string(), false)
@@ -208,9 +210,12 @@ fn parse_number_with_unit(s: &str) -> Option<Value> {
     let s = s.trim();
     let mut split = s.len();
     for (i, ch) in s.char_indices() {
-        if !ch.is_ascii_digit() && ch != '.' && ch != '-' && ch != '+' && ch != 'e' && ch != 'E' {
-            split = i;
-            break;
+        match !ch.is_ascii_digit() && ch != '.' && ch != '-' && ch != '+' && ch != 'e' && ch != 'E' {
+            true => {
+                split = i;
+                break;
+            }
+            false => {}
         }
     }
     let num_str = &s[..split];
@@ -218,10 +223,9 @@ fn parse_number_with_unit(s: &str) -> Option<Value> {
     num_str.parse::<f64>().ok().map(|n| {
         Value::Number(
             n,
-            if unit.is_empty() {
-                None
-            } else {
-                Some(unit.to_string())
+            match unit.is_empty() {
+                true => None,
+                false => Some(unit.to_string()),
             },
         )
     })

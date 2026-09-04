@@ -31,8 +31,9 @@ pub(crate) fn merge_math_args(
     name: &str,
 ) -> Vec<Value> {
     let param_names = math_param_names(name);
-    if param_names.is_empty() {
-        return pos_args.to_vec();
+    match param_names.is_empty() {
+        true => return pos_args.to_vec(),
+        false => {}
     }
     let mut result: Vec<Value> = param_names
         .iter()
@@ -46,8 +47,9 @@ pub(crate) fn merge_math_args(
         })
         .collect();
     // 追加多余的 pos_args（如 rest 参数场景）
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
+    match pos_args.len() > param_names.len() {
+        true => result.extend_from_slice(&pos_args[param_names.len()..]),
+        false => {}
     }
     result
 }
@@ -55,15 +57,13 @@ pub(crate) fn merge_math_args(
 /// 验证单参数 math 函数的参数数量和类型。
 /// 检查：空参数 → Missing argument $number；多参数 → Only 1 argument allowed；非数字 → $number is not a number。
 pub(crate) fn validate_single_number(args: &[Value]) -> Result<()> {
-    if args.is_empty() {
-        return Err(SassError::Eval("Missing argument $number.".into()));
-    }
-    if args.len() > 1 {
-        return Err(SassError::Eval(format!(
-            "Only 1 argument allowed, but {} {} passed.",
-            args.len(),
-            if args.len() == 1 { "was" } else { "were" }
-        )));
+    match args.len() {
+        0 => return Err(SassError::Eval("Missing argument $number.".into())),
+        1 => {}
+        n => return Err(SassError::Eval(format!(
+            "Only 1 argument allowed, but {n} {} passed.",
+            match n == 1 { true => "was", false => "were" }
+        ))),
     }
     match &args[0] {
         Value::Number(..) | Value::Calc(..) => Ok(()),

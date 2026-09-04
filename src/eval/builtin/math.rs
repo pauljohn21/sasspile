@@ -69,8 +69,9 @@ pub fn call(
         }
         "round" => {
             // CSS round(): 1 arg = math.round(), 2-3 args = CSS round(strategy?, number, step)
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $number.".into()));
+            match args.is_empty() {
+                true => return Err(SassError::Eval("Missing argument $number.".into())),
+                false => {}
             }
             match args.len() {
                 1 => {
@@ -105,27 +106,26 @@ pub fn call(
         }
         "mod" => {
             // CSS mod(number, step) — floored modulo
-            if args.len() != 2 {
-                return Err(SassError::Eval(format!(
-                    "mod() expects 2 arguments, got {}.",
-                    args.len()
-                )));
+            match args.len() {
+                2 => css_mod(&args[0], &args[1]),
+                n => Err(SassError::Eval(format!(
+                    "mod() expects 2 arguments, got {n}."
+                ))),
             }
-            css_mod(&args[0], &args[1])
         }
         "rem" => {
             // CSS rem(number, step) — truncated modulo
-            if args.len() != 2 {
-                return Err(SassError::Eval(format!(
-                    "rem() expects 2 arguments, got {}.",
-                    args.len()
-                )));
+            match args.len() {
+                2 => css_rem(&args[0], &args[1]),
+                n => Err(SassError::Eval(format!(
+                    "rem() expects 2 arguments, got {n}."
+                ))),
             }
-            css_rem(&args[0], &args[1])
         }
         "min" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("min requires at least 1 argument".into()));
+            match args.is_empty() {
+                true => return Err(SassError::Eval("min requires at least 1 argument".into())),
+                false => {}
             }
             let result = args
                 .iter()
@@ -133,10 +133,11 @@ pub fn call(
                     match (acc, v) {
                         (Value::Number(a, ua), Value::Number(b, ub)) => {
                             // 检查单位兼容性
-                            if !crate::eval::value::units_compatible(ua.as_deref(), ub.as_deref()) {
-                                return Err(SassError::Eval(
+                            match crate::eval::value::units_compatible(ua.as_deref(), ub.as_deref()) {
+                                false => return Err(SassError::Eval(
                                     "min requires number arguments".into(),
-                                ));
+                                )),
+                                true => {}
                             }
                             Ok(Value::Number(a.min(*b), ub.clone()))
                         }
@@ -146,8 +147,9 @@ pub fn call(
             Ok(Some(result))
         }
         "max" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("max requires at least 1 argument".into()));
+            match args.is_empty() {
+                true => return Err(SassError::Eval("max requires at least 1 argument".into())),
+                false => {}
             }
             let result =
                 args.iter()
@@ -155,13 +157,14 @@ pub fn call(
                         match (acc, v) {
                             (Value::Number(a, ua), Value::Number(b, ub)) => {
                                 // 检查单位兼容性
-                                if !crate::eval::value::units_compatible(
+                                match crate::eval::value::units_compatible(
                                     ua.as_deref(),
                                     ub.as_deref(),
                                 ) {
-                                    return Err(SassError::Eval(
+                                    false => return Err(SassError::Eval(
                                         "max requires number arguments".into(),
-                                    ));
+                                    )),
+                                    true => {}
                                 }
                                 Ok(Value::Number(a.max(*b), ub.clone()))
                             }
@@ -178,66 +181,61 @@ pub fn call(
             }
         }
         "div" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $number1.".into()));
-            }
-            if args.len() < 2 {
-                return Err(SassError::Eval("Missing argument $number2.".into()));
-            }
-            if args.len() > 2 {
-                return Err(SassError::Eval(format!(
-                    "Only 2 arguments allowed, but {} were passed.",
-                    args.len()
-                )));
+            match args.len() {
+                0 => return Err(SassError::Eval("Missing argument $number1.".into())),
+                1 => return Err(SassError::Eval("Missing argument $number2.".into())),
+                2 => {}
+                n => return Err(SassError::Eval(format!(
+                    "Only 2 arguments allowed, but {n} were passed."
+                ))),
             }
             match (&args[0], &args[1]) {
                 (Value::Number(a, u1), Value::Number(b, u2)) => {
-                    if *b == 0.0 {
-                        if *a == 0.0 {
-                            // 0/0 = NaN，有单位时需要 calc(NaN * 1unit / 1unit) 格式
-                            if u1.is_some() || u2.is_some() {
-                                let mut calc = String::from("calc(NaN");
-                                if let Some(u) = u1
-                                    && !u.is_empty()
-                                {
-                                    let _ = write!(calc, " * 1{u}");
+                    // div by zero handling
+                    match (*b == 0.0, *a == 0.0) {
+                        (true, true) => {
+                            // 0/0 = NaN
+                            match u1.is_some() || u2.is_some() {
+                                true => {
+                                    let mut calc = String::from("calc(NaN");
+                                    if let Some(u) = u1 && !u.is_empty() {
+                                        let _ = write!(calc, " * 1{u}");
+                                    }
+                                    if let Some(u) = u2 && !u.is_empty() {
+                                        let _ = write!(calc, " / 1{u}");
+                                    }
+                                    calc.push(')');
+                                    Ok(Some(Value::Calc(calc)))
                                 }
-                                if let Some(u) = u2
-                                    && !u.is_empty()
-                                {
-                                    let _ = write!(calc, " / 1{u}");
+                                false => Ok(Some(Value::Number(f64::NAN, None))),
+                            }
+                        }
+                        (true, false) => {
+                            // n/0 = infinity
+                            match u1.is_some() || u2.is_some() {
+                                true => {
+                                    let sign = match *a < 0.0 { true => "-", false => "" };
+                                    let mut calc = format!("calc({sign}infinity");
+                                    if let Some(u) = u1 && !u.is_empty() {
+                                        let _ = write!(calc, " * 1{u}");
+                                    }
+                                    if let Some(u) = u2 && !u.is_empty() {
+                                        let _ = write!(calc, " / 1{u}");
+                                    }
+                                    calc.push(')');
+                                    Ok(Some(Value::Calc(calc)))
                                 }
-                                calc.push(')');
-                                return Ok(Some(Value::Calc(calc)));
+                                false => {
+                                    let val = match *a < 0.0 {
+                                        true => f64::NEG_INFINITY,
+                                        false => f64::INFINITY,
+                                    };
+                                    Ok(Some(Value::Number(val, None)))
+                                }
                             }
-                            return Ok(Some(Value::Number(f64::NAN, None)));
                         }
-                        // 有单位时需要 calc(infinity * 1unit / 1unit) 格式
-                        if u1.is_some() || u2.is_some() {
-                            let sign = if *a < 0.0 { "-" } else { "" };
-                            let mut calc = format!("calc({sign}infinity");
-                            if let Some(u) = u1
-                                && !u.is_empty()
-                            {
-                                let _ = write!(calc, " * 1{u}");
-                            }
-                            if let Some(u) = u2
-                                && !u.is_empty()
-                            {
-                                let _ = write!(calc, " / 1{u}");
-                            }
-                            calc.push(')');
-                            return Ok(Some(Value::Calc(calc)));
-                        }
-                        // 无单位时返回 f64::INFINITY，display.rs 负责序列化为 calc(infinity)
-                        let val = if *a < 0.0 {
-                            f64::NEG_INFINITY
-                        } else {
-                            f64::INFINITY
-                        };
-                        return Ok(Some(Value::Number(val, None)));
+                        (false, _) => Ok(Some(Value::Number(a / b, u1.clone()))),
                     }
-                    Ok(Some(Value::Number(a / b, u1.clone())))
                 }
                 (other, Value::Number(..)) => Err(SassError::Eval(format!(
                     "$number1: {other} is not a number."
@@ -253,23 +251,26 @@ pub fn call(
         "pow" | "sqrt" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2" | "log"
         | "hypot" => super::math_trig::call(name, args),
         "random" => {
-            if args.len() > 1 {
-                return Err(SassError::Eval(format!(
+            match args.len() > 1 {
+                true => return Err(SassError::Eval(format!(
                     "Only 1 argument allowed, but {} {} passed.",
                     args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+                    match args.len() == 1 { true => "was", false => "were" }
+                ))),
+                false => {}
             }
             match args {
                 [] => Ok(Some(Value::Number(Evaluator::simple_random(), None))),
                 [Value::Number(n, _)] => {
-                    if *n <= 0.0 {
-                        return Err(SassError::Eval(format!(
+                    match *n <= 0.0 {
+                        true => return Err(SassError::Eval(format!(
                             "$limit: {n} must be a positive integer."
-                        )));
+                        ))),
+                        false => {}
                     }
-                    if n.fract() != 0.0 {
-                        return Err(SassError::Eval(format!("$limit: {n} is not an int.")));
+                    match n.fract() != 0.0 {
+                        true => return Err(SassError::Eval(format!("$limit: {n} is not an int."))),
+                        false => {}
                     }
                     Ok(Some(Value::Number(
                         (Evaluator::simple_random() * n).floor() + 1.0,
@@ -281,20 +282,14 @@ pub fn call(
             }
         }
         "clamp" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $min.".into()));
-            }
-            if args.len() < 2 {
-                return Err(SassError::Eval("Missing argument $number.".into()));
-            }
-            if args.len() < 3 {
-                return Err(SassError::Eval("Missing argument $max.".into()));
-            }
-            if args.len() > 3 {
-                return Err(SassError::Eval(format!(
-                    "Only 3 arguments allowed, but {} were passed.",
-                    args.len()
-                )));
+            match args.len() {
+                0 => return Err(SassError::Eval("Missing argument $min.".into())),
+                1 => return Err(SassError::Eval("Missing argument $number.".into())),
+                2 => return Err(SassError::Eval("Missing argument $max.".into())),
+                3 => {}
+                n => return Err(SassError::Eval(format!(
+                    "Only 3 arguments allowed, but {n} were passed."
+                ))),
             }
             match (&args[0], &args[1], &args[2]) {
                 (Value::Number(min, _), Value::Number(val, _), Value::Number(max, _)) => {
@@ -320,15 +315,13 @@ pub fn call(
             }
         }
         "is-unitless" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $number.".into()));
-            }
-            if args.len() > 1 {
-                return Err(SassError::Eval(format!(
-                    "Only 1 argument allowed, but {} {} passed.",
-                    args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+            match args.len() {
+                0 => return Err(SassError::Eval("Missing argument $number.".into())),
+                1 => {}
+                n => return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {n} {} passed.",
+                    match n == 1 { true => "was", false => "were" }
+                ))),
             }
             match &args[0] {
                 Value::Number(_, None) => Ok(Some(Value::Bool(true))),
@@ -339,17 +332,13 @@ pub fn call(
             }
         }
         "compatible" | "comparable" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $number1.".into()));
-            }
-            if args.len() < 2 {
-                return Err(SassError::Eval("Missing argument $number2.".into()));
-            }
-            if args.len() > 2 {
-                return Err(SassError::Eval(format!(
-                    "Only 2 arguments allowed, but {} were passed.",
-                    args.len()
-                )));
+            match args.len() {
+                0 => return Err(SassError::Eval("Missing argument $number1.".into())),
+                1 => return Err(SassError::Eval("Missing argument $number2.".into())),
+                2 => {}
+                n => return Err(SassError::Eval(format!(
+                    "Only 2 arguments allowed, but {n} were passed."
+                ))),
             }
             let u1 = match &args[0] {
                 Value::Number(_, u) => u.clone(),

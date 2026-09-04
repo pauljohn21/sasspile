@@ -13,8 +13,9 @@ impl Parser<'_> {
         let mut params = Vec::new();
         loop {
             self.skip_ws();
-            if self.peek() == Some(&Token::RParen) {
-                break;
+            match self.peek() {
+                Some(Token::RParen) => break,
+                _ => {}
             }
             let name = match self.peek() {
                 Some(Token::Dollar(n)) => {
@@ -30,18 +31,20 @@ impl Parser<'_> {
                 }
             };
             self.skip_ws();
-            let default = if self.peek() == Some(&Token::Colon) {
-                self.advance();
-                self.skip_ws();
-                Some(self.parse_expr(0)?)
-            } else {
-                None
+            let default = match self.peek() {
+                Some(Token::Colon) => {
+                    self.advance();
+                    self.skip_ws();
+                    Some(self.parse_expr(0)?)
+                }
+                _ => None,
             };
-            let rest = if self.peek() == Some(&Token::DotDotDot) {
-                self.advance();
-                true
-            } else {
-                false
+            let rest = match self.peek() {
+                Some(Token::DotDotDot) => {
+                    self.advance();
+                    true
+                }
+                _ => false,
             };
             params.push(Param {
                 name,
@@ -49,15 +52,19 @@ impl Parser<'_> {
                 rest,
             });
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-            } else {
-                break;
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                _ => break,
             }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::RParen) {
-            self.advance();
+        match self.peek() {
+            Some(Token::RParen) => {
+                self.advance();
+            }
+            _ => {}
         }
         Ok(params)
     }
@@ -67,17 +74,17 @@ impl Parser<'_> {
         let mut args = Vec::new();
         loop {
             self.skip_ws();
-            if self.peek() == Some(&Token::RParen) {
-                break;
+            match self.peek() {
+                Some(Token::RParen) => break,
+                _ => {}
             }
             // 检查关键字参数 $name: value 或 name: value
             let is_kwarg = match self.peek() {
                 Some(Token::Dollar(_)) => {
                     let next = self.tokens.get(self.pos + 1);
-                    let after_ws = if matches!(next, Some(Token::Whitespace)) {
-                        self.tokens.get(self.pos + 2)
-                    } else {
-                        next
+                    let after_ws = match next {
+                        Some(Token::Whitespace) => self.tokens.get(self.pos + 2),
+                        _ => next,
                     };
                     matches!(after_ws, Some(Token::Colon))
                 }
@@ -88,138 +95,162 @@ impl Parser<'_> {
                     ) =>
                 {
                     let next = self.tokens.get(self.pos + 1);
-                    let after_ws = if matches!(next, Some(Token::Whitespace)) {
-                        self.tokens.get(self.pos + 2)
-                    } else {
-                        next
+                    let after_ws = match next {
+                        Some(Token::Whitespace) => self.tokens.get(self.pos + 2),
+                        _ => next,
                     };
                     matches!(after_ws, Some(Token::Colon | Token::Assign))
                 }
                 _ => false,
             };
-            let (name, value) = if is_kwarg {
-                let n = match self.peek() {
-                    Some(Token::Dollar(n)) => {
-                        let n = n.clone();
-                        self.advance();
-                        n
-                    }
-                    Some(Token::Ident(n)) => {
-                        let n = n.clone();
-                        self.advance();
-                        n
-                    }
-                    _ => unreachable!(),
-                };
-                self.skip_ws();
-                if matches!(self.peek(), Some(Token::Colon | Token::Assign)) {
-                    self.advance();
-                }
-                self.skip_ws();
-                (Some(n), self.parse_expr(0)?)
-            } else {
-                let expr = self.parse_expr(0)?;
-                self.skip_ws();
-                if self.peek() == Some(&Token::Colon) {
-                    self.advance();
-                    self.skip_ws();
-                    let val = self.parse_expr(0)?;
-                    let spread = if self.peek() == Some(&Token::DotDotDot) {
-                        self.advance();
-                        true
-                    } else {
-                        false
+            let (name, value) = match is_kwarg {
+                true => {
+                    let n = match self.peek() {
+                        Some(Token::Dollar(n)) => {
+                            let n = n.clone();
+                            self.advance();
+                            n
+                        }
+                        Some(Token::Ident(n)) => {
+                            let n = n.clone();
+                            self.advance();
+                            n
+                        }
+                        _ => unreachable!(),
                     };
-                    args.push(Arg {
-                        name: None,
-                        value: val,
-                        spread,
-                        condition: Some(expr),
-                    });
                     self.skip_ws();
-                    while self.peek() == Some(&Token::Semicolon) {
-                        self.advance();
-                        self.skip_ws();
-                        // 双分号——报错
-                        if self.peek() == Some(&Token::Semicolon) {
-                            return Err(SassError::Parse {
-                                expected: "identifier".into(),
-                                found: ";".into(),
-                            });
+                    match self.peek() {
+                        Some(Token::Colon | Token::Assign) => {
+                            self.advance();
                         }
-                        // 分号后紧跟 ) ——报错
-                        if self.peek() == Some(&Token::RParen) {
-                            return Err(SassError::Parse {
-                                expected: "identifier".into(),
-                                found: ")".into(),
-                            });
-                        }
-                        // 分号后紧跟 , ——报错
-                        if self.peek() == Some(&Token::Comma) {
-                            return Err(SassError::Parse {
-                                expected: ")".into(),
-                                found: ",".into(),
-                            });
-                        }
-                        if let Some(Token::Ident(s)) = self.peek()
-                            && s == "else"
-                        {
+                        _ => {}
+                    }
+                    self.skip_ws();
+                    (Some(n), self.parse_expr(0)?)
+                }
+                false => {
+                    let expr = self.parse_expr(0)?;
+                    self.skip_ws();
+                    match self.peek() {
+                        Some(Token::Colon) => {
                             self.advance();
                             self.skip_ws();
-                            if self.peek() == Some(&Token::Colon) {
-                                self.advance();
-                                self.skip_ws();
-                            }
-                            let else_val = self.parse_expr(0)?;
-                            args.push(Arg {
-                                name: Some("else".to_string()),
-                                value: else_val,
-                                spread: false,
-                                condition: None,
-                            });
-                            // 消费 trailing semicolon
-                            self.skip_ws();
-                            if self.peek() == Some(&Token::Semicolon) {
-                                self.advance();
-                            }
-                            break;
-                        }
-                        let cond2 = self.parse_expr(0)?;
-                        self.skip_ws();
-                        if self.peek() == Some(&Token::Colon) {
-                            self.advance();
-                            self.skip_ws();
-                            let val2 = self.parse_expr(0)?;
-                            let spread2 = if self.peek() == Some(&Token::DotDotDot) {
-                                self.advance();
-                                true
-                            } else {
-                                false
+                            let val = self.parse_expr(0)?;
+                            let spread = match self.peek() {
+                                Some(Token::DotDotDot) => {
+                                    self.advance();
+                                    true
+                                }
+                                _ => false,
                             };
                             args.push(Arg {
                                 name: None,
-                                value: val2,
-                                spread: spread2,
-                                condition: Some(cond2),
+                                value: val,
+                                spread,
+                                condition: Some(expr),
                             });
+                            self.skip_ws();
+                            while self.peek() == Some(&Token::Semicolon) {
+                                self.advance();
+                                self.skip_ws();
+                                match self.peek() {
+                                    // 双分号——报错
+                                    Some(Token::Semicolon) => {
+                                        return Err(SassError::Parse {
+                                            expected: "identifier".into(),
+                                            found: ";".into(),
+                                        });
+                                    }
+                                    // 分号后紧跟 ) ——报错
+                                    Some(Token::RParen) => {
+                                        return Err(SassError::Parse {
+                                            expected: "identifier".into(),
+                                            found: ")".into(),
+                                        });
+                                    }
+                                    // 分号后紧跟 , ——报错
+                                    Some(Token::Comma) => {
+                                        return Err(SassError::Parse {
+                                            expected: ")".into(),
+                                            found: ",".into(),
+                                        });
+                                    }
+                                    Some(Token::Ident(s)) if s == "else" => {
+                                        self.advance();
+                                        self.skip_ws();
+                                        match self.peek() {
+                                            Some(Token::Colon) => {
+                                                self.advance();
+                                                self.skip_ws();
+                                            }
+                                            _ => {}
+                                        }
+                                        let else_val = self.parse_expr(0)?;
+                                        args.push(Arg {
+                                            name: Some("else".to_string()),
+                                            value: else_val,
+                                            spread: false,
+                                            condition: None,
+                                        });
+                                        self.skip_ws();
+                                        match self.peek() {
+                                            Some(Token::Semicolon) => {
+                                                self.advance();
+                                            }
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                    _ => {
+                                        let cond2 = self.parse_expr(0)?;
+                                        self.skip_ws();
+                                        match self.peek() {
+                                            Some(Token::Colon) => {
+                                                self.advance();
+                                                self.skip_ws();
+                                                let val2 = self.parse_expr(0)?;
+                                                let spread2 = match self.peek() {
+                                                    Some(Token::DotDotDot) => {
+                                                        self.advance();
+                                                        true
+                                                    }
+                                                    _ => false,
+                                                };
+                                                args.push(Arg {
+                                                    name: None,
+                                                    value: val2,
+                                                    spread: spread2,
+                                                    condition: Some(cond2),
+                                                });
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            }
+                            self.skip_ws();
+                            match self.peek() {
+                                Some(Token::Comma) => {
+                                    return Err(SassError::Parse {
+                                        expected: ")".into(),
+                                        found: ",".into(),
+                                    });
+                                }
+                                _ => {}
+                            }
+                            break;
                         }
+                        _ => {}
                     }
-                    self.skip_ws();
-                    if self.peek() == Some(&Token::Comma) {
-                        return Err(SassError::Parse {
-                            expected: ")".into(),
-                            found: ",".into(),
-                        });
-                    }
-                    break;
+                    (None, expr)
                 }
-                (None, expr)
             };
-            let spread = if self.peek() == Some(&Token::DotDotDot) {
-                self.advance();
-                true
-            } else {
-                false
+            let spread = match self.peek() {
+                Some(Token::DotDotDot) => {
+                    self.advance();
+                    true
+                }
+                _ => false,
             };
             args.push(Arg {
                 name,
@@ -228,15 +259,19 @@ impl Parser<'_> {
                 condition: None,
             });
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-            } else {
-                break;
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                _ => break,
             }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::RParen) {
-            self.advance();
+        match self.peek() {
+            Some(Token::RParen) => {
+                self.advance();
+            }
+            _ => {}
         }
         Ok(args)
     }
@@ -247,19 +282,22 @@ impl Parser<'_> {
         let mut config = Vec::new();
         let mut seen = std::collections::HashSet::new();
         self.skip_ws();
-        if self.peek() == Some(&Token::RParen) {
-            return Err(SassError::Eval("expected \"$\".".into()));
+        match self.peek() {
+            Some(Token::RParen) => return Err(SassError::Eval("expected \"$\".".into())),
+            _ => {}
         }
         loop {
             self.skip_ws();
-            if self.peek() == Some(&Token::RParen) {
-                break;
+            match self.peek() {
+                Some(Token::RParen) => break,
+                _ => {}
             }
             let name = match self.peek() {
                 Some(Token::Dollar(n)) => {
                     let n = n.clone();
-                    if n.is_empty() {
-                        return Err(SassError::Eval("Expected identifier.".into()));
+                    match n.is_empty() {
+                        true => return Err(SassError::Eval("Expected identifier.".into())),
+                        false => {}
                     }
                     self.advance();
                     n
@@ -275,45 +313,64 @@ impl Parser<'_> {
             self.skip_ws();
             // @use with() 中不允许 !default 标志；@forward with() 允许
             let mut is_default = false;
-            if self.peek() == Some(&Token::Bang) {
-                if !allow_default {
-                    return Err(SassError::Eval("expected \")\".".into()));
-                }
-                self.advance();
-                self.skip_ws();
-                if let Some(Token::Ident(s)) = self.peek() {
-                    if s == "default" {
-                        is_default = true;
+            match self.peek() {
+                Some(Token::Bang) => {
+                    match allow_default {
+                        false => return Err(SassError::Eval("expected \")\".".into())),
+                        true => {}
                     }
                     self.advance();
                     self.skip_ws();
+                    match self.peek() {
+                        Some(Token::Ident(s)) => {
+                            match s.as_str() {
+                                "default" => is_default = true,
+                                _ => {}
+                            }
+                            self.advance();
+                            self.skip_ws();
+                        }
+                        _ => {}
+                    }
                 }
+                _ => {}
             }
             // 重复配置变量检测——规范要求在解析阶段就报错
             let normalized = name.replace('-', "_");
-            if !seen.insert(normalized) {
-                return Err(SassError::Eval(
-                    "The same variable may only be configured once.".into(),
-                ));
+            match seen.insert(normalized) {
+                false => {
+                    return Err(SassError::Eval(
+                        "The same variable may only be configured once.".into(),
+                    ));
+                }
+                true => {}
             }
             config.push(ConfigVar {
                 name,
                 value,
                 is_default,
             });
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-                self.skip_ws();
-                let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
-                if !is_ok && !matches!(self.peek(), Some(Token::RParen)) {
-                    return Err(SassError::Eval("expected \")\".".into()));
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance();
+                    self.skip_ws();
+                    let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
+                    match is_ok {
+                        false => match self.peek() {
+                            Some(Token::RParen) => {}
+                            _ => return Err(SassError::Eval("expected \")\".".into())),
+                        },
+                        true => {}
+                    }
                 }
-            } else {
-                break;
+                _ => break,
             }
         }
-        if self.peek() == Some(&Token::RParen) {
-            self.advance();
+        match self.peek() {
+            Some(Token::RParen) => {
+                self.advance();
+            }
+            _ => {}
         }
         Ok(config)
     }
@@ -325,10 +382,13 @@ impl Parser<'_> {
             match self.peek() {
                 Some(Token::Semicolon | Token::LBrace) | None => break,
                 Some(Token::Dollar(n)) => {
-                    if n.is_empty() {
-                        return Err(SassError::Eval(
-                            "Expected variable, mixin, or function name".into(),
-                        ));
+                    match n.is_empty() {
+                        true => {
+                            return Err(SassError::Eval(
+                                "Expected variable, mixin, or function name".into(),
+                            ));
+                        }
+                        false => {}
                     }
                     members.push(format!("${n}"));
                     self.advance();
@@ -344,17 +404,24 @@ impl Parser<'_> {
                 }
             }
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-                self.skip_ws();
-                let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
-                if !is_ok && !matches!(self.peek(), Some(Token::Ident(_))) {
-                    return Err(SassError::Eval(
-                        "Expected variable, mixin, or function name".into(),
-                    ));
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance();
+                    self.skip_ws();
+                    let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
+                    match is_ok {
+                        false => match self.peek() {
+                            Some(Token::Ident(_)) => {}
+                            _ => {
+                                return Err(SassError::Eval(
+                                    "Expected variable, mixin, or function name".into(),
+                                ));
+                            }
+                        },
+                        true => {}
+                    }
                 }
-            } else {
-                break;
+                _ => break,
             }
         }
         Ok(members)

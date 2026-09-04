@@ -38,8 +38,9 @@ impl Value {
                     result.push('\\');
                     result.push_str(&hex);
                     let next = chars.get(i + 1).copied();
-                    if next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
-                        result.push(' ');
+                    match next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                        true => result.push(' '),
+                        false => {}
                     }
                 }
                 // CSS 标识符中不合法的 ASCII 字符需要转义
@@ -47,8 +48,9 @@ impl Value {
                     result.push('\\');
                     result.push(c);
                     let next = chars.get(i + 1).copied();
-                    if next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
-                        result.push(' ');
+                    match next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                        true => result.push(' '),
+                        false => {}
                     }
                 }
                 _ => result.push(c),
@@ -75,8 +77,9 @@ impl Value {
                     result.push('\\');
                     result.push_str(&hex);
                     let next = chars.get(i + 1).copied();
-                    if next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
-                        result.push(' ');
+                    match next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                        true => result.push(' '),
+                        false => {}
                     }
                 }
                 _ => result.push(c),

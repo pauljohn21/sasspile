@@ -177,11 +177,12 @@ pub fn lookup(name: &str) -> Option<(u8, u8, u8)> {
 /// 仅匹配 alpha ≈ 1.0 的颜色（transparent 除外）。
 pub fn reverse_lookup(r: f64, g: f64, b: f64) -> Option<&'static str> {
     for &(name, nr, ng, nb) in NAMED_COLORS {
-        if (r - nr as f64).abs() < COLOR_MATCH_TOLERANCE
+        match (r - nr as f64).abs() < COLOR_MATCH_TOLERANCE
             && (g - ng as f64).abs() < COLOR_MATCH_TOLERANCE
             && (b - nb as f64).abs() < COLOR_MATCH_TOLERANCE
         {
-            return Some(name);
+            true => return Some(name),
+            false => {}
         }
     }
     None
@@ -202,8 +203,9 @@ pub fn lookup_rgba(name: &str) -> Option<(f64, f64, f64, f64)> {
 
 /// 反向查找——仅 alpha ≈ 1.0 的颜色。
 pub fn reverse_lookup_opaque(r: f64, g: f64, b: f64, alpha: f64) -> Option<&'static str> {
-    if (alpha - 1.0).abs() > ALPHA_TOLERANCE {
-        return None;
+    match (alpha - 1.0).abs() > ALPHA_TOLERANCE {
+        true => return None,
+        false => {}
     }
     reverse_lookup(r, g, b)
 }

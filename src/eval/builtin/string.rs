@@ -54,8 +54,9 @@ pub(crate) fn merge_args(
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })
         .collect();
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
+    match pos_args.len() > param_names.len() {
+        true => result.extend_from_slice(&pos_args[param_names.len()..]),
+        false => {}
     }
     result
 }
@@ -71,15 +72,13 @@ impl Evaluator {
         let args = merge_args(pos_args, kw_args, params);
         let result = match name {
             "str-length" => {
-                if args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $string.".into()));
-                }
-                if args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
-                    )));
+                match args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $string.".into())),
+                    1 => {}
+                    n => return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {n} {} passed.",
+                        match n == 1 { true => "was", false => "were" }
+                    ))),
                 }
                 match &args[0] {
                     Value::String(s, _) => Value::Number(s.chars().count() as f64, None),
@@ -91,15 +90,13 @@ impl Evaluator {
                 }
             }
             "to-upper-case" => {
-                if args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $string.".into()));
-                }
-                if args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
-                    )));
+                match args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $string.".into())),
+                    1 => {}
+                    n => return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {n} {} passed.",
+                        match n == 1 { true => "was", false => "were" }
+                    ))),
                 }
                 match &args[0] {
                     Value::String(s, q) => {
@@ -107,10 +104,9 @@ impl Evaluator {
                         let uppered: String = s
                             .chars()
                             .map(|c| {
-                                if c.is_ascii_lowercase() {
-                                    c.to_ascii_uppercase()
-                                } else {
-                                    c
+                                match c.is_ascii_lowercase() {
+                                    true => c.to_ascii_uppercase(),
+                                    false => c,
                                 }
                             })
                             .collect();
@@ -124,15 +120,13 @@ impl Evaluator {
                 }
             }
             "to-lower-case" => {
-                if args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $string.".into()));
-                }
-                if args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
-                    )));
+                match args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $string.".into())),
+                    1 => {}
+                    n => return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {n} {} passed.",
+                        match n == 1 { true => "was", false => "were" }
+                    ))),
                 }
                 match &args[0] {
                     Value::String(s, q) => {
@@ -140,10 +134,9 @@ impl Evaluator {
                         let lowered: String = s
                             .chars()
                             .map(|c| {
-                                if c.is_ascii_uppercase() {
-                                    c.to_ascii_lowercase()
-                                } else {
-                                    c
+                                match c.is_ascii_uppercase() {
+                                    true => c.to_ascii_lowercase(),
+                                    false => c,
                                 }
                             })
                             .collect();
@@ -157,15 +150,13 @@ impl Evaluator {
                 }
             }
             "unquote" => {
-                if args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $string.".into()));
-                }
-                if args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
-                    )));
+                match args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $string.".into())),
+                    1 => {}
+                    n => return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {n} {} passed.",
+                        match n == 1 { true => "was", false => "were" }
+                    ))),
                 }
                 match &args[0] {
                     Value::String(s, _) => Value::String(s.clone(), false),
@@ -177,15 +168,13 @@ impl Evaluator {
                 }
             }
             "quote" => {
-                if args.is_empty() {
-                    return Err(SassError::Eval("Missing argument $string.".into()));
-                }
-                if args.len() > 1 {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {} {} passed.",
-                        args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
-                    )));
+                match args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $string.".into())),
+                    1 => {}
+                    n => return Err(SassError::Eval(format!(
+                        "Only 1 argument allowed, but {n} {} passed.",
+                        match n == 1 { true => "was", false => "were" }
+                    ))),
                 }
                 match &args[0] {
                     Value::String(s, _) => Value::String(s.clone(), true),
@@ -198,8 +187,9 @@ impl Evaluator {
             }
             "str-slice" => Self::str_slice(&args)?,
             "str-index" => {
-                if args.len() != 2 {
-                    return Err(SassError::Eval("str-index requires 2 arguments".into()));
+                match args.len() {
+                    2 => {}
+                    _ => return Err(SassError::Eval("str-index requires 2 arguments".into())),
                 }
                 let s = match &args[0] {
                     Value::String(s, _) => s.clone(),
@@ -225,12 +215,13 @@ impl Evaluator {
             "str-insert" => Self::str_insert(&args)?,
             "str-split" => Self::str_split(&args)?,
             "unique-id" => {
-                if !args.is_empty() {
-                    return Err(SassError::Eval(format!(
+                match args.is_empty() {
+                    false => return Err(SassError::Eval(format!(
                         "Only 0 arguments allowed, but {} {} passed.",
                         args.len(),
-                        if args.len() == 1 { "was" } else { "were" }
-                    )));
+                        match args.len() == 1 { true => "was", false => "were" }
+                    ))),
+                    true => {}
                 }
                 let id = UNIQUE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
                 Value::String(format!("u{id}"), false)
@@ -242,8 +233,9 @@ impl Evaluator {
 
     /// str-slice($string, $start-at, $end-at: -1)
     fn str_slice(args: &[Value]) -> Result<Value> {
-        if args.len() < 2 || args.len() > 3 {
-            return Err(SassError::Eval("str-slice requires 2-3 arguments".into()));
+        match args.len() {
+            2..=3 => {}
+            _ => return Err(SassError::Eval("str-slice requires 2-3 arguments".into())),
         }
         let (s, q) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
@@ -255,13 +247,15 @@ impl Evaluator {
         };
         let start = match &args[1] {
             Value::Number(n, u) => {
-                if n.fract() != 0.0 {
-                    return Err(SassError::Eval(format!("$start-at: {n} is not an int.")));
+                match n.fract() != 0.0 {
+                    true => return Err(SassError::Eval(format!("$start-at: {n} is not an int."))),
+                    false => {}
                 }
-                if u.is_some() {
-                    return Err(SassError::Eval(format!(
+                match u.is_some() {
+                    true => return Err(SassError::Eval(format!(
                         "$start-at: Expected {n} to have no units."
-                    )));
+                    ))),
+                    false => {}
                 }
                 *n as isize
             }
@@ -273,13 +267,15 @@ impl Evaluator {
         };
         let end = match args.get(2) {
             Some(Value::Number(n, u)) => {
-                if n.fract() != 0.0 {
-                    return Err(SassError::Eval(format!("$end-at: {n} is not an int.")));
+                match n.fract() != 0.0 {
+                    true => return Err(SassError::Eval(format!("$end-at: {n} is not an int."))),
+                    false => {}
                 }
-                if u.is_some() {
-                    return Err(SassError::Eval(format!(
+                match u.is_some() {
+                    true => return Err(SassError::Eval(format!(
                         "$end-at: Expected {n} to have no units."
-                    )));
+                    ))),
+                    false => {}
                 }
                 Some(*n as isize)
             }
@@ -292,18 +288,16 @@ impl Evaluator {
         };
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len() as isize;
-        let start_idx = if start < 0 {
-            (len + start).max(0) as usize
-        } else {
-            (start - 1).max(0) as usize
+        let start_idx = match start < 0 {
+            true => (len + start).max(0) as usize,
+            false => (start - 1).max(0) as usize,
         };
         let end_idx = match end {
             None => len as usize,
             Some(e) => {
-                if e < 0 {
-                    (len + e + 1).max(0) as usize
-                } else {
-                    e.min(len) as usize
+                match e < 0 {
+                    true => (len + e + 1).max(0) as usize,
+                    false => e.min(len) as usize,
                 }
             }
         };
@@ -315,8 +309,9 @@ impl Evaluator {
 
     /// str-insert($string, $insert, $index)
     fn str_insert(args: &[Value]) -> Result<Value> {
-        if args.len() != 3 {
-            return Err(SassError::Eval("str-insert requires 3 arguments".into()));
+        match args.len() {
+            3 => {}
+            _ => return Err(SassError::Eval("str-insert requires 3 arguments".into())),
         }
         let (s, q) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
@@ -336,13 +331,15 @@ impl Evaluator {
         };
         let idx = match &args[2] {
             Value::Number(n, u) => {
-                if u.is_some() {
-                    return Err(SassError::Eval(format!(
+                match u.is_some() {
+                    true => return Err(SassError::Eval(format!(
                         "$index: Expected {n} to have no units."
-                    )));
+                    ))),
+                    false => {}
                 }
-                if n.fract() != 0.0 {
-                    return Err(SassError::Eval(format!("$index: {n} is not an int.")));
+                match n.fract() != 0.0 {
+                    true => return Err(SassError::Eval(format!("$index: {n} is not an int."))),
+                    false => {}
                 }
                 *n as isize
             }
@@ -352,10 +349,9 @@ impl Evaluator {
         };
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len() as isize;
-        let pos = if idx >= 0 {
-            (idx - 1).max(0).min(len) as usize
-        } else {
-            (len + idx + 1).max(0) as usize
+        let pos = match idx >= 0 {
+            true => (idx - 1).max(0).min(len) as usize,
+            false => (len + idx + 1).max(0) as usize,
         };
         let mut result: Vec<char> = chars[..pos].to_vec();
         result.extend(insert.chars());
@@ -365,14 +361,12 @@ impl Evaluator {
 
     /// str-split($string, $separator, $limit: null)
     fn str_split(args: &[Value]) -> Result<Value> {
-        if args.len() > 3 {
-            return Err(SassError::Eval(format!(
-                "Only 3 arguments allowed, but {} were passed.",
-                args.len()
-            )));
-        }
-        if args.len() < 2 {
-            return Err(SassError::Eval("Missing argument $separator.".into()));
+        match args.len() {
+            0..=1 => return Err(SassError::Eval("Missing argument $separator.".into())),
+            2..=3 => {}
+            n => return Err(SassError::Eval(format!(
+                "Only 3 arguments allowed, but {n} were passed."
+            ))),
         }
         let (s, input_quoted) = match &args[0] {
             Value::String(s, q) => (s.clone(), *q),
@@ -393,19 +387,22 @@ impl Evaluator {
         };
         let limit = match args.get(2) {
             Some(Value::Number(n, u)) => {
-                if u.is_some() {
-                    return Err(SassError::Eval(format!(
+                match u.is_some() {
+                    true => return Err(SassError::Eval(format!(
                         "$limit: Expected {n} to have no units."
-                    )));
+                    ))),
+                    false => {}
                 }
-                if n.fract() != 0.0 {
-                    return Err(SassError::Eval(format!("$limit: {n} is not an int.")));
+                match n.fract() != 0.0 {
+                    true => return Err(SassError::Eval(format!("$limit: {n} is not an int."))),
+                    false => {}
                 }
-                if *n < 1.0 {
-                    return Err(SassError::Eval(format!(
+                match *n < 1.0 {
+                    true => return Err(SassError::Eval(format!(
                         "$limit: Must be 1 or greater, was {}.",
                         *n as i64
-                    )));
+                    ))),
+                    false => {}
                 }
                 Some(*n as usize)
             }

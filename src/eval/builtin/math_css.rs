@@ -29,11 +29,13 @@ pub(crate) fn css_round(strategy: &str, number: &Value, step: &Value) -> Result<
         Value::Number(s, u) => (*s, u.clone()),
         _ => return Err(SassError::Eval(format!("$step: {step} is not a number."))),
     };
-    if s == 0.0 {
-        return Err(SassError::Eval("Round step cannot be zero.".into()));
+    match s == 0.0 {
+        true => return Err(SassError::Eval("Round step cannot be zero.".into())),
+        false => {}
     }
     let compatible = crate::eval::value::units_compatible(n_unit.as_deref(), s_unit.as_deref());
-    if !compatible {
+    match compatible {
+        false => {
         let n_str = match &n_unit {
             Some(u) => format!("{n}{u}"),
             None => n.to_string(),
@@ -46,6 +48,8 @@ pub(crate) fn css_round(strategy: &str, number: &Value, step: &Value) -> Result<
             format!("round({strategy}, {n_str}, {s_str})"),
             false,
         )));
+        }
+        true => {}
     }
     let (s_converted, out_unit) = match (&n_unit, &s_unit) {
         (None, None) => (s, None),
@@ -92,8 +96,9 @@ const RES_TO_DPI: &[(&str, f64)] = &[("dpi", 1.0), ("dpcm", 2.54), ("dppx", 96.0
 
 /// 获取从 `from_unit` 到 `to_unit` 的转换因子。
 pub(crate) fn unit_conversion_factor(from: &str, to: &str) -> f64 {
-    if from == to {
-        return 1.0;
+    match from == to {
+        true => return 1.0,
+        false => {}
     }
     for table in [
         LENGTH_TO_PX,
@@ -127,11 +132,13 @@ pub(crate) fn css_mod(number: &Value, step: &Value) -> Result<Option<Value>> {
         Value::Number(s, u) => (*s, u.clone()),
         _ => return Err(SassError::Eval(format!("$step: {step} is not a number."))),
     };
-    if s == 0.0 {
-        return Err(SassError::Eval("mod() step cannot be zero.".into()));
+    match s == 0.0 {
+        true => return Err(SassError::Eval("mod() step cannot be zero.".into())),
+        false => {}
     }
     let compatible = crate::eval::value::units_compatible(n_unit.as_deref(), s_unit.as_deref());
-    if !compatible {
+    match compatible {
+        false => {
         let n_str = match &n_unit {
             Some(u) => format!("{n}{u}"),
             None => n.to_string(),
@@ -141,6 +148,8 @@ pub(crate) fn css_mod(number: &Value, step: &Value) -> Result<Option<Value>> {
             None => s.to_string(),
         };
         return Ok(Some(Value::String(format!("mod({n_str}, {s_str})"), false)));
+        }
+        true => {}
     }
     let (s_converted, out_unit) = match (&n_unit, &s_unit) {
         (None, None) => (s, None),
@@ -170,11 +179,13 @@ pub(crate) fn css_rem(number: &Value, step: &Value) -> Result<Option<Value>> {
         Value::Number(s, u) => (*s, u.clone()),
         _ => return Err(SassError::Eval(format!("$step: {step} is not a number."))),
     };
-    if s == 0.0 {
-        return Err(SassError::Eval("rem() step cannot be zero.".into()));
+    match s == 0.0 {
+        true => return Err(SassError::Eval("rem() step cannot be zero.".into())),
+        false => {}
     }
     let compatible = crate::eval::value::units_compatible(n_unit.as_deref(), s_unit.as_deref());
-    if !compatible {
+    match compatible {
+        false => {
         let n_str = match &n_unit {
             Some(u) => format!("{n}{u}"),
             None => n.to_string(),
@@ -184,6 +195,8 @@ pub(crate) fn css_rem(number: &Value, step: &Value) -> Result<Option<Value>> {
             None => s.to_string(),
         };
         return Ok(Some(Value::String(format!("rem({n_str}, {s_str})"), false)));
+        }
+        true => {}
     }
     let (s_converted, out_unit) = match (&n_unit, &s_unit) {
         (None, None) => (s, None),

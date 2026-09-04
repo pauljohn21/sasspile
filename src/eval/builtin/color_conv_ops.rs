@@ -27,8 +27,9 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
     use super::color_conv;
 
     // 同空间转换——直接返回原始值，避免精度损失
-    if is_same_space(c.space, target_space) {
-        return Ok(Value::Color(c.clone()));
+    match is_same_space(c.space, target_space) {
+        true => return Ok(Value::Color(c.clone())),
+        false => {}
     }
 
     // 获取源 sRGB (0-1) 值
@@ -254,11 +255,13 @@ pub(crate) fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
 
     let hue_to_rgb = |hue: f64| -> f64 {
         let mut hue = hue;
-        if hue < 0.0 {
-            hue += 1.0;
+        match hue < 0.0 {
+            true => hue += 1.0,
+            false => {}
         }
-        if hue > 1.0 {
-            hue -= 1.0;
+        match hue > 1.0 {
+            true => hue -= 1.0,
+            false => {}
         }
         match hue {
             h if h < 1.0 / 6.0 => w + factor * hue * 6.0,
@@ -288,8 +291,9 @@ pub(crate) fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
 /// 使用 CSS Color 4 规范的 HSL→RGB 算法。
 pub(crate) fn hsl_to_srgb_f64(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
     let h = h.rem_euclid(360.0);
-    if s == 0.0 {
-        return (l, l, l);
+    match s == 0.0 {
+        true => return (l, l, l),
+        false => {}
     }
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());

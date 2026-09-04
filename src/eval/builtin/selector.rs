@@ -31,8 +31,9 @@ fn merge_selector_args(
     name: &str,
 ) -> Vec<Value> {
     let param_names = selector_param_names(name);
-    if param_names.is_empty() {
-        return pos_args.to_vec();
+    match param_names.is_empty() {
+        true => return pos_args.to_vec(),
+        false => {}
     }
     let mut result: Vec<Value> = param_names
         .iter()
@@ -45,8 +46,9 @@ fn merge_selector_args(
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })
         .collect();
-    if pos_args.len() > param_names.len() {
-        result.extend_from_slice(&pos_args[param_names.len()..]);
+    match pos_args.len() > param_names.len() {
+        true => result.extend_from_slice(&pos_args[param_names.len()..]),
+        false => {}
     }
     result
 }
@@ -91,15 +93,13 @@ pub fn call(
             _ => Ok(Some(Value::Bool(false))),
         },
         "selector-parse" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $selector.".into()));
-            }
-            if args.len() > 1 {
-                return Err(SassError::Eval(format!(
-                    "Only 1 argument allowed, but {} {} passed.",
-                    args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+            match args.len() {
+                0 => return Err(SassError::Eval("Missing argument $selector.".into())),
+                1 => {}
+                n => return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {n} {} passed.",
+                    match n == 1 { true => "was", false => "were" }
+                ))),
             }
             match &args[0] {
                 Value::String(s, _) => {
@@ -115,35 +115,36 @@ pub fn call(
             }
         }
         "selector-simple-selectors" => {
-            if args.is_empty() {
-                return Err(SassError::Eval("Missing argument $selector.".into()));
-            }
-            if args.len() > 1 {
-                return Err(SassError::Eval(format!(
-                    "Only 1 argument allowed, but {} {} passed.",
-                    args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+            match args.len() {
+                0 => return Err(SassError::Eval("Missing argument $selector.".into())),
+                1 => {}
+                n => return Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {n} {} passed.",
+                    match n == 1 { true => "was", false => "were" }
+                ))),
             }
             match &args[0] {
                 Value::String(s, _) => {
                     let (result, current) = s.chars().fold(
                         (Vec::<Value>::new(), String::new()),
                         |(mut result, mut current), c| {
-                            if c == '.' || c == '#' || c == ':' || c == '[' {
-                                if !current.is_empty() {
-                                    result.push(Value::String(current, false));
+                            match c {
+                                '.' | '#' | ':' | '[' => {
+                                    match current.is_empty() {
+                                        false => result.push(Value::String(current, false)),
+                                        true => {}
+                                    }
+                                    current = c.to_string();
                                 }
-                                current = c.to_string();
-                            } else {
-                                current.push(c);
+                                _ => current.push(c),
                             }
                             (result, current)
                         },
                     );
                     let mut result = result;
-                    if !current.is_empty() {
-                        result.push(Value::String(current, false));
+                    match current.is_empty() {
+                        false => result.push(Value::String(current, false)),
+                        true => {}
                     }
                     Ok(Some(Value::List(result, Separator::Comma, false)))
                 }
@@ -154,17 +155,21 @@ pub fn call(
         }
         "selector-unify" => {
             let params = selector_param_names("selector-unify");
-            if args.len() < params.len() {
-                let missing = params[args.len()];
-                return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+            match args.len() < params.len() {
+                true => {
+                    let missing = params[args.len()];
+                    return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+                }
+                false => {}
             }
-            if args.len() > params.len() {
-                return Err(SassError::Eval(format!(
+            match args.len() > params.len() {
+                true => return Err(SassError::Eval(format!(
                     "Only {} arguments allowed, but {} {} passed.",
                     params.len(),
                     args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+                    match args.len() == 1 { true => "was", false => "were" }
+                ))),
+                false => {}
             }
             match args {
                 [Value::String(a, _), Value::String(b, _)] => {
@@ -183,17 +188,21 @@ pub fn call(
         }
         "selector-extend" => {
             let params = selector_param_names("selector-extend");
-            if args.len() < params.len() {
-                let missing = params[args.len()];
-                return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+            match args.len() < params.len() {
+                true => {
+                    let missing = params[args.len()];
+                    return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+                }
+                false => {}
             }
-            if args.len() > params.len() {
-                return Err(SassError::Eval(format!(
+            match args.len() > params.len() {
+                true => return Err(SassError::Eval(format!(
                     "Only {} arguments allowed, but {} {} passed.",
                     params.len(),
                     args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+                    match args.len() == 1 { true => "was", false => "were" }
+                ))),
+                false => {}
             }
             match args {
                 [
@@ -215,17 +224,21 @@ pub fn call(
         }
         "selector-replace" => {
             let params = selector_param_names("selector-replace");
-            if args.len() < params.len() {
-                let missing = params[args.len()];
-                return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+            match args.len() < params.len() {
+                true => {
+                    let missing = params[args.len()];
+                    return Err(SassError::Eval(format!("Missing argument ${missing}.")));
+                }
+                false => {}
             }
-            if args.len() > params.len() {
-                return Err(SassError::Eval(format!(
+            match args.len() > params.len() {
+                true => return Err(SassError::Eval(format!(
                     "Only {} arguments allowed, but {} {} passed.",
                     params.len(),
                     args.len(),
-                    if args.len() == 1 { "was" } else { "were" }
-                )));
+                    match args.len() == 1 { true => "was", false => "were" }
+                ))),
+                false => {}
             }
             match args {
                 [

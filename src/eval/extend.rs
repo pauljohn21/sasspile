@@ -54,11 +54,12 @@ impl Evaluator {
                                 let target_trimmed = target.trim();
                                 let extender_trimmed = extender.trim();
                                 // bogus 选择器检测
-                                if extender_trimmed.ends_with('+')
+                                match extender_trimmed.ends_with('+')
                                     || extender_trimmed.ends_with('>')
                                     || extender_trimmed.ends_with('~')
                                 {
-                                    return sel_ast;
+                                    true => return sel_ast,
+                                    false => {}
                                 }
                                 // 模块 scope 检查
                                 if let Some(module_path) = module {
@@ -143,19 +144,22 @@ impl Evaluator {
         extends
             .iter()
             .try_fold((), |(), (_extender, target, optional, _module)| {
-                if *optional {
-                    return Ok(());
-                }
+                                match *optional {
+                                    true => return Ok(()),
+                                    false => {}
+                                }
                 let target_trimmed = target.trim();
                 // 占位符选择器不需要在 CSS 中存在
-                if target_trimmed.starts_with('%') {
-                    return Ok(());
+                match target_trimmed.starts_with('%') {
+                    true => return Ok(()),
+                    false => {}
                 }
                 let found = all_selectors.iter().any(|s| s.contains(target_trimmed));
-                if !found {
-                    return Err(SassError::Eval(format!(
+                match found {
+                    false => return Err(SassError::Eval(format!(
                         "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
-                    )));
+                    ))),
+                    true => {}
                 }
                 Ok(())
             })

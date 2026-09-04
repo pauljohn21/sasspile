@@ -6,8 +6,9 @@ use std::path::Path;
 impl Evaluator {
     /// @import 指令处理。
     pub(crate) fn eval_import(url: &str, modifier: &str, env: Env) -> Result<(Vec<CssNode>, Env)> {
-        if url.starts_with("sass:") {
-            return Ok((vec![], env.add_module(url.to_string())));
+        match url.starts_with("sass:") {
+            true => return Ok((vec![], env.add_module(url.to_string()))),
+            false => {}
         }
         let is_css = Path::new(url)
             .extension()
@@ -22,7 +23,8 @@ impl Evaluator {
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("css"))
             });
-        if is_css {
+        match is_css {
+            true => {
             let urls: Vec<&str> = url.split(", ").collect();
             let nodes: Vec<CssNode> = urls
                 .iter()
@@ -44,6 +46,8 @@ impl Evaluator {
                 })
                 .collect();
             return Ok((nodes, env));
+            }
+            false => {}
         }
         let base = env.get_base_path();
         let load_paths = env.get_load_paths().to_vec();

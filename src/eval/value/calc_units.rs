@@ -11,8 +11,9 @@
 /// - 频率：hz, khz
 /// - 分辨率：dpi, dpcm, dppx
 pub fn units_compatible(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
+    match a == b {
+        true => return true,
+        false => {}
     }
     let group_a = unit_group(a);
     let group_b = unit_group(b);
@@ -46,11 +47,13 @@ enum UnitGroup {
 /// 返回 None 如果单位不兼容。
 /// 转换基于 CSS 参考像素（96px = 1in）等标准比例。
 pub fn convert_unit(value: f64, from_unit: &str, to_unit: &str) -> Option<f64> {
-    if from_unit == to_unit {
-        return Some(value);
+    match from_unit == to_unit {
+        true => return Some(value),
+        false => {}
     }
-    if !units_compatible(from_unit, to_unit) {
-        return None;
+    match units_compatible(from_unit, to_unit) {
+        false => return None,
+        true => {}
     }
     // 先转为基础单位，再从基础单位转到目标
     let in_base = to_base_unit(value, from_unit)?;

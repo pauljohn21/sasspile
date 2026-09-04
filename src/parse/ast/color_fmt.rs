@@ -15,10 +15,9 @@ use crate::consts::{FLOAT_PRECISION_INV, HUE_MAX, PCT_SCALE};
 /// 格式化 hue 值——截断到 10 位小数。
 pub(crate) fn format_hue(h: f64) -> String {
     let h = (h * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
-    if h.fract() == 0.0 {
-        format!("{}", h as i64)
-    } else {
-        format!("{h}")
+    match h.fract() == 0.0 {
+        true => format!("{}", h as i64),
+        false => format!("{h}"),
     }
 }
 
@@ -26,20 +25,18 @@ pub(crate) fn format_hue(h: f64) -> String {
 pub(crate) fn format_pct(v: f64) -> String {
     let pct = v * PCT_SCALE;
     let pct = (pct * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
-    if pct.fract() == 0.0 {
-        format!("{}", pct as i64)
-    } else {
-        format!("{pct}")
+    match pct.fract() == 0.0 {
+        true => format!("{}", pct as i64),
+        false => format!("{pct}"),
     }
 }
 
 /// 格式化百分比值（0.0-100.0 → 0%-100%），用于 rgb(%) 输出。
 pub(crate) fn format_pct_val(v: f64) -> String {
     let v = (v * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
-    if v.fract() == 0.0 {
-        format!("{}", v as i64)
-    } else {
-        format!("{v}")
+    match v.fract() == 0.0 {
+        true => format!("{}", v as i64),
+        false => format!("{v}"),
     }
 }
 
@@ -67,9 +64,8 @@ pub(crate) fn hsl_to_rgb_percent(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
 
 /// 格式化 alpha 值。
 pub(crate) fn format_alpha(a: f64) -> String {
-    if a.fract() == 0.0 {
-        format!("{}", a as i64)
-    } else {
-        format!("{a}")
+    match a.fract() == 0.0 {
+        true => format!("{}", a as i64),
+        false => format!("{a}"),
     }
 }

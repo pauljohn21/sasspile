@@ -40,9 +40,10 @@ impl<'tok> Parser<'tok> {
         let mut nodes = Vec::new();
         while !p.at_end() {
             p.skip_ws();
-            if p.at_end() {
-                break;
-            }
+        match p.at_end() {
+            true => break,
+            false => {}
+        }
             let node = p.parse_node()?;
             // 跟踪非模块规则——@forward 必须在这些规则之前
             // 变量声明和注释不触发 saw_other_rule（Sass 允许它们在 @forward 前）
@@ -104,10 +105,12 @@ impl<'tok> Parser<'tok> {
 
     fn expect(&mut self, tok: &Token) -> Result<()> {
         self.skip_ws();
-        if self.peek() == Some(tok) {
-            self.advance();
-            Ok(())
-        } else {
+        match self.peek() == Some(tok) {
+            true => {
+                self.advance();
+                Ok(())
+            }
+            false => {
             let found = self
                 .peek()
                 .map_or("EOF".into(), std::string::ToString::to_string);
@@ -118,10 +121,11 @@ impl<'tok> Parser<'tok> {
                 .map(std::string::ToString::to_string)
                 .collect();
             warn!(expected = %tok, found = %found, pos = self.pos, context = ?context, "expect failed");
-            Err(SassError::Parse {
-                expected: tok.to_string(),
-                found,
-            })
+                Err(SassError::Parse {
+                    expected: tok.to_string(),
+                    found,
+                })
+            }
         }
     }
 }

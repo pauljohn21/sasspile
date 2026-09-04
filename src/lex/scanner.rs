@@ -39,8 +39,11 @@ impl<'src> Lexer<'src> {
     /// 消费下一个字符并前进。
     pub(crate) fn next_char(&mut self) -> Option<char> {
         let c = self.chars.next();
-        if let Some(ch) = c {
-            self.pos += ch.len_utf8();
+        match c {
+            Some(ch) => {
+                self.pos += ch.len_utf8();
+            }
+            None => {}
         }
         c
     }
@@ -49,10 +52,9 @@ impl<'src> Lexer<'src> {
     pub(crate) fn scan_ident(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
-                self.next_char();
-            } else {
-                break;
+            match c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
+                true => { self.next_char(); }
+                false => break,
             }
         }
         let text = &self.source[start..self.pos];
@@ -71,39 +73,38 @@ impl<'src> Lexer<'src> {
     pub(crate) fn scan_number(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if c.is_ascii_digit() {
+            match c.is_ascii_digit() {
+                true => { self.next_char(); }
+                false => break,
+            }
+        }
+        match self.peek() == Some('.') && self.peek2().is_some_and(|c| c.is_ascii_digit()) {
+            true => {
                 self.next_char();
-            } else {
-                break;
-            }
-        }
-        if self.peek() == Some('.') && self.peek2().is_some_and(|c| c.is_ascii_digit()) {
-            self.next_char();
-            while let Some(c) = self.peek() {
-                if c.is_ascii_digit() {
-                    self.next_char();
-                } else {
-                    break;
+                while let Some(c) = self.peek() {
+                    match c.is_ascii_digit() {
+                        true => { self.next_char(); }
+                        false => break,
+                    }
                 }
             }
+            false => {}
         }
-        if self.source[start..self.pos]
-            .bytes()
-            .any(|b| b.is_ascii_digit())
-        {
-            while let Some(c) = self.peek() {
-                if c.is_ascii_alphabetic() || c == '%' {
-                    self.next_char();
-                } else {
-                    break;
+        match self.source[start..self.pos].bytes().any(|b| b.is_ascii_digit()) {
+            true => {
+                while let Some(c) = self.peek() {
+                    match c.is_ascii_alphabetic() || c == '%' {
+                        true => { self.next_char(); }
+                        false => break,
+                    }
                 }
             }
+            false => {}
         }
         let text = &self.source[start..self.pos];
-        if text == "." {
-            Token::Dot
-        } else {
-            Token::Number(text.to_string())
+        match text {
+            "." => Token::Dot,
+            _ => Token::Number(text.to_string()),
         }
     }
 
@@ -112,47 +113,58 @@ impl<'src> Lexer<'src> {
         self.next_char();
         let mut content = String::new();
         while let Some(c) = self.peek() {
-            if c == '\\' {
-                self.next_char();
-                if let Some(next) = self.peek() {
-                    if next.is_ascii_hexdigit() {
-                        let mut hex = String::new();
-                        for _ in 0..6 {
-                            if let Some(h) = self.peek() {
-                                if h.is_ascii_hexdigit() {
-                                    hex.push(h);
+            match c {
+                '\\' => {
+                    self.next_char();
+                    match self.peek() {
+                        Some(next) => {
+                            match next.is_ascii_hexdigit() {
+                                true => {
+                                    let mut hex = String::new();
+                                    for _ in 0..6 {
+                                        match self.peek() {
+                                            Some(h) if h.is_ascii_hexdigit() => {
+                                                hex.push(h);
+                                                self.next_char();
+                                            }
+                                            _ => break,
+                                        }
+                                    }
+                                    match self
+                                        .peek()
+                                        .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
+                                    {
+                                        true => { self.next_char(); }
+                                        false => {}
+                                    }
+                                    match u32::from_str_radix(&hex, 16)
+                                        .ok()
+                                        .and_then(char::from_u32)
+                                    {
+                                        Some(ch) => { content.push(ch); }
+                                        None => {}
+                                    }
+                                }
+                                false => {
                                     self.next_char();
-                                } else {
-                                    break;
+                                    content.push(next);
                                 }
                             }
                         }
-                        if self
-                            .peek()
-                            .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
-                        {
-                            self.next_char();
-                        }
-                        if let Ok(code) = u32::from_str_radix(&hex, 16)
-                            && let Some(ch) = char::from_u32(code)
-                        {
-                            content.push(ch);
-                        }
-                    } else {
-                        self.next_char();
-                        content.push(next);
+                        None => {}
                     }
+                    continue;
                 }
-                continue;
+                _ if c == quote => break,
+                _ => {
+                    content.push(c);
+                    self.next_char();
+                }
             }
-            if c == quote {
-                break;
-            }
-            content.push(c);
-            self.next_char();
         }
-        if self.peek().is_some() {
-            self.next_char();
+        match self.peek().is_some() {
+            true => { self.next_char(); }
+            false => {}
         }
         Ok(Token::String(content, quote))
     }
@@ -161,44 +173,57 @@ impl<'src> Lexer<'src> {
     pub(crate) fn scan_escape_ident(&mut self) -> Result<Token> {
         let mut text = String::new();
         self.next_char();
-        if let Some(next) = self.peek() {
-            if next.is_ascii_hexdigit() {
-                let mut hex = String::new();
-                for _ in 0..6 {
-                    if let Some(h) = self.peek().filter(char::is_ascii_hexdigit) {
-                        hex.push(h);
+        match self.peek() {
+            Some(next) => {
+                match next.is_ascii_hexdigit() {
+                    true => {
+                        let mut hex = String::new();
+                        for _ in 0..6 {
+                            match self.peek().filter(char::is_ascii_hexdigit) {
+                                Some(h) => {
+                                    hex.push(h);
+                                    self.next_char();
+                                }
+                                None => break,
+                            }
+                        }
+                        match self
+                            .peek()
+                            .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
+                        {
+                            true => { self.next_char(); }
+                            false => {}
+                        }
+                        match u32::from_str_radix(&hex, 16) {
+                            Ok(code) => {
+                                match char::from_u32(code) {
+                                    Some(ch) => { text.push(ch); }
+                                    None => {
+                                        return Err(SassError::Lex {
+                                            message: "Invalid Unicode code point.".into(),
+                                            pos: self.pos,
+                                        });
+                                    }
+                                }
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    false => {
                         self.next_char();
-                    } else {
-                        break;
+                        text.push(next);
                     }
                 }
-                if self
-                    .peek()
-                    .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
-                {
-                    self.next_char();
-                }
-                if let Ok(code) = u32::from_str_radix(&hex, 16) {
-                    if let Some(ch) = char::from_u32(code) {
-                        text.push(ch);
-                    } else {
-                        return Err(SassError::Lex {
-                            message: "Invalid Unicode code point.".into(),
-                            pos: self.pos,
-                        });
-                    }
-                }
-            } else {
-                self.next_char();
-                text.push(next);
             }
+            None => {}
         }
         while let Some(c) = self.peek() {
-            if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
-                self.next_char();
-                text.push(c);
-            } else {
-                break;
+            match c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
+                true => {
+                    self.next_char();
+                    text.push(c);
+                }
+                false => break,
             }
         }
         Ok(match text.as_str() {
@@ -224,32 +249,42 @@ impl<'src> Lexer<'src> {
                 }
                 '\\' => {
                     self.next_char();
-                    if let Some(next) = self.peek() {
-                        if next.is_ascii_hexdigit() {
-                            let mut hex = String::new();
-                            for _ in 0..6 {
-                                if let Some(h) = self.peek().filter(char::is_ascii_hexdigit) {
-                                    hex.push(h);
+                    match self.peek() {
+                        Some(next) => {
+                            match next.is_ascii_hexdigit() {
+                                true => {
+                                    let mut hex = String::new();
+                                    for _ in 0..6 {
+                                        match self.peek().filter(char::is_ascii_hexdigit) {
+                                            Some(h) => {
+                                                hex.push(h);
+                                                self.next_char();
+                                            }
+                                            None => break,
+                                        }
+                                    }
+                                    match self
+                                        .peek()
+                                        .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
+                                    {
+                                        true => { self.next_char(); }
+                                        false => {}
+                                    }
+                                    match u32::from_str_radix(&hex, 16)
+                                        .ok()
+                                        .and_then(char::from_u32)
+                                    {
+                                        Some(ch) => { name.push(ch); }
+                                        None => {}
+                                    }
+                                }
+                                false => {
                                     self.next_char();
-                                } else {
-                                    break;
+                                    name.push(next);
                                 }
                             }
-                            if self
-                                .peek()
-                                .is_some_and(|c| c == ' ' || c == '\t' || c == '\n')
-                            {
-                                self.next_char();
-                            }
-                            if let Ok(code) = u32::from_str_radix(&hex, 16)
-                                && let Some(ch) = char::from_u32(code)
-                            {
-                                name.push(ch);
-                            }
-                        } else {
-                            self.next_char();
-                            name.push(next);
                         }
+                        None => {}
                     }
                 }
                 _ => break,
@@ -263,10 +298,9 @@ impl<'src> Lexer<'src> {
         self.next_char();
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
-                self.next_char();
-            } else {
-                break;
+            match c.is_alphanumeric() || c == '-' || c == '_' {
+                true => { self.next_char(); }
+                false => break,
             }
         }
         let name = &self.source[start..self.pos];
@@ -276,59 +310,63 @@ impl<'src> Lexer<'src> {
     /// 扫描 #hash 或 #插值。
     pub(crate) fn scan_hash(&mut self) -> Result<Token> {
         self.next_char();
-        if self.peek() == Some('{') {
-            self.next_char();
-            let start = self.pos;
-            let mut depth = 1;
-            while depth > 0 {
-                match self.peek() {
-                    Some('{') => {
-                        depth += 1;
-                        self.next_char();
-                    }
-                    Some('}') => {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
+        match self.peek() {
+            Some('{') => {
+                self.next_char();
+                let start = self.pos;
+                let mut depth = 1;
+                while depth > 0 {
+                    match self.peek() {
+                        Some('{') => {
+                            depth += 1;
+                            self.next_char();
                         }
-                        self.next_char();
+                        Some('}') => {
+                            depth -= 1;
+                            match depth == 0 {
+                                true => break,
+                                false => { self.next_char(); }
+                            }
+                        }
+                        Some('"' | '\'') => {
+                            let q = self.peek().expect("peek is Some in quote branch");
+                            let _ = self.scan_string(q)?;
+                        }
+                        Some(_) => {
+                            self.next_char();
+                        }
+                        None => break,
                     }
-                    Some('"' | '\'') => {
-                        let q = self.peek().expect("peek is Some in quote branch");
-                        let _ = self.scan_string(q)?;
-                    }
-                    Some(_) => {
-                        self.next_char();
-                    }
-                    None => break,
                 }
+                let content = self.source[start..self.pos].to_string();
+                match self.peek() {
+                    Some('}') => { self.next_char(); }
+                    _ => {}
+                }
+                Ok(Token::Interp(content))
             }
-            let content = self.source[start..self.pos].to_string();
-            if self.peek() == Some('}') {
-                self.next_char();
+            _ => {
+                let start = self.pos;
+                while let Some(c) = self.peek() {
+                    match c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                        true => { self.next_char(); }
+                        false => break,
+                    }
+                }
+                let value = &self.source[start..self.pos];
+                Ok(Token::Hash(value.to_string()))
             }
-            return Ok(Token::Interp(content));
         }
-        let start = self.pos;
-        while let Some(c) = self.peek() {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                self.next_char();
-            } else {
-                break;
-            }
-        }
-        let value = &self.source[start..self.pos];
-        Ok(Token::Hash(value.to_string()))
     }
 
     /// 扫描 // 单行注释。
     pub(crate) fn scan_line_comment(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if c == '\n' {
-                break;
+            match c {
+                '\n' => break,
+                _ => { self.next_char(); }
             }
-            self.next_char();
         }
         let text = self.source[start..self.pos].trim().to_string();
         Token::Comment(text, true)
@@ -338,12 +376,14 @@ impl<'src> Lexer<'src> {
     pub(crate) fn scan_block_comment(&mut self) -> Token {
         let start = self.pos;
         while self.peek().is_some() {
-            if self.source[self.pos..].starts_with("*/") {
-                self.next_char();
-                self.next_char();
-                break;
+            match self.source[self.pos..].starts_with("*/") {
+                true => {
+                    self.next_char();
+                    self.next_char();
+                    break;
+                }
+                false => { self.next_char(); }
             }
-            self.next_char();
         }
         let text = self.source[start..self.pos.saturating_sub(2)]
             .trim()

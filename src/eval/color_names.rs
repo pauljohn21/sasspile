@@ -169,8 +169,9 @@ impl Evaluator {
     /// CSS 命名颜色反向查找——根据 RGB 值返回名称。
     #[allow(clippy::items_after_statements)]
     pub(crate) fn reverse_lookup_named_color(c: &Color) -> Option<&'static str> {
-        if (c.a - 1.0).abs() > 0.0001 {
-            return None;
+        match (c.a - 1.0).abs() > 0.0001 {
+            true => return None,
+            false => {}
         }
         const NAMED_COLORS: &[(f64, f64, f64, &str)] = &[
             (240.0, 248.0, 255.0, "aliceblue"),
@@ -313,11 +314,12 @@ impl Evaluator {
             (154.0, 205.0, 50.0, "yellowgreen"),
         ];
         for &(r, g, b, name) in NAMED_COLORS {
-            if (c.legacy_rgb[0] - r).abs() < 0.5
+            match (c.legacy_rgb[0] - r).abs() < 0.5
                 && (c.legacy_rgb[1] - g).abs() < 0.5
                 && (c.legacy_rgb[2] - b).abs() < 0.5
             {
-                return Some(name);
+                true => return Some(name),
+                false => {}
             }
         }
         None

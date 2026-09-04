@@ -21,9 +21,12 @@ fn main() {
     } else {
         // 从 stdin 读取
         let mut input = String::new();
-        if io::stdin().read_to_string(&mut input).is_err() {
-            tracing::error!("无法读取输入");
-            std::process::exit(1);
+        match io::stdin().read_to_string(&mut input).is_err() {
+            true => {
+                tracing::error!("无法读取输入");
+                std::process::exit(1);
+            }
+            false => {}
         }
         (input, None)
     };

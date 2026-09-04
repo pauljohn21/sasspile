@@ -173,14 +173,13 @@ pub(crate) fn math_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    if math_is_known(name) {
-        match super::math::call(name, pos_args, kw_args) {
+    match math_is_known(name) {
+        true => match super::math::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        }
-    } else {
-        None
+        },
+        false => None,
     }
 }
 
@@ -203,14 +202,13 @@ pub(crate) fn string_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    if string_is_known(name) {
-        match super::Evaluator::call_string_builtin(name, pos_args, kw_args) {
+    match string_is_known(name) {
+        true => match super::Evaluator::call_string_builtin(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        }
-    } else {
-        None
+        },
+        false => None,
     }
 }
 
@@ -230,15 +228,16 @@ pub(crate) fn map_dispatch(
     kw_args: &HashMap<String, Value>,
     env: &Env,
 ) -> Option<Result<Value>> {
-    if map_is_known(name) {
-        let combined = super::merge_map_args(pos_args, kw_args, name);
-        match super::Evaluator::call_map_builtin(name, &combined, env) {
-            Ok(Some(v)) => Some(Ok(v)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
+    match map_is_known(name) {
+        true => {
+            let combined = super::merge_map_args(pos_args, kw_args, name);
+            match super::Evaluator::call_map_builtin(name, &combined, env) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
         }
-    } else {
-        None
+        false => None,
     }
 }
 
@@ -258,14 +257,13 @@ pub(crate) fn list_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    if list_is_known(name) {
-        match super::list::call(name, pos_args, kw_args) {
+    match list_is_known(name) {
+        true => match super::list::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        }
-    } else {
-        None
+        },
+        false => None,
     }
 }
 
@@ -288,14 +286,13 @@ pub(crate) fn color_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    if color_is_known(name) {
-        match super::color::call(name, pos_args, kw_args) {
+    match color_is_known(name) {
+        true => match super::color::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        }
-    } else {
-        None
+        },
+        false => None,
     }
 }
 
@@ -318,14 +315,13 @@ pub(crate) fn selector_dispatch(
     kw_args: &HashMap<String, Value>,
     _env: &Env,
 ) -> Option<Result<Value>> {
-    if selector_is_known(name) {
-        match super::selector::call(name, pos_args, kw_args) {
+    match selector_is_known(name) {
+        true => match super::selector::call(name, pos_args, kw_args) {
             Ok(Some(v)) => Some(Ok(v)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
-        }
-    } else {
-        None
+        },
+        false => None,
     }
 }
 

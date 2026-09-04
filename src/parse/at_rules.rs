@@ -21,8 +21,9 @@ impl Parser<'_> {
             AtRuleKind::Include => self.parse_include(),
             AtRuleKind::Content => {
                 self.skip_ws();
-                if self.peek() == Some(&Token::Semicolon) {
-                    self.advance();
+                match self.peek() {
+                    Some(Token::Semicolon) => { self.advance(); }
+                    _ => {}
                 }
                 Ok(Node::Content)
             }
@@ -62,7 +63,8 @@ impl Parser<'_> {
                 Some(Token::Ident(n)) if n == "if" => true,
                 _ => false,
             };
-            if is_else_if {
+            match is_else_if {
+                true => {
                 self.advance(); // 消费 if
                 self.skip_ws();
                 let cond2 = self.parse_value()?;
@@ -70,11 +72,13 @@ impl Parser<'_> {
                 self.expect(&Token::LBrace)?;
                 let body2 = self.parse_body()?;
                 branches.push((cond2, body2));
-            } else {
-                self.skip_ws();
-                self.expect(&Token::LBrace)?;
-                else_body = Some(self.parse_body()?);
-                break;
+                }
+                false => {
+                    self.skip_ws();
+                    self.expect(&Token::LBrace)?;
+                    else_body = Some(self.parse_body()?);
+                    break;
+                }
             }
         }
         Ok(Node::If {
@@ -103,12 +107,15 @@ impl Parser<'_> {
         self.skip_ws();
         let from = self.parse_value()?;
         self.skip_ws();
-        let inclusive = if self.peek_keyword("through") {
-            self.advance();
-            true
-        } else {
-            self.expect_keyword("to")?;
-            false
+        let inclusive = match self.peek_keyword("through") {
+            true => {
+                self.advance();
+                true
+            }
+            false => {
+                self.expect_keyword("to")?;
+                false
+            }
         };
         self.skip_ws();
         let to = self.parse_value()?;
@@ -137,10 +144,9 @@ impl Parser<'_> {
                 _ => break,
             }
             self.skip_ws();
-            if self.peek() == Some(&Token::Comma) {
-                self.advance();
-            } else {
-                break;
+            match self.peek() {
+                Some(Token::Comma) => { self.advance(); }
+                _ => break,
             }
         }
         self.skip_ws();
@@ -166,17 +172,19 @@ impl Parser<'_> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
         // @mixin 不允许命名空间限定名（如 namespace.member）
-        if self.peek() == Some(&Token::Dot) {
-            return Err(SassError::Parse {
-                expected: "{".into(),
-                found: ".".into(),
-            });
+        match self.peek() {
+            Some(Token::Dot) => {
+                return Err(SassError::Parse {
+                    expected: "{".into(),
+                    found: ".".into(),
+                });
+            }
+            _ => {}
         }
         self.skip_ws();
-        let params = if self.peek() == Some(&Token::LParen) {
-            self.parse_params()?
-        } else {
-            Vec::new()
+        let params = match self.peek() {
+            Some(Token::LParen) => self.parse_params()?,
+            _ => Vec::new(),
         };
         self.skip_ws();
         self.expect(&Token::LBrace)?;
@@ -188,24 +196,27 @@ impl Parser<'_> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
         // 命名空间限定 mixin（如 midstream.b-a）
-        let name = if self.peek() == Some(&Token::Dot) {
-            self.advance();
-            let rest = self.parse_ident_name()?;
-            // 私有成员检查：以下划线开头的 mixin 不能从外部访问
-            if rest.starts_with('_') {
-                return Err(SassError::Eval(
-                    "Private members can't be accessed from outside their modules.".into(),
-                ));
+        let name = match self.peek() {
+            Some(Token::Dot) => {
+                self.advance();
+                let rest = self.parse_ident_name()?;
+                // 私有成员检查：以下划线开头的 mixin 不能从外部访问
+                match rest.starts_with('_') {
+                    true => {
+                        return Err(SassError::Eval(
+                            "Private members can't be accessed from outside their modules.".into(),
+                        ));
+                    }
+                    false => {}
+                }
+                format!("{name}.{rest}")
             }
-            format!("{name}.{rest}")
-        } else {
-            name
+            _ => name,
         };
         self.skip_ws();
-        let args = if self.peek() == Some(&Token::LParen) {
-            self.parse_args()?
-        } else {
-            Vec::new()
+        let args = match self.peek() {
+            Some(Token::LParen) => self.parse_args()?,
+            _ => Vec::new(),
         };
         // 检查 @content 块
         let mut content = None;
@@ -231,11 +242,14 @@ impl Parser<'_> {
         self.skip_ws();
         let name = self.parse_ident_name()?;
         // @function 不允许命名空间限定名（如 namespace.member）
-        if self.peek() == Some(&Token::Dot) {
-            return Err(SassError::Parse {
-                expected: "(".into(),
-                found: ".".into(),
-            });
+        match self.peek() {
+            Some(Token::Dot) => {
+                return Err(SassError::Parse {
+                    expected: "(".into(),
+                    found: ".".into(),
+                });
+            }
+            _ => {}
         }
         // 函数名验证——基于 Sass 官方规范
         // 参考: https://sass-lang.com/documentation/breaking-changes/function-name/
@@ -249,36 +263,46 @@ impl Parser<'_> {
         //    但 -prefix-element 仍然禁止（不在放宽列表中）
 
         // type 大小写不敏感都禁止
-        if name.eq_ignore_ascii_case("type") {
+        match name.eq_ignore_ascii_case("type") {
+            true => {
             return Err(SassError::Eval(
                 "This name is reserved for the plain-CSS function.".into(),
             ));
+            }
+            false => {}
         }
 
         // 全小写保留名检测
-        if name == name.to_ascii_lowercase() {
+        match name == name.to_ascii_lowercase() {
+            true => {
             match name.as_str() {
                 "url" | "expression" | "element" | "and" | "or" | "not" => {
                     return Err(SassError::Eval("Invalid function name.".into()));
                 }
                 _ => {}
             }
+            }
+            false => {}
         }
 
         // Vendor prefix 检查: -prefix-element 仍然禁止（全小写时）
         // （-prefix-url/-expression/-and/-or/-not 已放宽，不报错）
-        if name == name.to_ascii_lowercase() && name.starts_with('-') && name.ends_with("-element")
+        match name == name.to_ascii_lowercase() && name.starts_with('-') && name.ends_with("-element")
         {
+            true => {
             return Err(SassError::Eval("Invalid function name.".into()));
+            }
+            false => {}
         }
         self.skip_ws();
-        let params = if self.peek() == Some(&Token::LParen) {
-            self.parse_params()?
-        } else {
-            return Err(SassError::Parse {
-                expected: "(".into(),
-                found: "other".into(),
-            });
+        let params = match self.peek() {
+            Some(Token::LParen) => self.parse_params()?,
+            _ => {
+                return Err(SassError::Parse {
+                    expected: "(".into(),
+                    found: "other".into(),
+                });
+            }
         };
         self.skip_ws();
         self.expect(&Token::LBrace)?;
@@ -290,8 +314,9 @@ impl Parser<'_> {
         self.skip_ws();
         let value = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
         Ok(Node::Return(value))
     }
@@ -327,8 +352,9 @@ impl Parser<'_> {
             }
         }
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
         Ok(Node::Extend {
             selector: selector.trim().to_string(),
@@ -338,29 +364,35 @@ impl Parser<'_> {
 
     pub(crate) fn parse_at_root(&mut self) -> Result<Node> {
         self.skip_ws();
-        let query = if self.peek() == Some(&Token::LParen) {
-            self.advance();
-            let mut q = String::new();
-            while let Some(t) = self.peek() {
-                if t == &Token::RParen {
-                    break;
+        let query = match self.peek() {
+            Some(Token::LParen) => {
+                self.advance();
+                let mut q = String::new();
+                while let Some(t) = self.peek() {
+                    match t == &Token::RParen {
+                        true => break,
+                        false => {}
+                    }
+                    q.push_str(&t.to_string());
+                    self.advance();
                 }
-                q.push_str(&t.to_string());
-                self.advance();
+                match self.peek() {
+                    Some(Token::RParen) => { self.advance(); }
+                    _ => {}
+                }
+                Some(q.trim().to_string())
             }
-            if self.peek() == Some(&Token::RParen) {
-                self.advance();
-            }
-            Some(q.trim().to_string())
-        } else {
-            None
+            _ => None,
         };
         // 可能有选择器前缀
         self.skip_ws();
-        if self.peek() != Some(&Token::LBrace) {
+        match self.peek() {
+            Some(Token::LBrace) => {}
+            _ => {
             // 选择器 + { body }
             let sel = self.parse_selector()?;
             let _ = sel; // 简化：忽略 at-root 选择器前缀
+            }
         }
         self.skip_ws();
         self.expect(&Token::LBrace)?;
@@ -372,8 +404,9 @@ impl Parser<'_> {
         self.skip_ws();
         let v = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
         Ok(Node::Warn(v))
     }
@@ -381,8 +414,9 @@ impl Parser<'_> {
         self.skip_ws();
         let v = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
         Ok(Node::Debug(v))
     }
@@ -390,8 +424,9 @@ impl Parser<'_> {
         self.skip_ws();
         let v = self.parse_value()?;
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
         Ok(Node::Error(v))
     }
@@ -404,15 +439,17 @@ impl Parser<'_> {
             Some(self.parse_at_params()?)
         };
         self.skip_ws();
-        let body = if self.peek() == Some(&Token::LBrace) {
-            self.advance();
-            Some(self.parse_body()?)
-        } else {
-            None
+        let body = match self.peek() {
+            Some(Token::LBrace) => {
+                self.advance();
+                Some(self.parse_body()?)
+            }
+            _ => None,
         };
         self.skip_ws();
-        if self.peek() == Some(&Token::Semicolon) {
-            self.advance();
+        match self.peek() {
+            Some(Token::Semicolon) => { self.advance(); }
+            _ => {}
         }
         Ok(Node::AtRule { name, params, body })
     }

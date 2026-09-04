@@ -108,30 +108,32 @@ impl Iterator for Lexer<'_> {
             // 减号——可能是负数、标识符开头或减号运算符
             '-' => {
                 let next = self.peek2();
-                if next.is_some_and(|c| c.is_alphabetic() || c == '-' || c == '_' || !c.is_ascii())
+                match next.is_some_and(|c| c.is_alphabetic() || c == '-' || c == '_' || !c.is_ascii())
                 {
-                    self.next_char();
-                    let start = self.pos;
-                    while let Some(c) = self.peek() {
-                        if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
-                            self.next_char();
-                        } else {
-                            break;
+                    true => {
+                        self.next_char();
+                        let start = self.pos;
+                        while let Some(c) = self.peek() {
+                            match c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
+                                true => { self.next_char(); }
+                                false => break,
+                            }
+                        }
+                        let text = format!("-{}", &self.source[start..self.pos]);
+                        match text.as_str() {
+                            "true" => Token::True,
+                            "false" => Token::False,
+                            "null" => Token::Null,
+                            "and" => Token::And,
+                            "or" => Token::Or,
+                            "not" => Token::Not,
+                            _ => Token::Ident(text),
                         }
                     }
-                    let text = format!("-{}", &self.source[start..self.pos]);
-                    match text.as_str() {
-                        "true" => Token::True,
-                        "false" => Token::False,
-                        "null" => Token::Null,
-                        "and" => Token::And,
-                        "or" => Token::Or,
-                        "not" => Token::Not,
-                        _ => Token::Ident(text),
+                    false => {
+                        self.next_char();
+                        Token::Minus
                     }
-                } else {
-                    self.next_char();
-                    Token::Minus
                 }
             }
             // 斜杠——可能是注释或除法
@@ -152,39 +154,31 @@ impl Iterator for Lexer<'_> {
             // 感叹号
             '!' => {
                 self.next_char();
-                if self.peek() == Some('=') {
-                    self.next_char();
-                    Token::NotEq
-                } else {
-                    Token::Bang
+                match self.peek() {
+                    Some('=') => { self.next_char(); Token::NotEq }
+                    _ => Token::Bang,
                 }
             }
             // 等号/比较
             '=' => {
                 self.next_char();
-                if self.peek() == Some('=') {
-                    self.next_char();
-                    Token::Eq
-                } else {
-                    Token::Assign
+                match self.peek() {
+                    Some('=') => { self.next_char(); Token::Eq }
+                    _ => Token::Assign,
                 }
             }
             '<' => {
                 self.next_char();
-                if self.peek() == Some('=') {
-                    self.next_char();
-                    Token::LessEq
-                } else {
-                    Token::Less
+                match self.peek() {
+                    Some('=') => { self.next_char(); Token::LessEq }
+                    _ => Token::Less,
                 }
             }
             '>' => {
                 self.next_char();
-                if self.peek() == Some('=') {
-                    self.next_char();
-                    Token::GreaterEq
-                } else {
-                    Token::Greater
+                match self.peek() {
+                    Some('=') => { self.next_char(); Token::GreaterEq }
+                    _ => Token::Greater,
                 }
             }
             // 字符串
@@ -197,7 +191,6 @@ impl Iterator for Lexer<'_> {
             '$' => self.scan_dollar(),
             // # hash 或插值
             '#' => return Some(self.scan_hash()),
-            // 非 ASCII——作为标识符
             c if !c.is_ascii() => self.scan_ident(),
             // 未知
             _ => {

@@ -11,29 +11,36 @@ impl Parser<'_> {
                 // 一元负号：当后面是数字、变量、括号表达式时
                 // 标识符前的 - 是 CSS 厂商前缀（如 -webkit-inline-box）
                 let next = self.tokens.get(self.pos + 1);
-                if matches!(
+                match matches!(
                     next,
                     Some(Token::Number(_) | Token::Dollar(_) | Token::LParen | Token::Hash(_))
                 ) {
-                    self.advance();
-                    self.skip_ws();
-                    let val = self.parse_prefix()?;
-                    Ok(Value::UnaryOp(UnaryOp::Neg, Box::new(val)))
-                } else {
-                    // 厂商前缀标识符——作为字符串保留
-                    let mut name = String::from("-");
-                    self.advance();
-                    if let Some(Token::Ident(s)) = self.peek() {
-                        name.push_str(s);
+                    true => {
                         self.advance();
+                        self.skip_ws();
+                        let val = self.parse_prefix()?;
+                        Ok(Value::UnaryOp(UnaryOp::Neg, Box::new(val)))
                     }
-                    // 检查是否是函数调用
-                    self.skip_ws();
-                    if self.peek() == Some(&Token::LParen) {
-                        let args = self.parse_args()?;
-                        Ok(Value::Call(name, args))
-                    } else {
-                        Ok(Value::String(name, false))
+                    false => {
+                        // 厂商前缀标识符——作为字符串保留
+                        let mut name = String::from("-");
+                        self.advance();
+                        match self.peek() {
+                            Some(Token::Ident(s)) => {
+                                name.push_str(s);
+                                self.advance();
+                            }
+                            _ => {}
+                        }
+                        // 检查是否是函数调用
+                        self.skip_ws();
+                        match self.peek() {
+                            Some(Token::LParen) => {
+                                let args = self.parse_args()?;
+                                Ok(Value::Call(name, args))
+                            }
+                            _ => Ok(Value::String(name, false)),
+                        }
                     }
                 }
             }
@@ -51,18 +58,18 @@ impl Parser<'_> {
                 | Token::Amp
                 | Token::Star,
             ) => {
-                if let Some(v) = self.parse_literal()? {
-                    Ok(v)
-                } else {
-                    // parse_literal 返回 None — 理论上不应到此处（上面的 guard 确保匹配）
-                    // 但作为安全兜底，尝试解析为字符串
-                    match self.peek() {
-                        Some(t) => {
-                            let v = Value::String(t.to_string(), false);
-                            self.advance();
-                            Ok(v)
+                match self.parse_literal()? {
+                    Some(v) => Ok(v),
+                    None => {
+                        // parse_literal 返回 None — 安全兜底
+                        match self.peek() {
+                            Some(t) => {
+                                let v = Value::String(t.to_string(), false);
+                                self.advance();
+                                Ok(v)
+                            }
+                            None => Ok(Value::Null),
                         }
-                        None => Ok(Value::Null),
                     }
                 }
             }
@@ -70,99 +77,107 @@ impl Parser<'_> {
                 self.advance();
                 self.skip_ws();
                 // 空 Map 或列表
-                if self.peek() == Some(&Token::RParen) {
-                    self.advance();
-                    return Ok(Value::List(vec![], Separator::Undecided, false));
+                match self.peek() {
+                    Some(Token::RParen) => {
+                        self.advance();
+                        return Ok(Value::List(vec![], Separator::Undecided, false));
+                    }
+                    _ => {}
                 }
                 let first = self.parse_expr(0)?;
                 self.skip_ws();
-                if self.peek() == Some(&Token::Colon) {
-                    // Map
-                    self.advance();
-                    self.skip_ws();
-                    let val = self.parse_expr(0)?;
-                    let mut pairs = vec![(first, val)];
-                    self.skip_ws();
-                    while self.peek() == Some(&Token::Comma) {
+                match self.peek() {
+                    Some(Token::Colon) => {
+                        // Map
                         self.advance();
                         self.skip_ws();
-                        if self.peek() == Some(&Token::RParen) {
-                            break;
-                        } // 尾随逗号
-                        let k = self.parse_expr(0)?;
+                        let val = self.parse_expr(0)?;
+                        let mut pairs = vec![(first, val)];
                         self.skip_ws();
-                        self.expect(&Token::Colon)?;
-                        self.skip_ws();
-                        let v = self.parse_expr(0)?;
-                        pairs.push((k, v));
-                        self.skip_ws();
+                        while self.peek() == Some(&Token::Comma) {
+                            self.advance();
+                            self.skip_ws();
+                            match self.peek() {
+                                Some(Token::RParen) => break, // 尾随逗号
+                                _ => {}
+                            }
+                            let k = self.parse_expr(0)?;
+                            self.skip_ws();
+                            self.expect(&Token::Colon)?;
+                            self.skip_ws();
+                            let v = self.parse_expr(0)?;
+                            pairs.push((k, v));
+                            self.skip_ws();
+                        }
+                        self.expect(&Token::RParen)?;
+                        Ok(Value::Map(pairs))
                     }
-                    self.expect(&Token::RParen)?;
-                    Ok(Value::Map(pairs))
-                } else {
-                    // 分组或列表
-                    let mut items = vec![first];
-                    let mut saw_comma = false;
-                    let sep = loop {
-                        self.skip_ws();
-                        match self.peek() {
-                            Some(Token::Comma) => {
-                                self.advance();
-                                saw_comma = true;
-                                self.skip_ws();
-                                if self.peek() == Some(&Token::RParen) {
-                                    break Separator::Comma;
+                    _ => {
+                        // 分组或列表
+                        let mut items = vec![first];
+                        let mut saw_comma = false;
+                        let sep = loop {
+                            self.skip_ws();
+                            match self.peek() {
+                                Some(Token::Comma) => {
+                                    self.advance();
+                                    saw_comma = true;
+                                    self.skip_ws();
+                                    match self.peek() {
+                                        Some(Token::RParen) => break Separator::Comma,
+                                        _ => {}
+                                    }
+                                }
+                                Some(Token::RParen) => {
+                                    break match saw_comma {
+                                        true => Separator::Comma,
+                                        false => Separator::Space,
+                                    };
+                                }
+                                // 空格分隔的值——继续解析
+                                Some(
+                                    Token::Number(_)
+                                    | Token::String(_, _)
+                                    | Token::Ident(_)
+                                    | Token::Hash(_)
+                                    | Token::Dollar(_)
+                                    | Token::Interp(_)
+                                    | Token::LParen,
+                                ) => {
+                                    items.push(self.parse_expr(0)?);
+                                }
+                                _ => {
+                                    break match saw_comma {
+                                        true => Separator::Comma,
+                                        false => Separator::Space,
+                                    };
                                 }
                             }
-                            Some(Token::RParen) => {
-                                break if saw_comma {
-                                    Separator::Comma
-                                } else {
-                                    Separator::Space
-                                };
+                            self.skip_ws();
+                            match self.peek() {
+                                Some(Token::RParen) => {
+                                    break match saw_comma {
+                                        true => Separator::Comma,
+                                        false => Separator::Space,
+                                    };
+                                }
+                                _ => {}
                             }
-                            // 空格分隔的值——继续解析
-                            Some(
-                                Token::Number(_)
-                                | Token::String(_, _)
-                                | Token::Ident(_)
-                                | Token::Hash(_)
-                                | Token::Dollar(_)
-                                | Token::Interp(_)
-                                | Token::LParen,
-                            ) => {
-                                items.push(self.parse_expr(0)?);
-                            }
-                            _ => {
-                                break if saw_comma {
-                                    Separator::Comma
-                                } else {
-                                    Separator::Space
-                                };
-                            }
-                        }
+                        };
                         self.skip_ws();
-                        if self.peek() == Some(&Token::RParen) {
-                            break if saw_comma {
-                                Separator::Comma
-                            } else {
-                                Separator::Space
-                            };
+                        match self.peek() {
+                            Some(Token::RParen) => { self.advance(); }
+                            _ => {}
                         }
-                    };
-                    self.skip_ws();
-                    if self.peek() == Some(&Token::RParen) {
-                        self.advance();
-                    }
-                    if items.len() == 1 && !saw_comma {
-                        Ok(Value::Paren(Box::new(
-                            items
-                                .into_iter()
-                                .next()
-                                .expect("items has exactly 1 element"),
-                        )))
-                    } else {
-                        Ok(Value::List(items, sep, false))
+                        match items.len() == 1 && !saw_comma {
+                            true => Ok(Value::Paren(Box::new(
+                                items
+                                    .into_iter()
+                                    .next()
+                                    .expect("items has exactly 1 element"),
+                            ))),
+                            false => Ok(Value::List(items, sep, false)),
+                        }
                     }
                 }
             }
@@ -174,15 +189,17 @@ impl Parser<'_> {
                         self.tokens.get(self.pos.saturating_sub(1)),
                         Some(Token::Whitespace)
                     );
-                if next_is_paren_no_ws {
-                    return Err(SassError::Parse {
+                match next_is_paren_no_ws {
+                    true => Err(SassError::Parse {
                         expected: "whitespace between \"not\" and \"(\"".into(),
                         found: "(".into(),
-                    });
+                    }),
+                    false => {
+                        self.skip_ws();
+                        let v = self.parse_prefix()?;
+                        Ok(Value::UnaryOp(UnaryOp::Not, Box::new(v)))
+                    }
                 }
-                self.skip_ws();
-                let v = self.parse_prefix()?;
-                Ok(Value::UnaryOp(UnaryOp::Not, Box::new(v)))
             }
             Some(Token::LBracket) => {
                 // bracketed list
@@ -191,20 +208,23 @@ impl Parser<'_> {
                 let mut saw_comma = false;
                 loop {
                     self.skip_ws();
-                    if self.peek() == Some(&Token::RBracket) {
-                        break;
+                    match self.peek() {
+                        Some(Token::RBracket) => break,
+                        _ => {}
                     }
                     items.push(self.parse_expr(0)?);
                     self.skip_ws();
-                    if self.peek() == Some(&Token::Comma) {
-                        self.advance();
-                        saw_comma = true;
-                    } else {
-                        break;
+                    match self.peek() {
+                        Some(Token::Comma) => {
+                            self.advance();
+                            saw_comma = true;
+                        }
+                        _ => break,
                     }
                 }
-                if self.peek() == Some(&Token::RBracket) {
-                    self.advance();
+                match self.peek() {
+                    Some(Token::RBracket) => { self.advance(); }
+                    _ => {}
                 }
                 let sep = match (saw_comma, items.len()) {
                     (true, _) => Separator::Comma,
@@ -284,37 +304,42 @@ impl Parser<'_> {
                 _ => break,
             }
         }
-        if segments.len() == 1 {
-            let single = segments.into_iter().next().expect("segments has 1 element");
-            match &single {
-                InterpSegment::Expr(_) | InterpSegment::Text(_) => {
-                    self.skip_ws();
-                    if self.peek() == Some(&Token::LParen) {
-                        let expr = match single {
-                            InterpSegment::Expr(e) => e,
-                            InterpSegment::Text(t) => t,
-                        };
-                        let args = self.parse_args()?;
-                        Ok(Value::Call(expr, args))
-                    } else {
-                        Ok(Value::Interp(vec![single]))
+        match segments.len() {
+            1 => {
+                let single = segments.into_iter().next().expect("segments has 1 element");
+                match &single {
+                    InterpSegment::Expr(_) | InterpSegment::Text(_) => {
+                        self.skip_ws();
+                        match self.peek() {
+                            Some(Token::LParen) => {
+                                let expr = match single {
+                                    InterpSegment::Expr(e) => e,
+                                    InterpSegment::Text(t) => t,
+                                };
+                                let args = self.parse_args()?;
+                                Ok(Value::Call(expr, args))
+                            }
+                            _ => Ok(Value::Interp(vec![single])),
+                        }
                     }
                 }
             }
-        } else {
-            let joined: String = segments
-                .iter()
-                .map(|seg| match seg {
-                    InterpSegment::Expr(e) => e.clone(),
-                    InterpSegment::Text(t) => t.clone(),
-                })
-                .collect();
-            self.skip_ws();
-            if self.peek() == Some(&Token::LParen) {
-                let args = self.parse_args()?;
-                Ok(Value::Call(joined, args))
-            } else {
-                Ok(Value::Interp(segments))
+            _ => {
+                let joined: String = segments
+                    .iter()
+                    .map(|seg| match seg {
+                        InterpSegment::Expr(e) => e.clone(),
+                        InterpSegment::Text(t) => t.clone(),
+                    })
+                    .collect();
+                self.skip_ws();
+                match self.peek() {
+                    Some(Token::LParen) => {
+                        let args = self.parse_args()?;
+                        Ok(Value::Call(joined, args))
+                    }
+                    _ => Ok(Value::Interp(segments)),
+                }
             }
         }
     }
@@ -322,11 +347,9 @@ impl Parser<'_> {
 
 /// 解析数字字符串为 `Value::Number`。
 pub(crate) fn parse_number(s: &str) -> Result<Value> {
-    let (num_part, unit) = if let Some(idx) = s.find(|c: char| c.is_ascii_alphabetic() || c == '%')
-    {
-        (&s[..idx], Some(s[idx..].to_string()))
-    } else {
-        (s, None)
+    let (num_part, unit) = match s.find(|c: char| c.is_ascii_alphabetic() || c == '%') {
+        Some(idx) => (&s[..idx], Some(s[idx..].to_string())),
+        None => (s, None),
     };
     match num_part.parse::<f64>() {
         Ok(n) => Ok(Value::Number(n, unit)),

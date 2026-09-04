@@ -20,8 +20,9 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("eval_meta_apply", n_args = args.len());
         let _enter = span.enter();
 
-        if args.is_empty() {
-            return Err(err_missing_arg("mixin"));
+        match args.is_empty() {
+            true => return Err(err_missing_arg("mixin")),
+            false => {}
         }
 
         // 求值第一个参数（mixin 引用）
@@ -58,8 +59,9 @@ impl Evaluator {
         let span = crate::__tracing::info_span!("eval_meta_load_css", n_args = args.len());
         let _enter = span.enter();
 
-        if args.is_empty() {
-            return Err(err_missing_arg("module"));
+        match args.is_empty() {
+            true => return Err(err_missing_arg("module")),
+            false => {}
         }
 
         // 求值模块名参数
@@ -95,8 +97,9 @@ impl Evaluator {
         };
 
         // 内建模块（sass:math 等）——无 CSS 输出
-        if module_name.starts_with("sass:") {
-            return Ok((vec![], env));
+        match module_name.starts_with("sass:") {
+            true => return Ok((vec![], env)),
+            false => {}
         }
 
         // 解析文件路径
@@ -108,8 +111,9 @@ impl Evaluator {
             })?;
 
         // 检查是否已加载
-        if env.get_loaded_modules().contains(&path) {
-            return Ok((vec![], env));
+        match env.get_loaded_modules().contains(&path) {
+            true => return Ok((vec![], env)),
+            false => {}
         }
 
         // 加载模块

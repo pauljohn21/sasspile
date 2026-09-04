@@ -408,10 +408,13 @@ impl Env {
     pub(crate) fn with_namespace_var(mut self, ns: &str, var_name: &str, val: Value) -> Self {
         if let Some(exports) = self.namespaces.get(ns) {
             let mut new_exports = (**exports).clone();
-            if new_exports.forwarded_vars.contains_key(var_name) {
-                new_exports.forwarded_vars.insert(var_name.to_string(), val);
-            } else {
-                new_exports.local_vars.insert(var_name.to_string(), val);
+            match new_exports.forwarded_vars.contains_key(var_name) {
+                true => {
+                    new_exports.forwarded_vars.insert(var_name.to_string(), val);
+                }
+                false => {
+                    new_exports.local_vars.insert(var_name.to_string(), val);
+                }
             }
             self.namespaces.insert(ns.to_string(), Rc::new(new_exports));
         }
