@@ -3,7 +3,7 @@ members = ["."]
 
 [package]
 name = "sasspile"
-version = "0.9.7"
+version = "0.9.8"
 edition = "2024"
 rust-version = "1.97"
 description = "A pure Rust SCSS compiler — functional style, type-safe pipeline"
