@@ -471,7 +471,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 ```
 
 **通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：6205/11824 = 52.5%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：6264/11824 = 53.0%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -510,6 +510,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **sass-spec-boost**（2026-09-05）：color/to_space NaN 处理 + HWB/HSL 序列化 + scale/change HWB 通道扩展 — 202/202 核心测试全通过，sass-spec 6205→6264 (+59)
 - **sass-spec-completeness**（2026-09-05）：CSS at-rules 全链路（@keyframes/@font-face/@page/@charset/@namespace/@layer/@container）+ meta 反射修复 + 颜色算法精度 + selector-replace compound-level subset matching — 202/202 核心测试全通过，sass-spec 6123→6205 (+82)
 - **functional-cleanup**（2026-09-04）：函数式风格全量清理 — else-if 链→match（81处）、for+push→迭代器链（76处）、if-let 链→apply_kw 链式、&mut 参数→move 语义 — 105/105 核心测试通过，sass-spec 3366/5624 维持基线
 - **selector-ast**（2026-09-04）：选择器 AST + calc 简化函数式重构 — 226/226 全通过，sass-spec 3327→3366 (+39)

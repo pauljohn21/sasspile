@@ -425,10 +425,19 @@ pub(crate) fn hsl_to_srgb_f64(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
 ///
 /// 基于 CSS Color 4 规范的 HWB→RGB 算法。
 /// NaN hue 时基于 w/bk 推导 saturation 和 lightness，hue=0 计算 RGB。
+/// CSS Color 4: 所有 HWB 通道为 NaN 时，所有 sRGB 通道也为 NaN。
+/// 单个通道为 NaN 时，替换为 0 计算（非全 NaN 不传播）。
 pub(crate) fn hwb_to_srgb_f64(h: f64, w: f64, bk: f64) -> (f64, f64, f64) {
+    let nan_h = h.is_nan();
     let nan_w = w.is_nan();
     let nan_bk = bk.is_nan();
-    // w/bk 为 NaN 时替换为 0 进行计算
+    // 所有通道为 NaN 时，所有输出为 NaN
+    let all_nan = nan_h && nan_w && nan_bk;
+    // 单个通道为 NaN 时替换为 0 进行计算
+    let h = match nan_h {
+        true => 0.0,
+        false => h,
+    };
     let w = match nan_w {
         true => 0.0,
         false => w,
@@ -437,37 +446,15 @@ pub(crate) fn hwb_to_srgb_f64(h: f64, w: f64, bk: f64) -> (f64, f64, f64) {
         true => 0.0,
         false => bk,
     };
-    let (r, g, b) = match h.is_nan() {
-        // NaN hue: 基于 w/bk 推导 saturation 和 lightness
-        true => {
-            let l = 0.5 * (1.0 - bk + w);
-            let max = 1.0 - bk;
-            let min = w;
-            let delta = (max - min).abs();
-            let s = match delta < 1e-12 {
-                true => 0.0,
-                false => delta / (1.0 - (2.0 * l - 1.0).abs()),
-            };
-            hsl_to_srgb_f64(0.0, s, l)
-        }
+    let (r, g, b) = match all_nan {
+        true => (f64::NAN, f64::NAN, f64::NAN),
         false => {
             let factor = 1.0 - w - bk;
             let (hr, hg, hb) = hsl_to_srgb_f64(h, 1.0, 0.5);
             (hr * factor + w, hg * factor + w, hb * factor + w)
         }
     };
-    // 恢复 NaN：原始 w/bk 为 NaN 时对应 sRGB 通道设为 NaN
-    (
-        match nan_w {
-            true => f64::NAN,
-            false => r,
-        },
-        g,
-        match nan_bk {
-            true => f64::NAN,
-            false => b,
-        },
-    )
+    (r, g, b)
 }
 
 /// 生成颜色的显示名称（用于错误消息）。

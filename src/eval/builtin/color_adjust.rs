@@ -508,7 +508,12 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
 
     let rgb_result = match (has_hwb, has_hsl) {
         (true, _) => {
-            let new_c = Evaluator::hwb_to_rgb(h, hw, hb, 1.0);
+            // 归一化：hw + hb > 1 时按比例缩放
+            let (hw_norm, hb_norm) = match hw + hb > 1.0 {
+                true => (hw / (hw + hb), hb / (hw + hb)),
+                false => (hw, hb),
+            };
+            let new_c = Evaluator::hwb_to_rgb(h, hw_norm, hb_norm, 1.0);
             (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
         }
         (false, true) => {
@@ -518,18 +523,26 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
         (false, false) => (r, g, b),
     };
 
-    let (output, space) = match h_changed {
-        true => (ColorOutput::RgbPercent, ColorSpace::Hsl),
-        false => (ColorOutput::Auto, ColorSpace::Rgb),
+    // 转换 RGB 到 HSL 用于输出
+    let (out_h, out_s, out_l) =
+        Evaluator::rgb_to_hsl(rgb_result.0, rgb_result.1, rgb_result.2);
+
+    let output = match h_changed {
+        true => ColorOutput::RgbPercent,
+        false => ColorOutput::Auto,
     };
 
-    Ok(Value::Color(Color::with_rgb(
-        rgb_result.0.clamp(0.0, 255.0),
-        rgb_result.1.clamp(0.0, 255.0),
-        rgb_result.2.clamp(0.0, 255.0),
+    Ok(Value::Color(Color::with_hsl(
+        out_h,
+        out_s,
+        out_l,
         alpha.clamp(0.0, 1.0),
-        space,
         output,
+        [
+            rgb_result.0.clamp(0.0, 255.0),
+            rgb_result.1.clamp(0.0, 255.0),
+            rgb_result.2.clamp(0.0, 255.0),
+        ],
     )))
 }
 
@@ -547,6 +560,14 @@ fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let s = scale_channel(s_init, 1.0, kw_args, "saturation")?;
     let l = scale_channel(l_init, 1.0, kw_args, "lightness")?;
 
+    // HWB 通道缩放
+    let (hwb_h, w_init, bk_init) =
+        Evaluator::rgb_to_hwb(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
+    let has_hwb = kw_args.contains_key("whiteness") || kw_args.contains_key("blackness");
+    let w = scale_channel(w_init, 1.0, kw_args, "whiteness")?;
+    let bk = scale_channel(bk_init, 1.0, kw_args, "blackness")?;
+
+    // 先处理 HSL 缩放
     let rgb_result = match has_hsl {
         true => {
             let new_c = Evaluator::hsl_to_rgb(h, s.clamp(0.0, 1.0), l.clamp(0.0, 1.0));
@@ -555,17 +576,39 @@ fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
         false => (r, g, b),
     };
 
-    let (output, space) = match has_hsl {
-        true => (ColorOutput::RgbPercent, ColorSpace::Hsl),
-        false => (ColorOutput::Auto, ColorSpace::Rgb),
+    // 再处理 HWB 缩放
+    let rgb_result = match has_hwb {
+        true => {
+            // 归一化：w + bk > 1 时按比例缩放
+            let (w_norm, bk_norm) = match w + bk > 1.0 {
+                true => (w / (w + bk), bk / (w + bk)),
+                false => (w, bk),
+            };
+            let new_c = Evaluator::hwb_to_rgb(hwb_h, w_norm, bk_norm, alpha);
+            (new_c.legacy_rgb[0], new_c.legacy_rgb[1], new_c.legacy_rgb[2])
+        }
+        false => rgb_result,
     };
 
-    Ok(Value::Color(Color::with_rgb(
-        rgb_result.0.clamp(0.0, 255.0),
-        rgb_result.1.clamp(0.0, 255.0),
-        rgb_result.2.clamp(0.0, 255.0),
+    // 转换 RGB 到 HSL 用于输出
+    let (out_h, out_s, out_l) =
+        Evaluator::rgb_to_hsl(rgb_result.0, rgb_result.1, rgb_result.2);
+
+    let output = match (has_hsl, has_hwb) {
+        (true, _) | (_, true) => ColorOutput::RgbPercent,
+        _ => ColorOutput::Auto,
+    };
+
+    Ok(Value::Color(Color::with_hsl(
+        out_h,
+        out_s,
+        out_l,
         alpha.clamp(0.0, 1.0),
-        space,
         output,
+        [
+            rgb_result.0.clamp(0.0, 255.0),
+            rgb_result.1.clamp(0.0, 255.0),
+            rgb_result.2.clamp(0.0, 255.0),
+        ],
     )))
 }

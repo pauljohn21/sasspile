@@ -121,6 +121,22 @@ impl Evaluator {
         result
     }
 
+    /// RGB → HWB 转换。
+    ///
+    /// HWB: Hue, Whiteness, Blackness。
+    /// - H: 与 HSL 相同
+    /// - W: min(R, G, B) / 255（whiteness）
+    /// - BK: 1 - max(R, G, B) / 255（blackness）
+    pub(crate) fn rgb_to_hwb(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
+        let (h, _s, _l) = Evaluator::rgb_to_hsl(r, g, b);
+        let r_norm = r / 255.0;
+        let g_norm = g / 255.0;
+        let b_norm = b / 255.0;
+        let w = r_norm.min(g_norm).min(b_norm);
+        let bk = 1.0 - r_norm.max(g_norm).max(b_norm);
+        (h, w, bk)
+    }
+
     /// 简单伪随机数——基于系统时间。
     pub(crate) fn simple_random() -> f64 {
         let nanos = std::time::SystemTime::now()
