@@ -22,7 +22,7 @@ fn is_none_str(v: &Value) -> bool {
 }
 
 /// 从 Value 提取数值或 NaN（用于 none 通道处理）。
-fn extract_none_num(v: &Value) -> Option<f64> {
+pub(crate) fn extract_none_num(v: &Value) -> Option<f64> {
     match v {
         Value::Number(n, _) => Some(*n),
         Value::String(s, false) if s == "none" => Some(f64::NAN),
@@ -97,26 +97,18 @@ fn format_hue(v: &Value) -> String {
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {
         "invert" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let space_arg = kw_args.get("$space").or_else(|| kw_args.get("space"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
+            let space_arg = kw_args.get("space");
             match color_arg {
                 Some(Value::Color(c)) => {
-                    // 独立分派：legacy 用 HSL 反转，现代空间用通道反转
                     match c.space.is_legacy() {
                         true => {
-                            // Legacy invert：HSL hue + 180，输出 RGB Auto（查找命名色）
-                            let (h, s, l) = Evaluator::rgb_to_hsl(
-                                c.legacy_rgb[0],
-                                c.legacy_rgb[1],
-                                c.legacy_rgb[2],
-                            );
-                            let new_h = (h + 180.0).rem_euclid(360.0);
-                            let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
+                            // Legacy invert：RGB 反转（255 - channel），输出 Auto（查找命名色）
+                            let r = 255.0 - c.legacy_rgb[0];
+                            let g = 255.0 - c.legacy_rgb[1];
+                            let b = 255.0 - c.legacy_rgb[2];
                             Ok(Some(Value::Color(Color::with_rgb(
-                                new_c.legacy_rgb[0],
-                                new_c.legacy_rgb[1],
-                                new_c.legacy_rgb[2],
-                                c.a,
+                                r, g, b, c.a,
                                 ColorSpace::Rgb,
                                 ColorOutput::Auto,
                             ))))
@@ -126,7 +118,6 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                             // 如果指定了 $space，先转到该空间
                             let (r, g, b) = match space_arg {
                                 Some(Value::String(s, _)) => {
-                                    // 转换到指定空间
                                     let converted = super::color_conv_ops::convert_space(c, s)?;
                                     match converted {
                                         Value::Color(cc) => (cc.channels[0], cc.channels[1], cc.channels[2]),
@@ -164,7 +155,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "grayscale" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let (h, _s, l) =
@@ -299,7 +290,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "whiteness" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let w =
@@ -312,7 +303,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "blackness" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let b = (1.0
@@ -326,7 +317,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "complement" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let (h, s, l) =
@@ -349,109 +340,60 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         }
         "hsl" => {
             let is_space = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
-            // 合并命名参数到位置参数
-            let merged = merge_named_color_args(args, kw_args, &["hue", "saturation", "lightness", "alpha"]);
-            let flat = flatten_space_list(&merged);
-            // 检测是否有 none 参数
-            let has_none = flat
-                .iter()
-                .any(|a| matches!(a, Value::String(s, false) if s == "none"));
+            let flat = flatten_space_list(&merge_named_color_args(args, kw_args, &["hue", "saturation", "lightness", "alpha"]));
             match &flat[..] {
-                [
-                    Value::Number(h, _),
-                    Value::Number(s, _),
-                    Value::Number(l, _),
-                ] => {
+                [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _)] => {
                     let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        *h,
-                        *s / 100.0,
-                        *l / 100.0,
-                        1.0,
-                        ColorOutput::Auto,
-                        c.legacy_rgb,
-                    ))))
+                    Ok(Some(Value::Color(Color::with_hsl(*h, *s / 100.0, *l / 100.0, 1.0, ColorOutput::Auto, c.legacy_rgb))))
                 }
-                [
-                    Value::Number(h, _),
-                    Value::Number(s, _),
-                    Value::Number(l, _),
-                    Value::Number(a, _),
-                ] => {
+                [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _), Value::Number(a, _)] => {
                     let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        *h,
-                        *s / 100.0,
-                        *l / 100.0,
-                        *a,
-                        ColorOutput::Auto,
-                        c.legacy_rgb,
-                    ))))
+                    Ok(Some(Value::Color(Color::with_hsl(*h, *s / 100.0, *l / 100.0, *a, ColorOutput::Auto, c.legacy_rgb))))
                 }
-                // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
-                _ if has_none || flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                // CSS Color 4 missing channels: hsl(none 50% 50%) → Color with NaN channels
+                chans if chans.iter().any(|a| matches!(a, Value::String(s, false) if s == "none")) => {
+                    let c: Vec<f64> = chans.iter().map(|v| extract_none_num(v).unwrap_or(f64::NAN)).collect();
+                    let rgb = Evaluator::hsl_to_rgb(c[0], c[1] / 100.0, c[2] / 100.0);
+                    Ok(Some(Value::Color(Color::with_hsl(c[0], c[1] / 100.0, c[2] / 100.0, c.get(3).copied().unwrap_or(100.0) / 100.0, ColorOutput::Auto, rgb.legacy_rgb))))
+                }
+                // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出字符串
+                chans if chans.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
                     let sep = if is_space { " " } else { ", " };
-                    let arg_strs: Vec<String> = flat
-                        .iter()
-                        .enumerate()
-                        .map(|(i, a)| if i == 0 { format_hue(a) } else { a.to_string() })
-                        .collect();
-                    Ok(Some(Value::String(
-                        format!("hsl({})", arg_strs.join(sep)),
-                        false,
-                    )))
+                    let arg_strs: Vec<String> = chans.iter().enumerate().map(|(i, a)| if i == 0 { format_hue(a) } else { a.to_string() }).collect();
+                    Ok(Some(Value::String(format!("hsl({})", arg_strs.join(sep)), false)))
                 }
                 _ => Err(SassError::Eval("hsl requires 3-4 arguments".into())),
             }
         }
         "hsla" => {
             let is_space = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
-            // 合并命名参数到位置参数
-            let merged = merge_named_color_args(args, kw_args, &["hue", "saturation", "lightness", "alpha"]);
-            let flat = flatten_space_list(&merged);
-            // 检测是否有 none 参数
-            let has_none = flat
-                .iter()
-                .any(|a| matches!(a, Value::String(s, false) if s == "none"));
+            let flat = flatten_space_list(&merge_named_color_args(args, kw_args, &["hue", "saturation", "lightness", "alpha"]));
             match &flat[..] {
-                [
-                    Value::Number(h, _),
-                    Value::Number(s, _),
-                    Value::Number(l, _),
-                    Value::Number(a, _),
-                ] => {
+                [Value::Number(h, _), Value::Number(s, _), Value::Number(l, _), Value::Number(a, _)] => {
                     let c = Evaluator::hsl_to_rgb(*h, *s / 100.0, *l / 100.0);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        *h,
-                        *s / 100.0,
-                        *l / 100.0,
-                        *a,
-                        ColorOutput::Auto,
-                        c.legacy_rgb,
-                    ))))
+                    Ok(Some(Value::Color(Color::with_hsl(*h, *s / 100.0, *l / 100.0, *a, ColorOutput::Auto, c.legacy_rgb))))
+                }
+                // CSS Color 4 missing channels: hsla(none 50% 50% / 0.5) → Color with NaN
+                chans if chans.iter().any(|a| matches!(a, Value::String(s, false) if s == "none")) => {
+                    let c: Vec<f64> = chans.iter().map(|v| extract_none_num(v).unwrap_or(f64::NAN)).collect();
+                    let rgb = Evaluator::hsl_to_rgb(c[0], c[1] / 100.0, c[2] / 100.0);
+                    Ok(Some(Value::Color(Color::with_hsl(c[0], c[1] / 100.0, c[2] / 100.0, c.get(3).copied().unwrap_or(f64::NAN) / 100.0, ColorOutput::Auto, rgb.legacy_rgb))))
                 }
                 // CSS 透传
-                _ if has_none || flat.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
+                chans if chans.iter().any(|a| !matches!(a, Value::Number(_, _))) => {
                     let sep = if is_space { " " } else { ", " };
-                    let arg_strs: Vec<String> = flat
-                        .iter()
-                        .enumerate()
-                        .map(|(i, a)| if i == 0 { format_hue(a) } else { a.to_string() })
-                        .collect();
-                    Ok(Some(Value::String(
-                        format!("hsla({})", arg_strs.join(sep)),
-                        false,
-                    )))
+                    let arg_strs: Vec<String> = chans.iter().enumerate().map(|(i, a)| if i == 0 { format_hue(a) } else { a.to_string() }).collect();
+                    Ok(Some(Value::String(format!("hsla({})", arg_strs.join(sep)), false)))
                 }
                 _ => Err(SassError::Eval("hsla requires 4 arguments".into())),
             }
         }
         "adjust-hue" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             let deg_arg = args
                 .get(1)
-                .or_else(|| kw_args.get("$degrees"))
-                .or_else(|| kw_args.get("$hue"));
+                .or_else(|| kw_args.get("degrees"))
+                .or_else(|| kw_args.get("hue"));
             match (color_arg, deg_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(deg, _))) => {
                     let (h, s, l) =
@@ -473,8 +415,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "saturate" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
+            let amount_arg = args.get(1).or_else(|| kw_args.get("amount"));
             match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     let (h, s, l) =
@@ -500,8 +442,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "desaturate" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
+            let amount_arg = args.get(1).or_else(|| kw_args.get("amount"));
             match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     let (h, s, l) =
@@ -523,8 +465,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "transparentize" | "fade-out" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
+            let amount_arg = args.get(1).or_else(|| kw_args.get("amount"));
             match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     Ok(Some(Value::Color(Color::rgba(
@@ -540,8 +482,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "opacify" | "fade-in" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let amount_arg = args.get(1).or_else(|| kw_args.get("$amount"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
+            let amount_arg = args.get(1).or_else(|| kw_args.get("amount"));
             match (color_arg, amount_arg) {
                 (Some(Value::Color(c)), Some(Value::Number(amount, _))) => {
                     Ok(Some(Value::Color(Color::rgba(
@@ -557,7 +499,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "alpha" | "opacity" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.a, None))),
                 _ => {
@@ -586,28 +528,28 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "red" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.legacy_rgb[0], None))),
                 _ => Err(SassError::Eval("red requires 1 color argument".into())),
             }
         }
         "green" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.legacy_rgb[1], None))),
                 _ => Err(SassError::Eval("green requires 1 color argument".into())),
             }
         }
         "blue" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => Ok(Some(Value::Number(c.legacy_rgb[2], None))),
                 _ => Err(SassError::Eval("blue requires 1 color argument".into())),
             }
         }
         "hue" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let (h, _, _) =
@@ -618,7 +560,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "saturation" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let (_, s, _) =
@@ -631,7 +573,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             }
         }
         "lightness" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let (_, _, l) =
@@ -653,7 +595,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         "space" => super::color_space::space(args, kw_args),
         "same" => super::color_space::same(args, kw_args),
         "ie-hex-str" => {
-            let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let color_arg = args.first().or_else(|| kw_args.get("color"));
             match color_arg {
                 Some(Value::Color(c)) => {
                     let alpha = (c.a * 255.0).round() as u8;

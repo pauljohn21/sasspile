@@ -8,8 +8,14 @@
     clippy::cast_precision_loss
 )]
 use super::*;
+use super::builtin::color::extract_none_num;
 use crate::error::Result;
 use crate::parse::ast::{ColorOutput, ColorSpace};
+
+/// 线性插值：`a * (1 - t) + b * t`。
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a * (1.0 - t) + b * t
+}
 
 impl Evaluator {
     /// HSL → RGB 转换 (W3C CSS Color 4 算法)。
@@ -157,10 +163,6 @@ impl Evaluator {
             }
             _ => args.to_vec(),
         };
-        // 检测是否有 none 参数——有则 CSS 原样透传
-        let has_none = args
-            .iter()
-            .any(|a| matches!(a, Value::String(s, false) if s == "none"));
         // 检测 alpha 参数是否存在（4 个参数时最后一个为 alpha）
         let has_alpha = args.len() == 4;
         match &args[..] {
@@ -250,12 +252,17 @@ impl Evaluator {
                 c.space,
                 c.output,
             ))),
-            // CSS 透传：参数包含 none/var()/calc() 等非数值时，原样输出
-            _ if has_none
-                || args.iter().any(|a| {
-                    matches!(a, Value::Calc(_) | Value::String(_, false))
-                        && !matches!(a, Value::Color(_))
-                }) =>
+            // CSS Color 4 missing channels: rgb(none none none) → Color with NaN channels
+            _ if args.iter().any(|a| matches!(a, Value::String(s, false) if s == "none")) => {
+                let channels: Vec<f64> = args[..3].iter().map(|v| extract_none_num(v).unwrap_or(f64::NAN)).collect();
+                let alpha = args.get(3).map_or(1.0, |v| extract_none_num(v).unwrap_or(f64::NAN));
+                Ok(Value::Color(Color::with_rgb(channels[0], channels[1], channels[2], alpha, ColorSpace::Rgb, ColorOutput::Auto)))
+            }
+            // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出字符串
+            _ if args.iter().any(|a| {
+                matches!(a, Value::Calc(_) | Value::String(_, false))
+                    && !matches!(a, Value::Color(_))
+            }) =>
             {
                 let (rgb_args, alpha) = if has_alpha {
                     (&args[..3], Some(&args[3]))
@@ -398,6 +405,84 @@ impl Evaluator {
                 );
                 Err(SassError::Eval("mix requires 2-3 arguments".into()))
             }
+        }
+    }
+
+    /// `color.mix($color1, $color2, $weight, $method)` — 支持现代颜色空间混合。
+    /// 按 D0 决策：每个空间独立函数，禁止共享 match arm。
+    pub(crate) fn builtin_mix_modern(args: &[Value], method: Option<&Value>) -> Result<Value> {
+        let (a, b, weight) = match args {
+            [Value::Color(a), Value::Color(b)] => (a, b, 0.5),
+            [Value::Color(a), Value::Color(b), Value::Number(w, _)] => (a, b, *w / 100.0),
+            // 4 个参数时第 4 个是 method（已在 manual_dispatch 提取）
+            [Value::Color(a), Value::Color(b), Value::Number(w, _), _] => (a, b, *w / 100.0),
+            // 3 个参数但第 3 个不是 Number（可能是 method 字符串）
+            [Value::Color(a), Value::Color(b), Value::String(_, _)] => (a, b, 0.5),
+            // 3 个参数但第 3 个是 Null（method = null）
+            [Value::Color(a), Value::Color(b), Value::Null] => (a, b, 0.5),
+            _ => return Err(SassError::Eval("mix requires 2-3 arguments".into())),
+        };
+
+        // 提取 method 空间名
+        let method_space: Option<&str> = match method {
+            Some(Value::String(s, _)) => Some(s.as_str()),
+            Some(Value::Null) => None,
+            None => None,
+            _ => return Err(SassError::Eval("$method must be a string or null".into())),
+        };
+
+        // 选择混合空间：优先使用 $method，否则用第一个颜色的空间
+        let mix_space = method_space.unwrap_or_else(|| a.space.as_str());
+
+        // 将两个颜色转换到混合空间
+        let conv_a = super::builtin::color_conv_ops::convert_space(a, mix_space)?;
+        let conv_b = super::builtin::color_conv_ops::convert_space(b, mix_space)?;
+
+        let (ca, cb) = match (&conv_a, &conv_b) {
+            (Value::Color(ca), Value::Color(cb)) => (ca, cb),
+            _ => return Err(SassError::Eval("mix: color conversion failed".into())),
+        };
+
+        // 在混合空间中线性插值
+        let r = lerp(ca.channels[0], cb.channels[0], weight);
+        let g = lerp(ca.channels[1], cb.channels[1], weight);
+        let bl = lerp(ca.channels[2], cb.channels[2], weight);
+        let alpha = lerp(ca.a, cb.a, weight);
+
+        // 创建混合结果颜色
+        let mixed_space = ca.space;
+        let mixed = Color::with_space(
+            mixed_space,
+            [r, g, bl],
+            alpha,
+            ca.output,
+            [
+                lerp(ca.legacy_rgb[0], cb.legacy_rgb[0], weight),
+                lerp(ca.legacy_rgb[1], cb.legacy_rgb[1], weight),
+                lerp(ca.legacy_rgb[2], cb.legacy_rgb[2], weight),
+            ],
+        );
+
+        // 如果 method 指定了混合空间，需要将结果转回第一个颜色的空间
+        match method_space {
+            Some(_) => {
+                // 转回第一个颜色的空间
+                let target_space = a.space.as_str();
+                let result = super::builtin::color_conv_ops::convert_space(&mixed, target_space)?;
+                Ok(result)
+            }
+            // method 未指定且第一个颜色是 legacy 空间，结果转为 legacy RGB
+            None if a.space.is_legacy() => {
+                Ok(Value::Color(Color::with_rgb(
+                    mixed.legacy_rgb[0],
+                    mixed.legacy_rgb[1],
+                    mixed.legacy_rgb[2],
+                    alpha,
+                    crate::parse::ast::ColorSpace::Rgb,
+                    crate::parse::ast::ColorOutput::Auto,
+                )))
+            }
+            None => Ok(Value::Color(mixed)),
         }
     }
 }

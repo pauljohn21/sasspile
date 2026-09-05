@@ -21,7 +21,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         "is-powerless" => call_is_powerless(args, kw_args),
         "is-missing" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
-            let channel_arg = args.get(1).or_else(|| kw_args.get("$channel"));
+            let channel_arg = args.get(1).or_else(|| kw_args.get("channel"));
             match (color_arg, channel_arg) {
                 (Some(Value::Color(_)), Some(Value::String(_, _))) => Ok(Some(Value::Bool(false))),
                 _ => Err(SassError::Eval(
@@ -45,7 +45,7 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
 
 fn call_is_powerless(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     let color_arg = args.first().or_else(|| kw_args.get("$color"));
-    let channel = args.get(1).or_else(|| kw_args.get("$channel"));
+    let channel = args.get(1).or_else(|| kw_args.get("channel"));
     match (color_arg, channel) {
         (Some(Value::Color(c)), Some(Value::String(ch, _))) => {
             let powerless = is_channel_powerless(c, ch);

@@ -272,12 +272,16 @@ pub(crate) fn list_dispatch(
 pub(crate) fn color_builtin_name(name: &str) -> Option<&'static str> {
     COLOR_NAMES
         .iter()
-        .find(|(k, _)| *k == name)
+        .find(|(k, v)| *k == name || k.rfind('.').is_some_and(|i| name == format!("{}.{}", &k[..i], v)))
         .map(|(_, v)| *v)
 }
 
 pub(crate) fn color_is_known(name: &str) -> bool {
-    COLOR_NAMES.iter().any(|(k, v)| *k == name || *v == name) || name == "color_channel"
+    COLOR_NAMES.iter().any(|(k, v)| {
+        *k == name
+            || *v == name
+            || k.rfind('.').is_some_and(|i| name == format!("{}.{}", &k[..i], v))
+    }) || name == "color_channel"
 }
 
 pub(crate) fn color_dispatch(
@@ -287,11 +291,15 @@ pub(crate) fn color_dispatch(
     _env: &Env,
 ) -> Option<Result<Value>> {
     match color_is_known(name) {
-        true => match super::color::call(name, pos_args, kw_args) {
-            Ok(Some(v)) => Some(Ok(v)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        },
+        true => {
+            // 将模块限定名（color.change）或混合名（color.change-color）统一转换为全局名（change-color）
+            let global_name = color_builtin_name(name).unwrap_or(name);
+            match super::color::call(global_name, pos_args, kw_args) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
         false => None,
     }
 }

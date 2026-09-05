@@ -51,8 +51,11 @@ impl Evaluator {
                 }
             }
             "mix" => {
-                let merged = super::merge_mix_args(pos_args, kw_args);
-                Self::builtin_mix(&merged)
+                // 提取 $method 参数（第 4 个位置参数或命名参数 $method）
+                let method = kw_args.get("method")
+                    .or_else(|| kw_args.get("method"))
+                    .or_else(|| pos_args.get(3));
+                Self::builtin_mix_modern(pos_args, method)
             }
             // CSS Color 4 颜色函数——lab/lch/oklab/oklch/color()
             "lab" | "lch" | "oklab" | "oklch" | "color" => {
@@ -158,7 +161,7 @@ impl Evaluator {
                 let calc_arg = pos_args
                     .first()
                     .or_else(|| kw_args.get("calc"))
-                    .or_else(|| kw_args.get("$calc"));
+                    .or_else(|| kw_args.get("calc"));
                 match calc_arg {
                     Some(Value::Calc(s)) => {
                         let args = super::parse_calc_args(s);
@@ -176,7 +179,7 @@ impl Evaluator {
                 let calc_arg = pos_args
                     .first()
                     .or_else(|| kw_args.get("calc"))
-                    .or_else(|| kw_args.get("$calc"));
+                    .or_else(|| kw_args.get("calc"));
                 match calc_arg {
                     Some(Value::Calc(s)) => {
                         let name = super::parse_calc_name(s);

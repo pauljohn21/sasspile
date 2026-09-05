@@ -32,10 +32,10 @@ pub fn to_gamut(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
         .or_else(|| kw_args.get("color").or_else(|| kw_args.get("$color")));
     let space_arg = args
         .get(1)
-        .or_else(|| kw_args.get("space").or_else(|| kw_args.get("$space")));
+        .or_else(|| kw_args.get("space").or_else(|| kw_args.get("space")));
     let method_arg = args
         .get(2)
-        .or_else(|| kw_args.get("method").or_else(|| kw_args.get("$method")));
+        .or_else(|| kw_args.get("method").or_else(|| kw_args.get("method")));
 
     let c = match color_arg {
         Some(Value::Color(c)) => c.clone(),
