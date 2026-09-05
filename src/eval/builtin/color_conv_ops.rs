@@ -22,15 +22,8 @@ pub(crate) fn is_same_space(space: ColorSpace, target: &str) -> bool {
         || (space == ColorSpace::XyzD65 && (target == "xyz" || target == "xyz-d65"))
 }
 
-/// NaN 通道替换为默认值（CSS Color 4 missing 通道在计算中取 0）。
-fn replace_nan(v: f64, default: f64) -> f64 {
-    match v.is_nan() {
-        true => default,
-        false => v,
-    }
-}
-
 /// 转换颜色到目标空间，用 f64 精度算法。
+/// CSS Color 4 规范：NaN 通道在计算中取 0，输出时恢复为 NaN。
 pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
     use super::color_conv;
 
@@ -41,11 +34,41 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
         false => {}
     }
 
-    // 获取源 sRGB (0-1) 值（NaN 通道取 0）
+    // 获取源 sRGB (0-1) 值，记录 NaN 位置后替换为 0 进行计算
     let (r, g, b) = space_to_srgb_f64(c.space, c.channels, c.legacy_rgb);
-    let r = replace_nan(r, 0.0);
-    let g = replace_nan(g, 0.0);
-    let b = replace_nan(b, 0.0);
+    let nan_mask = [r.is_nan(), g.is_nan(), b.is_nan()];
+    // HWB 的 hue 为 NaN 时，目标色彩空间的 hue 通道也应为 NaN
+    let src_hwb_nan_hue = c.space == ColorSpace::Hwb && c.channels[0].is_nan();
+    let r = match nan_mask[0] {
+        true => 0.0,
+        false => r,
+    };
+    let g = match nan_mask[1] {
+        true => 0.0,
+        false => g,
+    };
+    let b = match nan_mask[2] {
+        true => 0.0,
+        false => b,
+    };
+
+    // NaN 恢复：输出通道中，输入为 NaN 的位置重新设为 NaN
+    let restore_nan = |vals: [f64; 3]| -> [f64; 3] {
+        [
+            match nan_mask[0] {
+                true => f64::NAN,
+                false => vals[0],
+            },
+            match nan_mask[1] {
+                true => f64::NAN,
+                false => vals[1],
+            },
+            match nan_mask[2] {
+                true => f64::NAN,
+                false => vals[2],
+            },
+        ]
+    };
 
     match target_space {
         "rgb" => {
@@ -71,7 +94,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rl, gl, bl) = color_conv::srgb_to_linear_srgb(r, g, b);
             Ok(make_color(
                 ColorSpace::SrgbLinear,
-                [rl, gl, bl],
+                restore_nan([rl, gl, bl]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -98,10 +121,29 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
                 (c.channels[0], c.channels[1], c.channels[2])
             } else {
                 let (r_f, g_f, b_f) = space_to_srgb_f64(c.space, c.channels, c.legacy_rgb);
+                let nan_r = r_f.is_nan();
+                let nan_g = g_f.is_nan();
+                let nan_b = b_f.is_nan();
+                let r_f = match nan_r {
+                    true => 0.0,
+                    false => r_f,
+                };
+                let g_f = match nan_g {
+                    true => 0.0,
+                    false => g_f,
+                };
+                let b_f = match nan_b {
+                    true => 0.0,
+                    false => b_f,
+                };
                 let (h, _s, _l) =
                     Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                 let w = r_f.min(g_f).min(b_f);
                 let bk = 1.0 - r_f.max(g_f).max(b_f);
+                let (w, bk) = match nan_r || nan_g || nan_b {
+                    true => (f64::NAN, f64::NAN),
+                    false => (w, bk),
+                };
                 (h, w, bk)
             };
             Ok(Value::Color(Color::with_hwb(h, w, bk, c.a, c.legacy_rgb)))
@@ -110,16 +152,32 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (l, a, b_lab) = color_conv::srgb_to_lab(r, g, b);
             Ok(make_color(
                 ColorSpace::Lab,
-                [l, a, b_lab],
+                restore_nan([l, a, b_lab]),
                 c.a,
                 ColorOutput::Auto,
             ))
         }
         "lch" => {
             let (l, c_lch, h) = color_conv::srgb_to_lch(r, g, b);
+            // CSS Color 4: 源 HWB hue 为 NaN 时，目标 LCH hue 也为 NaN
+            // 注意：LCH 的 hue 独立于 sRGB 通道，不使用 restore_nan
+            let h = match src_hwb_nan_hue {
+                true => f64::NAN,
+                false => h,
+            };
             Ok(make_color(
                 ColorSpace::Lch,
-                [l, c_lch, h],
+                [
+                    match nan_mask[0] {
+                        true => f64::NAN,
+                        false => l,
+                    },
+                    match nan_mask[1] {
+                        true => f64::NAN,
+                        false => c_lch,
+                    },
+                    h,
+                ],
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -128,16 +186,32 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (l, a, b_ok) = color_conv::srgb_to_oklab(r, g, b);
             Ok(make_color(
                 ColorSpace::Oklab,
-                [l, a, b_ok],
+                restore_nan([l, a, b_ok]),
                 c.a,
                 ColorOutput::Auto,
             ))
         }
         "oklch" => {
             let (l, c_ok, h) = color_conv::srgb_to_oklch(r, g, b);
+            // CSS Color 4: 源 HWB hue 为 NaN 时，目标 OKLCH hue 也为 NaN
+            // 注意：OKLCH 的 hue 独立于 sRGB 通道，不使用 restore_nan
+            let h = match src_hwb_nan_hue {
+                true => f64::NAN,
+                false => h,
+            };
             Ok(make_color(
                 ColorSpace::Oklch,
-                [l, c_ok, h],
+                [
+                    match nan_mask[0] {
+                        true => f64::NAN,
+                        false => l,
+                    },
+                    match nan_mask[1] {
+                        true => f64::NAN,
+                        false => c_ok,
+                    },
+                    h,
+                ],
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -146,7 +220,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rp, gp, bp) = color_conv::srgb_to_display_p3(r, g, b);
             Ok(make_color(
                 ColorSpace::DisplayP3,
-                [rp, gp, bp],
+                restore_nan([rp, gp, bp]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -155,7 +229,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rl, gl, bl) = color_conv::srgb_to_linear_srgb(r, g, b);
             Ok(make_color(
                 ColorSpace::DisplayP3Linear,
-                [rl, gl, bl],
+                restore_nan([rl, gl, bl]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -164,7 +238,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rp, gp, bp) = color_conv::srgb_to_a98_rgb(r, g, b);
             Ok(make_color(
                 ColorSpace::A98Rgb,
-                [rp, gp, bp],
+                restore_nan([rp, gp, bp]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -173,7 +247,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rp, gp, bp) = color_conv::srgb_to_prophoto(r, g, b);
             Ok(make_color(
                 ColorSpace::ProphotoRgb,
-                [rp, gp, bp],
+                restore_nan([rp, gp, bp]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -182,7 +256,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (rp, gp, bp) = color_conv::srgb_to_rec2020(r, g, b);
             Ok(make_color(
                 ColorSpace::Rec2020,
-                [rp, gp, bp],
+                restore_nan([rp, gp, bp]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -191,7 +265,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (x, y, z) = color_conv::srgb_to_xyz_d65(r, g, b);
             Ok(make_color(
                 ColorSpace::XyzD65,
-                [x, y, z],
+                restore_nan([x, y, z]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -201,7 +275,7 @@ pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
             let (x, y, z) = color_conv::xyz_d65_to_xyz_d50(x_d65, y_d65, z_d65);
             Ok(make_color(
                 ColorSpace::XyzD50,
-                [x, y, z],
+                restore_nan([x, y, z]),
                 c.a,
                 ColorOutput::Auto,
             ))
@@ -256,46 +330,72 @@ pub(crate) fn space_to_srgb_f64(
 }
 
 /// HWB→HSL 转换，直接在 f64 上计算，避免 u8 量化精度损失。
+/// CSS Color 4: NaN 通道在计算中取 0，hue 为 NaN 时基于 w/b 推导 saturation/lightness。
 pub(crate) fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
-    let h_norm = h.rem_euclid(360.0) / 360.0;
-    let (w, b) = if w + b > 1.0 {
-        (w / (w + b), b / (w + b))
-    } else {
-        (w, b)
+    // w/b 为 NaN 时替换为 0 进行计算（CSS Color 4 missing 通道规范）
+    let w = match w.is_nan() {
+        true => 0.0,
+        false => w,
     };
-    let factor = 1.0 - w - b;
+    let b = match b.is_nan() {
+        true => 0.0,
+        false => b,
+    };
+    // hue 为 NaN 时，HSL 的 saturation/lightness 基于 w/b 推导
+    match h.is_nan() {
+        true => {
+            let l = 0.5 * (1.0 - b + w);
+            let max = 1.0 - b;
+            let min = w;
+            let delta = (max - min).abs();
+            let s = match delta < 1e-12 {
+                true => 0.0,
+                false => delta / (1.0 - (2.0 * l - 1.0).abs()),
+            };
+            (f64::NAN, s, l)
+        }
+        false => {
+            let h_norm = h.rem_euclid(360.0) / 360.0;
+            let (w, b) = if w + b > 1.0 {
+                (w / (w + b), b / (w + b))
+            } else {
+                (w, b)
+            };
+            let factor = 1.0 - w - b;
 
-    let hue_to_rgb = |hue: f64| -> f64 {
-        let mut hue = hue;
-        match hue < 0.0 {
-            true => hue += 1.0,
-            false => {}
-        }
-        match hue > 1.0 {
-            true => hue -= 1.0,
-            false => {}
-        }
-        match hue {
-            h if h < 1.0 / 6.0 => w + factor * hue * 6.0,
-            h if h < 0.5 => w + factor,
-            h if h < 2.0 / 3.0 => w + factor * (2.0 / 3.0 - hue) * 6.0,
-            _ => w,
-        }
-    };
-    let r = hue_to_rgb(h_norm + 1.0 / 3.0);
-    let g = hue_to_rgb(h_norm);
-    let bl = hue_to_rgb(h_norm - 1.0 / 3.0);
+            let hue_to_rgb = |hue: f64| -> f64 {
+                let mut hue = hue;
+                match hue < 0.0 {
+                    true => hue += 1.0,
+                    false => {}
+                }
+                match hue > 1.0 {
+                    true => hue -= 1.0,
+                    false => {}
+                }
+                match hue {
+                    h if h < 1.0 / 6.0 => w + factor * hue * 6.0,
+                    h if h < 0.5 => w + factor,
+                    h if h < 2.0 / 3.0 => w + factor * (2.0 / 3.0 - hue) * 6.0,
+                    _ => w,
+                }
+            };
+            let r = hue_to_rgb(h_norm + 1.0 / 3.0);
+            let g = hue_to_rgb(h_norm);
+            let bl = hue_to_rgb(h_norm - 1.0 / 3.0);
 
-    let max = r.max(g).max(bl);
-    let min = r.min(g).min(bl);
-    let l = f64::midpoint(max, min);
-    let delta = max - min;
-    let s = if delta < 1e-12 {
-        0.0
-    } else {
-        delta / (1.0 - (2.0 * l - 1.0).abs())
-    };
-    (h, s, l)
+            let max = r.max(g).max(bl);
+            let min = r.min(g).min(bl);
+            let l = f64::midpoint(max, min);
+            let delta = max - min;
+            let s = if delta < 1e-12 {
+                0.0
+            } else {
+                delta / (1.0 - (2.0 * l - 1.0).abs())
+            };
+            (h, s, l)
+        }
+    }
 }
 
 /// HSL → sRGB (0-1) f64 精度转换，不经过 u8 量化。
@@ -324,10 +424,50 @@ pub(crate) fn hsl_to_srgb_f64(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
 /// HWB → sRGB (0-1) f64 精度转换，不经过 u8 量化。
 ///
 /// 基于 CSS Color 4 规范的 HWB→RGB 算法。
+/// NaN hue 时基于 w/bk 推导 saturation 和 lightness，hue=0 计算 RGB。
 pub(crate) fn hwb_to_srgb_f64(h: f64, w: f64, bk: f64) -> (f64, f64, f64) {
-    let (r, g, b) = hsl_to_srgb_f64(h, 1.0, 0.5);
-    let factor = 1.0 - w - bk;
-    (r * factor + w, g * factor + w, b * factor + w)
+    let nan_w = w.is_nan();
+    let nan_bk = bk.is_nan();
+    // w/bk 为 NaN 时替换为 0 进行计算
+    let w = match nan_w {
+        true => 0.0,
+        false => w,
+    };
+    let bk = match nan_bk {
+        true => 0.0,
+        false => bk,
+    };
+    let (r, g, b) = match h.is_nan() {
+        // NaN hue: 基于 w/bk 推导 saturation 和 lightness
+        true => {
+            let l = 0.5 * (1.0 - bk + w);
+            let max = 1.0 - bk;
+            let min = w;
+            let delta = (max - min).abs();
+            let s = match delta < 1e-12 {
+                true => 0.0,
+                false => delta / (1.0 - (2.0 * l - 1.0).abs()),
+            };
+            hsl_to_srgb_f64(0.0, s, l)
+        }
+        false => {
+            let factor = 1.0 - w - bk;
+            let (hr, hg, hb) = hsl_to_srgb_f64(h, 1.0, 0.5);
+            (hr * factor + w, hg * factor + w, hb * factor + w)
+        }
+    };
+    // 恢复 NaN：原始 w/bk 为 NaN 时对应 sRGB 通道设为 NaN
+    (
+        match nan_w {
+            true => f64::NAN,
+            false => r,
+        },
+        g,
+        match nan_bk {
+            true => f64::NAN,
+            false => b,
+        },
+    )
 }
 
 /// 生成颜色的显示名称（用于错误消息）。

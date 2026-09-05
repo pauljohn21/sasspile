@@ -86,8 +86,8 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
     let chosen_id = b_id.or(a_id).cloned();
 
     let has_universal = chosen_type.is_none()
-        && (a.0.iter().any(|s| *s == SimpleSelector::Universal)
-            || b.0.iter().any(|s| *s == SimpleSelector::Universal));
+        && (a.0.contains(&SimpleSelector::Universal)
+            || b.0.contains(&SimpleSelector::Universal));
 
     // 其余：并集去重
     let rest: Vec<SimpleSelector> = a
@@ -106,13 +106,10 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
     let rest: Vec<SimpleSelector> = rest
         .into_iter()
         .fold(Vec::new(), |mut acc, s| {
-            match acc.contains(&s) {
-                false => {
-                    acc.push(s);
-                    acc
-                }
-                true => acc,
+            if !acc.contains(&s) {
+                acc.push(s);
             }
+            acc
         });
 
     // 组装：Type → Universal → Id → rest
@@ -168,7 +165,7 @@ pub fn is_super_complex(super_c: &ComplexSelector, sub_c: &ComplexSelector) -> b
 #[tracing::instrument(level = "trace", fields(super_ = %super_c, sub = %sub_c))]
 pub fn is_super_compound(super_c: &CompoundSelector, sub_c: &CompoundSelector) -> bool {
     // `*` 是任何复合选择器的超选择器
-    super_c.0.iter().any(|s| *s == SimpleSelector::Universal)
+    super_c.0.contains(&SimpleSelector::Universal)
         || super_c.0.iter().all(|super_s| {
             match super_s {
                 SimpleSelector::Type(t) => sub_c.0.iter().any(|sub_s| match sub_s {
@@ -357,7 +354,7 @@ fn replace_complex(
                 .all(|orig_simple| sel_compound.0.contains(orig_simple))
         });
 
-        if let Some((idx, (comb, sel_compound))) = found {
+        if let Some((_idx, (comb, sel_compound))) = found {
             // 新化合物 = (sel_compound 去掉 orig 的 simples) ∪ replacement 第一个化合物的 simples
             if let Some(rep_complex) = replacement.0.first() {
                 if let Some((_, rep_compound)) = rep_complex.compounds.first() {

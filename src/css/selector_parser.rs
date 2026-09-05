@@ -127,10 +127,8 @@ impl Parser {
                     simples.push(simple);
                 }
                 '[' => {
-                    match self.parse_attribute() {
-                        Some(attr) => simples.push(attr),
-                        None => return None,
-                    }
+                    let attr = self.parse_attribute()?;
+                    simples.push(attr);
                 }
                 ':' => {
                     self.chars.next(); // 消费第一个 ':'

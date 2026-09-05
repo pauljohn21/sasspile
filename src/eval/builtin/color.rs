@@ -230,9 +230,20 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                 }
                 // none 参数处理：hwb(none none none) → 创建带 NaN 的颜色
                 [a, b, c] if is_none_str(a) || is_none_str(b) || is_none_str(c) => {
-                    let h = extract_none_num(a).unwrap_or(f64::NAN);
-                    let w = extract_none_num(b).unwrap_or(f64::NAN);
-                    let bk = extract_none_num(c).unwrap_or(f64::NAN);
+                    let h = match a {
+                        Value::Number(n, _) => *n,
+                        _ => f64::NAN,
+                    };
+                    let w = match b {
+                        Value::Number(n, Some(u)) if u == "%" => n / 100.0,
+                        Value::Number(n, _) => *n,
+                        _ => f64::NAN,
+                    };
+                    let bk = match c {
+                        Value::Number(n, Some(u)) if u == "%" => n / 100.0,
+                        Value::Number(n, _) => *n,
+                        _ => f64::NAN,
+                    };
                     Ok(Some(Value::Color(Color::with_hwb(
                         h,
                         w,

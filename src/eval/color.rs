@@ -363,51 +363,6 @@ impl Evaluator {
         }
     }
 
-    pub(crate) fn builtin_mix(args: &[Value]) -> Result<Value> {
-        match args {
-            [Value::Color(a), Value::Color(b)] => {
-                crate::__tracing::debug!(
-                    target: "sasspile::color",
-                    fn = "mix",
-                    color_a = ?a, color_b = ?b, weight = 50.0_f64,
-                    "mix 2-arg input"
-                );
-                Ok(Value::Color(Color::rgba(
-                    f64::midpoint(a.legacy_rgb[0], b.legacy_rgb[0]),
-                    f64::midpoint(a.legacy_rgb[1], b.legacy_rgb[1]),
-                    f64::midpoint(a.legacy_rgb[2], b.legacy_rgb[2]),
-                    f64::midpoint(a.a, b.a),
-                )))
-            }
-            [Value::Color(a), Value::Color(b), Value::Number(w, _)] => {
-                crate::__tracing::debug!(
-                    target: "sasspile::color",
-                    fn = "mix",
-                    color_a = ?a, color_b = ?b, weight = *w,
-                    "mix 3-arg input"
-                );
-                let weight = *w / 100.0;
-                Ok(Value::Color(Color::rgba(
-                    a.legacy_rgb[0] * (1.0 - weight) + b.legacy_rgb[0] * weight,
-                    a.legacy_rgb[1] * (1.0 - weight) + b.legacy_rgb[1] * weight,
-                    a.legacy_rgb[2] * (1.0 - weight) + b.legacy_rgb[2] * weight,
-                    a.a * (1.0 - weight) + b.a * weight,
-                )))
-            }
-            _ => {
-                crate::__tracing::debug!(
-                    target: "sasspile::color",
-                    fn = "mix",
-                    n_args = args.len(),
-                    arg_types = ?args.iter().map(std::mem::discriminant).collect::<Vec<_>>(),
-                    args_debug = ?args.iter().map(|a| format!("{a}")).collect::<Vec<_>>(),
-                    "mix argument mismatch"
-                );
-                Err(SassError::Eval("mix requires 2-3 arguments".into()))
-            }
-        }
-    }
-
     /// `color.mix($color1, $color2, $weight, $method)` — 支持现代颜色空间混合。
     /// 按 D0 决策：每个空间独立函数，禁止共享 match arm。
     pub(crate) fn builtin_mix_modern(args: &[Value], method: Option<&Value>) -> Result<Value> {
@@ -438,9 +393,8 @@ impl Evaluator {
         let conv_a = super::builtin::color_conv_ops::convert_space(a, mix_space)?;
         let conv_b = super::builtin::color_conv_ops::convert_space(b, mix_space)?;
 
-        let (ca, cb) = match (&conv_a, &conv_b) {
-            (Value::Color(ca), Value::Color(cb)) => (ca, cb),
-            _ => return Err(SassError::Eval("mix: color conversion failed".into())),
+        let (Value::Color(ca), Value::Color(cb)) = (&conv_a, &conv_b) else {
+            return Err(SassError::Eval("mix: color conversion failed".into()));
         };
 
         // 在混合空间中线性插值

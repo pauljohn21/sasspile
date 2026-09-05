@@ -77,7 +77,7 @@ pub enum Combinator {
 
 impl fmt::Display for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let parts: Vec<String> = self.0.iter().map(|c| c.to_string()).collect();
+        let parts: Vec<String> = self.0.iter().map(std::string::ToString::to_string).collect();
         write!(f, "{}", parts.join(", "))
     }
 }
@@ -93,7 +93,7 @@ impl fmt::Display for ComplexSelector {
                     Combinator::Sibling => write!(f, "~ ")?,
                 },
                 (0, None) => {}
-                (_, Some(Combinator::Descendant)) | (_, None) => write!(f, " ")?,
+                (_, Some(Combinator::Descendant) | None) => write!(f, " ")?,
                 (_, Some(Combinator::Child)) => write!(f, " > ")?,
                 (_, Some(Combinator::Adjacent)) => write!(f, " + ")?,
                 (_, Some(Combinator::Sibling)) => write!(f, " ~ ")?,

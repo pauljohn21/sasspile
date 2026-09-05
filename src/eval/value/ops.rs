@@ -381,8 +381,8 @@ fn format_infinity_with_units(
 
 /// 从 calc 字符串中提取分子和分母单位。
 ///
-/// 如 `calc(1px * 1em)` → (["px", "em"], [])
-/// 如 `calc(1px / 1s)` → (["px"], ["s"])
+/// 如 `calc(1px * 1em)` → (`["px", "em"]`, `[]`)
+/// 如 `calc(1px / 1s)` → (`["px"]`, `["s"]`)
 fn extract_units_from_calc(c: &str) -> (Vec<String>, Vec<String>) {
     let inner = c
         .strip_prefix("calc(")

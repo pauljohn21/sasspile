@@ -17,13 +17,11 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
     // 处理相邻复合选择器（[a]b → [a] b）
     let selector = normalize_adjacent_compounds(&selector);
     // 组合器验证——无效组合器返回空字符串
-    match has_bogus_combinators(&selector) {
-        true => return String::new(),
-        false => {}
+    if has_bogus_combinators(&selector) {
+        return String::new();
     }
-    match !selector.contains('%') {
-        true => return selector,
-        false => {}
+    if !selector.contains('%') {
+        return selector;
     }
     // 顶层逗号分隔——移除纯占位符部分
     let parts: Vec<&str> = selector
@@ -45,9 +43,8 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
                     ')' => depth -= 1,
                     _ => {}
                 }
-                match depth > 0 {
-                    true => i += 1,
-                    false => {}
+                if depth > 0 {
+                    i += 1;
                 }
             }
             let end = i;
@@ -58,28 +55,27 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
                 .filter(|s| !s.trim().starts_with('%'))
                 .copied()
                 .collect();
-            match real_args.is_empty() {
-                true => match *pseudo == "not" {
-                    true => {
-                        let before = &result[..pos];
-                        let after = &result[end + 1..];
-                        match before.trim().is_empty() {
-                            true => result = format!("*{after}"),
-                            false => result = format!("{before}{after}"),
-                        }
-                    }
-                    false => return String::new(),
-                },
-                false => {
-                    let new_inner = real_args
-                        .iter()
-                        .map(|s| s.trim())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let before = &result[..paren_start];
+            if real_args.is_empty() {
+                if *pseudo == "not" {
+                    let before = &result[..pos];
                     let after = &result[end + 1..];
-                    result = format!("{before}({new_inner}){after}");
+                    result = if before.trim().is_empty() {
+                        format!("*{after}")
+                    } else {
+                        format!("{before}{after}")
+                    };
+                } else {
+                    return String::new();
                 }
+            } else {
+                let new_inner = real_args
+                    .iter()
+                    .map(|s| s.trim())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let before = &result[..paren_start];
+                let after = &result[end + 1..];
+                result = format!("{before}({new_inner}){after}");
             }
         }
     }
@@ -129,12 +125,9 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
                 current.push(c);
             }
             '(' if !in_brackets => {
-                match !current.trim().is_empty() {
-                    true => {
-                        tokens.push(SelToken::Selector(current.trim().to_string()));
-                        current = String::new();
-                    }
-                    false => {}
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
                 }
                 // 向前查看伪类名（向前回看）
                 let pseudo_name = find_pseudo_name(&tokens);
@@ -148,9 +141,8 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
                         ')' => depth -= 1,
                         _ => {}
                     }
-                    match depth > 0 {
-                        true => inner.push(chars[i]),
-                        false => {}
+                    if depth > 0 {
+                        inner.push(chars[i]);
                     }
                     i += 1;
                 }
@@ -164,22 +156,16 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
                 current.push(c);
             }
             '>' | '+' | '~' => {
-                match !current.trim().is_empty() {
-                    true => {
-                        tokens.push(SelToken::Selector(current.trim().to_string()));
-                        current = String::new();
-                    }
-                    false => {}
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
                 }
                 tokens.push(SelToken::Combinator);
             }
             _ if c.is_whitespace() => {
-                match !current.trim().is_empty() {
-                    true => {
-                        tokens.push(SelToken::Selector(current.trim().to_string()));
-                        current = String::new();
-                    }
-                    false => {}
+                if !current.trim().is_empty() {
+                    tokens.push(SelToken::Selector(current.trim().to_string()));
+                    current = String::new();
                 }
             }
             _ => {
@@ -188,9 +174,8 @@ fn tokenize_selector_with_pseudo(selector: &str) -> Vec<SelToken> {
         }
         i += 1;
     }
-    match !current.trim().is_empty() {
-        true => tokens.push(SelToken::Selector(current.trim().to_string())),
-        false => {}
+    if !current.trim().is_empty() {
+        tokens.push(SelToken::Selector(current.trim().to_string()));
     }
     tokens
 }
@@ -217,29 +202,24 @@ fn find_pseudo_name(tokens: &[SelToken]) -> Option<String> {
 
 /// 检查 token 序列是否包含无效组合器。
 fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> bool {
-    match tokens.is_empty() {
-        true => return false,
-        false => {}
+    if tokens.is_empty() {
+        return false;
     }
     // 检查尾部组合器
-    match matches!(tokens.last(), Some(SelToken::Combinator)) {
-        true => return true,
-        false => {}
+    if matches!(tokens.last(), Some(SelToken::Combinator)) {
+        return true;
     }
     // 检查前导组合器
-    match tokens.first() {
-        Some(SelToken::Combinator) => {
-            match !allow_leading_combinator {
-                true => return true,
-                false => {}
-            }
-            // 单个前导组合器允许，但第二个不能是组合器
-            match (tokens.len() >= 2, &tokens[1]) {
-                (true, SelToken::Combinator) => return true,
-                _ => {}
+    if let Some(SelToken::Combinator) = tokens.first() {
+        if !allow_leading_combinator {
+            return true;
+        }
+        // 单个前导组合器允许，但第二个不能是组合器
+        if tokens.len() >= 2 {
+            if let SelToken::Combinator = &tokens[1] {
+                return true;
             }
         }
-        _ => {}
     }
     // 检查中间连续组合器
     for window in tokens.windows(2) {
@@ -274,16 +254,12 @@ fn normalize_adjacent_compounds(selector: &str) -> String {
     while i < chars.len() {
         result.push(chars[i]);
         // 检查是否需要插入空格
-        match i + 1 < chars.len() {
-            true => {
-                let curr = chars[i];
-                let next = chars[i + 1];
-                match (curr == ']' && !next.is_whitespace(), next == '*' || next.is_ascii_alphabetic()) {
-                    (true, true) => result.push(' '),
-                    _ => {}
-                }
+        if i + 1 < chars.len() {
+            let curr = chars[i];
+            let next = chars[i + 1];
+            if curr == ']' && !next.is_whitespace() && (next == '*' || next.is_ascii_alphabetic()) {
+                result.push(' ');
             }
-            false => {}
         }
         i += 1;
     }

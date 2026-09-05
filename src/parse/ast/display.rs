@@ -119,7 +119,11 @@ impl std::fmt::Display for Value {
                     ColorOutput::Auto => match c.space {
                         ColorSpace::Hsl => {
                             let (h, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
-                            let hue_str = format_hue(h);
+                            // CSS Color 4: HSL 输出中 NaN hue 规范化为 0
+                            let hue_str = match h.is_nan() {
+                                true => "0".to_string(),
+                                false => format_hue(h),
+                            };
                             match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
                                 true => write!(
                                     f,
@@ -140,20 +144,32 @@ impl std::fmt::Display for Value {
                         }
                         ColorSpace::Hwb => {
                             let (h, w, bk) = (c.channels[0], c.channels[1], c.channels[2]);
-                            // 全通道 NaN 时保留 hwb(none none none) 格式
-                            match h.is_nan() && w.is_nan() && bk.is_nan() {
+                            // 任意通道 NaN 时保留 hwb() 格式（CSS Color 4 missing 通道规范）
+                            match h.is_nan() || w.is_nan() || bk.is_nan() {
                                 true => {
+                                    let h_str = match h.is_nan() {
+                                        true => "none".to_string(),
+                                        false => format!("{}{}", format_hue(h), DEG_UNIT),
+                                    };
+                                    let w_str = match w.is_nan() {
+                                        true => "none".to_string(),
+                                        false => format_pct(w),
+                                    };
+                                    let bk_str = match bk.is_nan() {
+                                        true => "none".to_string(),
+                                        false => format_pct(bk),
+                                    };
                                     match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                        true => write!(f, "hwb(none none none)"),
-                                        false => write!(f, "hwb(none none none / {})", format_alpha(c.a)),
+                                        true => write!(f, "hwb({} {} {})", h_str, w_str, bk_str),
+                                        false => write!(
+                                            f,
+                                            "hwb({} {} {} / {})",
+                                            h_str, w_str, bk_str, format_alpha(c.a)
+                                        ),
                                     }
                                 }
                                 false => {
-                                    // SCSS 规范：HWB 是 legacy 格式，Auto 输出规范化为 HSL
-                                    let h = if h.is_nan() { 0.0 } else { h };
-                                    let w = if w.is_nan() { 0.0 } else { w };
-                                    let bk = if bk.is_nan() { 0.0 } else { bk };
-                                    // HWB → HSL 转换（内联实现，避免跨模块引用）
+                                    // SCSS 规范：HWB 全有效值时 Auto 输出规范化为 HSL
                                     let (hsl_h, hsl_s, hsl_l) = hwb_to_hsl_inline(h, w, bk);
                                     let hue_str = format_hue(hsl_h);
                                     match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
@@ -203,7 +219,8 @@ impl std::fmt::Display for Value {
                             let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
                             let l_clean = clean_pct(l);
                             let ch_clean = clean_num(ch);
-                            let h_str = match ch_clean == 0.0 {
+                            // CSS Color 4: chroma=0 或 hue=NaN 时输出 none
+                            let h_str = match ch_clean == 0.0 || h.is_nan() {
                                 true => "none".to_string(),
                                 false => format!("{}{}", format_hue(h), DEG_UNIT),
                             };
@@ -252,7 +269,8 @@ impl std::fmt::Display for Value {
                             let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
                             let l_pct = clean_pct(l * PCT_SCALE);
                             let ch_clean = clean_num(ch);
-                            let h_str = match ch_clean == 0.0 {
+                            // CSS Color 4: chroma=0 或 hue=NaN 时输出 none
+                            let h_str = match ch_clean == 0.0 || h.is_nan() {
                                 true => "none".to_string(),
                                 false => format!("{}{}", format_hue(h), DEG_UNIT),
                             };

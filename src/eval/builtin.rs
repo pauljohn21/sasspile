@@ -321,8 +321,4 @@ pub(crate) fn merge_two_args(
     merge_params_impl(pos_args, kw_args, &[p1, p2])
 }
 
-/// 合并 mix 的位置参数和命名参数（$color1/$color2/$weight）。
-pub(crate) fn merge_mix_args(pos_args: &[Value], kw_args: &HashMap<String, Value>) -> Vec<Value> {
-    const PARAMS: &[&str] = &["color1", "color2", "weight"];
-    merge_params_impl(pos_args, kw_args, PARAMS)
-}
+

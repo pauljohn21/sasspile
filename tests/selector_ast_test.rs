@@ -1,7 +1,6 @@
 //! 选择器 AST 解析 + 序列化 round-trip 测试。
 
 use sasspile::css::selector_parser::parse_selector;
-use sasspile::css::selector_ast::*;
 
 fn roundtrip(input: &str) -> String {
     parse_selector(input).to_string()
