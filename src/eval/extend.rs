@@ -61,19 +61,21 @@ impl Evaluator {
                                     true => return sel_ast,
                                     false => {}
                                 }
-                                // 模块 scope 检查
+                                // 模块 scope 检查——仅当 module_selectors 非空时执行
+                                // 非模块化编译时 module_selectors 为空，跳过检查（全局匹配）
                                 if let Some(module_path) = module {
-                                    let in_scope = module_selectors.get(module_path).map_or_else(
-                                        || {
-                                            module_selectors
-                                                .values()
-                                                .any(|s| s.contains(target_trimmed))
-                                        },
-                                        |s| s.contains(target_trimmed),
-                                    );
-                                    match !in_scope {
-                                        true => return sel_ast,
-                                        false => {}
+                                    if !module_selectors.is_empty() {
+                                        let in_scope = module_selectors
+                                            .get(module_path)
+                                            .map(|s| s.contains(target_trimmed))
+                                            .unwrap_or_else(|| {
+                                                module_selectors
+                                                    .values()
+                                                    .any(|s| s.contains(target_trimmed))
+                                            });
+                                        if !in_scope {
+                                            return sel_ast;
+                                        }
                                     }
                                 }
                                 let extendee = parse_selector(target_trimmed);

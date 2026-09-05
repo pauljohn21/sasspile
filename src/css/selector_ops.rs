@@ -194,17 +194,17 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
         .0
         .iter()
         .flat_map(|complex| {
-            // 原始选择器总是保留
             let original = std::iter::once(complex.clone());
-            // 对每个 extendee 的复杂选择器，尝试匹配
-            let extended = extendee.0.iter().filter_map(move |ec| extend_complex(complex, ec, extender))
+            let extended = extendee
+                .0
+                .iter()
+                .filter_map(move |ec| extend_complex(complex, ec, extender))
                 .flat_map(|s| s.0.into_iter());
             original.chain(extended)
         })
         .fold(Vec::new(), |mut acc, c| {
-            match !acc.contains(&c) {
-                true => acc.push(c),
-                false => {}
+            if !acc.contains(&c) {
+                acc.push(c);
             }
             acc
         });
@@ -287,21 +287,21 @@ pub fn replace_selector(
         .0
         .iter()
         .flat_map(|complex| {
-            // 尝试每个 original 的复杂选择器
-            let replaced = original.0.iter().find_map(|oc| replace_complex(complex, oc, replacement));
+            let replaced =
+                original
+                    .0
+                    .iter()
+                    .find_map(|oc| replace_complex(complex, oc, replacement));
             match replaced {
                 Some(sel) => sel.0.into_iter().collect::<Vec<_>>(),
                 None => vec![complex.clone()],
             }
         })
         .fold(Vec::new(), |mut acc, c| {
-            match acc.contains(&c) {
-                false => {
-                    acc.push(c);
-                    acc
-                }
-                true => acc,
+            if !acc.contains(&c) {
+                acc.push(c);
             }
+            acc
         });
 
     Selector(results)

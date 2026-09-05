@@ -273,14 +273,37 @@ fn eval_return(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 }
 
 /// 求值 @extend 节点。
+///
+/// 按 `,` 拆分 target，为每个目标生成独立 extend 条目。
+/// 校验：复杂选择器（`a b`）、复合选择器（`a:hover`）、空选择器报错。
 fn eval_extend_node(selector: &str, optional: bool, env: Env) -> Result<(Vec<CssNode>, Env)> {
     match env.get_selector().map(std::string::ToString::to_string) {
         Some(extender) => {
             let module = env.get_base_path().cloned();
-            Ok((
-                vec![],
-                env.add_extend(extender, selector.to_string(), optional, module),
-            ))
+            let targets: Vec<&str> = selector.split(',').map(str::trim).collect();
+            // 空选择器校验
+            if targets.iter().all(|s| s.is_empty()) {
+                return Err(SassError::Eval("expected selector.".into()));
+            }
+            let env = targets
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .try_fold(env, |env, target| {
+                    // 复杂选择器校验：包含空格（多 compound）→ 报错
+                    if target.chars().any(|c| c.is_whitespace()) {
+                        return Err(SassError::Eval(
+                            "complex selectors may not be extended.".into(),
+                        ));
+                    }
+                    // 复合选择器校验：包含 `:` 伪类/伪元素且非纯伪类 → 报错
+                    if target.contains(':') && !target.starts_with(':') {
+                        return Err(SassError::Eval(
+                            "compound selectors may no longer be extended.\nConsider `@extend a, :hover` instead.\nSee https://sass-lang.com/d/extend-compound for details.".into(),
+                        ));
+                    }
+                    Ok(env.add_extend(extender.clone(), target.to_string(), optional, module.clone()))
+                })?;
+            Ok((vec![], env))
         }
         None => Ok((vec![], env)),
     }
