@@ -283,9 +283,8 @@ fn test_sass_spec_full_stats() {
     );
 }
 
-/// 颜色子目录统计——已跳过（颜色测试需手动 --ignored 触发）。
+/// 颜色子目录统计。
 #[test]
-#[ignore = "颜色测试需手动 --ignored 触发"]
 fn test_core_functions_subdirs() {
     sasspile::init_tracing_otel();
     let spec_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("sass-spec/spec");

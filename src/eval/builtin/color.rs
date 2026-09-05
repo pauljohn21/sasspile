@@ -13,8 +13,45 @@
 
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
-use crate::parse::ast::{Color, ColorOutput, Separator, Value};
+use crate::parse::ast::{Color, ColorOutput, ColorSpace, Separator, Value};
 use std::collections::HashMap;
+
+/// 判断 Value 是否为 `none` 关键字。
+fn is_none_str(v: &Value) -> bool {
+    matches!(v, Value::String(s, false) if s == "none")
+}
+
+/// 从 Value 提取数值或 NaN（用于 none 通道处理）。
+fn extract_none_num(v: &Value) -> Option<f64> {
+    match v {
+        Value::Number(n, _) => Some(*n),
+        Value::String(s, false) if s == "none" => Some(f64::NAN),
+        _ => None,
+    }
+}
+
+/// 合并位置参数和命名参数——用于 hsl($hue: 0, $saturation: 100%, ...) 等。
+/// 按 names 顺序从 kw_args 提取参数补充到 args 中。
+fn merge_named_color_args(
+    args: &[Value],
+    kw_args: &HashMap<String, Value>,
+    names: &[&str],
+) -> Vec<Value> {
+    let mut result = args.to_vec();
+    for name in names {
+        match kw_args.get(*name).or_else(|| kw_args.get(&format!("${name}"))) {
+            Some(v) => {
+                // 只在位置参数不足时补充
+                let idx = names.iter().position(|n| *n == *name).unwrap_or(0);
+                if idx >= result.len() {
+                    result.push(v.clone());
+                }
+            }
+            None => {}
+        }
+    }
+    result
+}
 
 /// 展开空格分隔的 List 参数——用于 color.hsl(0 100% 50%) 等 CSS Level 4 语法。
 /// 当参数只有一个且为 space-separated list 时，展开为独立参数。
@@ -61,20 +98,58 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
     match name {
         "invert" => {
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
+            let space_arg = kw_args.get("$space").or_else(|| kw_args.get("space"));
             match color_arg {
                 Some(Value::Color(c)) => {
-                    let (h, s, l) =
-                        Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
-                    let new_h = (h + 180.0).rem_euclid(360.0);
-                    let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        new_h,
-                        s,
-                        l,
-                        c.a,
-                        ColorOutput::RgbPercent,
-                        new_c.legacy_rgb,
-                    ))))
+                    // 独立分派：legacy 用 HSL 反转，现代空间用通道反转
+                    match c.space.is_legacy() {
+                        true => {
+                            // Legacy invert：HSL hue + 180，输出 RGB Auto（查找命名色）
+                            let (h, s, l) = Evaluator::rgb_to_hsl(
+                                c.legacy_rgb[0],
+                                c.legacy_rgb[1],
+                                c.legacy_rgb[2],
+                            );
+                            let new_h = (h + 180.0).rem_euclid(360.0);
+                            let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
+                            Ok(Some(Value::Color(Color::with_rgb(
+                                new_c.legacy_rgb[0],
+                                new_c.legacy_rgb[1],
+                                new_c.legacy_rgb[2],
+                                c.a,
+                                ColorSpace::Rgb,
+                                ColorOutput::Auto,
+                            ))))
+                        }
+                        false => {
+                            // 现代空间 invert：各通道 1 - channel
+                            // 如果指定了 $space，先转到该空间
+                            let (r, g, b) = match space_arg {
+                                Some(Value::String(s, _)) => {
+                                    // 转换到指定空间
+                                    let converted = super::color_conv_ops::convert_space(c, s)?;
+                                    match converted {
+                                        Value::Color(cc) => (cc.channels[0], cc.channels[1], cc.channels[2]),
+                                        _ => (c.channels[0], c.channels[1], c.channels[2]),
+                                    }
+                                }
+                                _ => (c.channels[0], c.channels[1], c.channels[2]),
+                            };
+                            let target_space = match space_arg {
+                                Some(Value::String(s, _)) => {
+                                    ColorSpace::from_str(s).unwrap_or(c.space)
+                                }
+                                _ => c.space,
+                            };
+                            Ok(Some(Value::Color(Color::with_space(
+                                target_space,
+                                [1.0 - r, 1.0 - g, 1.0 - b],
+                                c.a,
+                                c.output,
+                                [0.0, 0.0, 0.0],
+                            ))))
+                        }
+                    }
                 }
                 // CSS 滤镜函数透传：invert(number) 非颜色参数
                 _ if !args.is_empty() => {
@@ -95,13 +170,13 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                     let (h, _s, l) =
                         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                     let new_c = Evaluator::hsl_to_rgb(h, 0.0, l);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        h,
-                        0.0,
-                        l,
+                    Ok(Some(Value::Color(Color::with_rgb(
+                        new_c.legacy_rgb[0],
+                        new_c.legacy_rgb[1],
+                        new_c.legacy_rgb[2],
                         c.a,
-                        ColorOutput::RgbPercent,
-                        new_c.legacy_rgb,
+                        ColorSpace::Rgb,
+                        ColorOutput::Auto,
                     ))))
                 }
                 _ if !args.is_empty() => {
@@ -131,8 +206,10 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         "change-color" => super::color_adjust::change_color(args, kw_args).map(Some),
         "scale-color" => super::color_adjust::scale_color(args, kw_args).map(Some),
         "hwb" => {
+            // 合并命名参数到位置参数
+            let merged = merge_named_color_args(args, kw_args, &["hue", "whiteness", "blackness", "alpha"]);
             // 展开空格分隔的 List（CSS hwb() 语法：hwb(0deg 30% 40%)）
-            let flat = flatten_space_list(args);
+            let flat = flatten_space_list(&merged);
             match &flat[..] {
                 [
                     Value::Number(h, _),
@@ -158,6 +235,19 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                         *b / 100.0,
                         1.0,
                         c.legacy_rgb,
+                    ))))
+                }
+                // none 参数处理：hwb(none none none) → 创建带 NaN 的颜色
+                [a, b, c] if is_none_str(a) || is_none_str(b) || is_none_str(c) => {
+                    let h = extract_none_num(a).unwrap_or(f64::NAN);
+                    let w = extract_none_num(b).unwrap_or(f64::NAN);
+                    let bk = extract_none_num(c).unwrap_or(f64::NAN);
+                    Ok(Some(Value::Color(Color::with_hwb(
+                        h,
+                        w,
+                        bk,
+                        1.0,
+                        [0.0, 0.0, 0.0],
                     ))))
                 }
                 [
@@ -243,13 +333,13 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                     let new_h = (h + 180.0).rem_euclid(360.0);
                     let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        new_h,
-                        s,
-                        l,
+                    Ok(Some(Value::Color(Color::with_rgb(
+                        new_c.legacy_rgb[0],
+                        new_c.legacy_rgb[1],
+                        new_c.legacy_rgb[2],
                         c.a,
-                        ColorOutput::RgbPercent,
-                        new_c.legacy_rgb,
+                        ColorSpace::Rgb,
+                        ColorOutput::Auto,
                     ))))
                 }
                 _ => Err(SassError::Eval(
@@ -259,7 +349,9 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         }
         "hsl" => {
             let is_space = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
-            let flat = flatten_space_list(args);
+            // 合并命名参数到位置参数
+            let merged = merge_named_color_args(args, kw_args, &["hue", "saturation", "lightness", "alpha"]);
+            let flat = flatten_space_list(&merged);
             // 检测是否有 none 参数
             let has_none = flat
                 .iter()
@@ -314,7 +406,9 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         }
         "hsla" => {
             let is_space = matches!(args.first(), Some(Value::List(_, Separator::Space, false)));
-            let flat = flatten_space_list(args);
+            // 合并命名参数到位置参数
+            let merged = merge_named_color_args(args, kw_args, &["hue", "saturation", "lightness", "alpha"]);
+            let flat = flatten_space_list(&merged);
             // 检测是否有 none 参数
             let has_none = flat
                 .iter()
@@ -364,13 +458,13 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                     let new_h = (h + *deg).rem_euclid(360.0);
                     let new_c = Evaluator::hsl_to_rgb(new_h, s, l);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        new_h,
-                        s,
-                        l,
+                    Ok(Some(Value::Color(Color::with_rgb(
+                        new_c.legacy_rgb[0],
+                        new_c.legacy_rgb[1],
+                        new_c.legacy_rgb[2],
                         c.a,
-                        ColorOutput::RgbPercent,
-                        new_c.legacy_rgb,
+                        ColorSpace::Rgb,
+                        ColorOutput::Auto,
                     ))))
                 }
                 _ => Err(SassError::Eval(
@@ -387,13 +481,13 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                     let new_s = (s + *amount / 100.0).min(1.0);
                     let new_c = Evaluator::hsl_to_rgb(h, new_s, l);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        h,
-                        new_s,
-                        l,
+                    Ok(Some(Value::Color(Color::with_rgb(
+                        new_c.legacy_rgb[0],
+                        new_c.legacy_rgb[1],
+                        new_c.legacy_rgb[2],
                         c.a,
-                        ColorOutput::RgbPercent,
-                        new_c.legacy_rgb,
+                        ColorSpace::Rgb,
+                        ColorOutput::Auto,
                     ))))
                 }
                 // CSS 滤镜函数透传：saturate(number)
@@ -414,13 +508,13 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                         Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]);
                     let new_s = (s - *amount / 100.0).max(0.0);
                     let new_c = Evaluator::hsl_to_rgb(h, new_s, l);
-                    Ok(Some(Value::Color(Color::with_hsl(
-                        h,
-                        new_s,
-                        l,
+                    Ok(Some(Value::Color(Color::with_rgb(
+                        new_c.legacy_rgb[0],
+                        new_c.legacy_rgb[1],
+                        new_c.legacy_rgb[2],
                         c.a,
-                        ColorOutput::RgbPercent,
-                        new_c.legacy_rgb,
+                        ColorSpace::Rgb,
+                        ColorOutput::Auto,
                     ))))
                 }
                 _ => Err(SassError::Eval(

@@ -22,18 +22,30 @@ pub(crate) fn is_same_space(space: ColorSpace, target: &str) -> bool {
         || (space == ColorSpace::XyzD65 && (target == "xyz" || target == "xyz-d65"))
 }
 
+/// NaN 通道替换为默认值（CSS Color 4 missing 通道在计算中取 0）。
+fn replace_nan(v: f64, default: f64) -> f64 {
+    match v.is_nan() {
+        true => default,
+        false => v,
+    }
+}
+
 /// 转换颜色到目标空间，用 f64 精度算法。
 pub(crate) fn convert_space(c: &Color, target_space: &str) -> Result<Value> {
     use super::color_conv;
 
     // 同空间转换——直接返回原始值，避免精度损失
+    // 创建函数的 legacy 规范化由 display.rs 的 Auto 输出处理
     match is_same_space(c.space, target_space) {
         true => return Ok(Value::Color(c.clone())),
         false => {}
     }
 
-    // 获取源 sRGB (0-1) 值
+    // 获取源 sRGB (0-1) 值（NaN 通道取 0）
     let (r, g, b) = space_to_srgb_f64(c.space, c.channels, c.legacy_rgb);
+    let r = replace_nan(r, 0.0);
+    let g = replace_nan(g, 0.0);
+    let b = replace_nan(b, 0.0);
 
     match target_space {
         "rgb" => {

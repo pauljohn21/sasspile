@@ -12,7 +12,12 @@ use crate::consts::{
 };
 
 /// 格式化浮点数——截断到 10 位小数（与 SCSS 规范一致）。
+/// NaN 输出为 `none`（CSS Color 4 missing 通道）。
 fn format_num(n: f64) -> String {
+    match n.is_nan() {
+        true => return "none".to_string(),
+        false => {}
+    }
     let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
     match n.fract() == 0.0 {
         true => format!("{}", n as i64),
@@ -135,17 +140,40 @@ impl std::fmt::Display for Value {
                         }
                         ColorSpace::Hwb => {
                             let (h, w, bk) = (c.channels[0], c.channels[1], c.channels[2]);
-                            let hue_str = format_hue(h);
-                            match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                                true => write!(f, "hwb({} {}% {}%)", hue_str, format_pct(w), format_pct(bk)),
-                                false => write!(
-                                    f,
-                                    "hwb({} {}% {}% / {})",
-                                    hue_str,
-                                    format_pct(w),
-                                    format_pct(bk),
-                                    format_alpha(c.a)
-                                ),
+                            // 全通道 NaN 时保留 hwb(none none none) 格式
+                            match h.is_nan() && w.is_nan() && bk.is_nan() {
+                                true => {
+                                    match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                        true => write!(f, "hwb(none none none)"),
+                                        false => write!(f, "hwb(none none none / {})", format_alpha(c.a)),
+                                    }
+                                }
+                                false => {
+                                    // SCSS 规范：HWB 是 legacy 格式，Auto 输出规范化为 HSL
+                                    let h = if h.is_nan() { 0.0 } else { h };
+                                    let w = if w.is_nan() { 0.0 } else { w };
+                                    let bk = if bk.is_nan() { 0.0 } else { bk };
+                                    // HWB → HSL 转换（内联实现，避免跨模块引用）
+                                    let (hsl_h, hsl_s, hsl_l) = hwb_to_hsl_inline(h, w, bk);
+                                    let hue_str = format_hue(hsl_h);
+                                    match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
+                                        true => write!(
+                                            f,
+                                            "hsl({}, {}%, {}%)",
+                                            hue_str,
+                                            format_pct(hsl_s),
+                                            format_pct(hsl_l)
+                                        ),
+                                        false => write!(
+                                            f,
+                                            "hsla({}, {}%, {}%, {})",
+                                            hue_str,
+                                            format_pct(hsl_s),
+                                            format_pct(hsl_l),
+                                            format_alpha(c.a)
+                                        ),
+                                    }
+                                }
                             }
                         }
                         ColorSpace::Lab => {

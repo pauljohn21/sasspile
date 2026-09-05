@@ -56,9 +56,11 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
     }
 }
 
-/// 从 Value 提取 f64 数值（支持百分比→0-1 转换）。
-fn extract_num(v: &Value, scale_pct: bool) -> Result<f64> {
+/// 从 Value 提取 f64 数值或 `none`（返回 NaN）。
+/// 支持百分比→0-1 转换和 `none` 关键字。
+fn extract_num_or_none(v: &Value, scale_pct: bool) -> Result<f64> {
     match v {
+        Value::String(s, false) if s == "none" => Ok(f64::NAN),
         Value::Number(n, Some(u)) if u == "%" && scale_pct => Ok(*n / 100.0),
         Value::Number(n, _) => Ok(*n),
         _ => Err(err_not_a_number("value", v)),
@@ -69,6 +71,7 @@ fn extract_num(v: &Value, scale_pct: bool) -> Result<f64> {
 /// 用于 lab/lch 的 L 分量，spec 中 lab(50% ...) 的 50% 就是 50.0。
 fn extract_pct_value(v: &Value) -> Result<f64> {
     match v {
+        Value::String(s, false) if s == "none" => Ok(f64::NAN),
         Value::Number(n, Some(u)) if u == "%" => Ok(*n),
         Value::Number(n, _) => Ok(*n),
         _ => Err(err_not_a_number("value", v)),
@@ -78,6 +81,7 @@ fn extract_pct_value(v: &Value) -> Result<f64> {
 /// 从 Value 提取 hue 值（支持 deg 单位）。
 fn extract_hue(v: &Value) -> Result<f64> {
     match v {
+        Value::String(s, false) if s == "none" => Ok(f64::NAN),
         Value::Number(n, Some(u)) if u == "deg" => Ok(*n),
         Value::Number(n, _) => Ok(*n),
         _ => Err(err_not_a_number("value", v)),
@@ -91,9 +95,9 @@ fn parse_lab(args: &[Value]) -> Result<Value> {
         true => return Err(err_requires_args("lab", 3, nums.len())),
         false => {}
     }
-    let l = extract_pct_value(&nums[0])?; // L% → 0-100
-    let a = extract_num(&nums[1], false)?;
-    let b = extract_num(&nums[2], false)?;
+    let l = extract_pct_value(&nums[0])?;
+    let a = extract_num_or_none(&nums[1], false)?;
+    let b = extract_num_or_none(&nums[2], false)?;
     Ok(make_color(
         ColorSpace::Lab,
         [l, a, b],
@@ -110,7 +114,7 @@ fn parse_lch(args: &[Value]) -> Result<Value> {
         false => {}
     }
     let l = extract_pct_value(&nums[0])?;
-    let c = extract_num(&nums[1], false)?;
+    let c = extract_num_or_none(&nums[1], false)?;
     let h = extract_hue(&nums[2])?;
     Ok(make_color(
         ColorSpace::Lch,
@@ -127,9 +131,9 @@ fn parse_oklab(args: &[Value]) -> Result<Value> {
         true => return Err(err_requires_args("oklab", 3, nums.len())),
         false => {}
     }
-    let l = extract_num(&nums[0], true)?; // L% → 0-1
-    let a = extract_num(&nums[1], false)?;
-    let b = extract_num(&nums[2], false)?;
+    let l = extract_num_or_none(&nums[0], true)?;
+    let a = extract_num_or_none(&nums[1], false)?;
+    let b = extract_num_or_none(&nums[2], false)?;
     Ok(make_color(
         ColorSpace::Oklab,
         [l, a, b],
@@ -145,8 +149,8 @@ fn parse_oklch(args: &[Value]) -> Result<Value> {
         true => return Err(err_requires_args("oklch", 3, nums.len())),
         false => {}
     }
-    let l = extract_num(&nums[0], true)?;
-    let c = extract_num(&nums[1], false)?;
+    let l = extract_num_or_none(&nums[0], true)?;
+    let c = extract_num_or_none(&nums[1], false)?;
     let h = extract_hue(&nums[2])?;
     Ok(make_color(
         ColorSpace::Oklch,
@@ -157,7 +161,16 @@ fn parse_oklch(args: &[Value]) -> Result<Value> {
 }
 
 /// color(space r g b [/ alpha])
+/// 单参数为 Value::Color 时直接透传。
 fn parse_color_space(args: &[Value]) -> Result<Value> {
+    // 单参数透传：color(some-color) → some-color
+    match args.len() == 1 {
+        true => match &args[0] {
+            Value::Color(_) => return Ok(args[0].clone()),
+            _ => {}
+        },
+        false => {}
+    }
     let (nums, alpha) = split_alpha(args);
     match nums.len() < 4 {
         true => return Err(err_requires_args("color", 4, nums.len())),
@@ -171,9 +184,9 @@ fn parse_color_space(args: &[Value]) -> Result<Value> {
             ));
         }
     };
-    let r = extract_num(&nums[1], false)?;
-    let g = extract_num(&nums[2], false)?;
-    let b = extract_num(&nums[3], false)?;
+    let r = extract_num_or_none(&nums[1], false)?;
+    let g = extract_num_or_none(&nums[2], false)?;
+    let b = extract_num_or_none(&nums[3], false)?;
     let cs = ColorSpace::from_str(&space)
         .ok_or_else(|| SassError::Eval(format!("Unknown color space: {space}")))?;
     Ok(make_color(cs, [r, g, b], alpha, ColorOutput::Auto))

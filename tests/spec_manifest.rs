@@ -1,8 +1,7 @@
 //! sass-spec manifest——目录索引 + 跳过列表。
 //!
-//! 跳过已弃用的目录（libsass `系列、non_conformant）和颜色相关目录`。
-//! 颜色目录跳过以防止在非颜色任务中反复触发颜色测试失败导致无限修复循环。
-//! 如需专门测试颜色功能，使用 `--ignored` 手动触发颜色相关测试。
+//! 跳过已弃用的目录（libsass 系列、non_conformant）。
+//! 颜色测试已纳入全量统计，不再跳过。
 //!
 //! **.sass 缩进式语法跳过**：sasspile 只支持 `.scss` 大括号语法，
 //! 不支持 `.sass` 缩进式语法。`sass_spec_full.rs` 的 `run_spec_dir`
@@ -11,15 +10,10 @@
 
 use std::path::{Path, PathBuf};
 
-/// 跳过的 spec 目录（已弃用/非标准/颜色）。
+/// 跳过的 spec 目录（已弃用/非标准）。
 ///
 /// - `libsass` 系列：LibSass 实现的旧测试，已被 SCSS 规范弃用
 /// - `non_conformant`：不符合规范的旧测试
-/// - `core_functions/color`：颜色函数（adjust/change/scale/channel/mix/hsl/hwb/rgb/invert/
-///   `is_powerless/lab/lch/oklab/oklch/color/to_space/to_gamut` + `adjust_color/adjust_hue` 等）
-/// - `values/colors`：`颜色值测试（alpha_hex`, equality）
-///
-/// **注意**：颜色相关测试已标记 `#[ignore]`，需要用 `--ignored` 手动触发。
 pub const SKIP_DIRS: &[&str] = &[
     // —— LibSass 弃用目录 ——
     "libsass",
@@ -28,14 +22,6 @@ pub const SKIP_DIRS: &[&str] = &[
     "libsass-todo-tests",
     // —— 不符合规范的旧测试 ——
     "non_conformant",
-    // —— 颜色相关目录（防止无限修复循环） ——
-    // core_functions/color 下所有子目录：
-    // adjust, adjust_color, adjust_hue, change, channel, color,
-    // hsl, hwb, invert, is_powerless, lab, lch, mix, oklab, oklch,
-    // rgb, scale, to_gamut, to_space + 顶层 .hrx 文件
-    "core_functions/color",
-    // values/colors（alpha_hex, equality）
-    "values/colors",
 ];
 
 /// 检查文件相对 `spec_root` 的路径是否在跳过列表中。

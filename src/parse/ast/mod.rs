@@ -8,6 +8,7 @@ pub mod named_colors;
 
 pub(crate) use color_fmt::{
     format_alpha, format_hue, format_pct, format_pct_val, hsl_to_rgb_percent,
+    hwb_to_hsl_inline,
 };
 pub use color_types::{ChannelSet, Color, ColorOutput, ColorSpace};
 
