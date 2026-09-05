@@ -316,38 +316,72 @@ fn replace_complex(
     let sel_compounds: Vec<&CompoundSelector> = selector.compounds.iter().map(|(_, c)| c).collect();
     let orig_compounds: Vec<&CompoundSelector> = original.compounds.iter().map(|(_, c)| c).collect();
 
-    match sel_compounds.len() < orig_compounds.len() {
-        true => return None,
-        false => {}
-    }
+    // Strategy 1: Complex-level suffix matching — original 的化合物序列作为 selector 的后缀精确匹配
+    if sel_compounds.len() >= orig_compounds.len() {
+        let start = sel_compounds.len() - orig_compounds.len();
+        let suffix = &sel_compounds[start..];
 
-    let start = sel_compounds.len() - orig_compounds.len();
-    let suffix = &sel_compounds[start..];
+        let matches = suffix
+            .iter()
+            .zip(orig_compounds.iter())
+            .all(|(s, o)| is_super_compound(o, s) && is_super_compound(s, o));
 
-    let matches = suffix
-        .iter()
-        .zip(orig_compounds.iter())
-        .all(|(s, o)| is_super_compound(o, s) && is_super_compound(s, o));
-
-    match matches {
-        false => return None,
-        true => {}
-    }
-
-    let prefix = &selector.compounds[..start];
-
-    let results: Vec<ComplexSelector> = replacement
-        .0
-        .iter()
-        .map(|rep_complex| {
-            let compounds: Vec<(Option<Combinator>, CompoundSelector)> = prefix
+        if matches {
+            let prefix = &selector.compounds[..start];
+            let results: Vec<ComplexSelector> = replacement
+                .0
                 .iter()
-                .cloned()
-                .chain(rep_complex.compounds.iter().cloned())
+                .map(|rep_complex| {
+                    let compounds: Vec<(Option<Combinator>, CompoundSelector)> = prefix
+                        .iter()
+                        .cloned()
+                        .chain(rep_complex.compounds.iter().cloned())
+                        .collect();
+                    ComplexSelector { compounds }
+                })
                 .collect();
-            ComplexSelector { compounds }
-        })
-        .collect();
+            return (!results.is_empty()).then_some(Selector(results));
+        }
+    }
 
-    (!results.is_empty()).then_some(Selector(results))
+    // Strategy 2: Compound-level subset matching — original 的单个化合物是 selector 某化合物的子集
+    // 例: selector-replace('.a.b', '.b', '.c') → '.a.c'
+    // original 仅含一个化合物，且其简单选择器是 selector 某化合物的子集
+    if orig_compounds.len() == 1 {
+        let orig_compound = orig_compounds[0];
+
+        let found = selector.compounds.iter().enumerate().find(|(_, (_, sel_compound))| {
+            orig_compound
+                .0
+                .iter()
+                .all(|orig_simple| sel_compound.0.contains(orig_simple))
+        });
+
+        if let Some((idx, (comb, sel_compound))) = found {
+            // 新化合物 = (sel_compound 去掉 orig 的 simples) ∪ replacement 第一个化合物的 simples
+            if let Some(rep_complex) = replacement.0.first() {
+                if let Some((_, rep_compound)) = rep_complex.compounds.first() {
+                    let remaining: Vec<SimpleSelector> = sel_compound
+                        .0
+                        .iter()
+                        .filter(|s| !orig_compound.0.contains(s))
+                        .cloned()
+                        .collect();
+
+                    let new_simples: Vec<SimpleSelector> = remaining
+                        .into_iter()
+                        .chain(rep_compound.0.clone())
+                        .collect();
+
+                    let new_compound = CompoundSelector(new_simples);
+                    let new_complex = ComplexSelector {
+                        compounds: vec![(*comb, new_compound)],
+                    };
+                    return Some(Selector(vec![new_complex]));
+                }
+            }
+        }
+    }
+
+    None
 }
