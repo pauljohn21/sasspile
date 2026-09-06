@@ -306,6 +306,11 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 | `rgb(r, g, b)` / `rgba(r, g, b, a)` | RGB 构造 | `builtin.rs` → `builtin_rgba` |
 | `hsl(h, s%, l%)` / `hsla(...)` | HSL 构造 | `builtin/color.rs` |
 | `hwb(h, w%, b%)` / `hwb(h, w%, b%, a)` | HWB 构造 | `builtin/color.rs` |
+| `lab(L% a b)` | CSS Color 4 CIE Lab | `builtin/color_parse.rs` |
+| `lch(L% C Hdeg)` | CSS Color 4 CIE LCH | `builtin/color_parse.rs` |
+| `oklab(L% a b)` | CSS Color 4 OkLab | `builtin/color_parse.rs` |
+| `oklch(L% C Hdeg)` | CSS Color 4 OKLCH | `builtin/color_parse.rs` |
+| `color(srgb r g b)` / `color(display-p3 r g b)` / `color(xyz r g b)` 等 | CSS Color 4 现代色彩空间 | `builtin/color_parse.rs` |
 
 **操作函数**：
 
@@ -362,29 +367,36 @@ RUST_LOG="sasspile::css=debug" cargo test --test compile_test -- --nocapture
 - `hsl_to_rgb(h, s, l) → Color`
 - `hwb_to_rgb(h, w, b, a) → Color`
 
-**颜色序列化辅助函数**（`src/parse/ast.rs`）：
-- `hsl_to_rgb_percent(h, s, l) → (r%, g%, b%)` — 从 HSL 精确计算 RGB 百分比（避免 u8 精度丢失）
-- `format_pct_val(v) → String` — 格式化百分比值（0-100，10 位小数截断）
-- `format_hue(h) → String` — 格式化 hue 值（整数无小数点）
-- `format_pct(v) → String` — 格式化百分比值（0-1 → 0%-100%）
+**颜色序列化辅助函数**（`src/parse/ast/color_fmt.rs`）：
+- `format_hue(h)` — hue 截断到 10 位小数，NaN → "none"
+- `format_pct(v)` — 百分比格式化（0-1 → 0%-100%）
+- `format_pct_val(v)` — 百分比值格式化（0-100 → 0%-100%）
 - `format_alpha(a) → String` — 格式化 alpha 值
+- `hwb_to_hsl_inline(h, w, b)` — HWB→HSL 转换（内联实现）
 
-**ColorFormat 枚举**（`src/parse/ast/mod.rs`）：
+**颜色类型架构**（`src/parse/ast/color_types.rs`）：
 
-| 格式 | 用途 | 序列化示例 |
-|------|------|------------|
-| `Auto` | hex / 命名颜色 / rgba | `#ff0000`, `red`, `rgba(0,0,0,0.5)` |
-| `Rgb` | rgb(r,g,b) 固定格式 | `rgb(255, 0, 0)` |
-| `RgbPercent(h,s,l)` | HSL 操作结果的百分比输出 | `rgb(72%, 0%, 0%)` |
-| `Hsl(h,s,l)` | hsl() 创建的颜色保留格式 | `hsl(120, 50%, 50%)` |
-| `Hwb(h,w,b)` | hwb() 创建的颜色保留格式 | `hwb(0 30% 40%)` |
-| `Lab(l,a,b)` | lab() CSS Color 4 Lab 空间 | `lab(50% 40 59.5)` |
-| `Lch(l,c,h)` | lch() CSS Color 4 LCH 空间 | `lch(50% 50 270)` |
-| `Oklab(l,a,b)` | oklab() CSS Color 4 OkLab 空间 | `oklab(59% 0.1 0.1)` |
-| `Oklch(l,c,h)` | oklch() CSS Color 4 OKLCH 空间 | `oklch(70% 0.1 180)` |
-| `DisplayP3(r,g,b)` | color(display-p3 ...) | `color(display-p3 1 0 0)` |
-| `Srgb(r,g,b)` | color(srgb ...) | `color(srgb 1 0 0)` |
-| `XyzD65(x,y,z)` / `XyzD50(x,y,z)` | color(xyz ...) / color(xyz-d50 ...) | `color(xyz 0.5 0.5 0.5)` |
+| 类型 | 用途 |
+|------|------|
+| `ColorSpace` | 17 种色彩空间枚举（Rgb/Srgb/SrgbLinear/DisplayP3/A98Rgb/ProphotoRgb/Rec2020/XyzD65/XyzD50/Hsl/Hwb/Lab/Lch/Oklab/Oklch 等） |
+| `ColorOutput` | 输出模式（Auto/RgbExplicit/RgbPercent） |
+| `ChannelSet` | 按空间分组通道名（Hsl/Hwb/Rgb/Lab/Lch/Oklab/Oklch/Xyz） |
+| `Color` | `{ space, channels[3], alpha, output, legacy_rgb[3] }` |
+
+**序列化格式示例**：
+
+| 空间 | 序列化示例 |
+|------|------------|
+| `Rgb` (Auto) | `#ff0000`, `red`, `rgba(0,0,0,0.5)` |
+| `Hsl` | `hsl(120, 50%, 50%)` |
+| `Hwb` | `hwb(0 30% 40%)` |
+| `Lab` | `lab(50% 40 59.5)` |
+| `Lch` | `lch(50% 50 270deg)`（chroma=0 时 hue 输出 `none`） |
+| `Oklab` | `oklab(59% 0.1 0.1)` |
+| `Oklch` | `oklch(70% 0.1 180deg)`（chroma=0 时 hue 输出 `none`） |
+| `DisplayP3` | `color(display-p3 1 0 0)` |
+| `Srgb` | `color(srgb 1 0 0)` |
+| `XyzD65` / `XyzD50` | `color(xyz 0.5 0.5 0.5)` |
 
 **CSS Color 4 转换架构**（`src/eval/builtin/color_conv.rs`）：
 - 使用 W3C 参考实现 (conversions.js) 的有理数分数矩阵
@@ -643,15 +655,17 @@ result.map_err(|e| {
 | 类型 | 文件 | 说明 |
 |------|------|------|
 | `Token` | `lex/token.rs` | 词法单元 |
-| `Node` | `parse/ast.rs` | AST 节点 |
-| `Value` | `parse/ast.rs` | 求值结果 |
-| `Color` | `parse/ast/color_types.rs` | RGBA 颜色（r/g/b: u8, a: f64） |
-| `ColorFormat` | `parse/ast/color_types.rs` | 颜色格式追踪（Auto/Rgb/RgbPercent/Hsl/Hwb） |
+| `Node` | `parse/ast/mod.rs` | AST 节点 |
+| `Value` | `parse/ast/mod.rs` | 求值结果 |
+| `Color` | `parse/ast/color_types.rs` | 颜色（space + channels[3] + alpha + output + legacy_rgb[3]） |
+| `ColorSpace` | `parse/ast/color_types.rs` | 17 种色彩空间枚举 |
+| `ColorOutput` | `parse/ast/color_types.rs` | 输出模式（Auto/RgbExplicit/RgbPercent） |
+| `ChannelSet` | `parse/ast/color_types.rs` | 按空间分组的通道名 |
 | `MixinRefData` | `parse/ast/mod.rs` | mixin 引用数据（meta.get-mixin 返回值） |
 | `Value::MixinRef` | `parse/ast/mod.rs` | mixin 引用值类型 |
 | `CssNode` | `css/node.rs` | CSS 输出节点 |
 | `Env` | `eval/mod.rs` | 求值环境（变量/函数/mixin/命名空间/module_cache 作用域） |
-| `Arg` | `parse/ast.rs` | 函数调用参数 |
+| `Arg` | `parse/ast/mod.rs` | 函数调用参数 |
 | `OutputStyle` | `lib.rs` | 输出风格枚举 |
 | `SassError` | `error.rs` | 错误类型 |
 
@@ -693,20 +707,21 @@ result.map_err(|e| {
 
 ```bash
 # 核心测试
-cargo test --test compile_test    # 43 个
+cargo test --test compile_test    # 57 个（含 14 个 CSS Color Level 4 色彩空间测试）
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
+cargo test --test interp_test     # 15 个
+cargo test --test default_config_test -- --test-threads=1  # 9 个
 
 # 兼容性测试
 cargo test --test bs_spec -- --nocapture    # 15 个（Bootstrap）
 cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 120 秒）— 121/121 通过
 
-# sass-spec 全量统计（约 44 秒）
+# sass-spec 全量统计（约 75 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：3216/5624 = 57%（hrx-auditor 依赖移除 + 内联 hrx_support 模块）
-# @directives 子目录：337/605 = 56%
-# ep_full：121/121 = 100%（fix-forward-use-conflict 修复后全部通过）
+# 基线：6426/11824 = 54.3%（含 color 目录，跳过 libsass 不支持目录）
+# ep_full：121/121 = 100%
 
 # sass-spec 全量统计 + OTel 追踪
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture

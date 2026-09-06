@@ -19,21 +19,22 @@
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| **lib.rs** | 409 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing + init_tracing_otel（OTel stdout exporter） |
+| **lib.rs** | 416 | 公共 API（compile/compile_expanded/compile_compressed/compile_file/compile_file_with_load_paths）+ init_tracing + init_tracing_otel（OTel stdout exporter） |
 | **main.rs** | 60 | CLI 入口（支持文件路径参数 + stdin 回退 + .css 文件 plain CSS 模式） |
 | **error.rs** | 95 | SassError 定义（全英文错误消息） |
 | **lex/token.rs** | 170 | Token 枚举定义 + Display impl（含重新转义） |
-| **lex/mod.rs** | 523 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
-| **parse/ast/mod.rs** | 335 | AST 类型定义（Node, Value, MixinRefData, BinOp, Param, Arg, VarFlags, ConfigVar, Separator 等）+ MixinRefData PartialEq impl |
-| **parse/ast/color_types.rs** | 180 | ColorFormat 枚举 + Color 结构体 + hsl_to_rgb_percent/format_pct_val/format_hue/format_pct/format_alpha 辅助函数 |
-| **parse/ast/display.rs** | 374 | Display for Value（ColorFormat 分派序列化，含 CSS Color 4 现代空间 + 负 infinity 处理 + Slash/SlashLiteral 分隔符区分） |
+| **lex/mod.rs** | 206 | Lexer + Iterator impl（scan_* 方法）+ scan_escape_ident 返回 Result |
+| **parse/ast/mod.rs** | 374 | AST 类型定义（Node, Value, MixinRefData, BinOp, Param, Arg, VarFlags, ConfigVar, Separator 等）+ MixinRefData PartialEq impl |
+| **parse/ast/color_types.rs** | 474 | ColorSpace 枚举（17 种色彩空间）+ ColorOutput 枚举 + ChannelSet 枚举（Hsl/Hwb/Rgb/Lab/Lch/Oklab/Oklch/Xyz）+ Color 结构体 + 颜色构造辅助函数 |
+| **parse/ast/color_fmt.rs** | 128 | 颜色格式化辅助函数（format_hue/format_pct/format_pct_val/format_alpha/hwb_to_hsl_inline）|
+| **parse/ast/display.rs** | 636 | Display for Value（ColorSpace/ColorOutput 分派序列化，含 CSS Color 4 现代空间 + 负 infinity 处理 + Slash/SlashLiteral 分隔符区分） |
 | **parse/ast_impl.rs** | 288 | Node::to_scss() |
 | **parse/mod.rs** | 92 | Parser 结构 + parse() 入口 + 基础操作（peek/advance/skip_w/expect） |
-| **parse/nodes.rs** | 668 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args + is_namespace_var/parse_namespace_var + parse_config (ConfigVar) |
-| **parse/at_rules.rs** | 513 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
-| **parse/expr/mod.rs** | 293 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color（SlashLiteral 用于声明值中字面量 `/`） |
-| **parse/expr/prefix.rs** | 465 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
-| **eval/mod.rs** | 282 | Env（move 语义 self→Self + HashMap 字段） + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node（Env move） + evaluate_with_env(pub(crate)) + plain CSS 检查入口 |
+| **parse/nodes.rs** | 462 | parse_node/parse_rule/parse_decl/parse_variable/parse_body + parse_params/parse_args + is_namespace_var/parse_namespace_var + parse_config (ConfigVar) |
+| **parse/at_rules.rs** | 502 | 所有 @ 规则解析（@if/@for/@each/@while/@mixin/@include/@function/@use/@forward/@import/@extend/@at-root/@warn/@debug/@error）+ @import 多值/修饰符解析 |
+| **parse/expr/mod.rs** | 376 | Pratt 表达式解析入口 + parse_decl_value/parse_value_with_slash/parse_expr_slash + slash_followed_by_arith_op + parse_number/parse_hash_color（SlashLiteral 用于声明值中字面量 `/`） |
+| **parse/expr/prefix.rs** | 403 | Pratt 前缀解析 + parse_prefix/peek_binding_power/parse_value_start |
+| **eval/mod.rs** | 349 | Env（move 语义 self→Self + HashMap 字段） + ModuleExports + MixinDef + FunctionDef + Evaluator + evaluate/eval_nodes/eval_node（Env move） + evaluate_with_env(pub(crate)) + plain CSS 检查入口 |
 | **eval/meta_ops.rs** | 329 | meta.apply / meta.load-css mixin + meta.get-mixin / meta.module-functions / meta.module-mixins / meta.module-variables 反射函数 |
 | **eval/rule.rs** | 155 | eval_rule（move 语义） + combine_selectors（规则体变量作用域隔离，传播命名空间/!global 变量） |
 | **eval/value/mod.rs** | 482 | eval_value + eval_binop + add/sub/mul/div/modulo/compare + values_eq + inspect_value + eval_interp_str + units_compatible + 命名空间变量赋值 + if() 命名参数支持 |
@@ -49,20 +50,20 @@
 | **eval/module.rs** | 348 | load_module（module_cache 缓存 + pending_config 注入） + load_import（forwarded→local 合并） + call_module_function + eval_use + eval_forward |
 | **eval/file_resolver.rs** | 198 | resolve_file + try_resolve_dir + check_resolve_ambiguity（partial/extension/index/import-only 四种冲突检测） |
 | **eval/module_helpers.rs** | 174 | bind_exports（BindMode Use/Forward + show/hide 过滤 + values_eq + Display 后备） + merge_module_cache + builtin_module_exports + BindMode + FilterConfig + merge_with_local_precedence |
-| **eval/color.rs** | 665 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
-| **eval/builtin.rs** | 409 | call_builtin 分派入口（优先调用宏生成的 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
-| **eval/builtin/math.rs** | 412 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
+| **eval/color.rs** | 458 | hsl_to_rgb/hwb_to_rgb/rgb_to_hsl + builtin_rgba（SlashLiteral 兼容）/builtin_darken/builtin_lighten/builtin_mix + simple_random |
+| **eval/builtin.rs** | 324 | call_builtin 分派入口（优先调用宏生成的 dispatch_builtin_module）+ rgba/rgb/darken/lighten/mix 手工分派 + meta 函数（get-mixin/module-functions/module-mixins/module-variables/mixin-exists/type-of） |
+| **eval/builtin/math.rs** | 371 | abs/ceil/floor/round/min/max/percentage/div/pow/sqrt/sin/cos/tan/atan2/asin/acos/atan/hypot/log/random/clamp/unit/is-unitless/compatible/comparable + validate_single_number 参数验证 + div 除零 calc(infinity) 表达式 |
 | **eval/builtin/math_helpers.rs** | 89 | merge_math_args 命名参数合并 + math_param_names 参数名映射 + validate_single_number 参数验证辅助 |
-| **eval/builtin/color.rs** | 520 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless + flatten_space_list（SlashLiteral 兼容） |
-| **eval/builtin/color_adjust.rs** | 550 | color.adjust/change/scale 现代色彩空间实现（Oklch/Lab/Lch/Oklab/DisplayP3/sRGB 等）— 直接在 ColorFormat 中修改通道值，保留原始格式输出 |
-| **eval/builtin/color_conv.rs** | 461 | f64 精度色彩空间转换算法（sRGB↔XYZ/Lab/Oklab/Oklch/DisplayP3）— W3C 参考实现有理数分数矩阵 + 扩展传递函数（支持负值） |
-| **eval/builtin/color_conv_ops.rs** | 261 | 颜色空间转换工具函数：is_same_space/convert_space/format_to_srgb_f64/make_color + HSL/HWB f64 精度转换 |
-| **eval/builtin/color_gamut.rs** | 293 | color.to-gamut 实现（clip 直接截断 + local-minde 在 Oklch 空间二分搜索减小 chroma） |
-| **eval/builtin/color_parse.rs** | 178 | CSS Color 4 颜色函数解析：lab/lch/oklab/oklch/color() — 从 Sass 值参数解析为 Value::Color + split_alpha（Slash/SlashLiteral 兼容） + flatten_space_list（SlashLiteral 兼容） |
-| **eval/builtin/color_space.rs** | 390 | color.channel/to-space/space/same 函数 + get_channel_value（各空间通道值提取） |
-| **eval/builtin/list.rs** | 306 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip（SlashLiteral 兼容处理） |
-| **eval/builtin/map.rs** | 302 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
-| **eval/builtin/string.rs** | 376 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id + 参数验证（$string: X is not a string） |
+| **eval/builtin/color.rs** | 627 | invert/grayscale/color-channel/hwb/complement/hsl/hsla/adjust-hue/saturate/desaturate/transparentize/opacify/alpha/red/green/blue/hue/saturation/lightness + adjust-color/change-color/scale-color（旧版 RGB/HSL/HWB） + is-powerless/is-in-gamut/is-legacy + is_channel_powerless + flatten_space_list（SlashLiteral 兼容） |
+| **eval/builtin/color_adjust.rs** | 614 | color.adjust/change/scale 现代色彩空间实现（Oklch/Lab/Lch/Oklab/DisplayP3/sRGB 等）— 直接在 ColorFormat 中修改通道值，保留原始格式输出 |
+| **eval/builtin/color_conv.rs** | 506 | f64 精度色彩空间转换算法（sRGB↔XYZ/Lab/Oklab/Oklch/DisplayP3）— W3C 参考实现有理数分数矩阵 + 扩展传递函数（支持负值） |
+| **eval/builtin/color_conv_ops.rs** | 488 | 颜色空间转换工具函数：is_same_space/convert_space/format_to_srgb_f64/make_color + HSL/HWB f64 精度转换 |
+| **eval/builtin/color_gamut.rs** | 315 | color.to-gamut 实现（clip 直接截断 + local-minde 在 Oklch 空间二分搜索减小 chroma） |
+| **eval/builtin/color_parse.rs** | 220 | CSS Color 4 颜色函数解析：lab/lch/oklab/oklch/color() — 从 Sass 值参数解析为 Value::Color + split_alpha（Slash/SlashLiteral 兼容） + flatten_space_list（SlashLiteral 兼容） |
+| **eval/builtin/color_space.rs** | 335 | color.channel/to-space/space/same 函数 + get_channel_value（各空间通道值提取） |
+| **eval/builtin/list.rs** | 352 | length/nth/append/join/index/separator/set-nth/is-bracketed/list-slash/zip（SlashLiteral 兼容处理） |
+| **eval/builtin/map.rs** | 385 | map-get/keys/values/has-key/merge/remove/set/deep-remove + value_to_map/nested_map_merge/nested_map_set |
+| **eval/builtin/string.rs** | 435 | str-length/to-upper-case/to-lower-case/unquote/quote/str-slice/str-index/str-insert/str-split/unique-id + 参数验证（$string: X is not a string） |
 | **eval/builtin/selector.rs** | 110 | selector-append/nest/is-super/parse/simple-selectors/unify/extend + merge_selector_args 命名参数合并 |
 | **css/mod.rs** | 359 | Serializer（CSS 树 → 字符串，选择器净化 + 组合器验证 + @规则合并 + @import 间不加空行） |
 | **css/node.rs** | 93 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Raw/Return） |
@@ -149,8 +150,10 @@
 |------|----------|
 | `Node` (AST 节点枚举) | `parse/ast/mod.rs` |
 | `Value` (值枚举) | `parse/ast/mod.rs` |
-| `Color` | `parse/ast/mod.rs` |
-| `ColorFormat` (Auto/Rgb/RgbPercent/Hsl/Hwb/Lab/Lch/Oklab/Oklch/DisplayP3/Srgb/...) | `parse/ast/mod.rs` |
+| `Color` | `parse/ast/color_types.rs` |
+| `ColorSpace` (17 种色彩空间枚举) | `parse/ast/color_types.rs` |
+| `ColorOutput` (Auto/RgbExplicit/RgbPercent) | `parse/ast/color_types.rs` |
+| `ChannelSet` (Hsl/Hwb/Rgb/Lab/Lch/Oklab/Oklch/Xyz) | `parse/ast/color_types.rs` |
 | `BinOp` / `BinOpKind` | `parse/ast/mod.rs` |
 | **Separator** (Comma/Space/Slash/SlashLiteral/Undecided) | `parse/ast/mod.rs` |
 | `Ast` | `parse/ast/mod.rs` |
@@ -184,7 +187,8 @@
 | 颜色转换 | `eval/color.rs` → `hsl_to_rgb` / `rgb_to_hsl` / `hwb_to_rgb` + `parse/ast/mod.rs` → `hsl_to_rgb_percent` + `eval/builtin/color_conv.rs` → sRGB↔XYZ/Lab/Oklab 矩阵转换 |
 | CSS Color 4 色彩空间 | `eval/builtin/color_space.rs` → `channel`/`to_space`/`space`/`same` + `eval/builtin/color_conv_ops.rs` → `convert_space`/`format_to_srgb_f64`/`make_color` + `eval/builtin/color_parse.rs` → `parse_color_fn` + `eval/builtin/color_adjust.rs` → 现代空间 adjust/change/scale + `eval/builtin/color_gamut.rs` → `to_gamut` (clip + local-minde) + `eval/builtin/color_conv.rs` → W3C 有理数分数矩阵 |
 | 颜色序列化 | `parse/ast/display.rs` → `Display for Value`（ColorFormat 分派，含 CSS Color 4 现代空间） |
-| 颜色格式追踪 | `parse/ast/mod.rs` → `ColorFormat` 枚举（Auto/Rgb/RgbPercent/Hsl/Hwb/Lab/Lch/Oklab/Oklch/DisplayP3/Srgb/...） |
+| 色彩空间枚举 | `parse/ast/color_types.rs` → `ColorSpace`（17 种：Rgb/Srgb/SrgbLinear/DisplayP3/A98Rgb/ProphotoRgb/Rec2020/XyzD65/XyzD50/Hsl/Hwb/Lab/Lch/Oklab/Oklch 等） |
+| 颜色输出模式 | `parse/ast/color_types.rs` → `ColorOutput`（Auto/RgbExplicit/RgbPercent） |
 | 选择器净化 | `css/selector.rs` → `sanitize_selector` / `normalize_attr_selectors` / `has_bogus_combinators` |
 | 内建函数注册 | `eval/module_dispatch.rs` → `#[derive(BuiltinRegistry)]` 宏自动生成单一数据源（`sasspile-macros` crate） |
 | 数学函数分派 | `eval/builtin/math.rs` → `call()` + `merge_math_args()` 命名参数合并（由 `MathBuiltins` 结构体通过宏注册） |
@@ -193,7 +197,7 @@
 | Tracing span | `eval/mod.rs` (eval_nodes/eval_node) + 各子模块 + `eval/rule.rs` (eval_rule) |
 | Tracing events | `eval/color.rs` (sasspile::color) + `eval/extend.rs` (sasspile::extend) + `eval/value/mod.rs` (sasspile::binop) |
 | CSS diff 工具 | `tests/common/mod.rs` |
-| HRX 解析（VFS 内联模块） | `tests/hrx_support.rs`（parse_hrx + Vfs + parse_hrx_to_cases）→ 9 个测试文件引用 |
+| HRX 解析（VFS 内联模块） | `tests/hrx_support.rs`（parse_hrx + Vfs + parse_hrx_to_cases + OnceLock _utils.scss 缓存注入）→ 9 个测试文件引用 |
 | spec 跳过列表 | `tests/spec_manifest.rs` → `SKIP_DIRS`（跳过 libsass/non_conformant/core_functions/color/values/colors） |
 | 颜色测试跳过 | `#[ignore]` 标记的 5 个颜色测试函数（cf_color/cf_diag/minimize/sass_spec_full），需 `--ignored` 手动触发 |
 | 最小化工具 | `tests/minimize.rs` |

@@ -405,3 +405,147 @@ fn test_cli_compile() {
     let css = compile_expanded(input).unwrap();
     assert!(css.contains("color: red"));
 }
+
+// ── CSS Color Level 4 现代色彩空间 ───────────────────────────────────────────
+
+#[test]
+fn test_compile_color_lab_basic() {
+    // lab(L% a b): L=50%, a=20, b=30
+    let css = compile_expanded("a { color: lab(50% 20 30); }").unwrap();
+    assert!(
+        css.contains("lab(50% 20 30)"),
+        "应输出 lab(50% 20 30): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_lab_with_alpha() {
+    // lab 带 alpha: L% a b / alpha
+    let css = compile_expanded("a { color: lab(50% 20 30 / 0.5); }").unwrap();
+    assert!(
+        css.contains("lab(50% 20 30 / 0.5)"),
+        "应输出 lab(50% 20 30 / 0.5): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_lab_negative_values() {
+    // lab 支持负值: a, b 通道可负
+    let css = compile_expanded("a { color: lab(75% -160 100); }").unwrap();
+    assert!(
+        css.contains("lab(75% -160 100)"),
+        "应输出 lab(75% -160 100): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_lch_basic() {
+    // lch(L% C Hdeg): L=50%, C=30, H=180deg
+    let css = compile_expanded("a { color: lch(50% 30 180deg); }").unwrap();
+    assert!(
+        css.contains("lch(50% 30 180deg)"),
+        "应输出 lch(50% 30 180deg): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_lch_with_alpha() {
+    // lch 带 alpha: L% C Hdeg / alpha
+    let css = compile_expanded("a { color: lch(50% 30 180deg / 0.8); }").unwrap();
+    assert!(
+        css.contains("lch(50% 30 180deg / 0.8)"),
+        "应输出 lch(50% 30 180deg / 0.8): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_lch_zero_chroma_none_hue() {
+    // chroma=0 时 hue 输出为 none
+    let css = compile_expanded("a { color: lch(50% 0 180deg); }").unwrap();
+    assert!(
+        css.contains("lch(50% 0 none)"),
+        "chroma=0 时 hue 应输出 none: {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklab_basic() {
+    // oklab(L% a b): L 百分比, a/b 小数
+    let css = compile_expanded("a { color: oklab(50% 0.1 -0.2); }").unwrap();
+    assert!(
+        css.contains("oklab(50% 0.1 -0.2)"),
+        "应输出 oklab(50% 0.1 -0.2): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklab_with_alpha() {
+    // oklab 带 alpha
+    let css = compile_expanded("a { color: oklab(75% -0.1 0.15 / 0.6); }").unwrap();
+    assert!(
+        css.contains("oklab(75% -0.1 0.15 / 0.6)"),
+        "应输出 oklab(75% -0.1 0.15 / 0.6): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklab_lightness_scaling() {
+    // oklab: 输入 channels 0-1 → 输出 L% 0-100%
+    let css = compile_expanded("a { color: oklab(0.6 0.1 0.2); }").unwrap();
+    assert!(
+        css.contains("oklab(60% 0.1 0.2)"),
+        "oklab lightness 0.6 应输出 60%: {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklch_basic() {
+    // oklch(L% C Hdeg)
+    let css = compile_expanded("a { color: oklch(50% 0.1 180deg); }").unwrap();
+    assert!(
+        css.contains("oklch(50% 0.1 180deg)"),
+        "应输出 oklch(50% 0.1 180deg): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklch_with_alpha() {
+    // oklch 带 alpha
+    let css = compile_expanded("a { color: oklch(50% 0.1 180deg / 0.7); }").unwrap();
+    assert!(
+        css.contains("oklch(50% 0.1 180deg / 0.7)"),
+        "应输出 oklch(50% 0.1 180deg / 0.7): {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklch_zero_chroma_none_hue() {
+    // chroma=0 时 hue 输出为 none
+    let css = compile_expanded("a { color: oklch(50% 0 180deg); }").unwrap();
+    assert!(
+        css.contains("oklch(50% 0 none)"),
+        "chroma=0 时 hue 应输出 none: {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_lab_variable_use() {
+    // lab 颜色可以作为变量使用
+    let css =
+        compile_expanded("$c: lab(50% 20 30); a { color: $c; }").unwrap();
+    assert!(
+        css.contains("lab(50% 20 30)"),
+        "lab 变量应正确序列化: {css}"
+    );
+}
+
+#[test]
+fn test_compile_color_oklch_variable_use() {
+    // oklch 颜色可以作为变量使用
+    let css =
+        compile_expanded("$c: oklch(60% 0.1 240deg); a { color: $c; }").unwrap();
+    assert!(
+        css.contains("oklch(60% 0.1 240deg)"),
+        "oklch 变量应正确序列化: {css}"
+    );
+}

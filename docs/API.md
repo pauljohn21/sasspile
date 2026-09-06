@@ -98,7 +98,7 @@
 
 ## Node 枚举
 
-`src/parse/ast.rs` — 语法树节点。
+`src/parse/ast/mod.rs` — 语法树节点。
 
 ### `Rule` 变体
 
@@ -247,7 +247,7 @@
 
 ## Value 枚举
 
-`src/parse/ast.rs` — 值表达式。
+`src/parse/ast/mod.rs` — 值表达式。
 
 ### 变体一览
 
@@ -309,33 +309,59 @@
 
 ## Color 结构体
 
-`src/parse/ast.rs` — RGB(A) 颜色表示。
+`src/parse/ast/color_types.rs` — CSS 多色彩空间颜色表示。
 
 | 字段 | 类型 | 语义 |
 |------|------|------|
-| `r` | `u8` | 红色通道（0-255） |
-| `g` | `u8` | 绿色通道（0-255） |
-| `b` | `u8` | 蓝色通道（0-255） |
-| `a` | `f32` | Alpha 通道（0.0-1.0） |
+| `space` | `ColorSpace` | 色彩空间标识（Rgb/Hsl/Lab/Oklab 等 17 种） |
+| `channels` | `[f64; 3]` | 通道值（语义随 space 变化） |
+| `a` | `f64` | Alpha 通道（0.0-1.0，NaN = none） |
+| `output` | `ColorOutput` | 输出模式（Auto/RgbExplicit/RgbPercent） |
+| `legacy_rgb` | `[f64; 3]` | sRGB 0-255 缓存（用于 hex/命名色输出） |
+
+### ColorSpace 枚举（17 种）
+
+| 空间 | 说明 |
+|------|------|
+| `Rgb` | Legacy RGB (0-255) |
+| `Srgb` / `SrgbLinear` | sRGB / 线性 sRGB |
+| `DisplayP3` / `DisplayP3Linear` | Display P3 / 线性 Display P3 |
+| `A98Rgb` | A98 RGB |
+| `ProphotoRgb` | ProPhoto RGB |
+| `Rec2020` | Rec. 2020 |
+| `XyzD65` / `XyzD50` | XYZ D65 / XYZ D50 |
+| `Hsl` | HSL |
+| `Hwb` | HWB |
+| `Lab` | CIE Lab |
+| `Lch` | CIE LCH |
+| `Oklab` | OkLab |
+| `Oklch` | OKLCH |
+
+### ChannelSet 枚举
+
+按空间分组：`Hsl(HslChannel)` / `Hwb(HwbChannel)` / `Rgb(RgbChannel)` / `Lab(LabChannel)` / `Lch(LchChannel)` / `Oklab(OklabChannel)` / `Oklch(OklchChannel)` / `Xyz(XyzChannel)`
+
+`ChannelSet::from_str(space, name)` 从空间和通道名解析对应通道。
 
 ---
 
 ## Separator 枚举
 
-`src/parse/ast.rs` — 列表分隔符类型。
+`src/parse/ast/mod.rs` — 列表分隔符类型。
 
 | 变体 | 语义 |
 |------|------|
 | `Comma` | 逗号分隔——`(a, b, c)` |
 | `Space` | 空格分隔——`(a b c)` |
-| `Slash` | 斜杠分隔——`(a / b / c)` |
+| `Slash` | 斜杠分隔——`(a / b / c)`（运算除法） |
+| `SlashLiteral` | 字面色隙分隔符——`lab(50% 0 0 / 0.5)`，仅作为值结构 |
 | `Undecided` | 未确定——单元素或待推断 |
 
 ---
 
 ## Ast 结构体
 
-`src/parse/ast.rs` — AST 根容器。
+`src/parse/ast/mod.rs` — AST 根容器。
 
 | 字段 | 类型 | 语义 |
 |------|------|------|
@@ -378,7 +404,8 @@
 
 - `src/lex/token.rs` — 34 个 Token 符号/关键字变体
 - `src/error.rs` — 6 个 SassError 变体字段
-- `src/parse/ast.rs` — 90+ 个 Node/Value/BinOp/Color/Separator/Ast 变体及字段
+- `src/parse/ast/mod.rs` — 90+ 个 Node/Value/BinOp/Separator/Ast 变体及字段
+- `src/parse/ast/color_types.rs` — Color/ColorSpace/ColorOutput/ChannelSet 颜色类型
 - `src/eval/mod.rs` — 4 个 Env 公开方法
 - `src/css/node.rs` — 7 个 CssNode 变体及字段
 

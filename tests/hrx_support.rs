@@ -246,11 +246,27 @@ pub struct HrxCase {
     pub expect_error: bool,
 }
 
+/// 共享模块缓存——避免重复读取磁盘。
+///
+/// sass-spec 的 `core_functions/color/_utils.scss` 是物理文件，不包含在 HRX 条目中。
+/// 第一次访问后缓存内容，后续测试用例直接复用。
+static UTILS_CONTENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// 获取颜色 utils 物理文件内容（带缓存）。
+fn get_utils_content() -> &'static str {
+    UTILS_CONTENT.get_or_init(|| {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{manifest_dir}/sass-spec/spec/core_functions/color/_utils.scss");
+        std::fs::read_to_string(&path).unwrap_or_default()
+    })
+}
+
 /// 解析 HRX 内容为测试用例列表。
 ///
 /// 所有文件共享同一个 VFS——不按 `===` 分组隔离。
 /// 文件路径加上 HRX 文件所在目录作为前缀，
 /// 使 `@use 'callable/arguments/mixin/utils'` 等绝对路径能正确解析。
+/// 颜色相关目录自动注入 `_utils.scss` 共享模块。
 pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
     let span = info_span!("parse_hrx", hrx = %hrx_rel_path);
     let _enter = span.enter();
@@ -265,7 +281,7 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
     let dirs = vfs.walk();
 
     // 展平所有 .scss/.css/.sass 文件——加上 HRX 目录前缀
-    let all_files: Vec<(String, String)> = dirs
+    let mut all_files: Vec<(String, String)> = dirs
         .iter()
         .flat_map(|(dir_path, files)| {
             let dp = dir_path.clone();
@@ -285,6 +301,17 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
         })
         .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
         .collect();
+
+    // 颜色相关目录自动注入 `_utils.scss` 共享模块
+    // 匹配 `core_functions/color/xxx.hrx` 且不是 `_utils.scss` 自身
+    if prefix.starts_with("core_functions/color/") && !prefix.ends_with("utils") {
+        let utils_path = "core_functions/color/_utils.scss";
+        let already_included = all_files.iter().any(|(p, _)| p == utils_path);
+        let utils_content = get_utils_content();
+        if !already_included && !utils_content.is_empty() {
+            all_files.push((utils_path.to_string(), utils_content.to_string()));
+        }
+    }
 
     let mut cases = Vec::new();
     for (dir_path, files) in &dirs {

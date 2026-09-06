@@ -454,7 +454,7 @@ Source::from_file(path)?
 ## 验证清单（修复后必跑）
 
 ```bash
-cargo test --test compile_test    # 43 个
+cargo test --test compile_test    # 57 个（含 14 个 CSS Color Level 4 色彩空间测试）
 cargo test --test stage_test      # 10 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
@@ -470,8 +470,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
 ```
 
-**通过标准**：43/43 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：6264/11824 = 53.0%（含 color 目录，跳过 libsass 不支持目录）
+**通过标准**：57/57 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
+**sass-spec 基线**：6426/11824 = 54.3%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -496,6 +496,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 - `hrx_support::Vfs::from_archive(&archive)` → `Vfs`（虚拟目录树）
 - `hrx_support::parse_hrx_to_cases(content, hrx_rel_path)` → `Vec<HrxCase>`（高级 API，路径加 HRX 名作前缀）
 - 测试代码**不再按 `===` 分组隔离**——所有条目共享同一个 VFS，路径加 HRX 目录前缀，使 `@use` 跨组引用能正确解析
+- **颜色相关目录自动注入 `_utils.scss`**：使用 `OnceLock` 缓存物理文件 `sass-spec/spec/core_functions/color/_utils.scss`，首次访问时读取并注入到 VFS 文件列表，解决跨组 `@use 'core_functions/color/_...'` 路径解析问题
 - 共享模块被 9 个测试文件引用：`sass_spec_full.rs`、`cf_diag.rs`、`css_diag.rs`、`expr_diag.rs`、`sass_spec.rs`、`diag_detail.rs`、`minimize.rs`、`cf_color.rs`、`diag_directives.rs`
 
 ## 🔄 Git 规范
@@ -510,6 +511,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **color-level4-complete**（2026-09-06）：CSS Color Level 4 测试工具链修复（.sass 过滤 + _utils.scss OnceLock 注入）+ 14 个 lab/lch/oklab/oklch 构造序列化测试 — 核心测试 100/100 全通过，sass-spec 6264→6426 (+162)
 - **sass-spec-boost**（2026-09-05）：color/to_space NaN 处理 + HWB/HSL 序列化 + scale/change HWB 通道扩展 — 202/202 核心测试全通过，sass-spec 6205→6264 (+59)
 - **sass-spec-completeness**（2026-09-05）：CSS at-rules 全链路（@keyframes/@font-face/@page/@charset/@namespace/@layer/@container）+ meta 反射修复 + 颜色算法精度 + selector-replace compound-level subset matching — 202/202 核心测试全通过，sass-spec 6123→6205 (+82)
 - **functional-cleanup**（2026-09-04）：函数式风格全量清理 — else-if 链→match（81处）、for+push→迭代器链（76处）、if-let 链→apply_kw 链式、&mut 参数→move 语义 — 105/105 核心测试通过，sass-spec 3366/5624 维持基线
@@ -535,29 +537,42 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 
 ## 颜色系统架构
 
-sasspile 颜色系统基于 `ColorFormat` 枚举追踪颜色创建方式，影响序列化输出：
+sasspile 颜色系统基于 `ColorSpace` 枚举（17 种色彩空间）+ `ColorOutput` 枚举（3 种输出模式）实现 CSS Color 4 完整支持。
 
-| 格式 | 用途 | 示例 |
-|------|------|------|
-| `Auto` | hex / 命名颜色 / rgba（默认） | `#ff0000`, `red`, `rgba(0,0,0,0.5)` |
-| `Rgb` | rgb(r,g,b) / rgba(r,g,b,a)（不转 hex） | `rgb(255, 0, 0)` |
-| `RgbPercent(h,s,l)` | rgb(r%,g%,b%) 百分比输出（HSL 操作结果） | `rgb(72%, 0%, 0%)` |
-| `Hsl(h,s,l)` | hsl(h,s%,l%) / hsla(...)（保留原始 HSL） | `hsl(120, 50%, 50%)` |
-| `Hwb(h,w,b)` | hwb(h w% b%) / hwb(h w% b% / a) | `hwb(0 30% 40%)` |
-| `Lab(l,a,b)` | lab(L% a b)（CSS Color 4 Lab） | `lab(50% 40 59.5)` |
-| `Lch(l,c,h)` | lch(L% C Hdeg)（CSS Color 4 LCH） | `lch(50% 50 270)` |
-| `Oklab(l,a,b)` | oklab(L% a b)（CSS Color 4 OkLab） | `oklab(59% 0.1 0.1)` |
-| `Oklch(l,c,h)` | oklch(L% C Hdeg)（CSS Color 4 OKLCH） | `oklch(70% 0.1 180)` |
-| `DisplayP3(r,g,b)` | color(display-p3 r g b) | `color(display-p3 1 0 0)` |
-| `Srgb(r,g,b)` | color(srgb r g b) | `color(srgb 1 0 0)` |
-| `XyzD65(x,y,z)` / `XyzD50(x,y,z)` | color(xyz r g b) / color(xyz-d50 r g b) | `color(xyz 0.5 0.5 0.5)` |
+**类型定义**（`src/parse/ast/color_types.rs`）：
+
+| 类型 | 说明 |
+|------|------|
+| `ColorSpace` | 色彩空间标识（Rgb/Srgb/DisplayP3/A98Rgb/ProphotoRgb/Rec2020/XyzD65/XyzD50/Hsl/Hwb/Lab/Lch/Oklab/Oklch 等） |
+| `ColorOutput` | 输出模式（Auto / RgbExplicit / RgbPercent） |
+| `ChannelSet` | 通道名分组（Hsl/Hwb/Rgb/Lab/Lch/Oklab/Oklch/Xyz） |
+| `Color` | `{ space, channels[3], alpha, output, legacy_rgb[3] }` |
+
+**序列化格式示例**：
+
+| 空间 | 输出示例 | 备注 |
+|------|----------|------|
+| `Rgb` (Auto) | `#ff0000`, `red`, `rgba(0,0,0,0.5)` | hex / 命名色优先 |
+| `Hsl` | `hsl(120, 50%, 50%)` | NaN hue → 0 |
+| `Hwb` | `hwb(0 30% 40%)` / `hsl(...)` | 全有效值时规范化为 HSL |
+| `Lab` | `lab(50% 40 59.5)` | L% a b |
+| `Lch` | `lch(50% 50 270deg)` | chroma=0 时 hue → `none` |
+| `Oklab` | `oklab(59% 0.1 0.1)` | L% a b（L 从 0-1 转为 0%-100%） |
+| `Oklch` | `oklch(70% 0.1 180deg)` | chroma=0 时 hue → `none` |
+| `DisplayP3` | `color(display-p3 1 0 0)` | 现代RGB空间 |
+| `Srgb` / `SrgbLinear` | `color(srgb 1 0 0)` | |
+| `XyzD65` / `XyzD50` | `color(xyz 0.5 0.5 0.5)` | |
 
 **关键规则**：
 - `hsl()`/`hsla()` 创建的颜色保留 HSL 格式输出
 - `darken`/`lighten`/`saturate`/`adjust-hue`/`complement`/`invert`/`grayscale` 等操作函数用 `RgbPercent` 输出
 - `adjust-color`/`change-color`/`scale-color` 修改 HSL/HWB 参数时用 `RgbPercent`，纯 RGB 参数时用 `Auto`
 - **CSS Color 4 现代空间**：`color_conv.rs` 使用 W3C 有理数分数矩阵（sRGB↔XYZ/Lab/Oklab），`color_adjust.rs` 支持现代空间 adjust/change/scale，`color_gamut.rs` 实现 clip + local-minde 色域映射
-- 依赖 `color` crate v0.3 提供色彩空间转换参考
+
+**格式化辅助函数**（`src/parse/ast/color_fmt.rs`）：
+- `format_hue(h)` — hue 截断到 10 位小数，NaN → "none"
+- `format_pct(v)` — 百分比格式化（0-1 → 0%-100%）
+- `format_num(n)` — 通用浮点格式化，NaN → "none"
 
 ## 🤖 AI 代码生成防抖规范
 
