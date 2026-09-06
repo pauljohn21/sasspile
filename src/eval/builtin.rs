@@ -6,9 +6,12 @@
 
 pub mod color;
 pub mod color_adjust;
+pub mod color_adjust_cie;
 pub mod color_conv;
 pub mod color_conv_ops;
+pub mod color_conv_spaces;
 pub mod color_gamut;
+pub mod color_hwb_hsl;
 pub mod color_inspect;
 pub(crate) mod color_parse;
 pub mod color_space;

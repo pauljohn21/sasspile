@@ -170,12 +170,12 @@ impl Parser<'_> {
                             _ => {}
                         }
                         match items.len() == 1 && !saw_comma {
-                            true => Ok(Value::Paren(Box::new(
-                                items
-                                    .into_iter()
-                                    .next()
-                                    .expect("items has exactly 1 element"),
-                            ))),
+                            true => {
+                                // len == 1 已确认，expect 仅作文档
+                                #[allow(clippy::expect_used)]
+                                let single_item = items.into_iter().next().expect("items has exactly 1 element");
+                                Ok(Value::Paren(Box::new(single_item)))
+                            }
                             false => Ok(Value::List(items, sep, false)),
                         }
                     }
@@ -306,6 +306,8 @@ impl Parser<'_> {
         }
         match segments.len() {
             1 => {
+                // len == 1 已确认，expect 仅作文档
+                #[allow(clippy::expect_used)]
                 let single = segments.into_iter().next().expect("segments has 1 element");
                 match &single {
                     InterpSegment::Expr(_) | InterpSegment::Text(_) => {

@@ -344,7 +344,7 @@ pub(crate) fn hwb_to_hsl_via_color(h: f64, w: f64, b: f64) -> (f64, f64, f64) {
     // hue 为 NaN 时，HSL 的 saturation/lightness 基于 w/b 推导
     match h.is_nan() {
         true => {
-            let l = 0.5 * (1.0 - b + w);
+            let l = f64::midpoint(1.0 - b, w);
             let max = 1.0 - b;
             let min = w;
             let delta = (max - min).abs();

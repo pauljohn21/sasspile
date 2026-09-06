@@ -248,6 +248,7 @@ impl Parser {
     }
 
     /// 解析数字 + 可选单位——peek+next 循环。
+    #[allow(clippy::expect_used)]
     fn parse_number(&mut self) -> Option<CalcNode> {
         let mut num_str = String::new();
         loop {
@@ -270,20 +271,23 @@ impl Parser {
         // 单位
         let mut unit = String::new();
         while self.peek().is_some_and(|c| is_unit_char(c)) {
-            unit.push(self.advance().unwrap());
+            // peek 已确认 Some，advance 必然返回 Some
+            unit.push(self.advance().expect("parse_number: peek matched unit char"));
         }
         let unit = match unit.is_empty() { true => None, false => Some(unit) };
         Some(CalcNode::Number(n, unit))
     }
 
     /// 解析标识符或函数调用。
+    #[allow(clippy::expect_used)]
     fn parse_ident_or_func(&mut self) -> Option<CalcNode> {
         let mut name = String::new();
         while self
             .peek()
             .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
-            name.push(self.advance().unwrap());
+            // peek 已确认 Some，advance 必然返回 Some
+            name.push(self.advance().expect("parse_ident_or_func: peek matched"));
         }
         self.skip_ws();
 
@@ -311,6 +315,7 @@ impl Parser {
     }
 
     /// var() 参数解析——peek+next 收集名字。
+    #[allow(clippy::expect_used)]
     fn parse_var_args(&mut self) -> Option<CalcNode> {
         self.skip_ws();
         let mut var_name = String::new();
@@ -318,7 +323,8 @@ impl Parser {
             .peek()
             .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
-            var_name.push(self.advance().unwrap());
+            // peek 已确认 Some，advance 必然返回 Some
+            var_name.push(self.advance().expect("parse_var_args: peek matched"));
         }
         self.skip_ws();
 

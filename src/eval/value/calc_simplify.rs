@@ -220,6 +220,7 @@ fn simplify_round_mod_rem(name: &str, args: Vec<CalcNode>) -> Result<CalcNode, C
 }
 
 /// 简化 round(step, x) 或 round(x)。
+#[allow(clippy::expect_used)]
 fn simplify_round(nums: &[(f64, Option<String>)], args: &[CalcNode]) -> Result<CalcNode, CalcError> {
     let val = match nums.len() {
         1 => nums[0].0.round(),
@@ -227,7 +228,8 @@ fn simplify_round(nums: &[(f64, Option<String>)], args: &[CalcNode]) -> Result<C
         2 => nums[1].0.round(),
         _ => return preserve_func("round", args.to_vec()),
     };
-    Ok(CalcNode::Number(val, nums.last().unwrap().1.clone()))
+    // nums 非空已在上方 is_empty 检查中保证
+    Ok(CalcNode::Number(val, nums.last().expect("simplify_round: nums non-empty").1.clone()))
 }
 
 /// 简化 mod(a, b)。

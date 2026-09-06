@@ -268,6 +268,7 @@ impl Evaluator {
     }
 
     /// `if()` 冒号语法求值。
+    #[allow(clippy::expect_used)]
     fn eval_if_colon(args: &[Arg], env: &Env) -> Result<Value> {
         let else_arg = args.iter().find(|a| a.name.as_deref() == Some("else"));
         for (i, cond_arg) in args
@@ -275,7 +276,8 @@ impl Evaluator {
             .enumerate()
             .filter(|(_, a)| a.condition.is_some())
         {
-            let condition = cond_arg.condition.as_ref().expect("已检查");
+            // filter 已确认 condition.is_some()
+            let condition = cond_arg.condition.as_ref().expect("eval_if_colon: condition.is_some() matched");
             // 检查条件中是否有 sass()+CSS 混用
             Self::check_sass_css_mix(condition)?;
             match Self::partial_eval_condition(condition, env)? {
@@ -289,7 +291,8 @@ impl Evaluator {
                         .enumerate()
                         .filter(|(j, a)| *j > i && a.condition.is_some())
                     {
-                        let cond = a.condition.as_ref().expect("已检查");
+                        // filter 已确认 condition.is_some()
+                        let cond = a.condition.as_ref().expect("eval_if_colon: subsequent condition.is_some() matched");
                         parts.push(format!("{cond}: {}", a.value));
                     }
                     if let Some(else_a) = else_arg {

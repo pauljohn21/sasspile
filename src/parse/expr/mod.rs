@@ -118,6 +118,8 @@ impl Parser<'_> {
                             // 例如 1 2/3 4 → [1, 2/3, 4]
                             match matches!(self.peek(), Some(Token::Slash)) {
                                 true => {
+                                    // lhs 刚 pop 出并入 slash_items，expect 仅作文档
+                                    #[allow(clippy::expect_used)]
                                     let last = items.pop().expect("items non-empty: just pushed lhs");
                                     let mut slash_items = vec![last];
                                     while self.peek() == Some(&Token::Slash) {
@@ -129,10 +131,11 @@ impl Parser<'_> {
                                     }
                                     let slash_list = match slash_items.len() > 1 {
                                         true => Value::List(slash_items, Separator::SlashLiteral, false),
-                                        false => slash_items
-                                            .into_iter()
-                                            .next()
-                                            .expect("slash_items non-empty: at least one item pushed"),
+                                        false => {
+                                            // slash_items 至少有一个元素（lhs），expect 仅作文档
+                                            #[allow(clippy::expect_used)]
+                                            slash_items.into_iter().next().expect("slash_items non-empty: at least one item pushed")
+                                        }
                                     };
                                     items.push(slash_list);
                                     continue;
@@ -143,6 +146,8 @@ impl Parser<'_> {
                             // 低优先级运算符（or,and,==,!=,<,>,<=,>=）不在此消费
                             match self.peek_binding_power() {
                                 Some((_, bp)) if bp >= 4 => {
+                                    // items 非空（lhs 已压入），expect 仅作文档
+                                    #[allow(clippy::expect_used)]
                                     let last = items.pop().expect("items non-empty: at least one element");
                                     let binop_result = self.parse_expr_rest(last, 4)?;
                                     items.push(binop_result);

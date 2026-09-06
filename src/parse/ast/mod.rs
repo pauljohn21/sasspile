@@ -3,6 +3,7 @@
 mod color_fmt;
 mod color_types;
 mod display;
+mod display_color;
 mod escape;
 pub mod named_colors;
 

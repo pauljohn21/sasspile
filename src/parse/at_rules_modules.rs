@@ -234,7 +234,11 @@ impl Parser<'_> {
             _ => {}
         }
         let url = match urls.len() {
-            1 => urls.into_iter().next().expect("urls has exactly 1 element"),
+            1 => {
+                // len == 1 已确认，expect 仅作文档
+                #[allow(clippy::expect_used)]
+                urls.into_iter().next().expect("urls has exactly 1 element")
+            }
             _ => urls
                 .iter()
                 .map(|u| format!("\"{u}\""))

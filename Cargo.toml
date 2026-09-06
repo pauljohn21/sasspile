@@ -92,6 +92,11 @@ unsafe_code = "warn"
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+# 生产代码禁止 unwrap/todo/unimpanicked（CI 强制）
+unwrap_used = "deny"
+todo = "deny"
+unimplemented = "deny"
+expect_used = "warn"
 # 放宽影响产量的 pedantic lint（风格偏好，非正确性问题）
 match_bool = "allow"
 similar_names = "allow"

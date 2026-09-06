@@ -144,7 +144,10 @@ impl Evaluator {
                     pos_idx += 1;
                 }
                 None if param.default.is_some() => {
-                    let val = Self::eval_value(param.default.as_ref().expect("checked"), &new_env)?;
+                    // is_some() 守卫已确认，expect 仅作不变量文档
+                    #[allow(clippy::expect_used)]
+                    let default = param.default.as_ref().expect("bind_params: default.is_some() matched");
+                    let val = Self::eval_value(default, &new_env)?;
                     new_env = new_env.bind(param.name.clone(), val);
                 }
                 None => {
@@ -241,7 +244,10 @@ impl Evaluator {
                     pos_idx += 1;
                 }
                 None if param.default.is_some() => {
-                    let val = Self::eval_value(param.default.as_ref().expect("checked"), &func_env)?;
+                    // is_some() 守卫已确认，expect 仅作不变量文档
+                    #[allow(clippy::expect_used)]
+                    let default = param.default.as_ref().expect("call_user_function: default.is_some() matched");
+                    let val = Self::eval_value(default, &func_env)?;
                     func_env = func_env.bind(param.name.clone(), val);
                 }
                 None => {

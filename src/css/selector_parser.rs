@@ -163,17 +163,20 @@ impl Parser {
     }
 
     /// 消费标识符字符——peek + next 循环，不消费非标识符字符。
+    #[allow(clippy::expect_used)]
     fn take_ident(&mut self) -> String {
         let mut s = String::new();
         while self.chars.peek().is_some_and(|c| {
             c.is_ascii_alphanumeric() || *c == '_' || *c == '-' || *c == '\\'
         }) {
-            s.push(self.chars.next().unwrap());
+            // peek 已确认 Some，next 必然返回 Some
+            s.push(self.chars.next().expect("take_ident: peek matched"));
         }
         s
     }
 
     /// 消费类型选择器（含命名空间 `ns|type` 或 `ns|*`）。
+    #[allow(clippy::expect_used)]
     fn take_type_with_ns(&mut self) -> String {
         let mut s = String::new();
         while let Some(&c) = self.chars.peek() {
@@ -195,7 +198,8 @@ impl Parser {
                             while self.chars.peek().is_some_and(|c| {
                                 c.is_ascii_alphanumeric() || *c == '_' || *c == '-'
                             }) {
-                                s.push(self.chars.next().unwrap());
+                                // peek 已确认 Some，next 必然返回 Some
+                                s.push(self.chars.next().expect("take_type_with_ns: peek matched"));
                             }
                         }
                     }
@@ -207,6 +211,7 @@ impl Parser {
     }
 
     /// 消费伪类/伪元素参数 `(...)`。
+    #[allow(clippy::expect_used)]
     fn take_pseudo_arg(&mut self) -> Option<String> {
         match self.chars.peek() {
             Some(c) if *c == '(' => {
@@ -221,7 +226,8 @@ impl Parser {
                     }
                     depth > 0
                 }) {
-                    arg.push(self.chars.next().unwrap());
+                    // peek 已确认 Some（depth > 0 保证还有字符），next 必然返回 Some
+                    arg.push(self.chars.next().expect("take_pseudo_arg: depth > 0"));
                 }
                 match self.chars.peek() {
                     Some(c) if *c == ')' => { self.chars.next(); }
@@ -235,6 +241,7 @@ impl Parser {
     }
 
     /// 解析属性选择器 `[name=value mod]`。
+    #[allow(clippy::expect_used)]
     fn parse_attribute(&mut self) -> Option<SimpleSelector> {
         self.chars.next(); // 跳过 [
         self.skip_ws();
@@ -245,7 +252,8 @@ impl Parser {
                 && *c != '*'
                 && !c.is_whitespace()
         }) {
-            name.push(self.chars.next().unwrap());
+            // peek 已确认 Some，next 必然返回 Some
+            name.push(self.chars.next().expect("parse_attribute: peek matched"));
         }
         self.skip_ws();
 
@@ -257,7 +265,8 @@ impl Parser {
 
         let modifier = match self.chars.peek() {
             Some(c) if *c != ']' => {
-                let m = self.chars.next().unwrap().to_string();
+                // peek 已确认 Some，next 必然返回 Some
+                let m = self.chars.next().expect("parse_attribute: modifier after ] check").to_string();
                 self.skip_ws();
                 Some(m)
             }
@@ -302,6 +311,7 @@ impl Parser {
     }
 
     /// 消费属性值（带引号或无引号）。
+    #[allow(clippy::expect_used)]
     fn take_attr_value(&mut self) -> Option<String> {
         match self.chars.peek() {
             Some(c) if *c == '"' || *c == '\'' => {
@@ -309,7 +319,8 @@ impl Parser {
                 self.chars.next();
                 let mut val = String::new();
                 while self.chars.peek().is_some_and(|c| *c != quote) {
-                    val.push(self.chars.next().unwrap());
+                    // peek 已确认 Some（非 quote），next 必然返回 Some
+                    val.push(self.chars.next().expect("take_attr_value: peek matched"));
                 }
                 match self.chars.peek() {
                     Some(c) if *c == quote => { self.chars.next(); }
@@ -320,7 +331,8 @@ impl Parser {
             Some(_) => {
                 let mut val = String::new();
                 while self.chars.peek().is_some_and(|c| *c != ']' && !c.is_whitespace()) {
-                    val.push(self.chars.next().unwrap());
+                    // peek 已确认 Some（非 ] 非 ws），next 必然返回 Some
+                    val.push(self.chars.next().expect("take_attr_value: peek matched"));
                 }
                 Some(val)
             }

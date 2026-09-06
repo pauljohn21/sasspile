@@ -331,7 +331,10 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
         true => return true,
         false => {}
     }
+    // none check 已通过（两周的 is_none 守卫），expect 仅作文档
+    #[allow(clippy::expect_used)]
     let g1 = u1.expect("non-none unit after none check");
+    #[allow(clippy::expect_used)]
     let g2 = u2.expect("non-none unit after none check");
     UNIT_COMPAT_GROUPS
         .iter()

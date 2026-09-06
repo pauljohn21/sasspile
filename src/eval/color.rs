@@ -8,7 +8,7 @@
     clippy::cast_precision_loss
 )]
 use super::*;
-use super::builtin::color::extract_none_num;
+use super::builtin::color_hwb_hsl::extract_none_num;
 use crate::error::Result;
 use crate::parse::ast::{ColorOutput, ColorSpace};
 

@@ -329,7 +329,9 @@ impl<'src> Lexer<'src> {
                             }
                         }
                         Some('"' | '\'') => {
-                            let q = self.peek().expect("peek is Some in quote branch");
+                            // Some 分支已确认，expect 仅作文档
+                            #[allow(clippy::expect_used)]
+                            let q = self.peek().expect("scan_hash: peek is Some in quote branch");
                             let _ = self.scan_string(q)?;
                         }
                         Some(_) => {

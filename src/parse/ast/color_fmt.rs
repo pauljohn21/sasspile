@@ -8,9 +8,10 @@
 //! 颜色格式化辅助函数。
 //!
 //! hue/百分比/alpha 值的浮点精度截断和格式化，
-//! HSL → RGB 百分比转换。
+//! HSL → RGB 百分比转换、命名颜色反向查找。
 
 use crate::consts::{FLOAT_PRECISION_INV, HUE_MAX, PCT_SCALE};
+
 
 /// 格式化 hue 值——截断到 10 位小数。
 /// NaN 输出为 `none`（CSS Color 4 missing 通道）。

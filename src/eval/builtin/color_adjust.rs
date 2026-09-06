@@ -12,6 +12,7 @@
 //! - Modern: Lab, Lch, Oklab, Oklch, `DisplayP3`, sRGB, sRGB-Linear, etc.
 //!
 //! 现代空间直接在 channels 中修改通道值，保留原始格式输出。
+//! CIE 空间（Oklch/Oklab/Lch/Lab）的实现已拆分到 color_adjust_cie.rs。
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::{Color, ColorOutput, ColorSpace, Value};
@@ -22,7 +23,7 @@ use super::super::Evaluator;
 // ── 辅助函数 ─────────────────────────────────────────────────────────────
 
 /// 从 `kw_args` 中提取数值参数。
-fn get_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<f64>> {
+pub(super) fn get_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<f64>> {
     match kw_args.get(key) {
         Some(Value::Number(n, _)) => Ok(Some(*n)),
         Some(_) => Err(SassError::Eval(format!("{key} requires a number"))),
@@ -31,7 +32,7 @@ fn get_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<f64>> {
 }
 
 /// 提取百分比参数，返回 0-1 范围的值。
-fn get_pct_or_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<f64>> {
+pub(super) fn get_pct_or_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<f64>> {
     match kw_args.get(key) {
         Some(Value::Number(n, Some(unit))) if unit == "%" => Ok(Some(*n / 100.0)),
         Some(Value::Number(n, None)) => Ok(Some(*n)),
@@ -42,7 +43,7 @@ fn get_pct_or_num(kw_args: &HashMap<String, Value>, key: &str) -> Result<Option<
 }
 
 /// 统一处理关键字参数应用——消除 `let mut x = ...; if let Some(v) = ... { x = f(x, v) }` 重复模式。
-fn apply_kw(
+pub(super) fn apply_kw(
     initial: f64,
     kw: &HashMap<String, Value>,
     key: &str,
@@ -55,7 +56,7 @@ fn apply_kw(
 }
 
 /// 同上，但使用 `get_pct_or_num` 提取百分比参数。
-fn apply_pct_kw(
+pub(super) fn apply_pct_kw(
     initial: f64,
     kw: &HashMap<String, Value>,
     key: &str,
@@ -68,7 +69,7 @@ fn apply_pct_kw(
 }
 
 /// 缩放通道值——按百分比向最大值方向缩放（正）或向 0 方向缩放（负）。
-fn scale_channel(val: f64, max: f64, kw_args: &HashMap<String, Value>, key: &str) -> Result<f64> {
+pub(super) fn scale_channel(val: f64, max: f64, kw_args: &HashMap<String, Value>, key: &str) -> Result<f64> {
     Ok(match get_num(kw_args, key)? {
         Some(n) => {
             let pct = n / 100.0;
@@ -100,10 +101,10 @@ pub fn adjust_color(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<
     let has_modern = modern_channels.iter().any(|ch| kw_args.contains_key(*ch));
 
     match c.space {
-        ColorSpace::Oklch => adjust_oklch(c, kw_args),
-        ColorSpace::Oklab => adjust_oklab(c, kw_args),
-        ColorSpace::Lch => adjust_lch(c, kw_args),
-        ColorSpace::Lab => adjust_lab(c, kw_args),
+        ColorSpace::Oklch => super::color_adjust_cie::adjust_oklch(c, kw_args),
+        ColorSpace::Oklab => super::color_adjust_cie::adjust_oklab(c, kw_args),
+        ColorSpace::Lch => super::color_adjust_cie::adjust_lch(c, kw_args),
+        ColorSpace::Lab => super::color_adjust_cie::adjust_lab(c, kw_args),
         ColorSpace::DisplayP3
         | ColorSpace::Srgb
         | ColorSpace::SrgbLinear
@@ -123,10 +124,10 @@ pub fn change_color(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<
     let c = extract_color(args, kw_args)?;
 
     match c.space {
-        ColorSpace::Oklch => change_oklch(c, kw_args),
-        ColorSpace::Oklab => change_oklab(c, kw_args),
-        ColorSpace::Lch => change_lch(c, kw_args),
-        ColorSpace::Lab => change_lab(c, kw_args),
+        ColorSpace::Oklch => super::color_adjust_cie::change_oklch(c, kw_args),
+        ColorSpace::Oklab => super::color_adjust_cie::change_oklab(c, kw_args),
+        ColorSpace::Lch => super::color_adjust_cie::change_lch(c, kw_args),
+        ColorSpace::Lab => super::color_adjust_cie::change_lab(c, kw_args),
         ColorSpace::DisplayP3
         | ColorSpace::Srgb
         | ColorSpace::SrgbLinear
@@ -145,10 +146,10 @@ pub fn scale_color(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<V
     let c = extract_color(args, kw_args)?;
 
     match c.space {
-        ColorSpace::Oklch => scale_oklch(c, kw_args),
-        ColorSpace::Oklab => scale_oklab(c, kw_args),
-        ColorSpace::Lch => scale_lch(c, kw_args),
-        ColorSpace::Lab => scale_lab(c, kw_args),
+        ColorSpace::Oklch => super::color_adjust_cie::scale_oklch(c, kw_args),
+        ColorSpace::Oklab => super::color_adjust_cie::scale_oklab(c, kw_args),
+        ColorSpace::Lch => super::color_adjust_cie::scale_lch(c, kw_args),
+        ColorSpace::Lab => super::color_adjust_cie::scale_lab(c, kw_args),
         ColorSpace::DisplayP3
         | ColorSpace::Srgb
         | ColorSpace::SrgbLinear
@@ -160,204 +161,6 @@ pub fn scale_color(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<V
         | ColorSpace::XyzD50 => scale_modern_rgb_space(c, kw_args),
         _ => scale_legacy(c, kw_args),
     }
-}
-
-// ── Oklch ────────────────────────────────────────────────────────────────
-
-fn adjust_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |v, d| (v + d).clamp(0.0, 1.0))?;
-    let ch = apply_kw(c.channels[1], kw_args, "chroma", |v, d| (v + d).max(0.0))?;
-    let h = apply_kw(c.channels[2], kw_args, "hue", |v, d| (v + d).rem_euclid(360.0))?;
-    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Oklch,
-        [l, ch, h],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn change_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |_v, d| d.clamp(0.0, 1.0))?;
-    let ch = apply_kw(c.channels[1], kw_args, "chroma", |_v, d| d.max(0.0))?;
-    let h = apply_kw(c.channels[2], kw_args, "hue", |_v, d| d.rem_euclid(360.0))?;
-    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Oklch,
-        [l, ch, h],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn scale_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = scale_channel(c.channels[0], 1.0, kw_args, "lightness")?.clamp(0.0, 1.0);
-    let ch = scale_channel(c.channels[1], f64::MAX, kw_args, "chroma")?.max(0.0);
-    let a = scale_channel(c.a, 1.0, kw_args, "alpha")?.clamp(0.0, 1.0);
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Oklch,
-        [l, ch, c.channels[2]],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-// ── Oklab ────────────────────────────────────────────────────────────────
-
-fn adjust_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |v, d| (v + d).clamp(0.0, 1.0))?;
-    let a_v = apply_kw(c.channels[1], kw_args, "a", |v, d| v + d)?;
-    let b_v = apply_kw(c.channels[2], kw_args, "b", |v, d| v + d)?;
-    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Oklab,
-        [l, a_v, b_v],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn change_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |_v, d| d.clamp(0.0, 1.0))?;
-    let a_v = apply_kw(c.channels[1], kw_args, "a", |_v, d| d)?;
-    let b_v = apply_kw(c.channels[2], kw_args, "b", |_v, d| d)?;
-    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Oklab,
-        [l, a_v, b_v],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn scale_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = scale_channel(c.channels[0], 1.0, kw_args, "lightness")?.clamp(0.0, 1.0);
-    let a_max = if c.channels[1] >= 0.0 { 0.5 } else { -0.5 };
-    let b_max = if c.channels[2] >= 0.0 { 0.5 } else { -0.5 };
-    let a_v = scale_channel(c.channels[1], a_max, kw_args, "a")?;
-    let b_v = scale_channel(c.channels[2], b_max, kw_args, "b")?;
-    let a = scale_channel(c.a, 1.0, kw_args, "alpha")?.clamp(0.0, 1.0);
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Oklab,
-        [l, a_v, b_v],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-// ── Lch ──────────────────────────────────────────────────────────────────
-
-fn adjust_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |v, d| {
-        (v + d * 100.0).clamp(0.0, 100.0)
-    })?;
-    let ch = apply_kw(c.channels[1], kw_args, "chroma", |v, d| (v + d).max(0.0))?;
-    let h = apply_kw(c.channels[2], kw_args, "hue", |v, d| (v + d).rem_euclid(360.0))?;
-    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Lch,
-        [l, ch, h],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn change_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |_v, d| {
-        (d * 100.0).clamp(0.0, 100.0)
-    })?;
-    let ch = apply_kw(c.channels[1], kw_args, "chroma", |_v, d| d.max(0.0))?;
-    let h = apply_kw(c.channels[2], kw_args, "hue", |_v, d| d.rem_euclid(360.0))?;
-    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Lch,
-        [l, ch, h],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn scale_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = scale_channel(c.channels[0], 100.0, kw_args, "lightness")?.clamp(0.0, 100.0);
-    let ch = scale_channel(c.channels[1], f64::MAX, kw_args, "chroma")?.max(0.0);
-    let a = scale_channel(c.a, 1.0, kw_args, "alpha")?.clamp(0.0, 1.0);
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Lch,
-        [l, ch, c.channels[2]],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-// ── Lab ──────────────────────────────────────────────────────────────────
-
-fn adjust_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |v, d| {
-        (v + d * 100.0).clamp(0.0, 100.0)
-    })?;
-    let a_v = apply_kw(c.channels[1], kw_args, "a", |v, d| v + d)?;
-    let b_v = apply_kw(c.channels[2], kw_args, "b", |v, d| v + d)?;
-    let a = apply_kw(c.a, kw_args, "alpha", |v, d| (v + d).clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Lab,
-        [l, a_v, b_v],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn change_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = apply_pct_kw(c.channels[0], kw_args, "lightness", |_v, d| {
-        (d * 100.0).clamp(0.0, 100.0)
-    })?;
-    let a_v = apply_kw(c.channels[1], kw_args, "a", |_v, d| d)?;
-    let b_v = apply_kw(c.channels[2], kw_args, "b", |_v, d| d)?;
-    let a = apply_kw(c.a, kw_args, "alpha", |_v, d| d.clamp(0.0, 1.0))?;
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Lab,
-        [l, a_v, b_v],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
-}
-
-fn scale_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
-    let l = scale_channel(c.channels[0], 100.0, kw_args, "lightness")?.clamp(0.0, 100.0);
-    let a_max = if c.channels[1] >= 0.0 { 125.0 } else { -125.0 };
-    let b_max = if c.channels[2] >= 0.0 { 125.0 } else { -125.0 };
-    let a_v = scale_channel(c.channels[1], a_max, kw_args, "a")?;
-    let b_v = scale_channel(c.channels[2], b_max, kw_args, "b")?;
-    let a = scale_channel(c.a, 1.0, kw_args, "alpha")?.clamp(0.0, 1.0);
-
-    Ok(Value::Color(Color::with_space(
-        ColorSpace::Lab,
-        [l, a_v, b_v],
-        a,
-        c.output,
-        c.legacy_rgb,
-    )))
 }
 
 // ── Modern RGB 空间 (DisplayP3, sRGB, A98, ProPhoto, Rec2020) ─────────────
