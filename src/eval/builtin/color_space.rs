@@ -131,7 +131,11 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
         "rgb" | "srgb" => get_rgb_channel(c, channel),
         "hsl" => {
             let (h, s, l) = match c.space == ColorSpace::Hsl {
-                true => (c.channels[0], c.channels[1], c.channels[2]),
+                true => {
+                    // hue 规范：规范化到 [0, 360)
+                    let h = c.channels[0] % 360.0;
+                    (h, c.channels[1], c.channels[2])
+                }
                 false => Evaluator::rgb_to_hsl(c.legacy_rgb[0], c.legacy_rgb[1], c.legacy_rgb[2]),
             };
             match channel {
@@ -234,7 +238,7 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
                 _ => Err(err_no_channel(&color_name(c), channel)),
             }
         }
-        "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "srgb-linear" => {
+        "display-p3" | "display-p3-linear" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "srgb-linear" => {
             // 这些空间用 red/green/blue 通道名，值为 0-1
             let (r, g, b) = get_normalized_rgb(c, effective_space);
             match channel {
@@ -325,10 +329,13 @@ fn get_xyz(c: &Color, space: &str) -> (f64, f64, f64) {
 }
 
 fn get_rgb_channel(c: &Color, channel: &str) -> Result<Value> {
+    // sRGB local 空间：通道值是 normalized [0-1]，不是 raw [0-255]
+    // NaN（none 通道）→ 0
+    let val_or_zero = |v: f64| if v.is_nan() { 0.0 } else { v };
     match channel {
-        "red" => Ok(Value::Number(c.legacy_rgb[0], None)),
-        "green" => Ok(Value::Number(c.legacy_rgb[1], None)),
-        "blue" => Ok(Value::Number(c.legacy_rgb[2], None)),
+        "red" => Ok(Value::Number(val_or_zero(c.legacy_rgb[0]) / RGB_MAX, None)),
+        "green" => Ok(Value::Number(val_or_zero(c.legacy_rgb[1]) / RGB_MAX, None)),
+        "blue" => Ok(Value::Number(val_or_zero(c.legacy_rgb[2]) / RGB_MAX, None)),
         "alpha" => Ok(Value::Number(c.a, None)),
         _ => Err(err_no_channel(&color_name(c), channel)),
     }
