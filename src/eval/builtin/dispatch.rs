@@ -174,11 +174,14 @@ pub(crate) fn math_dispatch(
     _env: &Env,
 ) -> Option<Result<Value>> {
     match math_is_known(name) {
-        true => match super::math::call(name, pos_args, kw_args) {
-            Ok(Some(v)) => Some(Ok(v)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        },
+        true => {
+            let global_name = math_builtin_name(name).unwrap_or(name);
+            match super::math::call(global_name, pos_args, kw_args) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
         false => None,
     }
 }
@@ -203,11 +206,14 @@ pub(crate) fn string_dispatch(
     _env: &Env,
 ) -> Option<Result<Value>> {
     match string_is_known(name) {
-        true => match super::Evaluator::call_string_builtin(name, pos_args, kw_args) {
-            Ok(Some(v)) => Some(Ok(v)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        },
+        true => {
+            let global_name = string_builtin_name(name).unwrap_or(name);
+            match super::Evaluator::call_string_builtin(global_name, pos_args, kw_args) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
         false => None,
     }
 }
@@ -230,8 +236,9 @@ pub(crate) fn map_dispatch(
 ) -> Option<Result<Value>> {
     match map_is_known(name) {
         true => {
+            let global_name = map_builtin_name(name).unwrap_or(name);
             let combined = super::merge_map_args(pos_args, kw_args, name);
-            match super::Evaluator::call_map_builtin(name, &combined, env) {
+            match super::Evaluator::call_map_builtin(global_name, &combined, env) {
                 Ok(Some(v)) => Some(Ok(v)),
                 Ok(None) => None,
                 Err(e) => Some(Err(e)),
@@ -258,11 +265,14 @@ pub(crate) fn list_dispatch(
     _env: &Env,
 ) -> Option<Result<Value>> {
     match list_is_known(name) {
-        true => match super::list::call(name, pos_args, kw_args) {
-            Ok(Some(v)) => Some(Ok(v)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        },
+        true => {
+            let global_name = list_builtin_name(name).unwrap_or(name);
+            match super::list::call(global_name, pos_args, kw_args) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
         false => None,
     }
 }
@@ -324,11 +334,14 @@ pub(crate) fn selector_dispatch(
     _env: &Env,
 ) -> Option<Result<Value>> {
     match selector_is_known(name) {
-        true => match super::selector::call(name, pos_args, kw_args) {
-            Ok(Some(v)) => Some(Ok(v)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        },
+        true => {
+            let global_name = selector_builtin_name(name).unwrap_or(name);
+            match super::selector::call(global_name, pos_args, kw_args) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
         false => None,
     }
 }
