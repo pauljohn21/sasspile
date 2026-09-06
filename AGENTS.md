@@ -471,7 +471,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 ```
 
 **通过标准**：57/57 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：6426/11824 = 54.3%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：6695/11824 = 56.2%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -511,6 +511,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **color-adjust-units**（2026-09-06）：CIE+Modern RGB 颜色 adjust/change/scale percent 单位处理 — 新增 cie_channel 提取器（区分 unitless n 与 n%），CIE 各通道正确 max 值（Oklch/Oklab/Lch/Lab），Modern RGB 统一使用 cie_channel(max=1.0)，sass-spec 6426→6695 (+269)
 - **color-level4-complete**（2026-09-06）：CSS Color Level 4 测试工具链修复（.sass 过滤 + _utils.scss OnceLock 注入）+ 14 个 lab/lch/oklab/oklch 构造序列化测试 — 核心测试 100/100 全通过，sass-spec 6264→6426 (+162)
 - **sass-spec-boost**（2026-09-05）：color/to_space NaN 处理 + HWB/HSL 序列化 + scale/change HWB 通道扩展 — 202/202 核心测试全通过，sass-spec 6205→6264 (+59)
 - **sass-spec-completeness**（2026-09-05）：CSS at-rules 全链路（@keyframes/@font-face/@page/@charset/@namespace/@layer/@container）+ meta 反射修复 + 颜色算法精度 + selector-replace compound-level subset matching — 202/202 核心测试全通过，sass-spec 6123→6205 (+82)

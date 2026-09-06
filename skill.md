@@ -720,7 +720,7 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 120 �
 
 # sass-spec 全量统计（约 75 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：6426/11824 = 54.3%（含 color 目录，跳过 libsass 不支持目录）
+# 基线：6695/11824 = 56.2%（含 color 目录，跳过 libsass 不支持目录）
 # ep_full：121/121 = 100%
 
 # sass-spec 全量统计 + OTel 追踪
