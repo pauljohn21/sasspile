@@ -403,7 +403,6 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             let hw = apply_channel(hw_init, kw_args, "whiteness", percentage, |_v, d| d);
             let hb = apply_channel(hb_init, kw_args, "blackness", percentage, |_v, d| d);
             // HWB 归一化：hw + hb > 1 时按比例缩放
-            // 注意：change 不 clamp，但归一化是数学必需
             let sum = hw + hb;
             let (hw_n, hb_n) = match sum.is_nan() || sum.is_infinite() {
                 true => (hw, hb),
@@ -412,8 +411,27 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
                     false => (hw, hb),
                 },
             };
+            // 有 NaN → HWB(none) 格式；RGB 有效值 [0,255] → RGB 输出（hex/named/rgb%）；超范围 → HWB 格式
+            let has_nan = h.is_nan() || hw.is_nan() || hb.is_nan();
+            let clean_ch = |v: f64| if v.abs() < 1e-6 { 0.0 } else { v };
             let (nr, ng, nb, _) = hwb_to_rgb_channels(h, hw_n, hb_n, 1.0);
-            (nr, ng, nb)
+            let (nr_c, ng_c, nb_c) = (clean_ch(nr), clean_ch(ng), clean_ch(nb));
+            let rgb_in_range = !has_nan
+                && nr_c >= 0.0 && nr_c <= 255.0
+                && ng_c >= 0.0 && ng_c <= 255.0
+                && nb_c >= 0.0 && nb_c <= 255.0;
+            return match rgb_in_range {
+                true => Ok(Value::Color(Color::with_space(
+                    ColorSpace::Hwb,
+                    [h, hw_n, hb_n],
+                    alpha,
+                    ColorOutput::RgbPercent,
+                    [nr_c, ng_c, nb_c],
+                ))),
+                false => Ok(Value::Color(build_channel_modified_color(
+                    ColorSpace::Hwb, h, hw_n, hb_n, alpha,
+                ))),
+            };
         }
         ModifiedSpace::Hsl => {
             // 获取 HSL 初始通道：从已有 HSL 数据或从 RGB 推导
