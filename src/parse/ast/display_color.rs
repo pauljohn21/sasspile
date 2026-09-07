@@ -96,20 +96,40 @@ pub(super) fn fmt_color(
             }
         }
         ColorOutput::RgbPercent => {
-            // channels 存储 HSL 值 (h, s, l)
-            let (h, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
-            let (rp, gp, bp) = hsl_to_rgb_percent(h, s, l);
+            // 根据色彩空间选择 RGB 百分比来源
+            let (rp, gp, bp) = match c.space {
+                ColorSpace::Hsl => {
+                    // channels 存储 HSL 值 (h, s, l)，需转换
+                    let (h, s, l) = (c.channels[0], c.channels[1], c.channels[2]);
+                    hsl_to_rgb_percent(h, s, l)
+                }
+                _ => {
+                    // 其他空间（如 change-color HWB）：legacy_rgb 已是 0-255 RGB
+                    (c.legacy_rgb[0] / 2.55, c.legacy_rgb[1] / 2.55, c.legacy_rgb[2] / 2.55)
+                }
+            };
+            // legacy_rgb 整数检查——基于 0-255 尺度，避免百分比尺度精度损失
+            let legacy_int = (c.legacy_rgb[0] - c.legacy_rgb[0].round()).abs() < FLOAT_NOISE_THRESHOLD
+                && (c.legacy_rgb[1] - c.legacy_rgb[1].round()).abs() < FLOAT_NOISE_THRESHOLD
+                && (c.legacy_rgb[2] - c.legacy_rgb[2].round()).abs() < FLOAT_NOISE_THRESHOLD;
+            let rp_r = c.legacy_rgb[0].round() as u8;
+            let gp_r = c.legacy_rgb[1].round() as u8;
+            let bp_r = c.legacy_rgb[2].round() as u8;
             // 检查是否匹配命名颜色，优先输出名称
             let alpha_ok = (c.a - 1.0).abs() < ALPHA_TOLERANCE;
-            match (alpha_ok, crate::eval::Evaluator::reverse_lookup_named_color(c)) {
+            let named = crate::eval::Evaluator::reverse_lookup_named_color(c);
+            match (alpha_ok, named) {
                 (true, Some(name)) => write!(f, "{name}"),
-                (true, None) => write!(
-                    f,
-                    "rgb({}%, {}%, {}%)",
-                    format_pct_val(rp),
-                    format_pct_val(gp),
-                    format_pct_val(bp)
-                ),
+                (true, None) => match legacy_int {
+                    true => write!(f, "#{:02x}{:02x}{:02x}", rp_r, gp_r, bp_r),
+                    false => write!(
+                        f,
+                        "rgb({}%, {}%, {}%)",
+                        format_pct_val(rp),
+                        format_pct_val(gp),
+                        format_pct_val(bp)
+                    ),
+                },
                 (false, _) => write!(
                     f,
                     "rgba({}%, {}%, {}%, {})",

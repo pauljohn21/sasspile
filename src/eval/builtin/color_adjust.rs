@@ -429,10 +429,22 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             // change 不 clamp——允许超出范围值
             let s = apply_channel(s_init, kw_args, "saturation", percentage, |_v, d| d);
             let l = apply_channel(l_init, kw_args, "lightness", percentage, |_v, d| d);
-            // 始终输出 HSL 格式（保留超出范围值 + NaN）
-            return Ok(Value::Color(build_channel_modified_color(
-                ColorSpace::Hsl, h, s, l, alpha,
-            )));
+            // 清理浮点噪声：极小值归零（避免 -1e-15 导致 rgb_valid=false）
+            let clean_rgb_ch = |v: f64| if v.abs() < 1e-6 { 0.0 } else { v };
+            // 序列化规则：有 NaN → HSL(none)；RGB 有效值 [0,255] → RGB 输出（hex/named/rgb%）；超范围 → HSL 格式
+            let rgb = hsl_to_rgb_channels(h, s, l);
+            let rgb_clean = (clean_rgb_ch(rgb.0), clean_rgb_ch(rgb.1), clean_rgb_ch(rgb.2));
+            let rgb_in_range = rgb_clean.0 >= 0.0 && rgb_clean.0 <= 255.0
+                && rgb_clean.1 >= 0.0 && rgb_clean.1 <= 255.0
+                && rgb_clean.2 >= 0.0 && rgb_clean.2 <= 255.0;
+            return match (h.is_nan() || s.is_nan() || l.is_nan(), rgb_in_range) {
+                (true, _) | (false, false) => Ok(Value::Color(build_channel_modified_color(
+                    ColorSpace::Hsl, h, s, l, alpha,
+                ))),
+                (false, true) => Ok(Value::Color(Color::with_hsl(
+                    h, s, l, alpha, ColorOutput::RgbPercent, [rgb_clean.0, rgb_clean.1, rgb_clean.2],
+                ))),
+            };
         }
         ModifiedSpace::Rgb => (r, g, b),
     };
