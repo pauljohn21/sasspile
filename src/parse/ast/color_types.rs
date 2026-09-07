@@ -123,10 +123,12 @@ pub enum ColorOutput {
     /// 自动：hex / 命名颜色 / rgba（默认行为）。
     #[default]
     Auto,
-    /// 强制 `rgb()/rgba()` 输出。
+    /// 强制 `rgb()/rgba()` 输出（传统逗号分隔）。
     RgbExplicit,
     /// rgb(r%, g%, b%) 百分比输出（HSL 操作结果）。
     RgbPercent,
+    /// 现代 `rgb(R G B / A)` 语法（支持 none 通道，无逗号）。
+    RgbModern,
 }
 
 // ── ChannelSet ────────────────────────────────────────────

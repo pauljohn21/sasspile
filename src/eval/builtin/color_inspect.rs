@@ -12,7 +12,7 @@
 
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
-use crate::parse::ast::{Color, Value};
+use crate::parse::ast::{Color, ColorSpace, Value};
 use std::collections::HashMap;
 
 /// is-powerless / is-missing / is-in-gamut / is-legacy 分派。
@@ -23,7 +23,10 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             let color_arg = args.first().or_else(|| kw_args.get("$color"));
             let channel_arg = args.get(1).or_else(|| kw_args.get("channel"));
             match (color_arg, channel_arg) {
-                (Some(Value::Color(_)), Some(Value::String(_, _))) => Ok(Some(Value::Bool(false))),
+                (Some(Value::Color(c)), Some(Value::String(ch, _))) => {
+                    let missing = is_channel_missing(c, ch);
+                    Ok(Some(Value::Bool(missing)))
+                }
                 _ => Err(SassError::Eval(
                     "is-missing requires $color and $channel arguments".into(),
                 )),
@@ -40,6 +43,40 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
         }
         "is-legacy" => Ok(Some(Value::Bool(true))),
         _ => Ok(None),
+    }
+}
+
+/// 检查颜色通道是否为 missing（NaN）。
+fn is_channel_missing(c: &Color, channel: &str) -> bool {
+    if channel == "alpha" {
+        return c.a.is_nan();
+    }
+    match c.space {
+        ColorSpace::Hsl => match channel {
+            "hue" => c.channels[0].is_nan(),
+            "saturation" => c.channels[1].is_nan(),
+            "lightness" => c.channels[2].is_nan(),
+            _ => false,
+        },
+        ColorSpace::Hwb => match channel {
+            "hue" => c.channels[0].is_nan(),
+            "whiteness" => c.channels[1].is_nan(),
+            "blackness" => c.channels[2].is_nan(),
+            _ => false,
+        },
+        ColorSpace::Lch | ColorSpace::Oklch => match channel {
+            "hue" => c.channels[2].is_nan(),
+            "chroma" => c.channels[1].is_nan(),
+            "lightness" => c.channels[0].is_nan(),
+            _ => false,
+        },
+        ColorSpace::Lab | ColorSpace::Oklab => match channel {
+            "lightness" => c.channels[0].is_nan(),
+            "a" => c.channels[1].is_nan(),
+            "b" => c.channels[2].is_nan(),
+            _ => false,
+        },
+        _ => false,
     }
 }
 

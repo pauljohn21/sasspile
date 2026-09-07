@@ -56,8 +56,34 @@ fn flatten_space_list(args: &[Value]) -> Vec<Value> {
     }
 }
 
+/// 从 Value 提取 f64 数值。
+/// 返回 `None` 表示 `calc(infinity/NaN)`——上层据此决定 clamp 行为。
+/// - `none` 关键字 → Some(NaN)
+/// - `%` 单位 + scale_pct=true → n / 100.0
+/// - `%` 单位 + scale_pct=false → n（保留原始数值）
+/// - `calc(infinity/‑infinity/NaN)` → None（透传 sentinel）
+fn try_extract_num(v: &Value, scale_pct: bool) -> Result<Option<f64>> {
+    match v {
+        Value::String(s, false) if s == "none" => Ok(Some(f64::NAN)),
+        Value::Number(n, Some(u)) if u == "%" && scale_pct => Ok(Some(*n / 100.0)),
+        Value::Number(n, Some(u)) if u == "%" => Ok(Some(*n)),
+        Value::Number(n, _) => Ok(Some(*n)),
+        Value::Calc(s) => {
+            let inner = s
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or("");
+            match inner {
+                "NaN" | "nan" | "infinity" | "-infinity" | "∞" | "-∞" => Ok(None),
+                _ => Err(err_not_a_number("value", v)),
+            }
+        }
+        _ => Err(err_not_a_number("value", v)),
+    }
+}
+
 /// 从 Value 提取 f64 数值或 `none`（返回 NaN）。
-/// 支持百分比→0-1 转换和 `none` 关键字。
+/// 用于 color() 空间的 rgb/modern 通道。
 fn extract_num_or_none(v: &Value, scale_pct: bool) -> Result<f64> {
     match v {
         Value::String(s, false) if s == "none" => Ok(f64::NAN),
@@ -67,13 +93,62 @@ fn extract_num_or_none(v: &Value, scale_pct: bool) -> Result<f64> {
     }
 }
 
-/// 从百分比 Value 提取原始值（50% → 50.0，不除以100）。
-/// 用于 lab/lch 的 L 分量，spec 中 lab(50% ...) 的 50% 就是 50.0。
-fn extract_pct_value(v: &Value) -> Result<f64> {
+/// 从 calc() 字符串提取对应的 f64 数值。
+/// `calc(NaN)` → NaN，`calc(infinity)` → inf，`calc(-infinity)` → -inf。
+/// 也支持带单位的变体如 `calc(NaN * 1%)`、`calc(infinity * 1%)`。
+pub(crate) fn extract_calc_f64(s: &str) -> Option<f64> {
+    let inner = s.strip_prefix("calc(").and_then(|s| s.strip_suffix(")"))?;
+    // 先尝试精确匹配
+    match inner {
+        "NaN" | "nan" => return Some(f64::NAN),
+        "infinity" | "∞" => return Some(f64::INFINITY),
+        "-infinity" | "-∞" => return Some(f64::NEG_INFINITY),
+        _ => {}
+    }
+    // 带单位的变体：提取特殊值关键字（忽略 `* 1%` 后缀）
+    let keyword = inner.split_whitespace().next().unwrap_or("");
+    match keyword {
+        "NaN" | "nan" => Some(f64::NAN),
+        "infinity" | "∞" => Some(f64::INFINITY),
+        "-infinity" | "-∞" => Some(f64::NEG_INFINITY),
+        _ => None,
+    }
+}
+
+/// lab 的 a/b 通道：百分比按 max=125 转换（100% → 125）。
+/// spec: lab(1% 2% -3%) = lab(1% 2.5 -3.75)
+fn extract_lab_ab(v: &Value) -> Result<f64> {
     match v {
         Value::String(s, false) if s == "none" => Ok(f64::NAN),
-        Value::Number(n, Some(u)) if u == "%" => Ok(*n),
-        Value::Number(n, _) => Ok(*n),
+        Value::Number(n, Some(u)) if u == "%" => Ok(n / 100.0 * 125.0),
+        Value::Number(n, _) => {
+            // -0 / +0 统一归零；其他数值直接透传
+            Ok(if n.abs() < f64::EPSILON { 0.0 } else { *n })
+        }
+        Value::Calc(s) => extract_calc_f64(s).ok_or_else(|| err_not_a_number("value", v)),
+        _ => Err(err_not_a_number("value", v)),
+    }
+}
+
+/// lch 的 chroma 通道：非负；百分比按 max=150 转换
+fn extract_lch_chroma(v: &Value) -> Result<f64> {
+    match v {
+        Value::String(s, false) if s == "none" => Ok(f64::NAN),
+        Value::Number(n, Some(u)) if u == "%" => Ok(n / 100.0 * 150.0),
+        Value::Number(n, _) => Ok(if n.abs() < f64::EPSILON { 0.0 } else { n.max(0.0) }),
+        Value::Calc(s) => extract_calc_f64(s).ok_or_else(|| err_not_a_number("value", v)),
+        _ => Err(err_not_a_number("value", v)),
+    }
+}
+
+/// oklab/oklch 的 a/b（unitless 0-1）、chroma（0-0.4）。
+/// 这些空间的 CIE 通道均为 unitless，percent 按 `max` 比例转换。
+fn extract_oklab_ab(v: &Value) -> Result<f64> {
+    match v {
+        Value::String(s, false) if s == "none" => Ok(f64::NAN),
+        Value::Number(n, Some(u)) if u == "%" => Ok(n / 100.0 * 0.4),
+        Value::Number(n, _) => Ok(if n.abs() < f64::EPSILON { 0.0 } else { *n }),
+        Value::Calc(s) => extract_calc_f64(s).ok_or_else(|| err_not_a_number("value", v)),
         _ => Err(err_not_a_number("value", v)),
     }
 }
@@ -91,13 +166,25 @@ fn extract_hue(v: &Value) -> Result<f64> {
 /// lab(L% a b [/ alpha])
 fn parse_lab(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
-    match nums.len() < 3 {
-        true => return Err(err_requires_args("lab", 3, nums.len())),
-        false => {}
+    if nums.len() < 3 {
+        return Err(err_requires_args("lab", 3, nums.len()));
     }
-    let l = extract_pct_value(&nums[0])?;
-    let a = extract_num_or_none(&nums[1], false)?;
-    let b = extract_num_or_none(&nums[2], false)?;
+    let l_opt = try_extract_num(&nums[0], false)?;
+    let l = match l_opt {
+        None => 100.0,
+        Some(v) if v.is_nan() => 0.0,
+        Some(v) if v.is_infinite() && v > 0.0 => 100.0,
+        Some(v) if v.is_infinite() && v < 0.0 => 0.0,
+        Some(v) => v.clamp(0.0, 100.0),
+    };
+    let a = match extract_lab_ab(&nums[1])? {
+        v if v.is_nan() => 0.0,
+        v => v,
+    };
+    let b = match extract_lab_ab(&nums[2])? {
+        v if v.is_nan() => 0.0,
+        v => v,
+    };
     Ok(make_color(
         ColorSpace::Lab,
         [l, a, b],
@@ -109,13 +196,23 @@ fn parse_lab(args: &[Value]) -> Result<Value> {
 /// lch(L% C Hdeg [/ alpha])
 fn parse_lch(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
-    match nums.len() < 3 {
-        true => return Err(err_requires_args("lch", 3, nums.len())),
-        false => {}
+    if nums.len() < 3 {
+        return Err(err_requires_args("lch", 3, nums.len()));
     }
-    let l = extract_pct_value(&nums[0])?;
-    let c = extract_num_or_none(&nums[1], false)?;
-    let h = extract_hue(&nums[2])?;
+    let l_opt = try_extract_num(&nums[0], false)?;
+    let l = match l_opt {
+        None => 100.0,
+        Some(v) if v.is_nan() => 0.0,
+        Some(v) if v.is_infinite() && v > 0.0 => 100.0,
+        Some(v) if v.is_infinite() && v < 0.0 => 0.0,
+        Some(v) => v.clamp(0.0, 100.0),
+    };
+    let c = match extract_lch_chroma(&nums[1])? {
+        v if v.is_nan() => 0.0,
+        v if v.is_infinite() => f64::MAX,
+        v => v.max(0.0),
+    };
+    let h = extract_hue(&nums[2]).unwrap_or(f64::NAN);
     Ok(make_color(
         ColorSpace::Lch,
         [l, c, h],
@@ -124,16 +221,29 @@ fn parse_lch(args: &[Value]) -> Result<Value> {
     ))
 }
 
-/// oklab(L% a b [/ alpha])
+/// oklab(L a b [/ alpha])
+/// L 是 unitless 0-1（percent → n/100）。
 fn parse_oklab(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
-    match nums.len() < 3 {
-        true => return Err(err_requires_args("oklab", 3, nums.len())),
-        false => {}
+    if nums.len() < 3 {
+        return Err(err_requires_args("oklab", 3, nums.len()));
     }
-    let l = extract_num_or_none(&nums[0], true)?;
-    let a = extract_num_or_none(&nums[1], false)?;
-    let b = extract_num_or_none(&nums[2], false)?;
+    let l_opt = try_extract_num(&nums[0], true)?;
+    let l = match l_opt {
+        None => 1.0,
+        Some(v) if v.is_nan() => 0.0,
+        Some(v) if v.is_infinite() && v > 0.0 => 1.0,
+        Some(v) if v.is_infinite() && v < 0.0 => 0.0,
+        Some(v) => v.clamp(0.0, 1.0),
+    };
+    let a = match extract_oklab_ab(&nums[1])? {
+        v if v.is_nan() => 0.0,
+        v => v,
+    };
+    let b = match extract_oklab_ab(&nums[2])? {
+        v if v.is_nan() => 0.0,
+        v => v,
+    };
     Ok(make_color(
         ColorSpace::Oklab,
         [l, a, b],
@@ -142,16 +252,26 @@ fn parse_oklab(args: &[Value]) -> Result<Value> {
     ))
 }
 
-/// oklch(L% C Hdeg [/ alpha])
+/// oklch(L C Hdeg [/ alpha])
 fn parse_oklch(args: &[Value]) -> Result<Value> {
     let (nums, alpha) = split_alpha(args);
-    match nums.len() < 3 {
-        true => return Err(err_requires_args("oklch", 3, nums.len())),
-        false => {}
+    if nums.len() < 3 {
+        return Err(err_requires_args("oklch", 3, nums.len()));
     }
-    let l = extract_num_or_none(&nums[0], true)?;
-    let c = extract_num_or_none(&nums[1], false)?;
-    let h = extract_hue(&nums[2])?;
+    let l_opt = try_extract_num(&nums[0], true)?;
+    let l = match l_opt {
+        None => 1.0,
+        Some(v) if v.is_nan() => 0.0,
+        Some(v) if v.is_infinite() && v > 0.0 => 1.0,
+        Some(v) if v.is_infinite() && v < 0.0 => 0.0,
+        Some(v) => v.clamp(0.0, 1.0),
+    };
+    let c = match extract_oklab_ab(&nums[1])? {
+        v if v.is_nan() => 0.0,
+        v if v.is_infinite() => f64::MAX,
+        v => v.max(0.0),
+    };
+    let h = extract_hue(&nums[2]).unwrap_or(f64::NAN);
     Ok(make_color(
         ColorSpace::Oklch,
         [l, c, h],

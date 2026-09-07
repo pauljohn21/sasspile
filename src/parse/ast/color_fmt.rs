@@ -13,13 +13,15 @@
 use crate::consts::{FLOAT_PRECISION_INV, HUE_MAX, PCT_SCALE};
 
 
-/// 格式化 hue 值——截断到 10 位小数。
+/// 格式化 hue 值——规范化到 [0, 360) 范围，浮点精度截断。
 /// NaN 输出为 `none`（CSS Color 4 missing 通道）。
 pub(crate) fn format_hue(h: f64) -> String {
     match h.is_nan() {
         true => return "none".to_string(),
         false => {}
     }
+    // CSS Color 4: hue 规范化到 [0, 360) — 360° ≡ 0°, -90° ≡ 270°
+    let h = h.rem_euclid(HUE_MAX);
     let h = (h * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
     match h.fract() == 0.0 {
         true => format!("{}", h as i64),
