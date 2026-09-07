@@ -1,7 +1,6 @@
-use sasspile::OutputStyle;
-use sasspile::compile_expanded;
 use sasspile::css::node::CssNode;
-use sasspile::stage::source::Source;
+use sasspile::eval::reactor::Reactor;
+use sasspile::compile_expanded;
 
 #[test]
 fn test_eval_interp_not_css_if() {
@@ -28,31 +27,33 @@ fn test_eval_interp_and_keyword() {
 
 #[test]
 fn test_eval_simple() {
-    // 链式调用：Source → Lexed → Parsed → Evaluated → Serialized
-    let css = Source::new("a { color: red; }".to_string())
+    // 通过 Reactor 管线编译
+    let css = Reactor::new("a { color: red; }")
         .lex()
         .unwrap()
         .parse()
         .unwrap()
         .evaluate()
         .unwrap()
-        .serialize(OutputStyle::Expanded)
-        .into_string();
+        .serialize(sasspile::OutputStyle::Expanded)
+        .finish()
+        .unwrap();
     assert!(css.contains("color: red"));
 }
 
 #[test]
 fn test_eval_variable() {
     let input = "$x: 10px; a { w: $x; }";
-    let nodes = Source::new(input.to_string())
+    let reactor = Reactor::new(input)
         .lex()
         .unwrap()
         .parse()
         .unwrap()
         .evaluate()
         .unwrap();
+    let nodes = reactor.css_nodes;
     // 验证变量求值结果——a 规则的第一个声明值应为 10px
-    if let Some(CssNode::Rule { declarations, .. }) = nodes.nodes.first()
+    if let Some(CssNode::Rule { declarations, .. }) = nodes.first()
         && let Some(CssNode::Declaration { value, .. }) = declarations.first()
     {
         assert_eq!(value, "10px");

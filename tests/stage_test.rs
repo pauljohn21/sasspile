@@ -1,99 +1,86 @@
-//! 编译管线阶段测试——Source → Lexed → Parsed → Evaluated → Serialized。
+//! Reactor 管线集成测试——验证直接调用 Lexer/Parser/Evaluator/Serializer。
 //!
-//! 物理隔离：所有阶段类型测试集中于此，不使用内联 #[cfg(test)] 模块。
-//! 同时包含 CSS Serializer 的单元测试。
+//! 替代已删除的 stage 模块测试, 确保新 Reactor 管线行为等价。
 
-use sasspile::OutputStyle;
-use sasspile::css::Serializer;
 use sasspile::css::node::CssNode;
-use sasspile::stage::evaluated::Evaluated;
-use sasspile::stage::serialized::Serialized;
-use sasspile::stage::source::Source;
+use sasspile::css::Serializer;
+use sasspile::eval::reactor::Reactor;
+use sasspile::OutputStyle;
 
-// —— Source 阶段 ——
+// —— Reactor 管线完整性 ——
 
 #[test]
 fn test_source_creation() {
-    let src = Source::new("a { color: red; }".to_string());
-    assert_eq!(src.text, "a { color: red; }");
+    // Reactor::new 创建管线起点
+    let reactor = Reactor::new("a { color: red; }");
+    assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Raw);
 }
 
 #[test]
 fn test_source_to_lexed() {
-    let src = Source::new("a".to_string());
-    let lexed = src.lex().unwrap();
-    assert_eq!(lexed.tokens.len(), 1);
+    // lex 后进入 Lexed 状态
+    let reactor = Reactor::new("a").lex().unwrap();
+    assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Lex);
 }
-
-// —— Lexed 阶段 ——
 
 #[test]
 fn test_lexed_parse() {
-    // 链式：Source → Lexed → Parsed
-    let parsed = Source::new("a { color: red; }".to_string())
+    // 管线: Raw → Lexed → Parsed
+    let reactor = Reactor::new("a { color: red; }")
         .lex()
         .unwrap()
         .parse()
         .unwrap();
-    assert!(!parsed.ast.nodes.is_empty());
+    assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Parse);
 }
-
-// —— Parsed 阶段 ——
 
 #[test]
 fn test_parsed_evaluate() {
-    // 链式：Source → Lexed → Parsed → Evaluated
-    let evaluated = Source::new(String::new())
+    // 管线: Raw → Lexed → Parsed → Evaluated (空输入产生 0 节点)
+    let reactor = Reactor::new(String::new())
         .lex()
         .unwrap()
         .parse()
         .unwrap()
         .evaluate()
         .unwrap();
-    assert!(evaluated.nodes.is_empty());
+    assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Evaluate);
+    assert!(reactor.css_nodes.is_empty());
 }
 
-// —— Evaluated 阶段 ——
+// —— CSS Serializer (取代旧 Evaluated::serialize 测试) ——
 
 #[test]
 fn test_serialize_empty() {
-    let evaluated = Evaluated { nodes: vec![] };
-    let serialized = evaluated.serialize(OutputStyle::Expanded);
-    assert_eq!(serialized.css, "\n");
+    let css = Serializer::serialize(&[], OutputStyle::Expanded);
+    assert_eq!(css, "\n");
+
+    // 通过 Reactor 管线也产生相同结果
+    let reactor_css = Reactor::new(String::new())
+        .lex()
+        .unwrap()
+        .parse()
+        .unwrap()
+        .evaluate()
+        .unwrap()
+        .serialize(OutputStyle::Expanded)
+        .finish()
+        .unwrap();
+    assert_eq!(reactor_css, "\n");
 }
 
 #[test]
 fn test_serialize_single_decl() {
-    let evaluated = Evaluated {
-        nodes: vec![CssNode::Declaration {
+    let css = Serializer::serialize(
+        &[CssNode::Declaration {
             property: "color".to_string(),
             value: "red".to_string(),
             important: false,
         }],
-    };
-    let serialized = evaluated.serialize(OutputStyle::Expanded);
-    assert_eq!(serialized.css, "color: red;\n");
+        OutputStyle::Expanded,
+    );
+    assert_eq!(css, "color: red;\n");
 }
-
-// —— Serialized 阶段 ——
-
-#[test]
-fn test_serialized_display() {
-    let s = Serialized {
-        css: "a{color:red;}".to_string(),
-    };
-    assert_eq!(format!("{s}"), "a{color:red;}");
-}
-
-#[test]
-fn test_serialized_as_ref() {
-    let s = Serialized {
-        css: "test".to_string(),
-    };
-    assert_eq!(s.as_ref(), "test");
-}
-
-// —— CSS Serializer ——
 
 #[test]
 fn test_serialize_decl() {

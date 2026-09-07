@@ -139,7 +139,6 @@ pub mod error;
 pub mod eval;
 pub mod lex;
 pub mod parse;
-pub mod stage;
 
 pub use error::{Result, SassError, Span};
 pub use eval::Evaluator;
@@ -147,7 +146,6 @@ pub use eval::reactor as ReactorModule;
 pub use eval::reactor::{Reactor, ReactorIO, ReactorSnapshot, ReactorTrace, CompileStage};
 pub use lex::Lexer;
 pub use parse::{Parser, ast::Ast};
-pub use stage::source::Source;
 
 use std::path::PathBuf;
 

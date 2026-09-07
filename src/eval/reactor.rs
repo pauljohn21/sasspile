@@ -15,11 +15,8 @@
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 use crate::eval::env::Env;
-use crate::stage::evaluated::Evaluated;
-use crate::stage::lexed::Lexed;
-use crate::stage::parsed::Parsed;
-use crate::stage::serialized::Serialized;
-use crate::stage::source::Source;
+use crate::lex::token::Token;
+use crate::parse::ast::Ast;
 use crate::OutputStyle;
 
 use std::collections::HashMap;
@@ -77,29 +74,23 @@ impl std::fmt::Display for CompileStage {
 /// Reactor —— 编译世界的完整显式快照。
 ///
 /// 通过泛型参数 `S` 编码管线阶段，保证编译顺序不可颠倒。
-///
-// ANCHOR: type-state-machine-doc
-// Reactor<StateRaw>.lex()       → Result<Reactor<StateLexed>>
-// Reactor<StateLexed>.parse()   → Result<Reactor<StateParsed>>
-// Reactor<StateParsed>.evaluate() → Result<Reactor<StateEvaluated>>
-// Reactor<StateEvaluated>.serialize() → Reactor<StateSerialized>
-// Reactor<StateSerialized>.finish()  → Result<String>
-// ANCHOR_END: type-state-machine-doc
 #[derive(Clone)]
 pub struct Reactor<S = StateRaw> {
-    /// 原始源码（管线全程不变）。
-    source: Source,
+    /// 原始源码文本。
+    text: String,
+    /// 源文件路径 (用于 @use/@import)。
+    base_path: Option<PathBuf>,
+    /// 加载路径 (用于模块搜索)。
+    load_paths: Vec<PathBuf>,
 
-    /// 词法分析产物。
-    tokens: Option<Lexed>,
-    /// 语法分析产物。
-    ast: Option<Parsed>,
-    /// 求值产物。
-    evaluated: Option<Evaluated>,
-    /// 序列化产物。
-    serialized: Option<Serialized>,
+    /// 词法分析产物 (Token 序列)。
+    tokens: Option<Vec<Token>>,
+    /// 语法分析产物 (AST)。
+    ast: Option<Ast>,
+    /// 序列化后的 CSS 字符串。
+    serialized: Option<String>,
 
-    /// 求值环境 —— 持久化作用域链 (Phase 2+ 将改为 imbl 结构)。
+    /// 求值环境 —— 持久化作用域链。
     env: Option<Env>,
     /// 已编译模块缓存。
     modules: HashMap<PathBuf, ModuleCacheEntry>,
@@ -148,7 +139,6 @@ pub struct Warning {
 }
 
 /// Reactor 追踪上下文 —— 与 OTel 链式追踪深度集成。
-/// 每次管线阶段推进自动创建 span, 父子关系由链式调用自动建立。
 #[derive(Debug, Clone)]
 pub struct ReactorTrace {
     pub trace_id: u128,
@@ -177,8 +167,6 @@ impl ReactorTrace {
 }
 
 /// IO 抽象 trait —— 所有文件 IO 通过此 trait 显式化。
-///
-/// 使得 `Reactor` 可以在无文件系统环境下运行 (测试/ WASM/ mock)。
 pub trait ReactorIO: Send + Sync {
     /// 读取文件内容。
     fn read_file(&self, path: &Path) -> std::io::Result<String>;
@@ -215,7 +203,6 @@ impl ReactorIO for DefaultReactorIO {
     }
 
     fn resolve_path(&self, base: &Path, import: &str) -> Result<PathBuf> {
-        // 委托给 Evaluator 的 resolve_file (pub(crate))
         use crate::eval::Evaluator;
         Evaluator::resolve_file(Some(&base.to_path_buf()), import, &self.load_paths)
             .ok_or_else(|| SassError::Module(format!("Cannot resolve: {import}")))
@@ -284,9 +271,6 @@ fn rand_id() -> u128 {
 impl Reactor<StateRaw> {
     /// 从源码字符串创建 Reactor (无文件路径)。
     ///
-    /// # 参数
-    /// - `text`: SCSS 源码。
-    ///
     /// # 示例
     ///
     /// ```
@@ -295,16 +279,12 @@ impl Reactor<StateRaw> {
     /// let reactor = Reactor::new("a { color: red; }");
     /// ```
     pub fn new(text: impl Into<String>) -> Self {
-        Self::with_source(Source::new(text.into()))
-    }
-
-    /// 从 Source 创建 Reactor。
-    pub fn with_source(source: Source) -> Self {
         Self {
-            source,
+            text: text.into(),
+            base_path: None,
+            load_paths: vec![],
             tokens: None,
             ast: None,
-            evaluated: None,
             serialized: None,
             env: None,
             modules: HashMap::new(),
@@ -323,8 +303,24 @@ impl Reactor<StateRaw> {
     /// # Errors
     /// 如果文件不存在或读取失败，返回 IO 错误。
     pub fn from_file(path: &PathBuf) -> Result<Self> {
-        let source = Source::from_file(path)?;
-        Ok(Self::with_source(source))
+        let text = std::fs::read_to_string(path)?;
+        Ok(Self {
+            text,
+            base_path: Some(path.clone()),
+            load_paths: vec![],
+            tokens: None,
+            ast: None,
+            serialized: None,
+            env: None,
+            modules: HashMap::new(),
+            imports_seen: vec![],
+            io_log: vec![],
+            css_nodes: vec![],
+            warnings: vec![],
+            io: Arc::new(DefaultReactorIO::new(vec![])),
+            trace: ReactorTrace::new(),
+            _state: std::marker::PhantomData,
+        })
     }
 
     /// 注入 IO 实现 —— 消费 self 返回新 Reactor (用于 mock 测试)。
@@ -335,7 +331,7 @@ impl Reactor<StateRaw> {
     /// 设置加载路径。
     pub fn with_load_paths(self, paths: Vec<PathBuf>) -> Self {
         Self {
-            source: self.source.with_load_paths(paths),
+            load_paths: paths,
             ..self
         }
     }
@@ -348,26 +344,34 @@ impl Reactor<StateRaw> {
     /// 词法分析 —— Raw → Lexed。
     ///
     /// 消费自身，返回 Token 序列或错误。
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "lex", chars = self.source.text.len())))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "lex", chars = self.text.len())))]
     pub fn lex(self) -> Result<Reactor<StateLexed>> {
         let start = std::time::Instant::now();
 
-        // 委托给现有的 Lexed 类型
-        let lexed = self.source.lex()?;
+        use crate::lex::Lexer;
+
+        // 直接调用 Lexer, 保留 Whitespace 令牌
+        let tokens: Vec<Token> = Lexer::new(&self.text)
+            .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
+            .collect::<Result<Vec<_>>>()?;
+
+        #[cfg(feature = "tracing")]
+        let n_tokens = tokens.len();
 
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "lex",
             elapsed_us = start.elapsed().as_micros() as u64,
-            n_tokens = lexed.tokens.len(),
+            n_tokens = n_tokens,
             "lex complete"
         );
 
         Ok(Reactor {
-            source: Source::new(String::new()), // lex 后源码不再需要
-            tokens: Some(lexed),
+            text: String::new(),              // lex 后源码不再需要
+            base_path: self.base_path,
+            load_paths: self.load_paths,
+            tokens: Some(tokens),
             ast: None,
-            evaluated: None,
             serialized: None,
             env: None,
             modules: self.modules,
@@ -392,12 +396,12 @@ impl Reactor<StateLexed> {
     pub fn parse(self) -> Result<Reactor<StateParsed>> {
         let start = std::time::Instant::now();
 
-        let lexed = self.tokens.ok_or_else(|| {
+        let tokens = self.tokens.ok_or_else(|| {
             SassError::Internal("Reactor<StateLexed> without tokens — this is a bug.".into())
         })?;
 
-        // 委托给现有的 parse 逻辑
-        let parsed = lexed.parse()?;
+        use crate::parse::Parser;
+        let ast = Parser::parse(&tokens)?;
 
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
@@ -407,10 +411,11 @@ impl Reactor<StateLexed> {
         );
 
         Ok(Reactor {
-            source: self.source,
+            text: self.text,
+            base_path: self.base_path,
+            load_paths: self.load_paths,
             tokens: None,
-            ast: Some(parsed),
-            evaluated: None,
+            ast: Some(ast),
             serialized: None,
             env: None,
             modules: self.modules,
@@ -431,47 +436,47 @@ impl Reactor<StateParsed> {
     /// 求值 —— Parsed → Evaluated。
     ///
     /// 消费自身，构建环境并求值 AST，返回求值后的 CSS 节点序列。
-    ///
-    /// **注意**: Phase 1 此方法内部仍委托给原有 `Evaluator::evaluate_with_env`,
-    /// Phase 3+ 将改为纯函数传递模式 (`eval_block(reactor, block) -> (Reactor, Vec<CssNode>)`)。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "evaluate")))]
     pub fn evaluate(self) -> Result<Reactor<StateEvaluated>> {
         let start = std::time::Instant::now();
 
-        let parsed = self.ast.ok_or_else(|| {
+        let ast = self.ast.ok_or_else(|| {
             SassError::Internal("Reactor<StateParsed> without AST — this is a bug.".into())
         })?;
 
-        // Phase 1: 委托给现有 Evaluator (仍使用旧 God-object)
-        // Phase 3+: 替换为纯函数 eval_block(reactor, block)
+        // 构建 Env, 注入文件路径和加载路径
         let mut env = Env::default();
 
-        if let Some(ref path) = parsed.base_path {
+        if let Some(ref path) = self.base_path {
             let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
             env = env
                 .with_base_path(path.clone())
                 .with_plain_css(is_plain_css);
         }
 
-        if !parsed.load_paths.is_empty() {
-            env = env.with_load_paths(parsed.load_paths.clone());
+        if !self.load_paths.is_empty() {
+            env = env.with_load_paths(self.load_paths.clone());
         }
 
-        let nodes = crate::eval::Evaluator::evaluate_with_env(&parsed.ast, env.clone())?;
+        let nodes = crate::eval::Evaluator::evaluate_with_env(&ast, env.clone())?;
+
+        #[cfg(feature = "tracing")]
+        let n_nodes = nodes.len();
 
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "evaluate",
             elapsed_us = start.elapsed().as_micros() as u64,
-            n_nodes = nodes.len(),
+            n_nodes = n_nodes,
             "evaluate complete"
         );
 
         Ok(Reactor {
-            source: self.source,
+            text: self.text,
+            base_path: self.base_path,
+            load_paths: self.load_paths,
             tokens: None,
             ast: None,
-            evaluated: Some(Evaluated { nodes: nodes.clone() }),
             serialized: None,
             env: Some(env),
             modules: self.modules,
@@ -499,19 +504,23 @@ impl Reactor<StateEvaluated> {
         let css = crate::css::Serializer::serialize(&self.css_nodes, style);
 
         #[cfg(feature = "tracing")]
+        let css_len = css.len();
+
+        #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "serialize",
             elapsed_us = start.elapsed().as_micros() as u64,
-            css_len = css.len(),
+            css_len = css_len,
             "serialize complete"
         );
 
         Reactor {
-            source: self.source,
+            text: self.text,
+            base_path: self.base_path,
+            load_paths: self.load_paths,
             tokens: None,
             ast: None,
-            evaluated: self.evaluated,
-            serialized: Some(Serialized { css }),
+            serialized: Some(css),
             env: self.env,
             modules: self.modules,
             imports_seen: self.imports_seen,
@@ -534,7 +543,7 @@ impl Reactor<StateSerialized> {
     pub fn finish(self) -> Result<String> {
         let start = std::time::Instant::now();
 
-        let serialized = self.serialized.ok_or_else(|| {
+        let css = self.serialized.ok_or_else(|| {
             SassError::Internal("Reactor<StateSerialized> without CSS — this is a bug.".into())
         })?;
 
@@ -546,7 +555,7 @@ impl Reactor<StateSerialized> {
             "compile complete"
         );
 
-        Ok(serialized.css)
+        Ok(css)
     }
 }
 
@@ -607,8 +616,6 @@ pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
 }
 
 /// 通过 Reactor 管线编译 SCSS 文件为 CSS 字符串。
-///
-/// 公开 API 入口，功能同 `compile_file()`。
 pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
     Reactor::from_file(path)?
         .lex()?
@@ -619,8 +626,6 @@ pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
 }
 
 /// 通过 Reactor 管线编译 SCSS 文件 (带加载路径) 为 CSS 字符串。
-///
-/// 公开 API 入口，功能同 `compile_file_with_load_paths()`。
 pub fn compile_file_with_load_paths(
     path: &PathBuf,
     style: OutputStyle,
@@ -637,7 +642,6 @@ pub fn compile_file_with_load_paths(
 
 // ─── 模块导入 / 重新导出 ───
 
-// 类型状态 (作为 Reactor 类型参数)
 pub use self::StateRaw as ReactorRaw;
 pub use self::StateLexed as ReactorLexed;
 pub use self::StateParsed as ReactorParsed;

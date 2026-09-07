@@ -1,18 +1,7 @@
 //! 颜色算法测试——scale, change, invert, to-space。
 
-use sasspile::{OutputStyle, Source};
-
 fn compile_expanded(input: &str) -> Result<String, String> {
-    let css = Source::new(input.to_string())
-        .lex()
-        .map_err(|e| e.to_string())?
-        .parse()
-        .map_err(|e| e.to_string())?
-        .evaluate()
-        .map_err(|e| e.to_string())?
-        .serialize(OutputStyle::Expanded)
-        .into_string();
-    Ok(css)
+    sasspile::compile_expanded(input).map_err(|e| e.to_string())
 }
 
 #[test]
