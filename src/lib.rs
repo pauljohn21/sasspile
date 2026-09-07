@@ -144,6 +144,7 @@ pub mod stage;
 pub use error::{Result, SassError, Span};
 pub use eval::Evaluator;
 pub use eval::reactor as ReactorModule;
+pub use eval::reactor::{Reactor, ReactorIO, ReactorSnapshot, ReactorTrace, CompileStage};
 pub use lex::Lexer;
 pub use parse::{Parser, ast::Ast};
 pub use stage::source::Source;
@@ -296,12 +297,7 @@ pub enum OutputStyle {
 ///
 /// 返回 [`SassError`] 如果输入包含语法错误或求值错误。
 pub fn compile(input: &str, style: OutputStyle) -> Result<String> {
-    Ok(Source::new(input.to_string())
-        .lex()?
-        .parse()?
-        .evaluate()?
-        .serialize(style)
-        .into_string())
+    ReactorModule::compile(input, style)
 }
 
 /// 编译 SCSS 为展开式 CSS。
@@ -367,12 +363,7 @@ pub fn compile_compressed(input: &str) -> Result<String> {
 ///
 /// 返回 [`SassError`] 如果文件不存在或编译失败。
 pub fn compile_file(path: &PathBuf, style: OutputStyle) -> Result<String> {
-    Ok(Source::from_file(path)?
-        .lex()?
-        .parse()?
-        .evaluate()?
-        .serialize(style)
-        .into_string())
+    ReactorModule::compile_file(path, style)
 }
 
 /// 编译 SCSS 文件为 CSS 字符串（带加载路径）。
@@ -407,11 +398,5 @@ pub fn compile_file_with_load_paths(
     style: OutputStyle,
     load_paths: Vec<PathBuf>,
 ) -> Result<String> {
-    Ok(Source::from_file(path)?
-        .with_load_paths(load_paths)
-        .lex()?
-        .parse()?
-        .evaluate()?
-        .serialize(style)
-        .into_string())
+    ReactorModule::compile_file_with_load_paths(path, style, load_paths)
 }
