@@ -15,7 +15,7 @@ use crate::parse::ast::{Color, ColorSpace, Value};
 use std::collections::HashMap;
 
 use super::color_adjust::{
-    angle_deg, apply_cie_channel, apply_channel, raw_value, scale_channel,
+    angle_deg, apply_cie_channel, apply_channel, cie_channel, raw_value, scale_channel,
 };
 
 // ── Oklch：lightness/chroma/hue 内部尺度分别为 0-1 / 0-~0.5 / 0-360 ────────
@@ -44,10 +44,16 @@ pub(super) fn adjust_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
 pub(super) fn change_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     // lightness: unitless=n(0-1), percent=n/100, none→NaN
     let l = apply_cie_channel(c.channels[0], kw_args, "lightness", 1.0, |_v, d| d.clamp(0.0, 1.0));
-    // chroma: unitless=n(raw), percent=n%*0.4, none→NaN（negative→hue + 180）
-    let ch = apply_cie_channel(c.channels[1], kw_args, "chroma", 0.4, |_v, d| d.max(0.0));
-    let h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |_v, d| d.rem_euclid(360.0));
     let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    // chroma + hue: handle negative chroma normalization and NaN preservation
+    let base_h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |_v, d| d.rem_euclid(360.0));
+    let chroma_input = cie_channel(kw_args, "chroma", 0.4);
+    let (ch, h) = match chroma_input {
+        None => (c.channels[1], base_h),             // no chroma change
+        Some(d) if d.is_nan() => (f64::NAN, base_h),  // none → chroma=NaN, hue unchanged
+        Some(d) if d < 0.0 => (-d, (base_h + 180.0).rem_euclid(360.0)), // negative → abs + hue+180
+        Some(d) => (d, base_h),                       // positive → use directly
+    };
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Oklch,
@@ -148,9 +154,16 @@ pub(super) fn change_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<
     let l = apply_cie_channel(c.channels[0], kw_args, "lightness", 100.0, |_v, d| {
         d.clamp(0.0, 100.0)
     });
-    let ch = apply_cie_channel(c.channels[1], kw_args, "chroma", 150.0, |_v, d| d.max(0.0));
-    let h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |_v, d| d.rem_euclid(360.0));
     let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    // chroma + hue: handle negative chroma normalization and NaN preservation
+    let base_h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |_v, d| d.rem_euclid(360.0));
+    let chroma_input = cie_channel(kw_args, "chroma", 150.0);
+    let (ch, h) = match chroma_input {
+        None => (c.channels[1], base_h),
+        Some(d) if d.is_nan() => (f64::NAN, base_h),
+        Some(d) if d < 0.0 => (-d, (base_h + 180.0).rem_euclid(360.0)),
+        Some(d) => (d, base_h),
+    };
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Lch,

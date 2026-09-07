@@ -30,6 +30,34 @@ fn clean_pct(v: f64) -> f64 {
     }
 }
 
+/// 格式化百分比值（输入已 0-100 范围）——NaN 输出为 "none"，正常值输出为 "N%"。
+fn fmt_pct_with_pctval(v: f64) -> String {
+    match v.is_nan() {
+        true => "none".to_string(),
+        false => {
+            let pct = (v * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
+            match pct.fract() == 0.0 {
+                true => format!("{}%", pct as i64),
+                false => format!("{pct}%"),
+            }
+        }
+    }
+}
+
+/// 格式化百分比值（输入为 0-1 范围）——NaN 输出为 "none"，正常值输出为 "N%"。
+fn fmt_pct_with_01(v: f64) -> String {
+    match v.is_nan() {
+        true => "none".to_string(),
+        false => {
+            let pct = (v * PCT_SCALE * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
+            match pct.fract() == 0.0 {
+                true => format!("{}%", pct as i64),
+                false => format!("{pct}%"),
+            }
+        }
+    }
+}
+
 /// 格式化浮点数——截断到 10 位小数（与 SCSS 规范一致）。
 /// NaN 输出为 `none`（CSS Color 4 missing 通道）。
 fn format_num(n: f64) -> String {
@@ -243,21 +271,22 @@ pub(super) fn fmt_color(
             }
             ColorSpace::Lab => {
                 let (l, a, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                let l_clean = clean_pct(l);
+                // Lab/Lch: L stored as 0-100, format with % (NaN → "none")
+                let l_str = fmt_pct_with_pctval(l);
                 let a_clean = clean_num(a);
                 let b_clean = clean_num(b);
                 match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
                     true => write!(
                         f,
-                        "lab({}% {} {})",
-                        format_num(l_clean),
+                        "lab({} {} {})",
+                        l_str,
                         format_num(a_clean),
                         format_num(b_clean)
                     ),
                     false => write!(
                         f,
-                        "lab({}% {} {} / {})",
-                        format_num(l_clean),
+                        "lab({} {} {} / {})",
+                        l_str,
                         format_num(a_clean),
                         format_num(b_clean),
                         format_alpha(c.a)
@@ -266,26 +295,28 @@ pub(super) fn fmt_color(
             }
             ColorSpace::Lch => {
                 let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-                let l_clean = clean_pct(l);
-                let ch_clean = clean_num(ch);
-                // CSS Color 4: chroma=0 或 hue=NaN 时输出 none
-                let h_str = match ch_clean == 0.0 || h.is_nan() {
+                // Lab/Lch: L stored as 0-100, format with % (NaN → "none")
+                let l_str = fmt_pct_with_pctval(l);
+                // chroma: output "none" for NaN; only real 0 makes hue "none"
+                let ch_str = format_num(ch);
+                let ch_is_zero = !ch.is_nan() && ch.abs() < FLOAT_NOISE_THRESHOLD;
+                let h_str = match ch_is_zero || h.is_nan() {
                     true => "none".to_string(),
                     false => format!("{}{}", format_hue(h), DEG_UNIT),
                 };
                 match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
                     true => write!(
                         f,
-                        "lch({}% {} {})",
-                        format_num(l_clean),
-                        format_num(ch_clean),
+                        "lch({} {} {})",
+                        l_str,
+                        ch_str,
                         h_str
                     ),
                     false => write!(
                         f,
-                        "lch({}% {} {} / {})",
-                        format_num(l_clean),
-                        format_num(ch_clean),
+                        "lch({} {} {} / {})",
+                        l_str,
+                        ch_str,
                         h_str,
                         format_alpha(c.a)
                     ),
@@ -293,21 +324,22 @@ pub(super) fn fmt_color(
             }
             ColorSpace::Oklab => {
                 let (l, a, b) = (c.channels[0], c.channels[1], c.channels[2]);
-                let l_pct = clean_pct(l * PCT_SCALE);
+                // Oklab/Oklch: L stored as 0-1, scale to 0-100, format with %
+                let l_str = fmt_pct_with_01(l);
                 let a_clean = clean_num(a);
                 let b_clean = clean_num(b);
                 match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
                     true => write!(
                         f,
-                        "oklab({}% {} {})",
-                        format_num(l_pct),
+                        "oklab({} {} {})",
+                        l_str,
                         format_num(a_clean),
                         format_num(b_clean)
                     ),
                     false => write!(
                         f,
-                        "oklab({}% {} {} / {})",
-                        format_num(l_pct),
+                        "oklab({} {} {} / {})",
+                        l_str,
                         format_num(a_clean),
                         format_num(b_clean),
                         format_alpha(c.a)
@@ -316,26 +348,28 @@ pub(super) fn fmt_color(
             }
             ColorSpace::Oklch => {
                 let (l, ch, h) = (c.channels[0], c.channels[1], c.channels[2]);
-                let l_pct = clean_pct(l * PCT_SCALE);
-                let ch_clean = clean_num(ch);
-                // CSS Color 4: chroma=0 或 hue=NaN 时输出 none
-                let h_str = match ch_clean == 0.0 || h.is_nan() {
+                // Oklab/Oklch: L stored as 0-1, scale to 0-100, format with %
+                let l_str = fmt_pct_with_01(l);
+                // chroma: output "none" for NaN; only real 0 makes hue "none"
+                let ch_str = format_num(ch);
+                let ch_is_zero = !ch.is_nan() && ch.abs() < FLOAT_NOISE_THRESHOLD;
+                let h_str = match ch_is_zero || h.is_nan() {
                     true => "none".to_string(),
                     false => format!("{}{}", format_hue(h), DEG_UNIT),
                 };
                 match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
                     true => write!(
                         f,
-                        "oklch({}% {} {})",
-                        format_num(l_pct),
-                        format_num(ch_clean),
+                        "oklch({} {} {})",
+                        l_str,
+                        ch_str,
                         h_str
                     ),
                     false => write!(
                         f,
-                        "oklch({}% {} {} / {})",
-                        format_num(l_pct),
-                        format_num(ch_clean),
+                        "oklch({} {} {} / {})",
+                        l_str,
+                        ch_str,
                         h_str,
                         format_alpha(c.a)
                     ),
