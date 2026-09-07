@@ -143,6 +143,7 @@ pub mod stage;
 
 pub use error::{Result, SassError, Span};
 pub use eval::Evaluator;
+pub use eval::reactor as ReactorModule;
 pub use lex::Lexer;
 pub use parse::{Parser, ast::Ast};
 pub use stage::source::Source;

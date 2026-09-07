@@ -40,6 +40,10 @@ thiserror = "2"
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt"] }
 
+# 持久化数据结构 —— imbl 是 im crate 的维护活跃 fork
+# Scope/Env/ModuleCache 的 COW 持久化实现 (Phase 2+)
+imbl = { version = "7", optional = true }
+
 # 颜色处理 —— HSL/RGB/Lab/OKLab 等色彩空间转换
 color = { version = "0.3", default-features = false, features = ["std"] }
 
@@ -54,6 +58,8 @@ tracing-opentelemetry = { version = "0.33", optional = true }
 default = ["tracing"]
 tracing = ["dep:tracing", "dep:tracing-subscriber"]
 otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:tracing-opentelemetry"]
+# imbl 持久化数据结构 —— 启用后 Env/Scope 使用 COW HashMap
+imbl-persistent = ["dep:imbl"]
 
 [[bin]]
 name = "sasspile"

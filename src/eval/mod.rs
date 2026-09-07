@@ -346,4 +346,5 @@ mod module_helpers;
 mod plain_css;
 mod rule;
 mod scope;
+pub mod reactor;
 pub mod value;

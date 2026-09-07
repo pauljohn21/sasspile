@@ -89,6 +89,10 @@ pub enum SassError {
     /// IO error.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Internal error — invariant violation (should never happen).
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 /// Result type alias.
