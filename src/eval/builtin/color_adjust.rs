@@ -26,16 +26,25 @@ use crate::eval::Evaluator;
 use crate::parse::ast::{Color, ColorOutput, ColorSpace, Value};
 use std::collections::HashMap;
 
+use super::color_parse::extract_calc_f64;
+
+/// 提取 calc() 数值，但忽略 NaN（`calc(NaN)` 视为无操作）。
+/// 仅用于 change 通道：`calc(±infinity)` → ±inf，其他 → None。
+fn extract_calc_f64_nonan(s: &str) -> Option<f64> {
+    extract_calc_f64(s).filter(|v| !v.is_nan())
+}
+
 // ── Channel Extractor + 统一 apply ───────────────────────────────────────
 
 /// 通道提取器：`(&HashMap, &str) -> Option<f64>`。封装「单位转换 + 关键字查找」。
 pub(super) type Extractor = fn(&HashMap<String, Value>, &str) -> Option<f64>;
 
-/// 字面数值：任何单位视为字面数值；`none` → NaN；未提供 → None。
+/// 字面数值：任何单位视为字面数值；`none` → NaN；`calc(±infinity)` → ±inf；未提供 → None。
 pub(super) fn raw_value(kw: &HashMap<String, Value>, key: &str) -> Option<f64> {
     match kw.get(key) {
         Some(Value::Number(n, _)) => Some(*n),
         Some(Value::String(s, false)) if s == "none" => Some(f64::NAN),
+        Some(Value::Calc(s)) => extract_calc_f64(s),
         _ => None,
     }
 }
@@ -46,6 +55,21 @@ pub(super) fn percentage(kw: &HashMap<String, Value>, key: &str) -> Option<f64> 
     match kw.get(key) {
         Some(Value::Number(n, _)) => Some(*n / 100.0),
         Some(Value::String(s, false)) if s == "none" => Some(f64::NAN),
+        Some(Value::Calc(s)) => extract_calc_f64_nonan(s),
+        _ => None,
+    }
+}
+
+/// alpha 通道提取器：50% → 0.5，无单位 n → n，`none` → NaN。
+/// 仅在单位是 "%" 时才除以 100。
+pub(super) fn alpha_value(kw: &HashMap<String, Value>, key: &str) -> Option<f64> {
+    match kw.get(key) {
+        Some(Value::Number(n, u)) => match u.as_deref() {
+            Some("%") => Some(*n / 100.0),
+            _ => Some(*n),
+        },
+        Some(Value::String(s, false)) if s == "none" => Some(f64::NAN),
+        Some(Value::Calc(s)) => extract_calc_f64_nonan(s),
         _ => None,
     }
 }
@@ -54,6 +78,7 @@ pub(super) fn percentage(kw: &HashMap<String, Value>, key: &str) -> Option<f64> 
 /// - 有单位 `%` → 解释为 channel max 的百分比：n/100 * max
 /// - 无单位 n → 直接使用 n（值已在内部尺度，如 0-100 for Lab）
 /// - `none` → NaN
+/// - `calc(±infinity)` → ±inf，`calc(NaN)` → NaN
 pub(super) fn cie_channel(kw: &HashMap<String, Value>, key: &str, max: f64) -> Option<f64> {
     match kw.get(key) {
         Some(Value::Number(n, u)) => match u.as_deref() {
@@ -61,6 +86,7 @@ pub(super) fn cie_channel(kw: &HashMap<String, Value>, key: &str, max: f64) -> O
             _ => Some(*n),
         },
         Some(Value::String(s, false)) if s == "none" => Some(f64::NAN),
+        Some(Value::Calc(s)) => extract_calc_f64_nonan(s),
         _ => None,
     }
 }
@@ -76,7 +102,7 @@ pub(super) fn apply_cie_channel(
     cie_channel(kw, key, max).map(|delta_or_val| f(init, delta_or_val)).unwrap_or(init)
 }
 
-/// 角度：rad/grad/turn/deg 统一转换为度；`none` → NaN。
+/// 角度：rad/grad/turn/deg 统一转换为度；`none` → NaN；`calc(±infinity)` → ±inf。
 pub(super) fn angle_deg(kw: &HashMap<String, Value>, key: &str) -> Option<f64> {
     match kw.get(key) {
         Some(Value::Number(n, None)) => Some(*n),
@@ -88,6 +114,10 @@ pub(super) fn angle_deg(kw: &HashMap<String, Value>, key: &str) -> Option<f64> {
             _ => *n,
         }),
         Some(Value::String(s, false)) if s == "none" => Some(f64::NAN),
+        Some(Value::Calc(s)) => extract_calc_f64(s).map(|v| {
+            // 无穷大角度无意义，规范化到 0（Dart Sass 行为）
+            if v.is_infinite() { 0.0 } else { v }
+        }),
         _ => None,
     }
 }
@@ -213,7 +243,7 @@ fn adjust_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
     let r = apply_cie_channel(c.channels[0], kw_args, c0, 1.0, |v, d| v + d);
     let g = apply_cie_channel(c.channels[1], kw_args, c1, 1.0, |v, d| v + d);
     let b = apply_cie_channel(c.channels[2], kw_args, c2, 1.0, |v, d| v + d);
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |v, d| (v + d).clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |v, d| (v + d).clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         c.space,
@@ -229,7 +259,7 @@ fn change_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
     let r = apply_cie_channel(c.channels[0], kw_args, c0, 1.0, |_v, d| d);
     let g = apply_cie_channel(c.channels[1], kw_args, c1, 1.0, |_v, d| d);
     let b = apply_cie_channel(c.channels[2], kw_args, c2, 1.0, |_v, d| d);
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| d.clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         c.space,
@@ -280,7 +310,7 @@ fn build_legacy_color(
     match space {
         ModifiedSpace::Rgb => match original {
             ColorSpace::Hsl => { let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b); Color::with_hsl(h, s, l, alpha, ColorOutput::Auto, [r, g, b]) }
-            _ => { let out = if r.is_nan() || g.is_nan() || b.is_nan() { ColorOutput::RgbModern } else { ColorOutput::Auto }; Color::with_rgb(r, g, b, alpha, ColorSpace::Rgb, out) }
+            _ => { let out = if r.is_nan() || g.is_nan() || b.is_nan() || alpha.is_nan() { ColorOutput::RgbModern } else { ColorOutput::Auto }; Color::with_rgb(r, g, b, alpha, ColorSpace::Rgb, out) }
         },
         ModifiedSpace::Hsl | ModifiedSpace::Hwb => build_channel_modified_color(original, r, g, b, alpha),
     }
@@ -319,7 +349,7 @@ fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let r = apply_channel(c.legacy_rgb[0], kw_args, "red", raw_value, |v, d| v + d);
     let g = apply_channel(c.legacy_rgb[1], kw_args, "green", raw_value, |v, d| v + d);
     let b = apply_channel(c.legacy_rgb[2], kw_args, "blue", raw_value, |v, d| v + d);
-    let alpha = apply_channel(c.a, kw_args, "alpha", raw_value, |v, d| v + d)
+    let alpha = apply_channel(c.a, kw_args, "alpha", alpha_value, |v, d| v + d)
         .clamp(0.0, 1.0);
 
     // HSL/HWB 通道调整——仅在对应模式时计算
@@ -389,9 +419,9 @@ fn change_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let g = apply_channel(c.legacy_rgb[1], kw_args, "green", raw_value, |_v, d| d);
     let b = apply_channel(c.legacy_rgb[2], kw_args, "blue", raw_value, |_v, d| d);
     // alpha：change 允许 none（NaN），但非 NaN 值需 clamp 到 [0, 1]
-    let alpha = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| {
-        if d.is_nan() { d } else { d.clamp(0.0, 1.0) }
-    });
+let alpha = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| {
+    if d.is_nan() { d } else { d.clamp(0.0, 1.0) }
+});
 
     // HSL/HWB 通道设置
     let rgb_result = match modified {

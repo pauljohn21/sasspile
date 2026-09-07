@@ -15,7 +15,7 @@ use crate::parse::ast::{Color, ColorSpace, Value};
 use std::collections::HashMap;
 
 use super::color_adjust::{
-    angle_deg, apply_cie_channel, apply_channel, cie_channel, raw_value, scale_channel,
+    alpha_value, angle_deg, apply_cie_channel, apply_channel, cie_channel, raw_value, scale_channel,
 };
 
 // ── Oklch：lightness/chroma/hue 内部尺度分别为 0-1 / 0-~0.5 / 0-360 ────────
@@ -30,7 +30,7 @@ pub(super) fn adjust_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
     let h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |v, d| {
         (v + d).rem_euclid(360.0)
     });
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |v, d| (v + d).clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |v, d| (v + d).clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Oklch,
@@ -44,7 +44,7 @@ pub(super) fn adjust_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
 pub(super) fn change_oklch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     // lightness: unitless=n(0-1), percent=n/100, none→NaN
     let l = apply_cie_channel(c.channels[0], kw_args, "lightness", 1.0, |_v, d| d.clamp(0.0, 1.0));
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| d.clamp(0.0, 1.0));
     // chroma + hue: handle negative chroma normalization and NaN preservation
     let base_h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |_v, d| d.rem_euclid(360.0));
     let chroma_input = cie_channel(kw_args, "chroma", 0.4);
@@ -86,7 +86,7 @@ pub(super) fn adjust_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
     });
     let a_v = apply_cie_channel(c.channels[1], kw_args, "a", 0.4, |v, d| v + d);
     let b_v = apply_cie_channel(c.channels[2], kw_args, "b", 0.4, |v, d| v + d);
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |v, d| (v + d).clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |v, d| (v + d).clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Oklab,
@@ -101,7 +101,7 @@ pub(super) fn change_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
     let l = apply_cie_channel(c.channels[0], kw_args, "lightness", 1.0, |_v, d| d.clamp(0.0, 1.0));
     let a_v = apply_cie_channel(c.channels[1], kw_args, "a", 0.4, |_v, d| d);
     let b_v = apply_cie_channel(c.channels[2], kw_args, "b", 0.4, |_v, d| d);
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| d.clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Oklab,
@@ -139,7 +139,7 @@ pub(super) fn adjust_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<
     let h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |v, d| {
         (v + d).rem_euclid(360.0)
     });
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |v, d| (v + d).clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |v, d| (v + d).clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Lch,
@@ -154,7 +154,7 @@ pub(super) fn change_lch(c: &Color, kw_args: &HashMap<String, Value>) -> Result<
     let l = apply_cie_channel(c.channels[0], kw_args, "lightness", 100.0, |_v, d| {
         d.clamp(0.0, 100.0)
     });
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| d.clamp(0.0, 1.0));
     // chroma + hue: handle negative chroma normalization and NaN preservation
     let base_h = apply_channel(c.channels[2], kw_args, "hue", angle_deg, |_v, d| d.rem_euclid(360.0));
     let chroma_input = cie_channel(kw_args, "chroma", 150.0);
@@ -197,7 +197,7 @@ pub(super) fn adjust_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<
     // a,b: unitless=n(raw), percent=n%*125, none→NaN
     let a_v = apply_cie_channel(c.channels[1], kw_args, "a", 125.0, |v, d| v + d);
     let b_v = apply_cie_channel(c.channels[2], kw_args, "b", 125.0, |v, d| v + d);
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |v, d| (v + d).clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |v, d| (v + d).clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Lab,
@@ -214,7 +214,7 @@ pub(super) fn change_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<
     });
     let a_v = apply_cie_channel(c.channels[1], kw_args, "a", 125.0, |_v, d| d);
     let b_v = apply_cie_channel(c.channels[2], kw_args, "b", 125.0, |_v, d| d);
-    let a = apply_channel(c.a, kw_args, "alpha", raw_value, |_v, d| d.clamp(0.0, 1.0));
+    let a = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| d.clamp(0.0, 1.0));
 
     Ok(Value::Color(Color::with_space(
         ColorSpace::Lab,

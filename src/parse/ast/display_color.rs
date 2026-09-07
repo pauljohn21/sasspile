@@ -11,22 +11,13 @@
 //! 支持所有 CSS Color 4 颜色空间的序列化输出。
 
 use super::*;
-use crate::consts::{ALPHA_TOLERANCE, DEG_UNIT, FLOAT_NOISE_THRESHOLD, FLOAT_PRECISION_INV, PCT_ROUND_THRESHOLD, PCT_SCALE};
+use crate::consts::{ALPHA_TOLERANCE, DEG_UNIT, FLOAT_NOISE_THRESHOLD, FLOAT_PRECISION_INV, PCT_SCALE};
 
 /// 清理颜色分量的浮点噪声——将极小值归零。
 fn clean_num(v: f64) -> f64 {
     match v.abs() < FLOAT_NOISE_THRESHOLD {
         true => 0.0,
         false => v,
-    }
-}
-
-/// 清理百分比分量——接近 0 或 100 时归整。
-fn clean_pct(v: f64) -> f64 {
-    match v {
-        v if v.abs() < FLOAT_NOISE_THRESHOLD => 0.0,
-        v if (v - PCT_SCALE).abs() < PCT_ROUND_THRESHOLD => PCT_SCALE,
-        _ => v,
     }
 }
 
@@ -59,16 +50,21 @@ fn fmt_pct_with_01(v: f64) -> String {
 }
 
 /// 格式化浮点数——截断到 10 位小数（与 SCSS 规范一致）。
-/// NaN 输出为 `none`（CSS Color 4 missing 通道）。
+/// NaN → "none"，±inf → "calc(±infinity)"（Sass 语法）。
 fn format_num(n: f64) -> String {
-    match n.is_nan() {
-        true => return "none".to_string(),
-        false => {}
-    }
-    let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
-    match n.fract() == 0.0 {
-        true => format!("{}", n as i64),
-        false => format!("{n}"),
+    match (n.is_nan(), n.is_infinite()) {
+        (true, _) => "none".to_string(),
+        (_, true) => match n > 0.0 {
+            true => "calc(infinity)".to_string(),
+            false => "calc(-infinity)".to_string(),
+        },
+        _ => {
+            let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
+            match n.fract() == 0.0 {
+                true => format!("{}", n as i64),
+                false => format!("{n}"),
+            }
+        }
     }
 }
 
