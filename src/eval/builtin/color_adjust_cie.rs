@@ -15,7 +15,7 @@ use crate::parse::ast::{Color, ColorSpace, Value};
 use std::collections::HashMap;
 
 use super::color_adjust::{
-    alpha_value, angle_deg, apply_cie_channel, apply_channel, cie_channel, raw_value, scale_channel,
+    alpha_value, angle_deg, apply_cie_channel, apply_channel, cie_channel, scale_channel, scale_channel_min,
 };
 
 // ── Oklch：lightness/chroma/hue 内部尺度分别为 0-1 / 0-~0.5 / 0-360 ────────
@@ -114,9 +114,9 @@ pub(super) fn change_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
 
 pub(super) fn scale_oklab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let l = scale_channel(c.channels[0], 1.0, kw_args, "lightness").clamp(0.0, 1.0);
-    // 使用对称 max=0.4 涵盖 oklab a/b 的值域
-    let a_v = scale_channel(c.channels[1], 0.4, kw_args, "a");
-    let b_v = scale_channel(c.channels[2], 0.4, kw_args, "b");
+    // 使用对称 max=0.4 / min=-0.4 涵盖 oklab a/b 的值域
+    let a_v = scale_channel_min(c.channels[1], 0.4, -0.4, kw_args, "a");
+    let b_v = scale_channel_min(c.channels[2], 0.4, -0.4, kw_args, "b");
     let a = scale_channel(c.a, 1.0, kw_args, "alpha").clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(
@@ -227,8 +227,9 @@ pub(super) fn change_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<
 
 pub(super) fn scale_lab(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let l = scale_channel(c.channels[0], 100.0, kw_args, "lightness").clamp(0.0, 100.0);
-    let a_v = scale_channel(c.channels[1], 125.0, kw_args, "a");
-    let b_v = scale_channel(c.channels[2], 125.0, kw_args, "b");
+    // 对称 max=125 / min=-125 涵盖 Lab a/b 的值域
+    let a_v = scale_channel_min(c.channels[1], 125.0, -125.0, kw_args, "a");
+    let b_v = scale_channel_min(c.channels[2], 125.0, -125.0, kw_args, "b");
     let a = scale_channel(c.a, 1.0, kw_args, "alpha").clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(

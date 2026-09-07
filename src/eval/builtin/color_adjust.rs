@@ -133,17 +133,33 @@ pub(super) fn apply_channel(
     extract(kw, key).map(|d| f(init, d)).unwrap_or(init)
 }
 
-/// 缩放通道：百分比缩放（正最大值方向，负 0 方向）。
+/// 缩放通道：百分比缩放（正最大值方向，负最小值方向）。
+///
+/// - `pct > 0`：在当前值和 `max` 之间线性插值
+/// - `pct < 0`：在当前值和 `min` 之间线性插值
+/// - `max == MAX`（chroma 类无下界通道）：仅按百分比缩放绝对值（`val + val * pct`）
 pub(super) fn scale_channel(val: f64, max: f64, kw: &HashMap<String, Value>, key: &str) -> f64 {
+    scale_channel_min(val, max, 0.0, kw, key)
+}
+
+/// 带 min 边界的缩放通道。
+pub(super) fn scale_channel_min(
+    val: f64,
+    max: f64,
+    min: f64,
+    kw: &HashMap<String, Value>,
+    key: &str,
+) -> f64 {
     raw_value(kw, key)
-        .map(|n| {
-            let pct = n / 100.0;
-            match pct >= 0.0 {
-                true => val + (max - val) * pct,
-                false => val + val * pct,
-            }
-        })
-        .unwrap_or(val)
+    .map(|n| {
+        let pct = n / 100.0;
+        match (pct >= 0.0, max == f64::MAX) {
+            (true, _) => val + (max - val) * pct,     // 扩向 max
+            (false, true) => val + val * pct,          // chroma 类：仅缩放绝对值（无下界）
+            (false, false) => val + (val - min) * pct, // 扩向 min（HWB→0, symmetric→-max）
+        }
+    })
+    .unwrap_or(val)
 }
 
 /// 从 args/kw_args 提取颜色参数。
@@ -298,7 +314,7 @@ fn classify_modified(kw: &HashMap<String, Value>) -> ModifiedSpace {
     ModifiedSpace::Rgb
 }
 
-// 根据被修改的色彩空间构造 Color：Rgb→保原空间, Hsl/Hwb→build_channel_modified_color
+// 根据被修改的色彩空间构造 Color：Rgb→保原空间（超范围→HSL回退）, Hsl/Hwb→build_channel_modified_color
 fn build_legacy_color(
     space: ModifiedSpace,
     original: ColorSpace,
@@ -310,7 +326,20 @@ fn build_legacy_color(
     match space {
         ModifiedSpace::Rgb => match original {
             ColorSpace::Hsl => { let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b); Color::with_hsl(h, s, l, alpha, ColorOutput::Auto, [r, g, b]) }
-            _ => { let out = if r.is_nan() || g.is_nan() || b.is_nan() || alpha.is_nan() { ColorOutput::RgbModern } else { ColorOutput::Auto }; Color::with_rgb(r, g, b, alpha, ColorSpace::Rgb, out) }
+            _ => {
+                // 超范围 RGB（超出 0-255，如 change-color(black, $red: 500)）→ 转 HSL 扩展输出
+                let rgb_in_range = r >= 0.0 && r <= 255.0 && g >= 0.0 && g <= 255.0 && b >= 0.0 && b <= 255.0;
+                let has_nan = r.is_nan() || g.is_nan() || b.is_nan() || alpha.is_nan();
+                match (has_nan, rgb_in_range) {
+                    (true, _) => Color::with_rgb(r, g, b, alpha, ColorSpace::Rgb, ColorOutput::RgbModern),
+                    (false, true) => Color::with_rgb(r, g, b, alpha, ColorSpace::Rgb, ColorOutput::Auto),
+                    (false, false) => {
+                        // 超范围：计算 HSL（允许 S > 1.0），以 HSL 格式输出
+                        let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b);
+                        Color::with_hsl(h, s, l, alpha, ColorOutput::Auto, [r, g, b])
+                    }
+                }
+            }
         },
         ModifiedSpace::Hsl | ModifiedSpace::Hwb => build_channel_modified_color(original, r, g, b, alpha),
     }
@@ -553,14 +582,35 @@ fn scale_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
         ModifiedSpace::Rgb => (r, g, b),
     };
 
-    let color = build_legacy_color(
-        modified,
-        c.space,
-        clamp_rgb(rgb_result.0),
-        clamp_rgb(rgb_result.1),
-        clamp_rgb(rgb_result.2),
-        alpha,
-    );
+    // scale-color HSL/HWB-modified: 总是以 rgb(r%, g%, b%) 格式输出
+    // scale-color RGB-modified: hex/rgb 格式（与 change-color 相同）
+    let color = match (modified, c.space) {
+        (ModifiedSpace::Hsl | ModifiedSpace::Hwb, _) => {
+            let has_nan = rgb_result.0.is_nan() || rgb_result.1.is_nan() || rgb_result.2.is_nan() || alpha.is_nan();
+            match has_nan {
+                true => Color::with_hsl(
+                    rgb_result.0, rgb_result.1, rgb_result.2, alpha,
+                    ColorOutput::Auto, [0.0; 3],
+                ),
+                false => Color::with_rgb(
+                    clamp_rgb(rgb_result.0),
+                    clamp_rgb(rgb_result.1),
+                    clamp_rgb(rgb_result.2),
+                    alpha,
+                    ColorSpace::Rgb,
+                    ColorOutput::RgbPercent,
+                ),
+            }
+        }
+        _ => build_legacy_color(
+            modified,
+            c.space,
+            clamp_rgb(rgb_result.0),
+            clamp_rgb(rgb_result.1),
+            clamp_rgb(rgb_result.2),
+            alpha,
+        ),
+    };
     Ok(Value::Color(color))
 }
 

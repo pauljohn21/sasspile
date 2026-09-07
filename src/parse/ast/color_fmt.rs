@@ -75,12 +75,13 @@ pub(crate) fn hsl_to_rgb_percent(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
     )
 }
 
-/// 格式化 alpha 值。
+/// 格式化 alpha 值——浮点精度截断（10 位小数）。
 pub(crate) fn format_alpha(a: f64) -> String {
     match a.is_nan() {
         true => return "none".to_string(),
         false => {}
     }
+    let a = (a * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
     match a.fract() == 0.0 {
         true => format!("{}", a as i64),
         false => format!("{a}"),
