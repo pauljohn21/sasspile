@@ -413,11 +413,15 @@ impl Evaluator {
             return Err(SassError::Eval("mix: color conversion failed".into()));
         };
 
-        // 在混合空间中线性插值
-        let r = lerp(ca.channels[0], cb.channels[0], weight);
-        let g = lerp(ca.channels[1], cb.channels[1], weight);
-        let bl = lerp(ca.channels[2], cb.channels[2], weight);
-        let alpha = lerp(ca.a, cb.a, weight);
+    // 在混合空间中线性插值
+    // Sass 规范：weight 表示 color1 的百分比，所以 t = weight
+    // lerp(a, b, t) = a * (1-t) + b * t
+    // 要得到 ca * weight + cb * (1-weight)，需要 lerp(cb, ca, weight)
+    let w = weight.clamp(0.0, 1.0);
+    let r = lerp(cb.channels[0], ca.channels[0], w);
+    let g = lerp(cb.channels[1], ca.channels[1], w);
+    let bl = lerp(cb.channels[2], ca.channels[2], w);
+    let alpha = lerp(cb.a, ca.a, w);
 
         // 创建混合结果颜色
         let mixed_space = ca.space;
@@ -427,9 +431,9 @@ impl Evaluator {
             alpha,
             ca.output,
             [
-                lerp(ca.legacy_rgb[0], cb.legacy_rgb[0], weight),
-                lerp(ca.legacy_rgb[1], cb.legacy_rgb[1], weight),
-                lerp(ca.legacy_rgb[2], cb.legacy_rgb[2], weight),
+                lerp(cb.legacy_rgb[0], ca.legacy_rgb[0], w),
+                lerp(cb.legacy_rgb[1], ca.legacy_rgb[1], w),
+                lerp(cb.legacy_rgb[2], ca.legacy_rgb[2], w),
             ],
         );
 
