@@ -15,7 +15,7 @@
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::{Color, ColorOutput, ColorSpace, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Option<Value>> {
     match name {

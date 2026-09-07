@@ -19,7 +19,7 @@ use crate::eval::error_msgs::{
     err_wrong_arg_count_plural,
 };
 use crate::parse::ast::{Color, ColorSpace, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 use super::super::Evaluator;
 use super::color_conv_ops::{color_name, convert_space};

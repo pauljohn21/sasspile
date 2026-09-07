@@ -1,8 +1,10 @@
 //! 作用域链——Scope 结构体 + Rc<Scope> 父链管理嵌套作用域。
+//!
+//! 使用 `imbl::HashMap` 提供持久化数据结构, clone 操作实现 O(log n) 结构共享。
 
 use super::env::{FunctionDef, MixinDef};
 use crate::parse::ast::Value;
-use std::collections::HashMap;
+use imbl::HashMap;
 use std::rc::Rc;
 
 /// 单层作用域——变量/mixin/function 表 + 父链。

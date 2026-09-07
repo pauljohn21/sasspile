@@ -13,7 +13,7 @@ use crate::eval::error_msgs::{
     err_not_a_string, err_unknown_color_space_quoted, err_wrong_arg_count_plural,
 };
 use crate::parse::ast::{Color, ColorSpace, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 use super::color_conv;
 use super::color_conv_ops::{is_same_space, space_to_srgb_f64};

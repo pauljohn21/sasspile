@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 pub(crate) use env::{Env, FunctionDef, MixinDef, ModuleExports};
 // 子模块通过 `use super::*` 获取这些类型
-pub(crate) use std::collections::HashMap;
+pub(crate) use imbl::{HashMap, HashSet};
 pub(crate) use std::rc::Rc;
 
 /// 求值器。

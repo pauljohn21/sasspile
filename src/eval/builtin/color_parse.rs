@@ -5,7 +5,7 @@
 use crate::error::{Result, SassError};
 use crate::eval::error_msgs::{err_not_a_number, err_requires_args};
 use crate::parse::ast::{ColorOutput, ColorSpace, Separator, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 use super::color_conv_ops::make_color;
 

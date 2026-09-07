@@ -12,7 +12,7 @@
 use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use std::collections::HashMap;
+use imbl::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// unique-id 全局计数器。

@@ -1,9 +1,12 @@
 //! 求值环境——Env + `ModuleExports` 类型定义和方法。
+//!
+//! 使用 `imbl::HashMap` / `imbl::HashSet` 提供持久化数据结构,
+//! clone 操作实现 O(log n) 结构共享。
 
 use crate::css::node::CssNode;
 use crate::eval::scope::Scope;
 use crate::parse::ast::*;
-use std::collections::{HashMap, HashSet};
+use imbl::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 

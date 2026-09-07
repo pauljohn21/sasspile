@@ -24,7 +24,7 @@
 use crate::error::{Result, SassError};
 use crate::eval::Evaluator;
 use crate::parse::ast::{Color, ColorOutput, ColorSpace, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 use super::color_parse::extract_calc_f64;
 

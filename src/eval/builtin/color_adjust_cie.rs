@@ -12,7 +12,7 @@
 
 use crate::error::Result;
 use crate::parse::ast::{Color, ColorSpace, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 use super::color_adjust::{
     alpha_value, angle_deg, apply_cie_channel, apply_channel, cie_channel, scale_channel, scale_channel_min,

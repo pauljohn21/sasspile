@@ -15,7 +15,7 @@ use super::super::Evaluator;
 use super::color_parse::extract_calc_f64;
 use crate::error::{Result, SassError};
 use crate::parse::ast::{Color, ColorOutput, ColorSpace, Separator, Value};
-use std::collections::HashMap;
+use imbl::HashMap;
 
 /// 从 Value 提取数值或 NaN（用于 none 通道处理）。
 pub(crate) fn extract_none_num(v: &Value) -> Option<f64> {

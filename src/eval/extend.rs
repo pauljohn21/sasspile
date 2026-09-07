@@ -2,6 +2,7 @@ use super::*;
 use crate::css::node::CssNode;
 use crate::css::selector_parser::parse_selector;
 use crate::css::selector_ops;
+use imbl::HashSet;
 
 impl Evaluator {
     /// 收集 CSS 中所有选择器文本（用于 extend target 匹配检查）。
@@ -29,7 +30,7 @@ impl Evaluator {
     pub(crate) fn apply_extends(
         nodes: Vec<CssNode>,
         extends: &[(String, String, bool, Option<PathBuf>)],
-        module_selectors: &HashMap<PathBuf, std::collections::HashSet<String>>,
+        module_selectors: &HashMap<PathBuf, HashSet<String>>,
     ) -> Vec<CssNode> {
         let span = crate::__tracing::info_span!("apply_extends", n_extends = extends.len());
         let _enter = span.enter();
@@ -171,7 +172,7 @@ impl Evaluator {
     /// 从模块缓存构建路径→选择器集合的映射
     pub(crate) fn build_module_selectors(
         cache: &HashMap<PathBuf, ModuleExports>,
-    ) -> HashMap<PathBuf, std::collections::HashSet<String>> {
+    ) -> HashMap<PathBuf, HashSet<String>> {
         cache
             .iter()
             .map(|(k, v)| (k.clone(), v.selectors.clone()))
@@ -186,7 +187,7 @@ impl Evaluator {
         css: &[CssNode],
         ast: &crate::parse::ast::Ast,
         load_paths: &[PathBuf],
-    ) -> std::collections::HashSet<String> {
+    ) -> HashSet<String> {
         // 从 AST 中提取 @use 的模块路径——flat_map + collect
         let base = Some(module_path.to_path_buf());
         let base_ref = base.as_ref();

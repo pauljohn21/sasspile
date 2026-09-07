@@ -7,7 +7,7 @@ use super::super::Evaluator;
 use crate::error::{Result, SassError};
 use crate::eval::Env;
 use crate::parse::ast::Value;
-use std::collections::HashMap;
+use imbl::HashMap;
 
 impl Evaluator {
     /// 手工分派——处理 rgba/rgb/darken/lighten/mix/if/inspect/type-of 等特殊函数。

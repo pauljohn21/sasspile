@@ -5,7 +5,7 @@
 use crate::error::Result;
 use crate::eval::Env;
 use crate::parse::ast::Value;
-use std::collections::HashMap;
+use imbl::HashMap;
 
 /// 内建函数映射条目：`(模块限定名, 全局名)`。
 ///

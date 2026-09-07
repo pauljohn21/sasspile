@@ -224,7 +224,7 @@ impl Evaluator {
                     prefix = ?prefix,
                     "eval_forward: consumed_config merge"
                 );
-                let new_env = new_env.with_consumed_config(merged_consumed);
+                let new_env = new_env.with_consumed_config(merged_consumed.into());
                 Ok((css, new_env))
             }
             None => Err(SassError::Eval("Can't find stylesheet to import.".into())),

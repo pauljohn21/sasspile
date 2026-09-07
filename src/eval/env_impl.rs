@@ -3,7 +3,7 @@
 use super::env::{Env, FunctionDef, MixinDef, ModuleExports};
 use super::scope::Scope;
 use crate::parse::ast::{Node, Param, Value};
-use std::collections::{HashMap, HashSet};
+use imbl::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -343,40 +343,65 @@ impl Env {
                     Err(rc) => (*rc).clone(),
                 };
                 // 传播命名空间变量（含 .）+ !global 变量
-                new_parent.local_vars.extend(
+                new_parent.local_vars = new_parent.local_vars.union(
                     child_scope
                         .local_vars
                         .into_iter()
-                        .filter(|(name, _)| name.contains('.')),
+                        .filter(|(name, _)| name.contains('.'))
+                        .collect(),
                 );
-                new_parent.local_vars.extend(child_scope.global_writes);
-                // 传播新增 mixin/function
-                child_scope
-                    .local_mixins
-                    .into_iter()
-                    .for_each(|(name, def)| {
-                        new_parent.local_mixins.entry(name).or_insert(def);
-                    });
-                child_scope
-                    .local_functions
-                    .into_iter()
-                    .for_each(|(name, def)| {
-                        new_parent.local_functions.entry(name).or_insert(def);
-                    });
+                new_parent.local_vars = new_parent
+                    .local_vars
+                    .union(child_scope.global_writes);
+                // 传播新增 mixin/function（保留 local 已有条目不覆盖）
+                new_parent.local_mixins = {
+                    let base = new_parent.local_mixins.clone();
+                    let existing = base.clone();
+                    base.union(
+                        child_scope
+                            .local_mixins
+                            .into_iter()
+                            .filter(move |(name, _)| !existing.contains_key(name))
+                            .collect(),
+                    )
+                };
+                new_parent.local_functions = {
+                    let base = new_parent.local_functions.clone();
+                    let existing = base.clone();
+                    base.union(
+                        child_scope
+                            .local_functions
+                            .into_iter()
+                            .filter(move |(name, _)| !existing.contains_key(name))
+                            .collect(),
+                    )
+                };
                 // 传播新增 forwarded 成员
-                child_scope
-                    .forwarded_mixins
-                    .into_iter()
-                    .for_each(|(name, def)| {
-                        new_parent.forwarded_mixins.entry(name).or_insert(def);
-                    });
-                child_scope
-                    .forwarded_functions
-                    .into_iter()
-                    .for_each(|(name, def)| {
-                        new_parent.forwarded_functions.entry(name).or_insert(def);
-                    });
-                new_parent.forwarded_vars.extend(child_scope.forwarded_vars);
+                new_parent.forwarded_mixins = {
+                    let base = new_parent.forwarded_mixins.clone();
+                    let existing = base.clone();
+                    base.union(
+                        child_scope
+                            .forwarded_mixins
+                            .into_iter()
+                            .filter(move |(name, _)| !existing.contains_key(name))
+                            .collect(),
+                    )
+                };
+                new_parent.forwarded_functions = {
+                    let base = new_parent.forwarded_functions.clone();
+                    let existing = base.clone();
+                    base.union(
+                        child_scope
+                            .forwarded_functions
+                            .into_iter()
+                            .filter(move |(name, _)| !existing.contains_key(name))
+                            .collect(),
+                    )
+                };
+                new_parent.forwarded_vars = new_parent
+                    .forwarded_vars
+                    .union(child_scope.forwarded_vars);
                 Self {
                     current: Rc::new(new_parent),
                     ..self
@@ -386,22 +411,16 @@ impl Env {
         }
     }
 
-    /// 合并 forwarded 表到 local `表（std::mem::take` 模式）。
-    #[allow(clippy::needless_for_each)]
+    /// 合并 forwarded 表到 local 表。
     pub(crate) fn merge_forwarded_to_local(self) -> Self {
         let (mut scope, env) = self.mutate_scope();
-        let forwarded_vars = std::mem::take(&mut scope.forwarded_vars);
-        forwarded_vars.into_iter().for_each(|(k, v)| {
-            scope.local_vars.entry(k).or_insert(v);
-        });
-        let forwarded_mixins = std::mem::take(&mut scope.forwarded_mixins);
-        forwarded_mixins.into_iter().for_each(|(k, v)| {
-            scope.local_mixins.entry(k).or_insert(v);
-        });
-        let forwarded_functions = std::mem::take(&mut scope.forwarded_functions);
-        forwarded_functions.into_iter().for_each(|(k, v)| {
-            scope.local_functions.entry(k).or_insert(v);
-        });
+        let forwarded_vars: HashMap<String, Value> = std::mem::take(&mut scope.forwarded_vars);
+        scope.local_vars = scope.local_vars.union(forwarded_vars);
+        let forwarded_mixins: HashMap<String, MixinDef> = std::mem::take(&mut scope.forwarded_mixins);
+        scope.local_mixins = scope.local_mixins.union(forwarded_mixins);
+        let forwarded_functions: HashMap<String, FunctionDef> =
+            std::mem::take(&mut scope.forwarded_functions);
+        scope.local_functions = scope.local_functions.union(forwarded_functions);
         env.with_scope(scope)
     }
 
@@ -411,7 +430,9 @@ impl Env {
             let mut new_exports = (**exports).clone();
             match new_exports.forwarded_vars.contains_key(var_name) {
                 true => {
-                    new_exports.forwarded_vars.insert(var_name.to_string(), val);
+                    new_exports
+                        .forwarded_vars
+                        .insert(var_name.to_string(), val);
                 }
                 false => {
                     new_exports.local_vars.insert(var_name.to_string(), val);

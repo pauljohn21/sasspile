@@ -7,7 +7,7 @@ use crate::css::selector_ops;
 use crate::css::selector_parser::parse_selector;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-use std::collections::HashMap;
+use imbl::HashMap;
 
 /// 返回每个 selector 函数的参数名列表（按位置顺序）。
 fn selector_param_names(name: &str) -> &'static [&'static str] {
