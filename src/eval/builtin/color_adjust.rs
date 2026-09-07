@@ -143,6 +143,8 @@ pub(super) fn scale_channel(val: f64, max: f64, kw: &HashMap<String, Value>, key
 }
 
 /// 带 min 边界的缩放通道。
+///
+/// 超出 [min, max] 的 val：在远离边界方向上的缩放无效（sRGB out_of_gamut 语义）。
 pub(super) fn scale_channel_min(
     val: f64,
     max: f64,
@@ -154,9 +156,15 @@ pub(super) fn scale_channel_min(
     .map(|n| {
         let pct = n / 100.0;
         match (pct >= 0.0, max == f64::MAX) {
-            (true, _) => val + (max - val) * pct,     // 扩向 max
-            (false, true) => val + val * pct,          // chroma 类：仅缩放绝对值（无下界）
-            (false, false) => val + (val - min) * pct, // 扩向 min（HWB→0, symmetric→-max）
+            // val 超上界 + 扩向上：无效（保持原值）
+            (true, false) if val > max => val,
+            // val 超下界 + 扩向下：无效（保持原值）
+            (false, false) if val < min => val,
+            // chroma 类无下界：乘法缩放
+            (_, true) => val + val * pct,
+            // 通用：向 max 插值 / 向 min 插值
+            (true, _) => val + (max - val) * pct,
+            (false, _) => val + (val - min) * pct,
         }
     })
     .unwrap_or(val)
@@ -288,17 +296,14 @@ fn change_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Resul
 
 fn scale_modern_rgb_space(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
     let [c0, c1, c2] = modern_channel_keys(c.space);
+    // 现代 RGB 空间：线性插值 val + (max - val)*pct，max=1.0
     let r = scale_channel(c.channels[0], 1.0, kw_args, c0);
     let g = scale_channel(c.channels[1], 1.0, kw_args, c1);
     let b = scale_channel(c.channels[2], 1.0, kw_args, c2);
     let a = scale_channel(c.a, 1.0, kw_args, "alpha").clamp(0.0, 1.0);
 
     Ok(Value::Color(Color::with_space(
-        c.space,
-        [r, g, b],
-        a,
-        c.output,
-        c.legacy_rgb,
+        c.space, [r, g, b], a, c.output, c.legacy_rgb,
     )))
 }
 
