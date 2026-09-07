@@ -404,37 +404,51 @@ Source → Lexer → Parser → Evaluator → Serializer → CSS
 (lex/)   (parse/)  (eval/)     (css/)
 ```
 
-### 函数式管线（链式调用 + move 语义）
+### 函数式管线（Reactor 类型状态机 + move 语义）
 
 入口 `lib.rs` 全部链式调用，数据通过 move 语义流过管线：
 
 ```rust
 // 字符串编译
-Source::new(input.to_string())
+Reactor::new(input)
     .lex()?
     .parse()?
     .evaluate()?
     .serialize(style)
-    .into_string()
+    .finish()?
 
 // 文件编译
-Source::from_file(path)?
+Reactor::from_file(path)?
     .with_load_paths(load_paths)
     .lex()?
     .parse()?
     .evaluate()?
     .serialize(style)
-    .into_string()
+    .finish()?
 ```
 
-### Stage 类型状态机
+### Reactor 类型状态机
 
-每个阶段是一个新类型，阶段转换是该类型的方法：
-- `Source` — 携带 `text` + `base_path` + `load_paths`
-- `Lexed` — 携带 `tokens` + 透传 `base_path` + `load_paths`
-- `Parsed` — 携带 `ast` + `base_path` + `load_paths`，`evaluate()` 内部构建 `Env`
-- `Evaluated` — 携带 `Vec<CssNode>`
-- `Serialized` — 最终 CSS 字符串
+`Reactor<S>` 通过泛型参数 `S` 编码管线阶段，保证编译顺序不可颠倒。
+
+```text
+Reactor<StateRaw>.lex()       → Result<Reactor<StateLexed>>
+Reactor<StateLexed>.parse()   → Result<Reactor<StateParsed>>
+Reactor<StateParsed>.evaluate() → Result<Reactor<StateEvaluated>>
+Reactor<StateEvaluated>.serialize() → Reactor<StateSerialized>
+Reactor<StateSerialized>.finish()  → Result<String>
+```
+
+**Reactor 内部字段**:
+- `text: String` — 原始源码
+- `base_path: Option<PathBuf>` — 源文件路径
+- `load_paths: Vec<PathBuf>` — 模块搜索路径
+- `tokens: Option<Vec<Token>>` — 词法产物（lex 后填充）
+- `ast: Option<Ast>` — 语法产物（parse 后填充）
+- `serialized: Option<String>` — CSS 字符串（serialize 后填充）
+- `env: Option<Env>` — 求值环境（evaluate 后填充）
+
+每个管线方法直接调用底层组件（`Lexer` / `Parser` / `Evaluator::evaluate_with_env` / `Serializer`），不再通过中间 stage 类型委托。
 
 ### Env 设计（move 语义 + Scope Chain 零 clone）
 

@@ -20,12 +20,17 @@ globs: ["src/**/*.rs", "tests/**/*.rs", "**/Cargo.toml"]
 ## 1. 编译管线架构
 
 ```
-Source::new(input)     → Source     (源码包装)
-  .lex()               → Lexed      (词法分析 → Token 流)
-  .parse()             → Parsed     (语法分析 → AST)
-  .evaluate()          → Evaluated  (求值 → CssNode 树)
-  .serialize(style)    → Serialized (序列化 → CSS 字符串)
+Reactor::new(input)       → Reactor<StateRaw>       (源码包装)
+  .lex()                  → Reactor<StateLexed>     (词法分析 → Token 流)
+  .parse()                → Reactor<StateParsed>    (语法分析 → AST)
+  .evaluate()             → Reactor<StateEvaluated> (求值 → CssNode 树)
+  .serialize(style)       → Reactor<StateSerialized>(序列化 → CSS 字符串)
+  .finish()               → Result<String>
 ```
+
+### Reactor 类型状态机
+
+`Reactor<S>` 通过泛型参数 `S` 编码管线阶段，保证编译顺序不可颠倒。内部字段 `tokens`/`ast`/`serialized` 均为 `Option<T>`，在对应管线阶段填充。每个管线方法直接调用底层组件（`Lexer` / `Parser` / `Evaluator::evaluate_with_env` / `Serializer`）。
 
 ### 入口函数 (`src/lib.rs`)
 
@@ -162,13 +167,13 @@ src/eval/
 **求值入口**：
 ```rust
 // lib.rs 链式调用
-Source::from_file(path)?
+Reactor::from_file(path)?
     .with_load_paths(load_paths)
     .lex()?
     .parse()?
-    .evaluate()?          // Parsed::evaluate() 内部构建 Env
+    .evaluate()?          // Reactor<StateParsed>::evaluate() 内部构建 Env
     .serialize(style)
-    .into_string()
+    .finish()?
 
 // eval/mod.rs 内部
 Evaluator::evaluate(ast) -> Result<Vec<CssNode>>           // 无路径

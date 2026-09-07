@@ -8,12 +8,13 @@ context: |
   All responses in Chinese; code, commands, filenames in English
 
   ## 架构
-  入口 lib.rs 链式调用：Source::from_file(path)?.lex()?.parse()?.evaluate()?.serialize(style).into_string()
-  Stage 管线：Source → Lexed → Parsed → Evaluated → Serialized
-  Source/Lexed/Parsed 携带 base_path + load_paths，Parsed::evaluate() 内部构建 Env
+  入口 Reactor 链式调用：Reactor::new(input).lex()?.parse()?.evaluate()?.serialize(style).finish()?
+  Reactor 类型状态机：Reactor<StateRaw>.lex() → Reactor<StateLexed>.parse() → Reactor<StateParsed>.evaluate() → Reactor<StateEvaluated>.serialize() → Reactor<StateSerialized>.finish()
+  Reactor<S> 通过泛型参数 S 编码管线阶段，内部 tokens/ast/serialized/env 均为 Option<T>
+  每个管线方法直接调用底层组件（Lexer / Parser / Evaluator::evaluate_with_env / Serializer）
   Env 方法全部 self -> Self（链式），eval_xxx 接收 Env（move），返回 (Vec<CssNode>, Env)
   只读辅助方法（call_function/bind_params/load_module）保持 &Env
-  禁止 env.clone()（除 @content 上下文快照），禁止 Rc::make_mut（字段已恢复为 HashMap）
+  禁止 env.clone()（除 @content 上下文快照），禁止 Rc::make_mut
 
   ## 禁止项
   1. 禁止 Python：不使用 python3/pip；脚本用 rust-script；测试用 #[test]

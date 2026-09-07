@@ -9,23 +9,24 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.7** — 函数式链式调用重构 + Env move 语义（零 clone） + stage 管线携带路径 + hrx-auditor 依赖移除（内联 hrx_support 模块） — 3216/5624 (57%) sass-spec, ep_full 121/121 (100%).
+> **v0.9.7** — Reactor 管线类型状态机 + 持久化数据结构 (imbl) + Env move 语义零 clone + hrx-auditor 依赖移除（内联 hrx_support 模块） — sass-spec 基线 7144/12131 (60.0%), ep_full 121/121 (100%).
 
 sasspile 是一个从零实现的 SCSS 编译器，采用 Rust 所有权管线。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 move 语义实现零 clone 的数据流。
 
 ```rust
-Source::from_file(&path)?
+Reactor::from_file(&path)?
     .with_load_paths(load_paths)
     .lex()?
     .parse()?
     .evaluate()?
     .serialize(OutputStyle::Expanded)
-    .into_string()
+    .finish()
 ```
 
 ## 特性
 
-- **类型状态机管线**: `Source → Lexed → Parsed → Evaluated → Serialized`
+- **类型状态机管线**: `Reactor<StateRaw> → StateLexed → StateParsed → StateEvaluated → StateSerialized`
+- **Reactor 架构**: 单类型 + 泛型状态参数编码管线阶段 + ReactorIO trait (测试可模拟) + ReactorTrace OTel 集成
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
 - **sass-spec 兼容**: 3216/5624 (57%) 全量通过（内联 hrx_support 模块，非隔离模式 + 路径前缀），@directives forward 76% + import conflict 5/5 修复，core_functions/color 已跳过（需 `--ignored` 手动触发）
@@ -194,16 +195,16 @@ RUST_LOG=info cargo test --features otel --test sass_spec_full -- --nocapture
 sasspile 使用类型状态机模式构建编译管线：
 
 ```
-Source { content }  ──lex()──►  Lexed { tokens }
-                                  │
-                                  ▼
-                             Parsed { ast }
-                                  │
-                                  ▼
-                            Evaluated { css_tree }
-                                  │
-                                  ▼
-                           Serialized { css_string }
+Reactor<StateRaw> { input }  ──lex()──►  Reactor<StateLexed> { tokens }
+                                           │
+                                           ▼
+                                      Reactor<StateParsed> { ast }
+                                           │
+                                           ▼
+                                    Reactor<StateEvaluated> { nodes }
+                                           │
+                                           ▼
+                                   Reactor<StateSerialized> { css }
 ```
 
 每个阶段通过类型转换确保：

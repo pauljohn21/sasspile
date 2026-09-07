@@ -14,8 +14,9 @@
 │                   核心原则                               │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  1. 阶段即类型 ── 编译阶段编码在类型系统中               │
-│     Source → Lexed → Parsed → Evaluated → Serialized    │
+│  1. 阶段即状态 ── 编译阶段编码在泛型参数中               │
+│     Reactor<StateRaw> → StateLexed → StateParsed         │
+│              → StateEvaluated → StateSerialized          │
 │                                                         │
 │  2. 数据不可变 ── 转换产生新值，不修改旧值               │
 │     fold 替代 loop + mutation                           │
@@ -59,17 +60,32 @@
 ### 关键设计
 
 ```rust
-// 每个阶段是新类型，不是 type alias
-pub struct Source { text: String }        // 原始源码
-pub struct Lexed { tokens: Vec<Token> }   // token 流
-pub struct Parsed { ast: Ast }            // 抽象语法树
-pub struct Evaluated { nodes: Vec<CssNode> } // CSS 节点
-pub struct Serialized { css: String }     // 最终 CSS
+// 单类型 + 泛型状态参数（类型状态机）
+pub struct Reactor<S = StateRaw> {
+    text: String,
+    base_path: Option<PathBuf>,
+    load_paths: Vec<PathBuf>,
+    tokens: Option<Vec<Token>>,
+    ast: Option<Ast>,
+    serialized: Option<String>,
+    env: Option<Env>,
+    _state: PhantomData<S>,
+}
 
-// 阶段转换 trait（可扩展）
-trait StageInput { type Output; }
-impl StageInput for Source { type Output = Lexed; }
-// ...
+// 状态标记（零大小类型）
+pub struct StateRaw;
+pub struct StateLexed;
+pub struct StateParsed;
+pub struct StateEvaluated;
+pub struct StateSerialized;
+
+// 阶段方法绑定到特定状态
+impl Reactor<StateRaw> {
+    pub fn lex(self) -> Result<Reactor<StateLexed>> { /* ... */ }
+}
+impl Reactor<StateParsed> {
+    pub fn evaluate(self) -> Result<Reactor<StateEvaluated>> { /* ... */ }
+}
 ```
 
 ---
@@ -84,14 +100,6 @@ sasspile/
 │   ├── lib.rs                   ── 公共 API（管线入口）
 │   ├── main.rs                  ── CLI
 │   │
-│   ├── stage/                   ── 阶段转换（纯函数）
-│   │   ├── mod.rs               ── Stage trait 定义
-│   │   ├── source.rs            ── Source 类型
-│   │   ├── lexed.rs             ── Lexed 类型
-│   │   ├── parsed.rs            ── Parsed 类型
-│   │   ├── evaluated.rs         ── Evaluated 类型
-│   │   └── serialized.rs        ── Serialized 类型
-│   │
 │   ├── lex/                     ── 词法分析
 │   │   ├── mod.rs               ── Lexer（迭代器实现）
 │   │   └── token.rs             ── Token 定义
@@ -101,11 +109,14 @@ sasspile/
 │   │   ├── ast.rs               ── AST 定义
 │   │   └── selector.rs          ── 选择器解析
 │   │
-│   ├── eval/                    ── 求值
-│   │   ├── mod.rs               ── Evaluator（fold 实现）
-│   │   ├── env.rs               ── 不可变环境
-│   │   ├── value.rs             ── 值类型
-│   │   └── builtin.rs           ── 内建函数
+│   ├── eval/                    ── 求值 + 管线类型状态机
+│   │   ├── mod.rs               ── Evaluator + Reactor 公开入口
+│   │   ├── reactor.rs           ── Reactor<S>（lex/parse/evaluate/serialize 管线）
+│   │   ├── env.rs               ── Env/Scope 类型定义
+│   │   ├── env_impl.rs          ── Env 方法实现
+│   │   ├── scope.rs             ── Scope 结构
+│   │   ├── builtin/             ── 内建函数 (color/string/list/map/math/...)
+│   │   └── value/               ── 值类型 (Value + calc)
 │   │
 │   ├── css/                     ── CSS 生成
 │   │   ├── mod.rs               ── Serializer
@@ -304,13 +315,17 @@ impl<'src> Iterator for Lexer<'src> {
     }
 }
 
-// 使用：Source → Lexed
-impl Source {
-    pub fn lex(self) -> Result<Lexed, SassError> {
+// Reactor lex: Reactor<StateRaw> → Reactor<StateLexed>
+impl Reactor<StateRaw> {
+    pub fn lex(self) -> Result<Reactor<StateLexed>> {
         let tokens = Lexer::new(&self.text)
             .filter(|t| !t.as_ref().is_ok_and(Token::is_trivia))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Lexed { tokens })
+        Ok(Reactor {
+            text: self.text, base_path: self.base_path, load_paths: self.load_paths,
+            tokens: Some(tokens), ast: None, serialized: None, env: None,
+            io: self.io, trace: self.trace, _state: PhantomData,
+        })
     }
 }
 ```
@@ -355,10 +370,15 @@ impl Parser {
     }
 }
 
-// Lexed → Parsed
-impl Lexed {
-    pub fn parse(self) -> Result<Parsed, SassError> {
-        Parser::new(self.tokens).parse().map(|ast| Parsed { ast })
+// Reactor parse: Reactor<StateLexed> → Reactor<StateParsed>
+impl Reactor<StateLexed> {
+    pub fn parse(self) -> Result<Reactor<StateParsed>> {
+        let ast = Parser::new(self.tokens.unwrap_or_default()).parse()?;
+        Ok(Reactor {
+            text: self.text, base_path: self.base_path, load_paths: self.load_paths,
+            tokens: self.tokens, ast: Some(ast), serialized: None, env: None,
+            io: self.io, trace: self.trace, _state: PhantomData,
+        })
     }
 }
 ```
@@ -436,12 +456,16 @@ impl Evaluator {
     }
 }
 
-// Parsed → Evaluated
-impl Parsed {
-    pub fn evaluate(self) -> Result<Evaluated, SassError> {
-        Evaluator::new()
-            .evaluate(&self.ast)
-            .map(|nodes| Evaluated { nodes })
+// Reactor evaluate: Reactor<StateParsed> → Reactor<StateEvaluated>
+impl Reactor<StateParsed> {
+    pub fn evaluate(self) -> Result<Reactor<StateEvaluated>> {
+        let ast = self.ast.unwrap_or_default();
+        let nodes = Evaluator::evaluate_with_env(ast, self.env.unwrap_or_default())?;
+        Ok(Reactor {
+            text: self.text, base_path: self.base_path, load_paths: self.load_paths,
+            tokens: self.tokens, ast: self.ast, serialized: None, env: self.env,
+            io: self.io, trace: self.trace, _state: PhantomData,
+        })
     }
 }
 ```
@@ -486,11 +510,16 @@ impl Serializer {
     }
 }
 
-// Evaluated → Serialized
-impl Evaluated {
-    pub fn serialize(&self, style: OutputStyle) -> Serialized {
-        let css = Serializer::new(style).serialize(&self.nodes);
-        Serialized { css }
+// Reactor serialize: Reactor<StateEvaluated> → Reactor<StateSerialized>
+impl Reactor<StateEvaluated> {
+    pub fn serialize(self, style: OutputStyle) -> Reactor<StateSerialized> {
+        let nodes = self.nodes_or_default();
+        let css = Serializer::new(style).serialize(&nodes);
+        Reactor {
+            text: self.text, base_path: self.base_path, load_paths: self.load_paths,
+            tokens: self.tokens, ast: self.ast, serialized: Some(css), env: self.env,
+            io: self.io, trace: self.trace, _state: PhantomData,
+        }
     }
 }
 ```
@@ -543,16 +572,10 @@ pub mod error;
 pub mod eval;
 pub mod lex;
 pub mod parse;
-pub mod stage;
 
 pub use css::node::CssNode;
 pub use error::{Result, SassError};
-pub use stage::source::Source;
-pub use stage::serialized::Serialized;
-
-use stage::evaluated::Evaluated;
-use stage::lexed::Lexed;
-use stage::parsed::Parsed;
+pub use eval::reactor::{Reactor, ReactorModule, StateLexed, StateParsed, StateRaw};
 
 pub mod style {
     #[derive(Debug, Clone, Copy)]
@@ -561,15 +584,14 @@ pub mod style {
 
 use style::OutputStyle;
 
-/// 编译入口——完整管线。
+/// 编译入口——完整管线（委托给 Reactor）。
 pub fn compile(source: &str, style: OutputStyle) -> Result<String> {
-    Source::new(source)
+    Reactor::new(source)
         .lex()?
         .parse()?
         .evaluate()?
         .serialize(style)
-        .pipe(|s| s.css)
-        .pipe(Ok)
+        .finish()
 }
 
 /// 编译（展开式）。

@@ -68,7 +68,7 @@
 | **css/mod.rs** | 359 | Serializer（CSS 树 → 字符串，选择器净化 + 组合器验证 + @规则合并 + @import 间不加空行） |
 | **css/node.rs** | 93 | CssNode 枚举（Rule/Declaration/AtRule/AtRoot/Comment/Raw/Return） |
 | **css/selector.rs** | 366 | sanitize_selector + normalize_attr_selectors + has_bogus_combinators + 占位符处理 |
-| **stage/*.rs** | 15-86 | 管线阶段类型（Source: from_file+base_path+load_paths / Lexed: 透传路径 / Parsed: evaluate()构建Env / Evaluated / Serialized） |
+| **eval/reactor.rs** | ~650 | Reactor<S> 类型状态机 — 单类型 + 泛型参数编码管线阶段 + ReactorIO trait + ReactorTrace OTel 集成 + compile/compile_file 公开 API |
 
 ## 函数 → 文件定位
 
