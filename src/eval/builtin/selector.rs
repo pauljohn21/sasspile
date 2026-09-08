@@ -452,6 +452,14 @@ fn call_unify(args: &[Value]) -> Result<Option<Value>> {
 
 // ─── selector-extend ────────────────────────────────────────────
 
+/// 解析 extend 参数为 complex selector 列表（支持单个选择器或逗号分隔的列表）
+fn parse_extend_arg(arg: &Value) -> Result<Vec<Vec<String>>> {
+    match arg {
+        Value::String(s, _) => Ok(selector_format::string_to_selector_format_validated(s)?),
+        _ => Ok(selector_format::value_to_selector_format(arg)?),
+    }
+}
+
 fn call_extend(args: &[Value]) -> Result<Option<Value>> {
     let params = selector_param_names("selector-extend");
     match args.len() < params.len() {
@@ -477,14 +485,36 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
         }
         false => {}
     }
-    let sel_fmt = selector_format::value_to_selector_format(&args[0])?;
-    let ext_fmt = selector_format::value_to_selector_format(&args[1])?;
-    let new_fmt = selector_format::value_to_selector_format(&args[2])?;
-    let sel = parse_selector(&format_to_string(&sel_fmt));
-    let ext = parse_selector(&format_to_string(&ext_fmt));
-    let new = parse_selector(&format_to_string(&new_fmt));
-    let result = selector_ops::extend_selector(&sel, &ext, &new);
-    Ok(Some(Value::String(result.to_string(), false)))
+    let sel_fmt = parse_extend_arg(&args[0])?;
+    let ext_fmt = parse_extend_arg(&args[1])?;
+    let new_fmt = parse_extend_arg(&args[2])?;
+
+    // 如果多个 extendees 和 extenders，要配对
+    let ext_count = ext_fmt.len();
+    let new_count = new_fmt.len();
+    if ext_count != new_count && ext_count != 1 && new_count != 1 {
+        return Err(SassError::Eval(format!(
+            "extendee and extender lists must have the same length (got {ext_count} extendees and {new_count} extenders)"
+        )));
+    }
+
+    let sel_str = format_to_string(&sel_fmt);
+    let sel = parse_selector(&sel_str);
+    // 初始值是原始selector
+    let mut sel_ast = sel.clone();
+
+    let max_pairs = ext_count.max(new_count);
+    for i in 0..max_pairs {
+        let ext_single = vec![ext_fmt[i % ext_count].clone()];
+        let new_single = vec![new_fmt[i % new_count].clone()];
+        let ext_str = format_to_string(&ext_single);
+        let new_str = format_to_string(&new_single);
+        let ext = parse_selector(&ext_str);
+        let new = parse_selector(&new_str);
+        // 对当前的selector做一次extend
+        sel_ast = selector_ops::extend_selector(&sel_ast, &ext, &new);
+    }
+    Ok(Some(Value::String(sel_ast.to_string(), false)))
 }
 
 // ─── selector-replace ───────────────────────────────────────────
