@@ -126,9 +126,9 @@ fn append_complex(a: &[String], b: &[String]) -> Result<Vec<Vec<String>>> {
     let b_first = b.first().cloned().unwrap_or_default();
     let a_last = a.last().cloned().unwrap_or_default();
 
-    // A 不能以组合符开头或结尾 → error
-    if matches!(a_first.as_str(), ">" | "+" | "~") || matches!(a_last.as_str(), ">" | "+" | "~") {
-        return Err(SassError::Eval(format!("Can't append {b_first} to {a_first}")));
+    // A 不能以组合符结尾 → error（没有 parent 可以附加）
+    if matches!(a_last.as_str(), ">" | "+" | "~") {
+        return Err(SassError::Eval(format!("Can't append {b_first} to {a_last}")));
     }
     // 检查 B 是否只有 combinator → error
     if b.len() == 1 && matches!(b_first.as_str(), ">" | "+" | "~") {

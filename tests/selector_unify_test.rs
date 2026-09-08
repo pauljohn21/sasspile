@@ -15,13 +15,23 @@ fn test_selector_append_basic() {
 }
 
 #[test]
-fn test_selector_append_initial_combinator() {
+fn test_selector_append_second_arg_leading_combinator_error() {
     let input = "\
         @use 'sass:selector';\
         .a { x: selector.append(\".b\", \"> .c\"); }\
     ";
+    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    assert!(eval_result.is_err(), "Expected error for second arg starting with combinator");
+}
+
+#[test]
+fn test_selector_append_first_arg_leading_combinator_ok() {
+    let input = "\
+        @use 'sass:selector';\
+        .a { x: selector.append(\"> .b\", \".c\"); }\
+    ";
     let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
-    assert!(result.contains(".b > .c"), "Expected .b > .c, got {result}");
+    assert!(result.contains("> .b.c"), "Expected > .b.c, got {result}");
 }
 
 #[test]
