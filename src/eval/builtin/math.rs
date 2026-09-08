@@ -294,8 +294,19 @@ pub fn call(
                 ))),
             }
             match (&args[0], &args[1], &args[2]) {
-                (Value::Number(min, _), Value::Number(val, _), Value::Number(max, _)) => {
-                    Ok(Some(Value::Number(val.max(*min).min(*max), None)))
+                (Value::Number(min, u_min), Value::Number(val, u_val), Value::Number(max, u_max)) => {
+                    // 校验所有参数的单位兼容
+                    if !crate::eval::value::units_compatible(u_min.as_deref(), u_val.as_deref()) {
+                        return Err(SassError::Eval(format!(
+                            "Incompatible units."
+                        )));
+                    }
+                    if !crate::eval::value::units_compatible(u_val.as_deref(), u_max.as_deref()) {
+                        return Err(SassError::Eval(format!(
+                            "Incompatible units."
+                        )));
+                    }
+                    Ok(Some(Value::Number(val.max(*min).min(*max), u_val.clone())))
                 }
                 (non_num, _, _) if !matches!(non_num, Value::Number(..)) => {
                     Err(SassError::Eval(format!("$min: {non_num} is not a number.")))
