@@ -169,6 +169,21 @@ pub fn call(
                 true => return Err(SassError::Eval("join requires 2-4 arguments".into())),
                 false => {}
             }
+            // 校验未知的命名参数（join 只接受 list1/list2/separator/bracketed）
+            for key in kw_args.keys() {
+                let bare = key.strip_prefix('$').unwrap_or(key.as_str());
+                if !["list1", "list2", "separator", "bracketed"].contains(&bare) {
+                    return Err(SassError::Eval(format!("Argument `{bare}` doesn't exist.")));
+                }
+            }
+            // 校验 separator 类型
+            if let Some(sep_val) = args.get(2) {
+                if !matches!(sep_val, Value::String(_, _)) && !matches!(sep_val, Value::Bool(_)) {
+                    return Err(SassError::Eval(format!(
+                        "$separator: {sep_val} is not a valid separator argument."
+                    )));
+                }
+            }
             // 提取 list1 的 items 和 separator
             let (a_items, a_sep, a_bracketed) = match &args[0] {
                 Value::List(items, sep, br) => (items.clone(), sep.clone(), *br),
@@ -204,15 +219,9 @@ pub fn call(
                     "space" => Separator::Space,
                     "slash" => Separator::Slash,
                     _ => {
-                        let auto_sep = if a_sep == Separator::Undecided {
-                            b_sep
-                        } else {
-                            a_sep
-                        };
-                        match auto_sep == Separator::SlashLiteral {
-                            true => Separator::Slash,
-                            false => auto_sep,
-                        }
+                        return Err(SassError::Eval(format!(
+                            "\"{s}\" is not a valid separator for join()."
+                        )));
                     }
                 }
             } else {
@@ -290,7 +299,22 @@ pub fn call(
             }
         }
         "set-nth" => match args {
-            [Value::List(items, sep, bracketed), Value::Number(n, _), val] => {
+            [list_input, Value::Number(n, _), val] => {
+                // Coerce Map / non-list → list (per sass-spec)
+                let (items, sep, bracketed) = match list_input {
+                    Value::List(items, sep, br) => (items.clone(), sep.clone(), *br),
+                    Value::Map(pairs) => (
+                        pairs
+                            .iter()
+                            .map(|(k, v)| {
+                                Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                            })
+                            .collect(),
+                        Separator::Comma,
+                        false,
+                    ),
+                    other => (vec![other.clone()], Separator::Undecided, false),
+                };
                 let len = items.len() as i64;
                 let idx = *n as i64;
                 let actual = match idx.cmp(&0) {
@@ -300,14 +324,14 @@ pub fn call(
                         return Err(SassError::Eval(format!("List index {idx} may not be 0.")));
                     }
                 };
-                let mut new_items = items.clone();
+                let mut new_items = items;
                 match actual < new_items.len() {
                     true => new_items[actual] = val.clone(),
                     false => return Err(SassError::Eval(format!(
                         "List index {idx} is out of bounds for list of length {len}"
                     ))),
                 }
-                Ok(Some(Value::List(new_items, sep.clone(), *bracketed)))
+                Ok(Some(Value::List(new_items, sep, bracketed)))
             }
             _ => Err(SassError::Eval("set-nth requires 3 arguments".into())),
         },
@@ -323,11 +347,23 @@ pub fn call(
             Ok(Some(Value::List(args.to_vec(), Separator::Slash, false)))
         }
         "zip" => {
-            match args.len() < 2 {
-                true => return Err(SassError::Eval("zip requires 2+ list arguments".into())),
+            match args.is_empty() {
+                true => return Ok(Some(Value::List(Vec::new(), Separator::Comma, false))),
                 false => {}
             }
-            // 将每个参数转为列表（非列表值视为单元素列表）
+            // 单列表 zip：包装每个元素为单元素列表（符合 sass-spec）
+            if args.len() == 1 {
+                let items = match &args[0] {
+                    Value::List(items, _, _) => items.clone(),
+                    other => vec![other.clone()],
+                };
+                let wrapped: Vec<Value> = items
+                    .into_iter()
+                    .map(|v| Value::List(vec![v], Separator::Space, false))
+                    .collect();
+                return Ok(Some(Value::List(wrapped, Separator::Comma, false)));
+            }
+            // 多列表 zip：将每个参数转为列表（非列表值视为单元素列表）
             let lists: Vec<Vec<Value>> = args
                 .iter()
                 .map(|v| match v {
