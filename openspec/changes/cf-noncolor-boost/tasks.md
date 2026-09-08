@@ -13,7 +13,7 @@
 - [ ] 2.3 修复 `selector-parse` 选择器解析为结构化 list(匹配 sass-spec 期望格式)
 - [ ] 2.4 修复 `is-superselector` 超集匹配判断(处理 type/class/pseudo 的层级关系)
 - [ ] 2.5 修复 `selector-extend` 扩展逻辑
-- [ ] 2.6 修复 `selector-unify` 选择器统一
+- [x] 2.6 修复 `selector-unify` 选择器统一——从右向左逐位置合并 + superselector 检测（a 是 b 的 super 则返回 b）
 - [ ] 2.7 修复 `simple-selectors` 选择器分解
 - [ ] 2.8 修复 `selector-replace` 选择器模式替换
 - [ ] 2.9 运行 `cargo test --test compile_test` 确认无回归,运行 `cargo test --test sass_spec_full` 确认 selector 子目录通过率提升

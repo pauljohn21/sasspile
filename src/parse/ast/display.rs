@@ -183,6 +183,43 @@ impl std::fmt::Display for Value {
             Value::MixinRef(data) => {
                 write!(f, "get-mixin(\"{}\")", data.name)
             }
+            Value::FunctionRef(data) => {
+                write!(f, "get-function(\"{}\")", data.name)
+            }
+            Value::ArgList(elements, sep, bracketed) => {
+                match elements.is_empty() {
+                    true => {
+                        return match *bracketed {
+                            true => write!(f, "[]"),
+                            false => Ok(()),
+                        };
+                    }
+                    false => {}
+                }
+                let sep_str = match sep {
+                    Separator::Comma => ", ",
+                    Separator::Space => " ",
+                    Separator::Slash => " / ",
+                    Separator::SlashLiteral => "/",
+                    Separator::Undecided => " ",
+                };
+                match *bracketed {
+                    true => f.write_str("[")?,
+                    false => {}
+                }
+                for (i, e) in elements.iter().enumerate() {
+                    match i > 0 {
+                        true => f.write_str(sep_str)?,
+                        false => {}
+                    }
+                    e.fmt(f)?;
+                }
+                match *bracketed {
+                    true => f.write_str("]")?,
+                    false => {}
+                }
+                Ok(())
+            }
         }
     }
 }

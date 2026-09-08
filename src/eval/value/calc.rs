@@ -9,6 +9,74 @@
 
 use super::*;
 
+/// 检查内容是否仅包含纯数字、单位字面量、常量（pi/e）和基础算术运算（+-*/）。
+/// 任何变量引用（$）、插值痕迹（#{}）、非数字函数调用都会使此返回 false。
+/// 用于决定 eval_value 中是否可对 `calc(...)` 内容做数值简化——
+/// 仅纯表达式可简化，含插值/变量时须保留 Calc 类型供 meta.calc-args 等内省。
+pub(crate) fn is_pure_calc_expr(s: &str) -> bool {
+    let s = s.trim();
+    match s.is_empty() {
+        true => return false,
+        false => {}
+    }
+    // 纯数字+单位 — 允许简化。calc(1px) → Number(1px) 是合法的数值简化。
+    // 注意：这使得 meta.calc-args(calc(1px)) 接收 Number 而非 Calc，
+    // 需要 calc-args/calc-name 内做一个 从 Number → 单元素列表 的转换。
+    if Evaluator::parse_simple_number(s).is_some() {
+        return true;
+    }
+    // 嵌套 calc/min/max/clamp 调用 —— 递归检查参数
+    for prefix in &["calc(", "min(", "max(", "clamp("] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            let inner = match rest.strip_suffix(")") {
+                Some(i) => i,
+                None => return false,
+            };
+            let mut depth = 0i32;
+            let mut arg_start = 0;
+            for (i, c) in inner.char_indices() {
+                match c {
+                    '(' | '[' => depth += 1,
+                    ')' | ']' => depth -= 1,
+                    ',' if depth == 0 => {
+                        if !is_pure_calc_expr(&inner[arg_start..i]) {
+                            return false;
+                        }
+                        arg_start = i + 1;
+                    }
+                    _ => {}
+                }
+            }
+            return is_pure_calc_expr(&inner[arg_start..]);
+        }
+    }
+    // 括号包裹的纯表达式
+    if let Some(inner) = s.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
+        return is_pure_calc_expr(inner);
+    }
+    // 算术运算（+-*/）：分割运算符，递归验证两边
+    let mut depth = 0i32;
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            ' ' if depth == 0 => {
+                let rest = &s[i..];
+                if rest.starts_with(" + ")
+                    || rest.starts_with(" - ")
+                    || rest.starts_with(" * ")
+                    || rest.starts_with(" / ")
+                {
+                    return is_pure_calc_expr(&s[..i]) && is_pure_calc_expr(&s[i + 3..]);
+                }
+            }
+            _ => {}
+        }
+    }
+    // 存在变量/插值/其他非数字字符 → 不纯
+    !s.contains('$') && !s.contains('#')
+}
+
 impl Evaluator {
     /// 简化 `calc()` 表达式——纯数字时去掉 `calc()` 包装。
     ///
@@ -35,12 +103,17 @@ impl Evaluator {
         let node = super::calc_ast::parse_calc_expr(inner)?;
         let simplified = super::calc_simplify::simplify_calc_node(node).ok()?;
         match simplified {
-            super::calc_ast::CalcNode::Number(n, unit) => {
-                Some(Value::Number(n, unit))
-            }
+            super::calc_ast::CalcNode::Number(n, unit) => Some(Value::Number(n, unit)),
+            // Var / 非 calc 节点保留原始 calc() 包装
+            super::calc_ast::CalcNode::Var { .. } => Some(Value::Calc(s.to_string())),
             other => {
                 let s = other.to_string();
-                match s.starts_with("calc(") || s.contains('(') {
+                // 只有简化后仍是嵌套 calc/min/max 函数调用才保留外层 calc 包装
+                match s.starts_with("calc(")
+                    || s.starts_with("min(")
+                    || s.starts_with("max(")
+                    || s.starts_with("clamp(")
+                {
                     true => Some(Value::Calc(s)),
                     false => Some(Value::Calc(format!("calc({s})"))),
                 }

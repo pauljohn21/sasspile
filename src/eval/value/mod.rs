@@ -12,6 +12,7 @@ mod display;
 mod ops;
 mod partial;
 
+pub(crate) use calc::is_pure_calc_expr;
 pub(crate) use display::{
     eval_interp_segments, eval_interp_str, eval_property_name, eval_simple_expr, inspect_value,
 };
@@ -120,8 +121,24 @@ impl Evaluator {
             | Value::Color(..)
             | Value::Bool(..)
             | Value::Null
-            | Value::MixinRef(..) => Ok(value.clone()),
-            Value::Calc(s) => Ok(Self::simplify_calc(s)),
+            | Value::MixinRef(..)
+            | Value::FunctionRef(..)
+            | Value::ArgList(..) => Ok(value.clone()),
+            Value::Calc(s) => {
+                // 仅当内容是纯数字/单位字面量和基础算术（+-*/）时才简化。
+                // 其他情况（插值结果、变量引用、混合单位运算）保留 calc() 包装，
+                // 这样 meta.calc-args 等反射函数能看到 Calc 类型。
+                // 支持 calc(…) / min(…) / max(…) / clamp(…) 四种前缀。
+                let inner = s
+                    .strip_prefix("calc(")
+                    .or_else(|| s.strip_prefix("min("))
+                    .or_else(|| s.strip_prefix("max("))
+                    .or_else(|| s.strip_prefix("clamp("));
+                match inner.and_then(|i| i.strip_suffix(")")) {
+                    Some(inner) if is_pure_calc_expr(inner) => Ok(Self::simplify_calc(s)),
+                    _ => Ok(Value::Calc(s.clone())),
+                }
+            }
             Value::Paren(inner) => Self::eval_value(inner, env),
             Value::String(s, quoted) => {
                 let has_interp = s.contains('#') && s.contains('{');

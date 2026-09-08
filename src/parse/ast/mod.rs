@@ -296,6 +296,21 @@ pub enum Value {
     Spread(Box<Value>),
     /// mixin 引用——`meta.get-mixin` 返回的值。
     MixinRef(std::rc::Rc<MixinRefData>),
+    /// 函数引用——`meta.get-function` 返回的值。
+    FunctionRef(std::rc::Rc<FunctionRefData>),
+    /// 剩余参数列表（rest parameter `$args...`）。
+    /// `type-of` 返回 "arglist"，区别于普通 `Value::List`。
+    ArgList(Vec<Value>, Separator, bool),
+}
+
+/// 函数引用数据（`meta.get-function` 返回）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionRefData {
+    pub name: String,
+    pub module: Option<String>,
+    pub params: Vec<crate::parse::ast::Param>,
+    pub body: Vec<crate::parse::ast::Node>,
+    pub captured_ns_keys: Vec<String>,
 }
 
 /// 二元运算。

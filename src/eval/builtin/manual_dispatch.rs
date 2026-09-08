@@ -64,15 +64,22 @@ impl Evaluator {
 
             // ── meta（手工 arm，dispatch = "none"）──
             "type-of" => match pos_args {
+                [] => Err(SassError::Eval("Missing argument $value.".into())),
                 [Value::Number(..)] => Ok(Value::String("number".into(), false)),
                 [Value::String(..)] => Ok(Value::String("string".into(), false)),
                 [Value::Color(..)] => Ok(Value::String("color".into(), false)),
                 [Value::Bool(..)] => Ok(Value::String("bool".into(), false)),
                 [Value::List(..)] => Ok(Value::String("list".into(), false)),
+                [Value::ArgList(..)] => Ok(Value::String("arglist".into(), false)),
                 [Value::Map(..)] => Ok(Value::String("map".into(), false)),
                 [Value::Null] => Ok(Value::String("null".into(), false)),
                 [Value::MixinRef(..)] => Ok(Value::String("mixin".into(), false)),
-                [Value::Calc(..)] => Ok(Value::String("calc".into(), false)),
+                [Value::FunctionRef(..)] => Ok(Value::String("function".into(), false)),
+                [Value::Calc(..)] => Ok(Value::String("calculation".into(), false)),
+                [_, _, ..] => Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} were passed.",
+                    pos_args.len()
+                ))),
                 _ => Ok(Value::String("unknown".into(), false)),
             },
             "inspect" => {
@@ -174,15 +181,131 @@ impl Evaluator {
                 [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
                 _ => Ok(Value::Bool(false)),
             },
-            "get-function" => match pos_args {
-                [Value::String(fname, _)] => Ok(Value::String(fname.clone(), false)),
-                _ => Err(SassError::Eval("get-function requires 1 argument".into())),
-            },
+            "get-function" => {
+                // 提取 $name 和 $module（支持命名参数形式）
+                let name_val = pos_args
+                    .first()
+                    .or_else(|| kw_args.get("name"))
+                    .or_else(|| kw_args.get("$name"));
+                let module_val = pos_args
+                    .get(1)
+                    .or_else(|| kw_args.get("module"))
+                    .or_else(|| kw_args.get("$module"));
+
+                match (name_val, module_val) {
+                    (Some(Value::String(fname, _)), module_opt) => {
+                        // 检查位置参数个数
+                        if pos_args.len() > 2 {
+                            return Err(SassError::Eval(format!(
+                                "Only 2 arguments allowed, but {} were passed.",
+                                pos_args.len()
+                            )));
+                        }
+                        let module_str: Option<String> = match module_opt {
+                            Some(Value::String(s, _)) => Some(s.clone()),
+                            Some(Value::Null) | None => None,
+                            Some(v) => {
+                                return Err(SassError::Eval(format!(
+                                    "$module: {v} is not a string."
+                                )))
+                            }
+                        };
+                        // dash-insensitive 查找
+                        let lookup_name = fname.replace('-', "_");
+                        let lookup_variants = [
+                            fname.as_str(),
+                            &lookup_name,
+                            &fname.replace('_', "-"),
+                        ];
+                        // 先在指定命名空间查找
+                        if let Some(ns_name) = &module_str {
+                            if let Some(module) = env.get_namespace(ns_name) {
+                                for variant in &lookup_variants {
+                                    if let Some(func) = module
+                                        .all_functions()
+                                        .find(|(k, _)| *k == variant)
+                                        .map(|(_, f)| f)
+                                    {
+                                        return Ok(Value::FunctionRef(std::rc::Rc::new(
+                                            crate::parse::ast::FunctionRefData {
+                                                name: fname.clone(),
+                                                module: module_str.clone(),
+                                                params: func.params.clone(),
+                                                body: func.body.clone(),
+                                                captured_ns_keys: func
+                                                    .captured_namespaces
+                                                    .keys()
+                                                    .cloned()
+                                                    .collect(),
+                                            },
+                                        )));
+                                    }
+                                }
+                            }
+                            // 未知命名空间 → 错误
+                            return Err(SassError::Eval(format!(
+                                "There is no module with namespace \"{ns_name}\"."
+                            )));
+                        }
+                        // 全局查找（local_functions / namespaces）
+                        for variant in &lookup_variants {
+                            if let Some(func) = env.get_function(variant) {
+                                return Ok(Value::FunctionRef(std::rc::Rc::new(
+                                    crate::parse::ast::FunctionRefData {
+                                        name: fname.clone(),
+                                        module: None,
+                                        params: func.params.clone(),
+                                        body: func.body.clone(),
+                                        captured_ns_keys: func
+                                            .captured_namespaces
+                                            .keys()
+                                            .cloned()
+                                            .collect(),
+                                    },
+                                )));
+                            }
+                        }
+                        // 内建函数检查（module 未指定时方可全局查找）
+                        if module_str.is_none() {
+                            let lookup_norm = fname.replace('-', "_");
+                            if super::dispatch::is_known_builtin(&lookup_norm) {
+                                return Ok(Value::FunctionRef(std::rc::Rc::new(
+                                    crate::parse::ast::FunctionRefData {
+                                        name: fname.clone(),
+                                        module: None,
+                                        params: vec![],
+                                        body: vec![], // 空 body 标记内建函数
+                                        captured_ns_keys: vec![],
+                                    },
+                                )));
+                            }
+                        }
+                        // 未知函数
+                        Err(SassError::Eval(format!(
+                            "Undefined function: {fname}."
+                        )))
+                    }
+                    (Some(v), _) => Err(SassError::Eval(format!(
+                        "$name: {v} is not a string."
+                    ))),
+                    (None, _) => Err(SassError::Eval(
+                        "Missing argument $name.".into(),
+                    )),
+                }
+            }
             "get-mixin" => Self::meta_get_mixin(pos_args, kw_args, env),
             "call" => match pos_args {
                 [Value::String(fname, _), rest @ ..] => {
                     let empty_kw = HashMap::new();
                     Self::call_function(fname, rest, &empty_kw, env)
+                }
+                [Value::FunctionRef(fn_data), rest @ ..] => {
+                    let empty_kw = HashMap::new();
+                    // 空 body 标记内建函数，转分派到 call_builtin
+                    match fn_data.body.is_empty() {
+                        true => Self::call_builtin(&fn_data.name, rest, &empty_kw, env),
+                        false => Self::call_user_function_ref(fn_data, rest, &empty_kw, env),
+                    }
                 }
                 _ => Err(SassError::Eval("call requires at least 1 argument".into())),
             },
@@ -195,12 +318,18 @@ impl Evaluator {
                 _ => Err(SassError::Eval("keywords requires 1 argument".into())),
             },
             "calc-args" => {
-                let calc_arg = pos_args
-                    .first()
-                    .or_else(|| kw_args.get("calc"))
-                    .or_else(|| kw_args.get("calc"));
-                match calc_arg {
-                    Some(Value::Calc(s)) => {
+                // 命名参数已在 call_builtin 合并到 pos_args，直接检查个数
+                match pos_args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $calc.".into())),
+                    1 => {}
+                    n => {
+                        return Err(SassError::Eval(format!(
+                            "Only 1 argument allowed, but {n} were passed."
+                        )))
+                    }
+                }
+                match &pos_args[0] {
+                    Value::Calc(s) => {
                         let args = super::parse_calc_args(s);
                         Ok(Value::List(
                             args,
@@ -208,22 +337,33 @@ impl Evaluator {
                             false,
                         ))
                     }
-                    Some(v) => Err(SassError::Eval(format!("$calc: {v} is not a calculation."))),
-                    None => Err(SassError::Eval("Missing argument $calc.".into())),
+                    // calc(1px) 经 eval 简化为 Number，包装回单元素列表
+                    Value::Number(..) => Ok(Value::List(
+                        vec![pos_args[0].clone()],
+                        crate::parse::ast::Separator::Comma,
+                        false,
+                    )),
+                    v => Err(SassError::Eval(format!("$calc: {v} is not a calculation."))),
                 }
             }
             "calc-name" => {
-                let calc_arg = pos_args
-                    .first()
-                    .or_else(|| kw_args.get("calc"))
-                    .or_else(|| kw_args.get("calc"));
-                match calc_arg {
-                    Some(Value::Calc(s)) => {
+                match pos_args.len() {
+                    0 => return Err(SassError::Eval("Missing argument $calc.".into())),
+                    1 => {}
+                    n => {
+                        return Err(SassError::Eval(format!(
+                            "Only 1 argument allowed, but {n} were passed."
+                        )))
+                    }
+                }
+                match &pos_args[0] {
+                    Value::Calc(s) => {
                         let name = super::parse_calc_name(s);
                         Ok(Value::String(name, true))
                     }
-                    Some(v) => Err(SassError::Eval(format!("$calc: {v} is not a calculation."))),
-                    None => Err(SassError::Eval("Missing argument $calc.".into())),
+                    // calc(N) 简化为 Number 后也要识别为 calc 函数名
+                    Value::Number(..) => Ok(Value::String("calc".into(), true)),
+                    v => Err(SassError::Eval(format!("$calc: {v} is not a calculation."))),
                 }
             }
 

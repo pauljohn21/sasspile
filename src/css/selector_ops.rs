@@ -22,22 +22,54 @@ pub fn unify(a: &Selector, b: &Selector) -> Option<Selector> {
     (!results.is_empty()).then_some(Selector(results))
 }
 
-/// 统一两个复杂选择器——从右端匹配复合选择器。
+/// 统一两个复杂选择器——从右向左逐位置合并复合选择器。
+///
+/// 算法：
+/// 1. 若 a 是 b 的超选择器（或反之），返回更具体的那个。
+/// 2. 对齐两 complex 的 compounds 从最右端。
+/// 3. 对每对相同位置（从右数）的 compound 调用 `unify_compound`。
+/// 4. 较长 selector 的左侧尾部（未对齐部分）保持原样。
 #[tracing::instrument(level = "trace", fields(a = %a, b = %b))]
 pub fn unify_complex(a: &ComplexSelector, b: &ComplexSelector) -> Option<ComplexSelector> {
-    let (_b_last_comb, b_last_compound) = b.compounds.last()?;
-    let a_last = a.compounds.last()?;
-    let merged = unify_compound(&a_last.1, b_last_compound)?;
+    // 若 a 是 b 的超选择器，b 更具体——直接返回 b
+    if is_super_complex(a, b) {
+        return Some(b.clone());
+    }
+    // 若 b 是 a 的超选择器，a 更具体——直接返回 a
+    if is_super_complex(b, a) {
+        return Some(a.clone());
+    }
 
-    // a 前缀 + 统一后的复合选择器 + b 前缀
-    let a_prefix = &a.compounds[..a.compounds.len() - 1];
-    let b_prefix = &b.compounds[..b.compounds.len() - 1];
+    let a_len = a.compounds.len();
+    let b_len = b.compounds.len();
+    let min_len = a_len.min(b_len);
 
-    let compounds: Vec<(Option<Combinator>, CompoundSelector)> = a_prefix
+    // 从右向左逐位置 unify
+    let mut unified_from_right: Vec<(Option<Combinator>, CompoundSelector)> = (0..min_len)
+        .try_fold(Vec::with_capacity(min_len), |mut acc, i| {
+            let a_idx = a_len - 1 - i;
+            let b_idx = b_len - 1 - i;
+            let (a_comb, a_comp) = &a.compounds[a_idx];
+            let (_, b_comp) = &b.compounds[b_idx];
+            let merged = unify_compound(a_comp, b_comp)?;
+            acc.push((*a_comb, merged));
+            Some(acc)
+        })?;
+
+    // 较长 selector 的左侧尾部（未对齐部分）
+    let tail = match a_len.cmp(&b_len) {
+        std::cmp::Ordering::Greater => &a.compounds[..a_len - min_len],
+        std::cmp::Ordering::Less => &b.compounds[..b_len - min_len],
+        std::cmp::Ordering::Equal => &[],
+    };
+
+    // 反转恢复从左到右顺序
+    unified_from_right.reverse();
+
+    let compounds: Vec<(Option<Combinator>, CompoundSelector)> = tail
         .iter()
         .cloned()
-        .chain(std::iter::once((a_last.0, merged)))
-        .chain(b_prefix.iter().map(|(c, comp)| (*c, comp.clone())))
+        .chain(unified_from_right)
         .collect();
 
     Some(ComplexSelector { compounds })

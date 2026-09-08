@@ -58,6 +58,9 @@ impl Evaluator {
                 &["condition", "if-true", "if-false"],
             )),
             "inspect" | "type-of" => Some(merge_meta_args(pos_args, kw_args, &["value"])),
+            "calc-args" | "calc-name" => {
+                Some(merge_meta_args(pos_args, kw_args, &["calc"]))
+            }
             _ => None,
         };
         let pos_args: &[Value] = if let Some(ref merged) = merged_meta {
@@ -182,31 +185,35 @@ pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
     args
 }
 
-/// 将单个 calc 参数字符串解析为 `Value`.
+/// 将单个 calc 参数字符串解析为 `Value`。
 ///
-/// `var(--c)` → `Value::String("var(--c)", false)`（未加引号字符串）
+/// 遵循 Sass 规范：嵌套 `calc()`/`min()`/`max()`/`clamp()` 为 calculation 类型；
+/// `var()`/`env()` 和字符串表达式为 string 类型；纯数字为 number 类型。
+///
+/// `var(--c)` → `Value::String("var(--c)", false)`
 /// `1%` → `Value::Number(1.0, Some("%"))`
-/// `2px` → `Value::Number(2.0, Some("px"))`
 /// `calc(...)` → `Value::Calc("calc(...)")`
+/// `1% + 1px` → `Value::String("1% + 1px", false)`
 pub(crate) fn parse_calc_arg_value(s: &str) -> Value {
     let s = s.trim();
-    // 嵌套 calc/min/max/clamp → Value::Calc
+    // 嵌套 calc/min/max/clamp → Value::Calc（这些是 calculation 类型）
     match s.starts_with("calc(")
         || s.starts_with("min(")
         || s.starts_with("max(")
         || s.starts_with("clamp(")
-        || s.starts_with("var(")
-        || s.starts_with("env(")
     {
         true => return Value::Calc(s.to_string()),
         false => {}
     }
-    // 尝试解析为数字+单位
-    match parse_number_with_unit(s) {
-        Some(val) => return val,
-        None => {}
+    // 尝试解析为数字+单位（仅当整个字符串恰好是单一数字时，含可选单位）
+    match s.contains(' ') {
+        false => match parse_number_with_unit(s) {
+            Some(val) => return val,
+            None => {}
+        },
+        true => {}
     }
-    // 默认为未加引号字符串
+    // 默认：含空格（算术表达式）或无法解析的值均归为 string
     Value::String(s.to_string(), false)
 }
 

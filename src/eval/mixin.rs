@@ -129,7 +129,7 @@ impl Evaluator {
                     let rest: Vec<Value> = positional[pos_idx..].to_vec();
                     new_env = new_env.bind(
                         param.name.clone(),
-                        Value::List(rest, Separator::Comma, false),
+                        Value::ArgList(rest, Separator::Comma, false),
                     );
                     break;
                 }
@@ -201,6 +201,29 @@ impl Evaluator {
         Self::call_builtin(name, pos_args, kw_args, env)
     }
 
+    /// 调用由 FunctionRefData 引用的函数（meta.call + get-function 场景）。
+    pub(crate) fn call_user_function_ref(
+        func: &crate::parse::ast::FunctionRefData,
+        pos_args: &[Value],
+        kw_args: &HashMap<String, Value>,
+        env: &Env,
+    ) -> Result<Value> {
+        // 从 captured_ns_keys 重建命名空间
+        let mut captured = HashMap::new();
+        for ns_key in &func.captured_ns_keys {
+            if let Some(ns_exports) = env.get_namespace(ns_key) {
+                let exports_clone = ns_exports.clone();
+                captured.insert(ns_key.clone(), std::rc::Rc::new(exports_clone));
+            }
+        }
+        let fdef = crate::eval::env::FunctionDef {
+            params: func.params.clone(),
+            body: func.body.clone(),
+            captured_namespaces: captured,
+        };
+        Self::call_user_function(&fdef, pos_args, kw_args, env.clone())
+    }
+
     pub(crate) fn call_user_function(
         func: &FunctionDef,
         pos_args: &[Value],
@@ -232,7 +255,7 @@ impl Evaluator {
                     let rest: Vec<Value> = pos_args[pos_idx..].to_vec();
                     func_env = func_env.bind(
                         param.name.clone(),
-                        Value::List(rest, Separator::Comma, false),
+                        Value::ArgList(rest, Separator::Comma, false),
                     );
                     break;
                 }

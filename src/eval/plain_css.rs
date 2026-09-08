@@ -21,7 +21,8 @@ impl super::Evaluator {
             | Value::Bool(..)
             | Value::Null
             | Value::Calc(..)
-            | Value::MixinRef(..) => Ok(()),
+            | Value::MixinRef(..)
+            | Value::FunctionRef(..) => Ok(()),
 
             // 变量引用 — 禁止
             Value::Variable(_) => Err(SassError::Eval(
@@ -67,7 +68,7 @@ impl super::Evaluator {
             }
 
             // 列表 — 检查每个元素
-            Value::List(elements, _, _) => {
+            Value::List(elements, _, _) | Value::ArgList(elements, _, _) => {
                 elements.iter().try_for_each(Self::check_plain_css_value)?;
                 Ok(())
             }
