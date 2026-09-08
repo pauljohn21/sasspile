@@ -34,6 +34,16 @@ fn test_global_selector_append() {
 }
 
 #[test]
+fn test_selector_append_with_inner_combinator() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.append(".b > .c", ".d"); }
+    "#;
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    assert!(result.contains(".b > .c.d"), "Expected .b > .c.d, got {result}");
+}
+
+#[test]
 fn test_selector_append_empty_args_error() {
     let input = r#"
         @use 'sass:selector';
@@ -103,16 +113,6 @@ fn test_selector_nest_with_parent_ref() {
     assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
 }
 
-#[test]
-fn test_selector_append_output_format() {
-    let input = r#"
-        @use 'sass:selector';
-        .a { x: selector-append("a", "b"); }
-    "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
-    tracing::debug!("Actual output: {result}");
-    assert!(result.contains("a b") || result.contains("\"a b\""), "Expected a b, got {result}");
-}
 
 #[test]
 fn test_unify_same_class() {

@@ -58,6 +58,8 @@ pub enum SimpleSelector {
     },
     /// `%button`（占位符）
     Placeholder(String),
+    /// `&`（父选择器引用）
+    ParentReference,
 }
 
 /// 组合器。
@@ -149,6 +151,7 @@ impl fmt::Display for SimpleSelector {
                 Ok(())
             }
             Self::Placeholder(s) => write!(f, "%{s}"),
+            Self::ParentReference => write!(f, "&"),
         }
     }
 }
