@@ -296,15 +296,13 @@ impl Evaluator {
             "get-mixin" => Self::meta_get_mixin(pos_args, kw_args, env),
             "call" => match pos_args {
                 [Value::String(fname, _), rest @ ..] => {
-                    let empty_kw = HashMap::new();
-                    Self::call_function(fname, rest, &empty_kw, env)
+                    Self::call_function(fname, rest, kw_args, env)
                 }
                 [Value::FunctionRef(fn_data), rest @ ..] => {
-                    let empty_kw = HashMap::new();
                     // 空 body 标记内建函数，转分派到 call_builtin
                     match fn_data.body.is_empty() {
-                        true => Self::call_builtin(&fn_data.name, rest, &empty_kw, env),
-                        false => Self::call_user_function_ref(fn_data, rest, &empty_kw, env),
+                        true => Self::call_builtin(&fn_data.name, rest, kw_args, env),
+                        false => Self::call_user_function_ref(fn_data, rest, kw_args, env),
                     }
                 }
                 _ => Err(SassError::Eval("call requires at least 1 argument".into())),
