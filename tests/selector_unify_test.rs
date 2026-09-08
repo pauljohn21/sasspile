@@ -104,6 +104,17 @@ fn test_selector_nest_with_parent_ref() {
 }
 
 #[test]
+fn test_selector_append_output_format() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector-append("a", "b"); }
+    "#;
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    tracing::debug!("Actual output: {result}");
+    assert!(result.contains("a b") || result.contains("\"a b\""), "Expected a b, got {result}");
+}
+
+#[test]
 fn test_unify_same_class() {
     let a = parse_selector(".foo");
     let b = parse_selector(".foo");

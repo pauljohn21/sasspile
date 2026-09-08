@@ -120,11 +120,13 @@ fn append_two(a: &[Vec<String>], b: &[Vec<String>]) -> Result<Vec<Vec<String>>> 
 /// 合并两个 complex selectors——末尾化合物字符串拼接。
 /// 返回 Ok(merged) 或 Err(error_message)。
 fn append_complex(a: &[String], b: &[String]) -> Result<Vec<Vec<String>>> {
+    let a_first = a.first().cloned().unwrap_or_default();
     let b_first = b.first().cloned().unwrap_or_default();
     let a_last = a.last().cloned().unwrap_or_default();
-    // A 不能以组合符结尾 → error
-    if matches!(a_last.as_str(), ">" | "+" | "~") {
-        return Err(SassError::Eval(format!("Can't append {b_first} to {a_last}.")));
+
+    // A 不能以组合符开头或结尾 → error
+    if matches!(a_first.as_str(), ">" | "+" | "~") || matches!(a_last.as_str(), ">" | "+" | "~") {
+        return Err(SassError::Eval(format!("Can't append {b_first} to {a_first}.")));
     }
     // 检查 B 是否只有 combinator → error
     if b.len() == 1 && matches!(b_first.as_str(), ">" | "+" | "~") {
@@ -148,7 +150,7 @@ fn append_complex(a: &[String], b: &[String]) -> Result<Vec<Vec<String>>> {
         result.extend(b.iter().cloned());
         return Ok(vec![result]);
     }
-    // 化合物总是做字符串拼接（即使在 bare type + bare type 时产生歧义也如此）
+    // 化合物选择器拼接：直接连接，比如.a + .b → .a.b，a + b → ab
     let merged = format!("{a_last}{b_first}");
     let mut result = a[..a.len() - 1].to_vec();
     result.push(merged);

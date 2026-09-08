@@ -70,33 +70,32 @@ fn value_list_to_format(elements: &[Value], depth: usize) -> Result<Vec<Vec<Stri
         ));
     }
 
-    // 首先检查是否是列表的列表（selector format）
-    let is_list_of_lists = elements.iter().all(|e| matches!(e, Value::List(_, _, _)));
-    if is_list_of_lists && !elements.is_empty() {
-        return elements
+    if elements.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 判断元素类型
+    let all_strings = elements.iter().all(|e| matches!(e, Value::String(_, _)));
+    let all_lists = elements.iter().all(|e| matches!(e, Value::List(_, _, _)));
+
+    if all_strings {
+        // 所有元素都是字符串：整个列表是一个complex selector
+        list_to_compounds(elements, depth).map(|v| vec![v])
+    } else if all_lists {
+        // 所有元素都是列表：每个元素是一个complex selector
+        elements
             .iter()
             .map(|inner_list| match inner_list {
                 Value::List(inner, _, _) => list_to_compounds(inner, depth + 1),
                 _ => unreachable!(),
             })
-            .collect();
+            .collect()
+    } else {
+        // 混合类型，无效
+        Err(SassError::Eval(
+            "Invalid selector: list must contain all strings or all lists".into(),
+        ))
     }
-
-    // 否则当作complex selector处理：每个元素是字符串或compound字符串
-    elements
-        .iter()
-        .map(|elem| match elem {
-            Value::String(s, _) => Ok(string_to_selector_format(s)
-                .into_iter()
-                .next()
-                .unwrap_or_default()),
-            Value::List(inner, _, _) => list_to_compounds(inner, depth + 1),
-            _ => Err(SassError::Eval(format!(
-                "{elem} is not a valid selector: it must be a string, \
-                 a list of strings, or a list of lists of strings."
-            ))),
-        })
-        .collect()
 }
 
 /// 将内部 list 转换为 compound strings。
@@ -139,5 +138,44 @@ mod tests {
         let value = selector_format_to_value(fmt.clone());
         let result = value_to_selector_format(&value).expect("roundtrip");
         assert_eq!(result, fmt);
+    }
+
+    #[test]
+    fn test_string_with_combinators() {
+        let fmt = string_to_selector_format("a > b + c ~ d");
+        assert_eq!(fmt, vec![vec!["a", ">", "b", "+", "c", "~", "d"]]);
+    }
+
+    #[test]
+    fn test_value_list_input() {
+        let value = Value::List(vec![
+            Value::String("a".into(), false),
+            Value::String("b".into(), false),
+        ], Separator::Space, false);
+        let fmt = value_to_selector_format(&value).unwrap();
+        assert_eq!(fmt, vec![vec!["a", "b"]]);
+    }
+
+    #[test]
+    fn test_value_list_of_lists_input() {
+        let value = Value::List(vec![
+            Value::List(vec![
+                Value::String("a".into(), false),
+                Value::String("b".into(), false),
+            ], Separator::Space, false),
+            Value::List(vec![
+                Value::String("c".into(), false),
+                Value::String("d".into(), false),
+            ], Separator::Space, false),
+        ], Separator::Comma, false);
+        let fmt = value_to_selector_format(&value).unwrap();
+        assert_eq!(fmt, vec![vec!["a", "b"], vec!["c", "d"]]);
+    }
+
+    #[test]
+    fn test_invalid_input_error() {
+        let value = Value::Number(1.0, None);
+        let result = value_to_selector_format(&value);
+        assert!(result.is_err());
     }
 }
