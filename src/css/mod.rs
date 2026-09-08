@@ -4,6 +4,7 @@ pub mod node;
 mod serialize;
 pub mod selector_ast;
 mod selector;
+pub mod selector_format;
 pub mod selector_ops;
 pub mod selector_parser;
 

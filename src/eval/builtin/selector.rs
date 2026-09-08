@@ -94,7 +94,9 @@ fn call_append(args: &[Value]) -> Result<Option<Value>> {
     }
     let formats: Vec<Vec<Vec<String>>> = args
         .iter()
-        .map(|a| selector_format::value_to_selector_format(a))
+        .map(|a| {
+            selector_format::value_to_selector_format(a)
+        })
         .collect::<Result<Vec<_>>>()?;
     let init = formats[0].clone();
     let result = formats[1..]

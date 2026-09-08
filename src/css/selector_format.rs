@@ -9,6 +9,18 @@
 use crate::error::{Result, SassError};
 use crate::parse::ast::{Separator, Value};
 
+/// 验证单个token是否是有效的选择器部分
+fn is_valid_selector_token(token: &str) -> bool {
+    // 组合符有效
+    if matches!(token, ">" | "+" | "~") {
+        return true;
+    }
+    // 其他token：至少有一个合法字符（字母、数字、_、-、.、#、:、[]等）
+    !token.is_empty() && token.chars().all(|c| {
+        c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '#' || c == ':' || c == '[' || c == ']' || c == '(' || c == ')' || c == '%' || c == '&'
+    })
+}
+
 /// 解析选择器字符串为 Selector Format（外层 = complex 列表，内层 = token 字符串列表，包含组合符）。
 ///
 /// 显式组合符（>、+、~）会作为单独的字符串元素保留在列表中。
@@ -34,6 +46,22 @@ pub fn string_to_selector_format(input: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
+/// 解析选择器字符串为 Selector Format，带验证
+pub fn string_to_selector_format_validated(input: &str) -> Result<Vec<Vec<String>>> {
+    let fmt = string_to_selector_format(input);
+    // 验证所有token
+    for complex in &fmt {
+        for token in complex {
+            if !is_valid_selector_token(token) {
+                return Err(SassError::Eval(format!(
+                    "Invalid selector: \"{token}\" is not a valid selector token"
+                )));
+            }
+        }
+    }
+    Ok(fmt)
+}
+
 /// 将 Selector Format 转为 Value（list of lists of strings）。
 pub fn selector_format_to_value(fmt: Vec<Vec<String>>) -> Value {
     let complexes: Vec<Value> = fmt
@@ -52,7 +80,7 @@ pub fn selector_format_to_value(fmt: Vec<Vec<String>>) -> Value {
 /// 将 Value（string 或 selector format）转换为 Selector Format。
 pub fn value_to_selector_format(value: &Value) -> Result<Vec<Vec<String>>> {
     match value {
-        Value::String(s, _) => Ok(string_to_selector_format(s)),
+        Value::String(s, _) => Ok(string_to_selector_format_validated(s)?),
         Value::List(elements, _, _) => value_list_to_format(elements, 0),
         _ => Err(SassError::Eval(format!(
             "{value} is not a valid selector: it must be a string, \

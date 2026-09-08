@@ -115,6 +115,10 @@ impl Parser {
                     self.chars.next();
                     simples.push(SimpleSelector::Universal);
                 }
+                '&' => {
+                    self.chars.next();
+                    simples.push(SimpleSelector::ParentReference);
+                }
                 '.' | '#' | '%' => {
                     self.chars.next();
                     let name = self.take_ident();
