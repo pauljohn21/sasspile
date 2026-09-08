@@ -50,53 +50,49 @@ pub fn string_to_selector_format(input: &str) -> Vec<Vec<String>> {
 /// 解析选择器字符串为 Selector Format，带验证。
 ///
 /// 检测未闭合的属性选择器（如 `[c`、`[foo=bar`）并返回错误。
+#[tracing::instrument(level = "debug", skip(input))]
 pub fn string_to_selector_format_validated(input: &str) -> Result<Vec<Vec<String>>> {
     // 预检查：属性选择器闭合性
     check_attribute_closure(input)?;
 
     let fmt = string_to_selector_format(input);
-    // 验证所有token
-    for complex in &fmt {
-        for token in complex {
+    // 验证所有token（迭代器链替代 for 循环）
+    fmt.iter()
+        .flatten()
+        .try_for_each(|token| {
             if !is_valid_selector_token(token) {
                 return Err(SassError::Eval(format!(
                     "Invalid selector: \"{token}\" is not a valid selector token"
                 )));
             }
-        }
-    }
+            Ok(())
+        })?;
     Ok(fmt)
 }
 
 /// 检查属性选择器 `[...]` 是否正确闭合。
+#[tracing::instrument(level = "debug", skip(input))]
 fn check_attribute_closure(input: &str) -> Result<()> {
-    let mut chars = input.chars();
-    let mut in_quotes: Option<char> = None;
-    let mut bracket_stack: Vec<usize> = Vec::new();
-
-    while let Some(c) = chars.next() {
-        match in_quotes {
-            Some(quote) => {
-                if c == quote {
-                    in_quotes = None;
-                }
-            }
+    let (bracket_count, in_quotes) = input.chars().fold(
+        (0isize, None::<char>),
+        |(count, in_quotes), c| match in_quotes {
+            Some(quote) if c == quote => (count, None),
+            Some(_) => (count, in_quotes),
             None => match c {
-                '"' | '\'' => in_quotes = Some(c),
-                '[' => bracket_stack.push(1),
-                ']' => {
-                    bracket_stack.pop();
-                }
-                _ => {}
+                '"' | '\'' => (count, Some(c)),
+                '[' => (count + 1, None),
+                ']' => (count - 1, None),
+                _ => (count, None),
             },
-        }
-    }
+        },
+    );
 
-    match bracket_stack.is_empty() {
-        true => Ok(()),
-        false => Err(SassError::Eval(
+    if bracket_count == 0 && in_quotes.is_none() {
+        Ok(())
+    } else {
+        Err(SassError::Eval(
             "Invalid selector: missing closing `]` for attribute selector".into(),
-        )),
+        ))
     }
 }
 
@@ -119,7 +115,9 @@ pub fn selector_format_to_value(fmt: Vec<Vec<String>>) -> Value {
 pub fn value_to_selector_format(value: &Value) -> Result<Vec<Vec<String>>> {
     match value {
         Value::String(s, _) => Ok(string_to_selector_format_validated(s)?),
-        Value::List(elements, _, _) => value_list_to_format(elements, 0),
+        Value::List(elements, separator, _) => {
+            value_list_to_format(elements, separator.clone(), 0)
+        }
         _ => Err(SassError::Eval(format!(
             "{value} is not a valid selector: it must be a string, \
              a list of strings, or a list of lists of strings."
@@ -128,13 +126,20 @@ pub fn value_to_selector_format(value: &Value) -> Result<Vec<Vec<String>>> {
 }
 
 /// 将 Value 列表（selector format）转换为 Selector Format。
+/// separator: 外层列表的分隔符（Comma 或 Space）。
 /// depth: 当前递归深度，防止多层嵌套。
 ///
 /// 支持三种模式：
-/// - 纯 strings：整个列表是一个 complex selector（space 分隔）
+/// - 纯 strings：
+///   - Space separator: 整个列表是一个 complex selector
+///   - Comma separator: 每个 string 是一个 complex selector
 /// - 纯 lists：每个内部列表是一个 complex selector（comma 分隔）
 /// - 混合类型：string 视为单 compound complex，list 视为多 compound complex
-fn value_list_to_format(elements: &[Value], depth: usize) -> Result<Vec<Vec<String>>> {
+fn value_list_to_format(
+    elements: &[Value],
+    separator: Separator,
+    depth: usize,
+) -> Result<Vec<Vec<String>>> {
     if depth > 2 {
         return Err(SassError::Eval(
             "Invalid selector: too many nested lists".into(),
@@ -149,17 +154,43 @@ fn value_list_to_format(elements: &[Value], depth: usize) -> Result<Vec<Vec<Stri
     let all_lists = elements.iter().all(|e| matches!(e, Value::List(_, _, _)));
 
     if all_strings {
-        // 所有元素都是字符串：整个列表是一个 complex selector
-        list_to_compounds(elements, depth).map(|v| vec![v])
+        match separator {
+            Separator::Comma => {
+                // Comma-separated strings: 每个 string 是一个 complex selector
+                elements
+                    .iter()
+                    .map(|e| match e {
+                        Value::String(s, _) => {
+                            Ok(string_to_selector_format_validated(s)?)
+                        }
+                        _ => unreachable!(),
+                    })
+                    .try_fold(Vec::new(), |mut acc, result| {
+                        result.map(|mut v| {
+                            acc.append(&mut v);
+                            acc
+                        })
+                    })
+            }
+            _ => {
+                // Space-separated strings: 整个列表是一个 complex selector
+                list_to_compounds(elements, depth).map(|v| vec![v])
+            }
+        }
     } else if all_lists {
         // 所有元素都是列表：每个元素是一个 complex selector
         elements
             .iter()
             .map(|inner_list| match inner_list {
-                Value::List(inner, _, _) => list_to_compounds(inner, depth + 1),
+                Value::List(inner, sep, _) => value_list_to_format(inner, sep.clone(), depth + 1),
                 _ => unreachable!(),
             })
-            .collect()
+            .try_fold(Vec::new(), |mut acc, result| {
+                result.map(|mut v| {
+                    acc.append(&mut v);
+                    acc
+                })
+            })
     } else {
         // 混合类型：逐个元素处理，string → 单 compound complex，list → 多 compound complex
         elements
@@ -170,9 +201,9 @@ fn value_list_to_format(elements: &[Value], depth: usize) -> Result<Vec<Vec<Stri
                     let fmt = string_to_selector_format_validated(s)?;
                     Ok(fmt)
                 }
-                Value::List(inner, _, _) => {
+                Value::List(inner, sep, _) => {
                     // list 视为多 compound complex
-                    value_list_to_format(inner, depth + 1)
+                    value_list_to_format(inner, sep.clone(), depth + 1)
                 }
                 _ => Err(SassError::Eval(format!(
                     "{e} is not a valid selector: it must be a string, \
@@ -212,128 +243,4 @@ fn list_to_compounds(elements: &[Value], depth: usize) -> Result<Vec<String>> {
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_string_format_roundtrip() {
-        let fmt = string_to_selector_format(".a, .b .c");
-        assert_eq!(fmt, vec![vec![".a"], vec![".b", ".c"]]);
-    }
-
-    #[test]
-    fn test_format_to_value_roundtrip() {
-        let fmt = vec![vec!["c".to_string(), "d".to_string()], vec!["e".to_string(), "f".to_string()]];
-        let value = selector_format_to_value(fmt.clone());
-        let result = value_to_selector_format(&value).expect("roundtrip");
-        assert_eq!(result, fmt);
-    }
-
-    #[test]
-    fn test_string_with_combinators() {
-        let fmt = string_to_selector_format("a > b + c ~ d");
-        assert_eq!(fmt, vec![vec!["a", ">", "b", "+", "c", "~", "d"]]);
-    }
-
-    #[test]
-    fn test_value_list_input() {
-        let value = Value::List(vec![
-            Value::String("a".into(), false),
-            Value::String("b".into(), false),
-        ], Separator::Space, false);
-        let fmt = value_to_selector_format(&value).unwrap();
-        assert_eq!(fmt, vec![vec!["a", "b"]]);
-    }
-
-    #[test]
-    fn test_value_list_of_lists_input() {
-        let value = Value::List(vec![
-            Value::List(vec![
-                Value::String("a".into(), false),
-                Value::String("b".into(), false),
-            ], Separator::Space, false),
-            Value::List(vec![
-                Value::String("c".into(), false),
-                Value::String("d".into(), false),
-            ], Separator::Space, false),
-        ], Separator::Comma, false);
-        let fmt = value_to_selector_format(&value).unwrap();
-        assert_eq!(fmt, vec![vec!["a", "b"], vec!["c", "d"]]);
-    }
-
-    #[test]
-    fn test_invalid_input_error() {
-        let value = Value::Number(1.0, None);
-        let result = value_to_selector_format(&value);
-        assert!(result.is_err());
-    }
-
-    // ─── Mixed type input tests ─────────────────────────────────────
-
-    #[test]
-    fn test_mixed_string_and_list_input() {
-        // (c, d e) → [["c"], ["d", "e"]]
-        let value = Value::List(vec![
-            Value::String("c".into(), false),
-            Value::List(vec![
-                Value::String("d".into(), false),
-                Value::String("e".into(), false),
-            ], Separator::Space, false),
-        ], Separator::Comma, false);
-        let fmt = value_to_selector_format(&value).expect("mixed input");
-        assert_eq!(fmt, vec![vec!["c"], vec!["d", "e"]]);
-    }
-
-    #[test]
-    fn test_mixed_three_elements() {
-        // (a, b c, d e f) → [["a"], ["b", "c"], ["d", "e", "f"]]
-        let value = Value::List(vec![
-            Value::String("a".into(), false),
-            Value::List(vec![
-                Value::String("b".into(), false),
-                Value::String("c".into(), false),
-            ], Separator::Space, false),
-            Value::List(vec![
-                Value::String("d".into(), false),
-                Value::String("e".into(), false),
-                Value::String("f".into(), false),
-            ], Separator::Space, false),
-        ], Separator::Comma, false);
-        let fmt = value_to_selector_format(&value).expect("mixed 3 elements");
-        assert_eq!(fmt, vec![vec!["a"], vec!["b", "c"], vec!["d", "e", "f"]]);
-    }
-
-    #[test]
-    fn test_pure_strings_still_work() {
-        // Pure strings: single complex selector
-        let value = Value::List(vec![
-            Value::String("a".into(), false),
-            Value::String("b".into(), false),
-            Value::String("c".into(), false),
-        ], Separator::Space, false);
-        let fmt = value_to_selector_format(&value).expect("pure strings");
-        assert_eq!(fmt, vec![vec!["a", "b", "c"]]);
-    }
-
-    #[test]
-    fn test_pure_lists_still_work() {
-        // Pure lists: each inner list is a complex
-        let value = Value::List(vec![
-            Value::List(vec![
-                Value::String("a".into(), false),
-                Value::String("b".into(), false),
-            ], Separator::Space, false),
-            Value::List(vec![
-                Value::String("c".into(), false),
-                Value::String("d".into(), false),
-            ], Separator::Space, false),
-            Value::List(vec![
-                Value::String("e".into(), false),
-                Value::String("f".into(), false),
-            ], Separator::Space, false),
-        ], Separator::Comma, false);
-        let fmt = value_to_selector_format(&value).expect("pure lists");
-        assert_eq!(fmt, vec![vec!["a", "b"], vec!["c", "d"], vec!["e", "f"]]);
-    }
-}

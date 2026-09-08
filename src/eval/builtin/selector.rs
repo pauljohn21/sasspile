@@ -3,7 +3,7 @@
 //! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend/replace。
 //! 返回值统一为 Selector Format（list of lists of strings）。
 
-use crate::css::selector_ast::{CompoundSelector, Selector};
+use crate::css::selector_ast::Selector;
 use crate::css::selector_format;
 use crate::css::selector_ops;
 use crate::css::selector_parser::parse_selector;
@@ -484,28 +484,36 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
         false => {}
     }
     // 解析为 Selector AST
-    let sel = parse_selector(&format_to_string(&parse_extend_arg(&args[0])?));
-    let extendee = parse_selector(&format_to_string(&parse_extend_arg(&args[1])?));
-    let extender = parse_selector(&format_to_string(&parse_extend_arg(&args[2])?));
+    let sel_arg = parse_extend_arg(&args[0])?;
+    let ext_arg = parse_extend_arg(&args[1])?;
+    let extender_arg = parse_extend_arg(&args[2])?;
+    tracing::debug!(?sel_arg, ?ext_arg, ?extender_arg, "call_extend: parsed args");
+    let sel = parse_selector(&format_to_string(&sel_arg));
+    let extendee = parse_selector(&format_to_string(&ext_arg));
+    let extender = parse_selector(&format_to_string(&extender_arg));
+    tracing::debug!(%sel, %extendee, %extender, "call_extend: parsed selectors");
 
     let uses_format = matches!(args[0], Value::List(_, _, _))
         || matches!(args[1], Value::List(_, _, _))
         || matches!(args[2], Value::List(_, _, _));
 
     let result = selector_ops::extend_selector(&sel, &extendee, &extender);
-    if uses_format {
-        // 输入包含 list → 返回 selector format
-        Ok(Some(selector_format::selector_format_to_value(fmt_to_vec_vec(
-            &result,
-        ))))
-    } else {
-        // 全部字符串输入 → 返回字符串
-        Ok(Some(Value::String(result.to_string(), false)))
-    }
+    tracing::debug!(%result, uses_format, "call_extend: result");
+
+    // selector-extend 始终返回 selector format（list of lists of strings）
+    let fmt = fmt_to_vec_vec(&result);
+    tracing::debug!(?fmt, "call_extend: fmt_to_vec_vec");
+    Ok(Some(selector_format::selector_format_to_value(fmt)))
 }
 
 /// 将 Selector AST 转换为 Vec<Vec<String>> (selector format)。
+///
+/// 组合器（>、+、~）会作为单独的字符串元素保留在列表中。
+/// 例如：`.a > .b` → [[".a", ">", ".b"]]
+/// 尾随组合器也会保留：`.a +` → [[".a", "+"]]
 fn fmt_to_vec_vec(selector: &Selector) -> Vec<Vec<String>> {
+    use crate::css::selector_ast::Combinator;
+
     selector
         .0
         .iter()
@@ -513,10 +521,17 @@ fn fmt_to_vec_vec(selector: &Selector) -> Vec<Vec<String>> {
             complex
                 .compounds
                 .iter()
-                .map(|(_, compound): &(Option<crate::css::selector_ast::Combinator>, CompoundSelector)| {
-                    compound.to_string()
+                .flat_map(|(comb, compound)| {
+                    let comb_token = match comb {
+                        Some(Combinator::Child) => Some(">".to_string()),
+                        Some(Combinator::Adjacent) => Some("+".to_string()),
+                        Some(Combinator::Sibling) => Some("~".to_string()),
+                        Some(Combinator::Descendant) | None => None,
+                    };
+                    let compound_token = (!compound.0.is_empty()).then(|| compound.to_string());
+                    comb_token.into_iter().chain(compound_token)
                 })
-                .collect()
+                .collect::<Vec<String>>()
         })
         .collect()
 }

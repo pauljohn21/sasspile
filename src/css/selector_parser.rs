@@ -63,6 +63,10 @@ impl Parser {
     }
 
     /// 解析复杂选择器——组合器分隔的复合选择器序列。
+    ///
+    /// 特殊处理：
+    /// - 尾随组合器（如 `.c +`）→ 追加空 compound 保留组合器
+    /// - 多连续组合器（如 `> + .c`、`.c ~ ~ .d`）→ 追加空 compound 保留每个组合器
     fn parse_complex(&mut self) -> Option<ComplexSelector> {
         let mut compounds: Vec<(Option<Combinator>, CompoundSelector)> = Vec::new();
         let mut pending_combinator: Option<Combinator> = None;
@@ -73,6 +77,11 @@ impl Parser {
                 None => break,
                 Some(c) => match *c {
                     '>' | '+' | '~' => {
+                        // 如果已有 pending_combinator，说明是连续组合器
+                        // 追加空 compound 保留前一个组合器
+                        if pending_combinator.is_some() {
+                            compounds.push((pending_combinator.take(), CompoundSelector(Vec::new())));
+                        }
                         pending_combinator = match c {
                             '>' => Some(Combinator::Child),
                             '+' => Some(Combinator::Adjacent),
@@ -99,6 +108,11 @@ impl Parser {
                 }
                 _ => {}
             }
+        }
+
+        // 处理尾随组合器：如果循环结束时仍有 pending_combinator，追加空 compound
+        if let Some(comb) = pending_combinator.take() {
+            compounds.push((Some(comb), CompoundSelector(Vec::new())));
         }
 
         (!compounds.is_empty()).then_some(ComplexSelector { compounds })

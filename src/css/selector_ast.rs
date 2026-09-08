@@ -87,7 +87,15 @@ impl fmt::Display for Selector {
 impl fmt::Display for ComplexSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, (comb, compound)) in self.compounds.iter().enumerate() {
+            let is_empty = compound.0.is_empty();
             match (i, comb) {
+                (0, Some(c)) if is_empty => match c {
+                    // 前导组合器 + 空 compound：只写组合器（如 `+`）
+                    Combinator::Descendant => {}
+                    Combinator::Child => write!(f, ">")?,
+                    Combinator::Adjacent => write!(f, "+")?,
+                    Combinator::Sibling => write!(f, "~")?,
+                },
                 (0, Some(c)) => match c {
                     Combinator::Descendant => write!(f, " ")?,
                     Combinator::Child => write!(f, "> ")?,
@@ -100,7 +108,9 @@ impl fmt::Display for ComplexSelector {
                 (_, Some(Combinator::Adjacent)) => write!(f, " + ")?,
                 (_, Some(Combinator::Sibling)) => write!(f, " ~ ")?,
             }
-            write!(f, "{compound}")?;
+            if !is_empty {
+                write!(f, "{compound}")?;
+            }
         }
         Ok(())
     }
