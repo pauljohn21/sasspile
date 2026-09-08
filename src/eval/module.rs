@@ -183,6 +183,7 @@ impl Evaluator {
             consumed_config: final_env.get_consumed_config().clone(),
             selectors,
             star_imported: final_env.get_star_imported().clone(),
+            ..Default::default()
         };
         let exports_cache = exports.module_cache.clone();
         let mut updated_cache = (*exports_cache).clone();
@@ -271,11 +272,23 @@ impl Evaluator {
         kw_args: &HashMap<String, Value>,
         env: &Env,
     ) -> Result<Value> {
-        // 先检查文件加载的命名空间
+        // 先处理内建模块（sass:*）：命名空间的 FunctionDef 条目仅用于 meta 内省，
+        // 必须走 call_builtin 路径（否则空 body 的占位符 def 会被 parse 为 Null）。
+        if let Some(dot) = name.find('.') {
+            let ns = &name[..dot];
+            if let Some(module) = env.get_namespace(ns)
+                && module.is_builtin
+            {
+                let builtin_name = super::builtin::dispatch::module_builtin_name(name);
+                return Self::call_builtin(builtin_name, pos_args, kw_args, env);
+            }
+        }
+        // 检查文件加载的命名空间（非内建模块）。
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let func_name = &name[dot + 1..];
             if let Some(module) = env.get_namespace(ns)
+                && !module.is_builtin
                 && let Some(func) = module
                     .all_functions()
                     .find(|(k, _)| *k == func_name)
@@ -291,7 +304,7 @@ impl Evaluator {
                 return Self::call_user_function(func, pos_args, kw_args, func_env);
             }
         }
-        // 将模块限定名映射到内建函数
+        // 将模块限定名映射到内建函数。
         let builtin_name = super::builtin::dispatch::module_builtin_name(name);
         Self::call_builtin(builtin_name, pos_args, kw_args, env)
     }

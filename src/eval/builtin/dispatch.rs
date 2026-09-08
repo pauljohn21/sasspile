@@ -10,7 +10,7 @@ use imbl::HashMap;
 /// 内建函数映射条目：`(模块限定名, 全局名)`。
 ///
 /// 每个模块的 const 数组集中管理，消除 `builtin_name` / `is_known` / `dispatch` 三处重复。
-const MATH_NAMES: &[(&str, &str)] = &[
+pub(crate) const MATH_NAMES: &[(&str, &str)] = &[
     ("math.abs", "abs"),
     ("math.div", "div"),
     ("math.ceil", "ceil"),
@@ -40,7 +40,7 @@ const MATH_NAMES: &[(&str, &str)] = &[
     ("math.rem", "rem"),
 ];
 
-const STRING_NAMES: &[(&str, &str)] = &[
+pub(crate) const STRING_NAMES: &[(&str, &str)] = &[
     ("string.length", "str-length"),
     ("string.index", "str-index"),
     ("string.slice", "str-slice"),
@@ -53,7 +53,7 @@ const STRING_NAMES: &[(&str, &str)] = &[
     ("string.unique-id", "unique-id"),
 ];
 
-const MAP_NAMES: &[(&str, &str)] = &[
+pub(crate) const MAP_NAMES: &[(&str, &str)] = &[
     ("map.get", "map-get"),
     ("map.merge", "map-merge"),
     ("map.remove", "map-remove"),
@@ -65,7 +65,7 @@ const MAP_NAMES: &[(&str, &str)] = &[
     ("map.set", "map-set"),
 ];
 
-const LIST_NAMES: &[(&str, &str)] = &[
+pub(crate) const LIST_NAMES: &[(&str, &str)] = &[
     ("list.length", "length"),
     ("list.nth", "nth"),
     ("list.append", "append"),
@@ -78,7 +78,7 @@ const LIST_NAMES: &[(&str, &str)] = &[
     ("list.zip", "zip"),
 ];
 
-const COLOR_NAMES: &[(&str, &str)] = &[
+pub(crate) const COLOR_NAMES: &[(&str, &str)] = &[
     ("color.adjust", "adjust-color"),
     ("color.change", "change-color"),
     ("color.scale", "scale-color"),
@@ -122,7 +122,7 @@ const COLOR_NAMES: &[(&str, &str)] = &[
     ("color.mix", "mix"),
 ];
 
-const SELECTOR_NAMES: &[(&str, &str)] = &[
+pub(crate) const SELECTOR_NAMES: &[(&str, &str)] = &[
     ("selector.is-superselector", "selector-is-superselector"),
     ("selector.parse", "selector-parse"),
     ("selector.simple-selectors", "selector-simple-selectors"),
@@ -133,7 +133,7 @@ const SELECTOR_NAMES: &[(&str, &str)] = &[
     ("selector.nest", "selector-nest"),
 ];
 
-const META_NAMES: &[(&str, &str)] = &[
+pub(crate) const META_NAMES: &[(&str, &str)] = &[
     ("meta.type-of", "type-of"),
     ("meta.inspect", "inspect"),
     ("meta.keywords", "keywords"),

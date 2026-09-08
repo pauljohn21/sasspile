@@ -126,7 +126,37 @@ impl Evaluator {
                 _ => Ok(Value::Bool(false)),
             },
             "function-exists" => match pos_args {
-                [Value::String(name, _)] => Ok(Value::Bool(env.get_function(name).is_some())),
+                [Value::String(name, _), Value::String(module, _)] => {
+                    // 2-arg form: check specific module's exports.
+                    let dash = name.replace('-', "_");
+                    let underscore = name.replace('_', "-");
+                    match env.get_namespace(module) {
+                        Some(m) => {
+                            let found = m.all_functions().any(|(k, _)| {
+                                k == name || k == &dash || k == &underscore
+                            });
+                            Ok(Value::Bool(found))
+                        }
+                        None => Err(SassError::Eval(format!(
+                            "There is no module with namespace \"{module}\"."
+                        ))),
+                    }
+                }
+                [Value::String(name, _)] => {
+                    // 1-arg form: check local scope + all namespaces + builtins.
+                    let dash = name.replace('-', "_");
+                    let underscore = name.replace('_', "-");
+                    let in_local = env.get_function(name).is_some()
+                        || env.get_function(&dash).is_some()
+                        || env.get_function(&underscore).is_some();
+                    let in_namespace = env.get_namespaces().values().any(|ns| {
+                        ns.all_functions().any(|(k, _)| {
+                            k == name || k == &dash || k == &underscore
+                        })
+                    });
+                    let is_builtin = super::dispatch::is_known_builtin(name);
+                    Ok(Value::Bool(in_local || in_namespace || is_builtin))
+                }
                 _ => Ok(Value::Bool(false)),
             },
             "global-variable-exists" => match pos_args {

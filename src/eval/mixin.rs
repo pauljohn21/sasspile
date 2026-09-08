@@ -179,8 +179,11 @@ impl Evaluator {
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env.clone());
         }
-        // 在命名空间模块中查找同名函数
+        // 在命名空间模块中查找同名函数（跳过内建模块 — 其 FunctionDef 条目仅用于 meta 内省）。
         for exports in env.get_namespaces().values() {
+            if exports.is_builtin {
+                continue;
+            }
             if let Some(func) = exports
                 .all_functions()
                 .find(|(k, _)| *k == name)

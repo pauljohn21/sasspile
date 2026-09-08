@@ -28,6 +28,10 @@ pub(crate) struct ModuleExports {
     pub(crate) selectors: HashSet<String>,
     /// 通过 `@use ... as *` 引入的成员名集合（不应传递到下一个 `@use ... as *`）。
     pub(crate) star_imported: HashSet<String>,
+    /// 该 ModuleExports 是否表示一个内建模块（sass:*）。
+    /// 内建模块的 FunctionDef 条目仅用于 meta 内省（module-functions 等），
+    /// 实际调用应走 `call_builtin` 路径。
+    pub(crate) is_builtin: bool,
 }
 
 impl ModuleExports {

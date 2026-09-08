@@ -5,8 +5,59 @@ use crate::error::{Result, SassError};
 use crate::eval::value::values_eq;
 use std::path::Path;
 
-/// 返回内建模块的导出变量。
+use crate::eval::env::FunctionDef;
+use crate::parse::ast::Param;
+
+/// Placeholder def for a builtin function (body empty — dispatched by Rust code).
+fn builtin_fn_def(name: &str) -> FunctionDef {
+    FunctionDef {
+        params: vec![Param {
+            name: format!("${name}"),
+            default: None,
+            rest: false,
+        }],
+        body: vec![],
+        captured_namespaces: HashMap::new(),
+    }
+}
+
+/// Collect the global-name entries for a given builtin module prefix.
+fn module_fn_names<'a>(names: &[(&'a str, &'a str)], module: &str) -> Vec<&'a str> {
+    let prefix = format!("{module}.");
+    names
+        .iter()
+        .filter_map(|(qname, gname)| {
+            if qname.starts_with(&prefix) || *qname == module {
+                Some(*gname)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// 返回内建模块的导出变量和函数。
 pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports> {
+    use super::builtin::dispatch::{
+        COLOR_NAMES, LIST_NAMES, MAP_NAMES, MATH_NAMES, META_NAMES, SELECTOR_NAMES,
+        STRING_NAMES,
+    };
+
+    let fn_names: Vec<&str> = match module_name {
+        "sass:math" => module_fn_names(MATH_NAMES, "math"),
+        "sass:string" => module_fn_names(STRING_NAMES, "string"),
+        "sass:map" => module_fn_names(MAP_NAMES, "map"),
+        "sass:list" => module_fn_names(LIST_NAMES, "list"),
+        "sass:color" => module_fn_names(COLOR_NAMES, "color"),
+        "sass:selector" => module_fn_names(SELECTOR_NAMES, "selector"),
+        "sass:meta" => module_fn_names(META_NAMES, "meta"),
+        _ => vec![],
+    };
+    let fn_map: HashMap<String, FunctionDef> = fn_names
+        .into_iter()
+        .map(|n| (n.to_string(), builtin_fn_def(n)))
+        .collect();
+
     match module_name {
         "sass:math" => {
             let mut vars = HashMap::new();
@@ -28,9 +79,16 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
             );
             Some(ModuleExports {
                 local_vars: vars,
+                local_functions: fn_map,
+                is_builtin: true,
                 ..Default::default()
             })
         }
+        n if n.starts_with("sass:") => Some(ModuleExports {
+            local_functions: fn_map,
+            is_builtin: true,
+            ..Default::default()
+        }),
         _ => None,
     }
 }
