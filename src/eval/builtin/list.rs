@@ -335,26 +335,37 @@ pub fn call(
             }
             _ => Err(SassError::Eval("set-nth requires 3 arguments".into())),
         },
-        "is-bracketed" => match args {
-            [Value::List(_, _, true)] => Ok(Some(Value::Bool(true))),
-            _ => Ok(Some(Value::Bool(false))),
+        "is-bracketed" => match args.len() {
+            1 => match &args[0] {
+                Value::List(_, _, true) => Ok(Some(Value::Bool(true))),
+                Value::Map(_) | Value::List(_, _, false) => Ok(Some(Value::Bool(false))),
+                _ => Ok(Some(Value::Bool(false))),
+            },
+            0 => Err(SassError::Eval("Missing argument $number.".into())),
+            n => Err(SassError::Eval(format!(
+                "Only 1 argument allowed, but {n} were passed."
+            ))),
         },
-        "list-slash" => {
-            match args.is_empty() {
-                true => return Err(SassError::Eval("list-slash requires 1+ arguments".into())),
-                false => {}
-            }
-            Ok(Some(Value::List(args.to_vec(), Separator::Slash, false)))
-        }
+        "list-slash" => match args.len() {
+            0 => Err(SassError::Eval("Missing argument $elements.".into())),
+            _ => Ok(Some(Value::List(args.to_vec(), Separator::Slash, false))),
+        },
         "zip" => {
             match args.is_empty() {
                 true => return Ok(Some(Value::List(Vec::new(), Separator::Comma, false))),
                 false => {}
             }
+            // 将 Map 也转为列表（键值对变为子列表）
             // 单列表 zip：包装每个元素为单元素列表（符合 sass-spec）
             if args.len() == 1 {
                 let items = match &args[0] {
                     Value::List(items, _, _) => items.clone(),
+                    Value::Map(pairs) => pairs
+                        .iter()
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .collect(),
                     other => vec![other.clone()],
                 };
                 let wrapped: Vec<Value> = items
@@ -368,6 +379,12 @@ pub fn call(
                 .iter()
                 .map(|v| match v {
                     Value::List(items, _, _) => items.clone(),
+                    Value::Map(pairs) => pairs
+                        .iter()
+                        .map(|(k, v)| {
+                            Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
+                        })
+                        .collect(),
                     other => vec![other.clone()],
                 })
                 .collect();
