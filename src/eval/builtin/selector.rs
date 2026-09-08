@@ -126,19 +126,19 @@ fn append_complex(a: &[String], b: &[String]) -> Result<Vec<Vec<String>>> {
 
     // A 不能以组合符开头或结尾 → error
     if matches!(a_first.as_str(), ">" | "+" | "~") || matches!(a_last.as_str(), ">" | "+" | "~") {
-        return Err(SassError::Eval(format!("Can't append {b_first} to {a_first}.")));
+        return Err(SassError::Eval(format!("Can't append {b_first} to {a_first}")));
     }
     // 检查 B 是否只有 combinator → error
     if b.len() == 1 && matches!(b_first.as_str(), ">" | "+" | "~") {
-        return Err(SassError::Eval(format!("Can't append {b_first} to {a_last}.")));
+        return Err(SassError::Eval(format!("Can't append {b_first} to {a_last}")));
     }
     // 检查 B 是否只有 namespace → error
     if b.len() == 1 && b_first.starts_with('|') {
-        return Err(SassError::Eval(format!("Can't append {b_first} to {a_last}.")));
+        return Err(SassError::Eval(format!("Can't append {b_first} to {a_last}")));
     }
     // 检查 universal 开头 → error
     if b_first == "*" {
-        return Err(SassError::Eval(format!("Can't append * to {a_last}.")));
+        return Err(SassError::Eval(format!("Can't append * to {a_last}")));
     }
     // 检查 parent reference — append 中不允许裸 &
     if b.len() == 1 && b[0] == "&" {
