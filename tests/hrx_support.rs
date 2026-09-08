@@ -253,10 +253,22 @@ pub struct HrxCase {
 static UTILS_CONTENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// 获取颜色 utils 物理文件内容（带缓存）。
-fn get_utils_content() -> &'static str {
+fn get_color_utils_content() -> &'static str {
     UTILS_CONTENT.get_or_init(|| {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let path = format!("{manifest_dir}/sass-spec/spec/core_functions/color/_utils.scss");
+        std::fs::read_to_string(&path).unwrap_or_default()
+    })
+}
+
+/// list 目录的共享模块缓存。
+static LIST_UTILS_CONTENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// 获取 list utils 物理文件内容（带缓存）。
+fn get_list_utils_content() -> &'static str {
+    LIST_UTILS_CONTENT.get_or_init(|| {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{manifest_dir}/sass-spec/spec/core_functions/list/_utils.scss");
         std::fs::read_to_string(&path).unwrap_or_default()
     })
 }
@@ -307,7 +319,17 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
     if prefix.starts_with("core_functions/color/") && !prefix.ends_with("utils") {
         let utils_path = "core_functions/color/_utils.scss";
         let already_included = all_files.iter().any(|(p, _)| p == utils_path);
-        let utils_content = get_utils_content();
+        let utils_content = get_color_utils_content();
+        if !already_included && !utils_content.is_empty() {
+            all_files.push((utils_path.to_string(), utils_content.to_string()));
+        }
+    }
+
+    // list 目录自动注入 `_utils.scss` 共享模块
+    if prefix.starts_with("core_functions/list/") {
+        let utils_path = "core_functions/list/_utils.scss";
+        let already_included = all_files.iter().any(|(p, _)| p == utils_path);
+        let utils_content = get_list_utils_content();
         if !already_included && !utils_content.is_empty() {
             all_files.push((utils_path.to_string(), utils_content.to_string()));
         }
