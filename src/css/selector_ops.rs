@@ -255,6 +255,22 @@ fn extend_complex(
     extendee: &ComplexSelector,
     extender: &Selector,
 ) -> Option<Selector> {
+    // Combinator no_op 检测：当 selector 和 extender 都有 leading combinator
+    // 或都有 trailing combinator 时，不应扩展（避免产生无效选择器）
+    if has_leading_combinator(selector) && extender_has_leading_combinator(extender) {
+        return None;
+    }
+    if has_trailing_combinator(selector) && extender_has_trailing_combinator(extender) {
+        return None;
+    }
+
+    // Unification no_op 检测：当 extender 的某个 complex 包含 extendee 的某个 complex
+    // 作为子选择器时，不应扩展（避免循环引用和冗余输出）
+    let extendee_selector = Selector(vec![extendee.clone()]);
+    if extender_contains_extendee(extender, &extendee_selector) {
+        return None;
+    }
+
     // 策略 1: Complex-level suffix matching
     try_suffix_match(selector, extendee, extender)
         .or_else(|| {
@@ -264,6 +280,61 @@ fn extend_complex(
                 _ => None,
             }
         })
+}
+
+/// 检查 complex selector 的第一个 compound 是否有 leading combinator。
+fn has_leading_combinator(complex: &ComplexSelector) -> bool {
+    complex
+        .compounds
+        .first()
+        .is_some_and(|(comb, _)| comb.is_some())
+}
+
+/// 检查 complex selector 的最后一个 compound 是否有 trailing combinator。
+fn has_trailing_combinator(complex: &ComplexSelector) -> bool {
+    complex
+        .compounds
+        .last()
+        .is_some_and(|(comb, _)| comb.is_some())
+}
+
+/// 检查 extender Selector 的任意 complex 是否有 leading combinator。
+fn extender_has_leading_combinator(extender: &Selector) -> bool {
+    extender
+        .0
+        .iter()
+        .any(|c| has_leading_combinator(c))
+}
+
+/// 检查 extender Selector 的任意 complex 是否有 trailing combinator。
+fn extender_has_trailing_combinator(extender: &Selector) -> bool {
+    extender
+        .0
+        .iter()
+        .any(|c| has_trailing_combinator(c))
+}
+
+/// 检查 extender 是否包含 extendee 作为子选择器。
+///
+/// 当 extender 的某个 complex 包含 extendee 的某个 complex 的所有 compounds 时,
+/// 不应扩展(避免循环引用)。
+/// 例：extendee="c", extender="c.d" → 包含,不扩展
+fn extender_contains_extendee(extender: &Selector, extendee: &Selector) -> bool {
+    extender.0.iter().any(|ext_c| {
+        extendee.0.iter().any(|ee_c| {
+            // 检查 extendee 的所有 compounds 是否都是 extender 对应位置 compounds 的超集
+            let ee_compounds: Vec<&CompoundSelector> =
+                ee_c.compounds.iter().map(|(_, comp)| comp).collect();
+            let ext_compounds: Vec<&CompoundSelector> =
+                ext_c.compounds.iter().map(|(_, comp)| comp).collect();
+            // extendee 必须完全匹配 extender 的前缀
+            ee_compounds.len() <= ext_compounds.len()
+                && ee_compounds.iter().zip(ext_compounds.iter()).all(|(ee, ext)| {
+                    // extendee compound 必须是 extender compound 的超集(包含所有 simples)
+                    ee.0.iter().all(|ee_simple| ext.0.contains(ee_simple))
+                })
+        })
+    })
 }
 
 /// 策略 1: Suffix matching — extendee 的 compounds 序列作为 selector 的后缀精确匹配。
@@ -354,6 +425,10 @@ fn try_suffix_match(
 /// - extender: `[".e", ".f"]` 两个 compound
 /// - 新 complex: [".e"[None], ".x.f"[Descendant], ".d"[Descendant]]
 /// - 结果: `.e .x.f .d` ✓
+///
+/// **Type selector 不部分匹配规则**：当 extendee 只包含 type selector（如 `c`）且 selector
+/// compound 还包含其他 simples（如 `c.d`）时，不扩展。Type selector 必须完全匹配整个 compound。
+/// 例：`selector.extend("c.d", "c, .d", ".e")` → `"c.d, .e"`（`"c"` 不部分匹配 `"c.d"`）
 fn try_compound_subset_match(
     selector: &ComplexSelector,
     extendee: &ComplexSelector,
@@ -368,6 +443,15 @@ fn try_compound_subset_match(
         .position(|(_, sel_compound)| is_subset_compound(ext_compound, sel_compound))?;
 
     let (_, sel_compound) = &selector.compounds[match_pos];
+
+    // Type selector 不部分匹配：如果 extendee 只包含 type selector 且 selector compound
+    // 还包含其他 simples，则不扩展（type selector 必须完全匹配整个 compound）
+    let ext_is_single_type = ext_compound.0.len() == 1
+        && matches!(&ext_compound.0[0], SimpleSelector::Type(_));
+    let sel_has_multiple_simples = sel_compound.0.len() > 1;
+    if ext_is_single_type && sel_has_multiple_simples {
+        return None;
+    }
 
     // 计算 parent context（匹配位置之前的 compounds，包括它们的 combinator）
     let prefix: Vec<(Option<Combinator>, CompoundSelector)> =
@@ -401,6 +485,16 @@ fn try_compound_subset_match(
             // 关键规则：remaining simples 始终在 extender 首 compound 之前
             // 单 compound: remaining + extender_compound
             // 多 compound: extender 首 compound 不变, remaining 放在最后一个 compound 前面
+            // 确定首 compound 的 combinator 优先级：
+            // 1. extender 自带的 combinator（如 `+ .d` 中的 `+`）
+            // 2. selector 原始 compound 的 combinator（如 `> .c.x` 中的 `>`）
+            // 3. 仅当 prefix 非空时使用 Descendant（避免产生无效的前导组合器）
+            let ext_first_combinator = ext_complex.compounds[0].0;
+            let orig_combinator = selector.compounds[match_pos].0;
+            let resolved_combinator = ext_first_combinator
+                .or(orig_combinator)
+                .or_else(|| (!prefix.is_empty()).then_some(Combinator::Descendant));
+
             match ext_complex.compounds.len() {
                 0 => {}
                 1 => {
@@ -411,8 +505,7 @@ fn try_compound_subset_match(
                         .cloned()
                         .chain(ext_sims.iter().cloned())
                         .collect();
-                    let orig_combinator = selector.compounds[match_pos].0;
-                    new_compounds.push((orig_combinator, CompoundSelector(merged_simples)));
+                    new_compounds.push((resolved_combinator, CompoundSelector(merged_simples)));
                 }
                 _ => {
                     // 多 compound extender：
@@ -421,12 +514,8 @@ fn try_compound_subset_match(
                     let last_idx = ext_complex.compounds.len() - 1;
 
                     // 首 compound
-                    let (first_comb, first_comp) = &ext_complex.compounds[0];
-                    let orig_combinator = selector.compounds[match_pos].0;
-                    new_compounds.push((
-                        first_comb.or(orig_combinator).or(Some(Combinator::Descendant)),
-                        first_comp.clone(),
-                    ));
+                    let (_, first_comp) = &ext_complex.compounds[0];
+                    new_compounds.push((resolved_combinator, first_comp.clone()));
 
                     // 中间 compounds（如果有）
                     for (c, comp) in &ext_complex.compounds[1..last_idx] {

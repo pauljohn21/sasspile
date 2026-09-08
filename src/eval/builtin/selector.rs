@@ -3,6 +3,7 @@
 //! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend/replace。
 //! 返回值统一为 Selector Format（list of lists of strings）。
 
+use crate::css::selector_ast::{CompoundSelector, Selector};
 use crate::css::selector_format;
 use crate::css::selector_ops;
 use crate::css::selector_parser::parse_selector;
@@ -482,120 +483,42 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
         }
         false => {}
     }
-    let sel_fmt = parse_extend_arg(&args[0])?;
-    let ext_fmt = parse_extend_arg(&args[1])?;
-    let new_fmt = parse_extend_arg(&args[2])?;
-
-    let ext_count = ext_fmt.len();
-    let new_count = new_fmt.len();
-    if ext_count != new_count && ext_count != 1 && new_count != 1 {
-        return Err(SassError::Eval(format!(
-            "extendee and extender lists must have the same length (got {ext_count} extendees and {new_count} extenders)"
-        )));
-    }
+    // 解析为 Selector AST
+    let sel = parse_selector(&format_to_string(&parse_extend_arg(&args[0])?));
+    let extendee = parse_selector(&format_to_string(&parse_extend_arg(&args[1])?));
+    let extender = parse_selector(&format_to_string(&parse_extend_arg(&args[2])?));
 
     let uses_format = matches!(args[0], Value::List(_, _, _))
         || matches!(args[1], Value::List(_, _, _))
         || matches!(args[2], Value::List(_, _, _));
 
-    let max_pairs = ext_count.max(new_count);
-
+    let result = selector_ops::extend_selector(&sel, &extendee, &extender);
     if uses_format {
-        // Format-level extending: match when entire complex equals extendee
-        let mut result: Vec<Vec<String>> = Vec::new();
-        for sel_complex in &sel_fmt {
-            result.push(sel_complex.clone());
-            for j in 0..max_pairs {
-                let ext_str = ext_fmt[j % ext_count].join("");
-                if sel_complex.join(" ") == ext_str {
-                    let new_compounds = new_fmt[j % new_count].clone();
-                    if !result.contains(&new_compounds) {
-                        result.push(new_compounds);
-                    }
-                }
-            }
-        }
-        Ok(Some(selector_format::selector_format_to_value(result)))
+        // 输入包含 list → 返回 selector format
+        Ok(Some(selector_format::selector_format_to_value(fmt_to_vec_vec(
+            &result,
+        ))))
     } else {
-        // Compound-level extending (string input)
-        let mut result: Vec<Vec<String>> = sel_fmt.clone();
-        for j in 0..max_pairs {
-            let ext_str = ext_fmt[j % ext_count].join("");
-            let new_compounds = &new_fmt[j % new_count];
-            let mut extensions: Vec<Vec<String>> = Vec::new();
-            for sel_complex in &sel_fmt {
-                for extd in extend_complex_string(sel_complex, &ext_str, new_compounds) {
-                    if !result.contains(&extd) && !extensions.contains(&extd) {
-                        extensions.push(extd);
-                    }
-                }
-            }
-            result.extend(extensions);
-        }
-        Ok(Some(Value::String(format_to_string(&result), false)))
+        // 全部字符串输入 → 返回字符串
+        Ok(Some(Value::String(result.to_string(), false)))
     }
 }
 
-/// String-level extend — returns ALL possible extensions for one complex.
-/// - Exact match: replace compound with extender compounds.
-/// - Class/type extendee: prefix match, with remainder merged into extender.
-fn extend_complex_string(
-    complex: &[String],
-    extendee: &str,
-    extender_compounds: &[String],
-) -> Vec<Vec<String>> {
-    let mut results: Vec<Vec<String>> = Vec::new();
-    for (pos, compound) in complex.iter().enumerate() {
-        // Exact match: replace compound with extender
-        if compound == extendee {
-            let mut new_complex = complex[..pos].to_vec();
-            new_complex.extend_from_slice(extender_compounds);
-            new_complex.extend_from_slice(&complex[pos + 1..]);
-            results.push(new_complex);
-            continue;
-        }
-        // Prefix match (class or type extendee)
-        if compound.starts_with(extendee) && !extendee.is_empty() {
-            let remainder = &compound[extendee.len()..];
-            let ext_len = extender_compounds.len();
-            if ext_len == 1 {
-                // Single extender: build [prefix + REM + ext]
-                let mut new_complex = complex[..pos].to_vec();
-                let mut merged = remainder.to_string();
-                merged.push_str(&extender_compounds[0]);
-                new_complex.push(merged);
-                new_complex.extend_from_slice(&complex[pos + 1..]);
-                results.push(new_complex);
-            } else if ext_len >= 2 {
-                // Multi extender: build [prefix + ext[0] + REM + ext[N-1] + ext[1..N-1] + suffix]
-                let mut merged = remainder.to_string();
-                merged.push_str(&extender_compounds[ext_len - 1]);
-                // Normal variant
-                let mut new_complex = complex[..pos].to_vec();
-                new_complex.push(extender_compounds[0].clone());
-                new_complex.push(merged.clone());
-                for ec in extender_compounds[1..ext_len - 1].iter() {
-                    new_complex.push(ec.clone());
-                }
-                new_complex.extend_from_slice(&complex[pos + 1..]);
-                results.push(new_complex);
-                // PREPEND variant for multi-extender: ext[0] goes BEFORE the extendee
-                if pos > 0 {
-                    let mut prepend_complex: Vec<String> = Vec::new();
-                    prepend_complex.extend_from_slice(&complex[..pos - 1]);
-                    prepend_complex.push(extender_compounds[0].clone());
-                    prepend_complex.push(complex[pos - 1].clone());
-                    prepend_complex.push(merged);
-                    for ec in extender_compounds[1..ext_len - 1].iter() {
-                        prepend_complex.push(ec.clone());
-                    }
-                    prepend_complex.extend_from_slice(&complex[pos + 1..]);
-                    results.push(prepend_complex);
-                }
-            }
-        }
-    }
-    results
+/// 将 Selector AST 转换为 Vec<Vec<String>> (selector format)。
+fn fmt_to_vec_vec(selector: &Selector) -> Vec<Vec<String>> {
+    selector
+        .0
+        .iter()
+        .map(|complex| {
+            complex
+                .compounds
+                .iter()
+                .map(|(_, compound): &(Option<crate::css::selector_ast::Combinator>, CompoundSelector)| {
+                    compound.to_string()
+                })
+                .collect()
+        })
+        .collect()
 }
 
 // ─── selector-replace ───────────────────────────────────────────
