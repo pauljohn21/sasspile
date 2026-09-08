@@ -1,13 +1,15 @@
 ## Context
 
-sass-spec 当前通过率 60%（7142/12131），core_functions 非 color 子域存在 852 个失败 case：
-- `selector/`: 489 fail (45%) — selector-nest, selector-merge, selector-extend, selector-parse, selector-unify, is-superselector, simple-selectors, selector-replace
-- `meta/`: 179 fail (63%) — module-variables, module-functions, get-function, keywords, content-exists, inspect, type-of
-- `math/`: 96 fail (80%) — 函数精度与边界
-- `list/`: 68 fail (70%) — separator, set-nth, join
-- `modules/`: 14 fail (54%)
+sass-spec 当前通过率 62%（7376/12131），core_functions 非 color 子域存在 630 个失败 case：
+- `selector/`: 381 fail (56%) — selector-extend 为主(format 错误 + combinator no_op + unification no_op)
+- `meta/`: 156 fail (67%) — type-of, calc-args, call, global-variable-exists, equality, 颜色(跳过)
+- `math/`: 79 fail (82%) — percentage, ceil/floor/round, clamp, comparable
+- `list/`: 20 fail (**91%**) — 目标 90%+ 已达成,无需额外修复
+- `modules/`: 14 fail (54%) — **全为颜色变更引入,跳过**
 
-这些子域从未被系统攻坚，每个 case 对应一个 HRX 测试文件，input.scss + output.css 明确。
+**诊断方法**: 使用 `tests/tmp_cf_diag.rs` 统一诊断测试,`SHOW_FAILS=1` 聚类分析。
+
+**策略调整**: 原预估 +350~600 cases 需修正 — selector 需要 AST 级深度修复(高成本),meta 失败分散(中等成本),modules 跳过。实际可快速收益来自 meta + math 子域。
 
 ## Goals / Non-Goals
 

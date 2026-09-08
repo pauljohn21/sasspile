@@ -1,10 +1,11 @@
 ## 1. 诊断基础设施
 
-- [ ] 1.1 创建 `tests/tmp_cf_selector.rs` 诊断测试——用 SHOW_FAILS 模式收集 selector 前 30 个失败 case,聚类分析共性根因
-- [ ] 1.2 创建 `tests/tmp_cf_meta.rs` 诊断测试——收集 meta 前 30 个失败 case,按函数分组统计
-- [ ] 1.3 创建 `tests/tmp_cf_list.rs` 诊断测试——收集 list 前 30 个失败 case
-- [ ] 1.4 创建 `tests/tmp_cf_math.rs` 诊断测试——收集 math 前 30 个失败 case
-- [ ] 1.5 创建 `tests/tmp_cf_modules.rs` 诊断测试——收集 modules 全部失败 case
+- [x] 1.1 创建 `tests/tmp_cf_diag.rs` 统一诊断测试——收集 selector/meta/list/math/modules 失败 case
+- [x] 1.2 selector 诊断完成 — 381 fails,失败模式: format 错误(3) + combinator no_op(20) + unification no_op(7)
+- [x] 1.3 meta 诊断完成 — 156 fails,分散在 type-of(1) + calc-args(1) + call(5) + global-variable-exists(4) + equality(7) + 颜色(跳过)
+- [x] 1.4 list 基线确认 — 213/233 = 91%,目标 90%+ 已达成
+- [x] 1.5 math 基线确认 — 403/486 = 82%,79 fails
+- [x] 1.6 modules 诊断完成 — 14 fails 全为颜色变更引入(adjust/scale/change 等 expected_error_but_ok),**跳过**
 
 ## 2. selector 子域修复 (目标: 45% → 85%+)
 
