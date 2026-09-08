@@ -160,7 +160,14 @@ impl Evaluator {
                 _ => Ok(Value::Bool(false)),
             },
             "global-variable-exists" => match pos_args {
-                [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
+                [Value::String(name, _)] => {
+                    // Check local scope + all namespaces.
+                    let exists = env.has_var(name)
+                        || env.get_namespaces().values().any(|ns| {
+                            ns.all_vars().any(|(k, _)| k == name)
+                        });
+                    Ok(Value::Bool(exists))
+                }
                 _ => Ok(Value::Bool(false)),
             },
             "variable-exists" => match pos_args {
