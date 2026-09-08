@@ -7,16 +7,37 @@ use super::math_helpers::validate_single_number;
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 
-/// 单参数三角/数学函数（sin/cos/tan/sqrt）。
-/// Calc 参数透传为 `func(inner)` 字符串。
-fn unary_math_func(
+/// 将角度单位转为弧度。
+/// 接受的单位：`deg`、`grad`、`turn`、无单位（弧度）。
+/// 其它单位报错。
+fn angle_to_radians(n: f64, unit: Option<&String>, param: &str) -> Result<f64> {
+    let rad = match unit.map(String::as_str).as_deref() {
+        None => n,
+        Some("deg") => n * std::f64::consts::PI / 180.0,
+        Some("grad") => n * std::f64::consts::PI / 200.0,
+        Some("turn") => n * 2.0 * std::f64::consts::PI,
+        Some(other) => {
+            return Err(SassError::Eval(format!(
+                "${param}: Expected {n}{other} to have an angle unit (deg, grad, turn) or no units."
+            )))
+        }
+    };
+    Ok(rad)
+}
+
+/// 单参数三角函数（sin/cos/tan）——支持角度单位转换。
+/// 接受 deg/grad/turn/unitless(弧度)，其它角度单位报错。
+fn trig_func(
     args: &[Value],
     func_name: &str,
     f: impl Fn(f64) -> f64,
 ) -> Result<Option<Value>> {
     validate_single_number(args)?;
     match &args[0] {
-        Value::Number(n, _) => Ok(Some(Value::Number(f(*n), None))),
+        Value::Number(n, unit) => {
+            let rad = angle_to_radians(*n, unit.as_ref(), "number")?;
+            Ok(Some(Value::Number(f(rad), None)))
+        }
         Value::Calc(c) => {
             let inner = c
                 .strip_prefix("calc(")
@@ -28,16 +49,39 @@ fn unary_math_func(
     }
 }
 
-/// 单参数反三角函数（asin/acos/atan）——返回 deg 单位。
+/// 单参数 math 函数——严格 unitless（sqrt）。
+/// 计算前校验无单位。
+fn unitless_unary_func(
+    args: &[Value],
+    func_name: &str,
+    f: impl Fn(f64) -> f64,
+) -> Result<Option<Value>> {
+    validate_single_number(args)?;
+    let n = extract_unitless(&args[0], "number")?;
+    match &args[0] {
+        Value::Number(_, _) => Ok(Some(Value::Number(f(n), None))),
+        Value::Calc(c) => {
+            let inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
+            Ok(Some(Value::String(format!("{func_name}({inner})"), false)))
+        }
+        _ => unreachable!(),
+    }
+}
+
+/// 单参数反三角函数（asin/acos/atan）——参数 unitless，返回 deg。
 fn inverse_trig_func(
     args: &[Value],
     func_name: &str,
     f: impl Fn(f64) -> f64,
 ) -> Result<Option<Value>> {
     validate_single_number(args)?;
+    let n = extract_unitless(&args[0], "number")?;
     match &args[0] {
-        Value::Number(n, _) => {
-            let result = f(*n).to_degrees();
+        Value::Number(_, _) => {
+            let result = f(n).to_degrees();
             Ok(Some(Value::Number(result, Some("deg".to_string()))))
         }
         Value::Calc(c) => {
@@ -50,6 +94,7 @@ fn inverse_trig_func(
         _ => unreachable!(),
     }
 }
+
 
 /// 将 Value 转换为 `数字+单位` 字符串（用于 Calc 透传）。
 fn value_to_str(v: &Value) -> Result<String> {
@@ -81,10 +126,10 @@ fn extract_unitless(v: &Value, param: &str) -> Result<f64> {
 /// Math 三角/pow/log/hypot 函数分派。
 pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
     match name {
-        "sqrt" => unary_math_func(args, "sqrt", f64::sqrt),
-        "sin" => unary_math_func(args, "sin", f64::sin),
-        "cos" => unary_math_func(args, "cos", f64::cos),
-        "tan" => unary_math_func(args, "tan", f64::tan),
+        "sqrt" => unitless_unary_func(args, "sqrt", f64::sqrt),
+        "sin" => trig_func(args, "sin", f64::sin),
+        "cos" => trig_func(args, "cos", f64::cos),
+        "tan" => trig_func(args, "tan", f64::tan),
         "asin" => inverse_trig_func(args, "asin", f64::asin),
         "acos" => inverse_trig_func(args, "acos", f64::acos),
         "atan" => inverse_trig_func(args, "atan", f64::atan),
