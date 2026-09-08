@@ -2,6 +2,106 @@
 
 use sasspile::css::selector_parser::parse_selector;
 use sasspile::css::selector_ops;
+use sasspile::Reactor;
+
+#[test]
+fn test_selector_append_basic() {
+    let input = "\
+        @use 'sass:selector';\
+        .a { x: selector.append(\".b\", \".c\"); }\
+    ";
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
+}
+
+#[test]
+fn test_selector_append_initial_combinator() {
+    let input = "\
+        @use 'sass:selector';\
+        .a { x: selector.append(\".b\", \"> .c\"); }\
+    ";
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    assert!(result.contains(".b > .c"), "Expected .b > .c, got {result}");
+}
+
+#[test]
+fn test_global_selector_append() {
+    let input = "\
+        .a { x: selector-append(\".b\", \".c\"); }\
+    ";
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
+}
+
+#[test]
+fn test_selector_append_empty_args_error() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.append(); }
+    "#;
+    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    assert!(eval_result.is_err(), "Expected error for empty args");
+}
+
+#[test]
+fn test_selector_append_invalid_type_error() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.append(1, 2); }
+    "#;
+    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    assert!(eval_result.is_err(), "Expected error for invalid type");
+}
+
+#[test]
+fn test_selector_append_only_combinator_error() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.append(".a", ">"); }
+    "#;
+    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    assert!(eval_result.is_err(), "Expected error for only combinator");
+}
+
+#[test]
+fn test_selector_append_only_leading_combinator_error() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.append(">", ".b"); }
+    "#;
+    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    assert!(eval_result.is_err(), "Expected error for leading only combinator");
+}
+
+#[test]
+fn test_selector_append_trailing_combinator_error() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.append(".a >", ".b"); }
+    "#;
+    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    assert!(eval_result.is_err(), "Expected error for trailing combinator");
+}
+
+#[test]
+fn test_selector_nest_basic() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.nest(".b", ".c"); }
+    "#;
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    assert!(result.contains(".b .c"), "Expected .b .c, got {result}");
+}
+
+#[test]
+fn test_selector_nest_with_parent_ref() {
+    let input = r#"
+        @use 'sass:selector';
+        .a { x: selector.nest(".b", "&.c"); }
+    "#;
+    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
+}
 
 #[test]
 fn test_unify_same_class() {
