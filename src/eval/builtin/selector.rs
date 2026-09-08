@@ -146,11 +146,13 @@ fn append_complex(a: &[String], b: &[String]) -> Result<Vec<Vec<String>>> {
     if b.len() == 1 && b[0] == "&" {
         return Err(SassError::Eval("Parent selectors aren't allowed here.".into()));
     }
-    // 处理前导 combinator：直接拼接整个 b 到 a
+    // 第二个选择器不能以 combinator 开头 → error
     if matches!(b_first.as_str(), ">" | "+" | "~") {
-        let mut result: Vec<String> = a.iter().cloned().collect();
-        result.extend(b.iter().cloned());
-        return Ok(vec![result]);
+        let b_display = b.join(" ");
+        let a_display = a.join(" ");
+        return Err(SassError::Eval(format!(
+            "Can't append {b_display} to {a_display}."
+        )));
     }
     // 化合物选择器拼接：直接连接，比如.a + .b → .a.b，a + b → ab
     let merged = format!("{a_last}{b_first}");

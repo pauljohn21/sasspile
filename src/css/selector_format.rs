@@ -15,9 +15,10 @@ fn is_valid_selector_token(token: &str) -> bool {
     if matches!(token, ">" | "+" | "~") {
         return true;
     }
-    // 其他token：至少有一个合法字符（字母、数字、_、-、.、#、:、[]等）
+    // 其他token：至少有一个合法字符（字母、数字、_、-、.、#、:、[]、*、|等）
+    // * = 通用选择器, | = 命名空间分隔符
     !token.is_empty() && token.chars().all(|c| {
-        c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '#' || c == ':' || c == '[' || c == ']' || c == '(' || c == ')' || c == '%' || c == '&'
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '#' | ':' | '[' | ']' | '(' | ')' | '%' | '&' | '*' | '|')
     })
 }
 
