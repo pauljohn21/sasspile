@@ -185,6 +185,10 @@ pub fn is_super_compound(super_c: &CompoundSelector, sub_c: &CompoundSelector) -
 // ─── extend/replace 算法 ──────────────────────────────────────────
 
 /// 扩展选择器：在 `selector` 中查找匹配 `extendee` 的部分，用 `extender` 追加。
+///
+/// 算法：对 selector 的每个 complex，尝试两种匹配策略：
+/// 1. Complex-level suffix matching（原算法）：extendee 作为整个 complex 的后缀匹配
+/// 2. Compound-level subset matching（新算法）：extendee 的单个 compound 是某 compound 的子集
 #[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender))]
 pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Selector) -> Selector {
     let results: Vec<ComplexSelector> = selector
@@ -210,7 +214,28 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
 }
 
 /// 在单个复杂选择器上执行 extend。
+///
+/// 尝试两种策略：
+/// 1. Suffix matching：extendee 的 compounds 序列作为 selector 的 suffix 精确匹配
+/// 2. Compound subset matching：extendee 的单个 compound 是 selector 某 compound 的子集
 fn extend_complex(
+    selector: &ComplexSelector,
+    extendee: &ComplexSelector,
+    extender: &Selector,
+) -> Option<Selector> {
+    // 策略 1: Complex-level suffix matching
+    try_suffix_match(selector, extendee, extender)
+        .or_else(|| {
+            // 策略 2: Compound-level subset matching（仅当 extendee 只有单个 compound 时）
+            match extendee.compounds.len() {
+                1 => try_compound_subset_match(selector, extendee, extender),
+                _ => None,
+            }
+        })
+}
+
+/// 策略 1: Suffix matching — extendee 的 compounds 序列作为 selector 的后缀精确匹配。
+fn try_suffix_match(
     selector: &ComplexSelector,
     extendee: &ComplexSelector,
     extender: &Selector,
@@ -271,6 +296,136 @@ fn extend_complex(
         .collect();
 
     (!results.is_empty()).then_some(Selector(results))
+}
+
+/// 策略 2: Compound-level subset matching — extendee 的单个 compound 是 selector 某 compound 的子集。
+///
+/// 核心思路：extender 的首 compound 替换匹配位置，remaining simples 与 extender 后续 compound 串联。
+///
+/// 例 1：`.c.x .d` extend `.c` → `.e`（单 compound extender）
+/// - selector: `[".c.x", ".d"]`
+/// - extendee: `[".c"]`（单个 compound）
+/// - 匹配位置：index 0（compound `.c.x`），remaining: `[".x"]`
+/// - extender: `[".e"]`
+/// - 新 compound 0: `.e`（替换整个 `.c.x`）
+/// - 新 compound 1: `.x`（remaining）+ extender 后续无 compound，所以只剩 `.x`
+/// - 结果：`.e .x .d`... 不对
+///
+/// 重新分析 spec 结果 `.c.x .d, .x.e .d`：
+/// - `.x.e .d`：`.x` 保留，`.e `.x.f .d`
+///
+/// 正确理解：extendee 替换 compound 内部的 partial simple，extender 整体作为替换插入。
+/// 即：`compound = remaining_simples + extender_compounds`
+/// 当 extender 有多个 compound 时，remaining simples 附加到 extender 的**最后一个**compound。
+///
+/// 例 2：selector.extend(".c.x .d", ".c", ".e .f") → ".c.x .d, .e .x.f .d"
+/// - extender: `[".e", ".f"]` 两个 compound
+/// - 新 complex: [".e"[None], ".x.f"[Descendant], ".d"[Descendant]]
+/// - 结果: `.e .x.f .d` ✓
+fn try_compound_subset_match(
+    selector: &ComplexSelector,
+    extendee: &ComplexSelector,
+    extender: &Selector,
+) -> Option<Selector> {
+    let ext_compound = &extendee.compounds[0].1;
+
+    // 找到第一个匹配的 compound 位置
+    let match_pos = selector
+        .compounds
+        .iter()
+        .position(|(_, sel_compound)| is_subset_compound(ext_compound, sel_compound))?;
+
+    let (_, sel_compound) = &selector.compounds[match_pos];
+
+    // 计算 parent context（匹配位置之前的 compounds，包括它们的 combinator）
+    let prefix: Vec<(Option<Combinator>, CompoundSelector)> =
+        selector.compounds[..match_pos].iter().cloned().collect();
+
+    // 计算后缀（匹配位置之后的 compounds）
+    let suffix: Vec<(Option<Combinator>, CompoundSelector)> = selector.compounds[match_pos + 1..]
+        .iter()
+        .cloned()
+        .collect();
+
+    // 计算匹配 compound 中除去 extendee simples 后的剩余部分
+    let remaining: Vec<SimpleSelector> = sel_compound
+        .0
+        .iter()
+        .filter(|s| !ext_compound.0.contains(s))
+        .cloned()
+        .collect();
+
+    // 对 extender 的每个 complex 生成替换
+    let results: Vec<ComplexSelector> = extender
+        .0
+        .iter()
+        .map(|ext_complex| {
+            let mut new_compounds: Vec<(Option<Combinator>, CompoundSelector)> = Vec::new();
+
+            // 添加 prefix
+            new_compounds.extend(prefix.iter().cloned());
+
+            // extender 的 compounds 处理
+            // 关键规则：remaining simples 始终在 extender 首 compound 之前
+            // 单 compound: remaining + extender_compound
+            // 多 compound: extender 首 compound 不变, remaining 放在最后一个 compound 前面
+            match ext_complex.compounds.len() {
+                0 => {}
+                1 => {
+                    // 单 compound extender：remaining 在 extender compound 前面
+                    let ext_sims = &ext_complex.compounds[0].1 .0;
+                    let merged_simples: Vec<SimpleSelector> = remaining
+                        .iter()
+                        .cloned()
+                        .chain(ext_sims.iter().cloned())
+                        .collect();
+                    let orig_combinator = selector.compounds[match_pos].0;
+                    new_compounds.push((orig_combinator, CompoundSelector(merged_simples)));
+                }
+                _ => {
+                    // 多 compound extender：
+                    // - 首 compound 保持不变
+                    // - remaining simples 放在最后一个 compound 前面
+                    let last_idx = ext_complex.compounds.len() - 1;
+
+                    // 首 compound
+                    let (first_comb, first_comp) = &ext_complex.compounds[0];
+                    let orig_combinator = selector.compounds[match_pos].0;
+                    new_compounds.push((
+                        first_comb.or(orig_combinator).or(Some(Combinator::Descendant)),
+                        first_comp.clone(),
+                    ));
+
+                    // 中间 compounds（如果有）
+                    for (c, comp) in &ext_complex.compounds[1..last_idx] {
+                        new_compounds.push((*c, comp.clone()));
+                    }
+
+                    // 最后一个 compound：remaining 在前面
+                    let (_, last_comp) = &ext_complex.compounds[last_idx];
+                    let merged_simples: Vec<SimpleSelector> = remaining
+                        .iter()
+                        .cloned()
+                        .chain(last_comp.0.iter().cloned())
+                        .collect();
+                    let last_combinator = ext_complex.compounds[last_idx].0;
+                    new_compounds.push((last_combinator, CompoundSelector(merged_simples)));
+                }
+            }
+
+            // 添加 suffix
+            new_compounds.extend(suffix.iter().cloned());
+
+            ComplexSelector { compounds: new_compounds }
+        })
+        .collect();
+
+    (!results.is_empty()).then_some(Selector(results))
+}
+
+/// 检查 `subset` 是否是 `superset` 的 simple selector 子集。
+fn is_subset_compound(subset: &CompoundSelector, superset: &CompoundSelector) -> bool {
+    subset.0.iter().all(|s| superset.0.contains(s))
 }
 
 /// 替换选择器：在 `selector` 中查找匹配 `original` 的部分，用 `replacement` 替换。
