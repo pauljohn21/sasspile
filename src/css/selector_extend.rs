@@ -69,29 +69,32 @@ pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, exten
 
 fn is_more_specific_than(extender: &Selector, extendee: &Selector) -> bool {
     // extender 比 extendee 更具体 → extend 是 no-op
-    // 特殊情况1：extendee 包含 Universal → 任何 extender 都更具体 → no-op
-    // 特殊情况2：selector（原始选择器）包含 Universal → 任何 extend 都是 no-op
-    //   （因为 * 已经匹配所有元素，无法通过 extend 增加新信息）
+    // 即：extendee 是 extender 的超选择器（extendee 匹配更多元素）
+    use crate::css::selector_is_super::is_super_compound;
+
     extender.0.iter().all(|ext_c| {
         extendee.0.iter().any(|ee_c| {
             // 如果 extendee 的 compound 包含 Universal，任何 extender 都更具体
             let ee_has_universal = ee_c.compounds.iter().any(|(_, comp)| comp.0.iter().any(|s| matches!(s, SimpleSelector::Universal)));
             if ee_has_universal { return true; }
-            
-            ext_c.compounds.len() >= ee_c.compounds.len()
-                && ee_c.compounds.iter().enumerate().all(|(i, (_, ee_comp))| {
-                    ext_c.compounds.get(i).is_some_and(|(_, ext_comp)| {
-                        ee_comp.0.iter().all(|s| match s {
-                            SimpleSelector::Type { namespace: ns_ee, name: name_ee } => ext_comp.0.iter().any(|es| match es {
-                                SimpleSelector::Type { namespace: ns_ext, name: name_ext } => {
-                                    name_ee == name_ext && (ns_ee == ns_ext || matches!(ns_ee, Namespace::Any) || matches!(ns_ext, Namespace::Any))
-                                }
-                                _ => false,
-                            }),
-                            _ => ext_comp.0.contains(s),
-                        })
-                    })
+
+            // 检查 extendee 是否是 extender 的超选择器
+            let ee_compounds: Vec<_> = ee_c.compounds.iter().map(|(_, c)| c).collect();
+            let ext_compounds: Vec<_> = ext_c.compounds.iter().map(|(_, c)| c).collect();
+
+            if ee_compounds.len() <= ext_compounds.len() {
+                // extender 更长或相等 → 检查 ee 是否是 ext 的后缀
+                // "c.d" (ext) vs "c" (ee): ee 应该匹配 ext 的最后一个 compound
+                let offset = ext_compounds.len() - ee_compounds.len();
+                ee_compounds.iter().enumerate().all(|(i, ee_comp)| {
+                    ext_compounds.get(i + offset).is_some_and(|ext_comp| is_super_compound(ee_comp, ext_comp))
                 })
+            } else {
+                // extendee 更长 → 逐位匹配
+                ee_compounds.iter().enumerate().all(|(i, ee_comp)| {
+                    ext_compounds.get(i).is_some_and(|ext_comp| is_super_compound(ee_comp, ext_comp))
+                })
+            }
         })
     })
 }
