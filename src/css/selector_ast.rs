@@ -51,10 +51,12 @@ pub enum SimpleSelector {
         name: String,
         arg: Option<String>,
     },
-    /// `::before`
+    /// `::before` 或 `:before`（class syntax）
     PseudoElement {
         name: String,
         arg: Option<String>,
+        /// CSS 向后兼容：单冒号伪元素语法: :before, :after, :first-line, :first-letter
+        is_class_syntax: bool,
     },
     /// `%button`（占位符）
     Placeholder(String),
@@ -153,8 +155,12 @@ impl fmt::Display for SimpleSelector {
                 }
                 Ok(())
             }
-            Self::PseudoElement { name, arg } => {
-                write!(f, "::{name}")?;
+            Self::PseudoElement { name, arg, is_class_syntax } => {
+                if *is_class_syntax {
+                    write!(f, ":{name}")?;
+                } else {
+                    write!(f, "::{name}")?;
+                }
                 if let Some(arg) = arg {
                     write!(f, "({arg})")?;
                 }

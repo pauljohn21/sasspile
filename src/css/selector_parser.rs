@@ -156,13 +156,21 @@ impl Parser {
                             self.chars.next();
                             let name = self.take_ident();
                             let arg = self.take_pseudo_arg();
-                            simples.push(SimpleSelector::PseudoElement { name, arg });
+                            simples.push(SimpleSelector::PseudoElement { name, arg, is_class_syntax: false });
                         }
                         _ => {
-                            // 伪类 :name
+                            // 可能是伪类 :name，也可能是单冒号伪元素（CSS 向后兼容）
                             let name = self.take_ident();
                             let arg = self.take_pseudo_arg();
-                            simples.push(SimpleSelector::PseudoClass { name, arg });
+                            // CSS 允许单冒号伪元素语法: :before, :after, :first-line, :first-letter
+                            match name.as_str() {
+                                "before" | "after" | "first-line" | "first-letter" => {
+                                    simples.push(SimpleSelector::PseudoElement { name, arg, is_class_syntax: true });
+                                }
+                                _ => {
+                                    simples.push(SimpleSelector::PseudoClass { name, arg });
+                                }
+                            }
                         }
                     }
                 }
