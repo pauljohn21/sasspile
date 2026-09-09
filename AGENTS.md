@@ -619,6 +619,67 @@ sasspile 颜色系统基于 `ColorSpace` 枚举（17 种色彩空间）+ `ColorO
 - 在纯函数中引入 `&mut` 参数
 - 用 `if-else` 链替换已有的 `match`
 
+## 🔧 高效工具优先（违反 = 任务失败）
+
+> **核心原则**：禁止使用低效手动方式（grep、sed、逐行命令行分析、重复打印查询）。所有任务必须使用已建立的高效工具链。
+
+### 工具链总览
+
+| 类别 | 工具 | 触发场景 |
+|------|------|----------|
+| 代码统计 | `tests/sass_spec_stats.rs` | sass-spec 通过率报告、基线对比 |
+| 失败诊断 | `tests/css_diag.rs`、`tests/expr_diag.rs`、`tests/cfs_diag.rs`、`tests/diag_directives.rs` | 定位具体失败 case |
+| 代码查询 | `codegraph callers/impact/node/explore/callees` | 调用链分析、影响范围 |
+| 链路追踪 | `RUST_LOG=trace --features otel` | 跨函数/跨阶段 bug 定位 |
+| 脚本处理 | `rust-script` 或 Rust test | 任何脚本/数据处理任务 |
+
+### sass-spec 诊断工具
+
+```bash
+# 1. 全量统计（~4 分钟，后台运行）
+RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture > /tmp/sass-spec-full.log 2>&1 &
+
+# 2. 生成 MD 报告 + 基线对比
+cargo test --test sass_spec_stats -- --nocapture
+
+# 3. 保存当前为新基线
+BASELINE=1 cargo test --test sass_spec_stats -- --nocapture
+```
+
+### 失败定位工具
+
+```bash
+# CSS 失败（含 selector/extend）
+RUST_LOG="css_diag=info" cargo test --test css_diag
+
+# 表达式失败
+RUST_LOG="expr_diag=info" cargo test --test expr_diag
+
+# 指令失败
+RUST_LOG="diag_directives=info" cargo test --test diag_directives
+
+# core_functions 失败
+RUST_LOG="cfs_diag=info" cargo test --test cfs_diag
+```
+
+### 禁止模式
+
+| 禁止 | 替代 |
+|------|------|
+| `grep -r "xxx" /tmp/log \| head -20` 反复查询 | 写 Rust test 解析日志，一次生成报告 |
+| `codegraph callers` 重复 5 次不同角度 | `codegraph explore` 一次探索完整上下文 |
+| 手动逐行翻日志 200 行 | `cargo test --test xxx_diag` 输出结构化失败汇总 |
+| python3 处理数据 | `rust-script -e` 或新建 test 文件 |
+| bash 循环分析 | Rust test 中用迭代器链处理 |
+
+### 工作流
+
+1. **统计需求** → `sass_spec` 后台运行 → `sass_spec_stats` 生成报告
+2. **定位失败** → 运行对应 `*_diag` 测试获取结构化输出
+3. **分析影响** → `codegraph callers/impact/node`
+4. **Bug 追踪** → `RUST_LOG=trace --features otel` + `#[instrument]`
+5. **数据转换** → 写 Rust test 或 `rust-script`
+
 ## 🔍 CodeGraph 优先
 
 查询调用链、影响分析、代码流向时，**使用 CodeGraph CLI**（优先于 LSP 或手动阅读）：
@@ -697,4 +758,5 @@ codegraph query <search>       # 搜索符号
 - [ ] 调试遵循 4 步协议（如果是 bug 修复）
 - [ ] OTel 追踪可用：`cargo test --features otel` 输出 span 正常
 - [ ] CodeGraph 用于代码查询
+- [ ] 使用高效工具链（sass_spec_stats / *_diag / codegraph / OTel），未手动 grep/逐行分析
 - [ ] Commit 等用户确认后再推送
