@@ -1,9 +1,10 @@
 //! element-plus 全量编译验证测试。
 //!
-//! 使用 tracing 进行问题追踪，不使用 eprintln!/println!。
+//! 使用 tracing 进行问题追踪，不使用 tracing::error!/println!。
 
 use sasspile::*;
 use std::path::PathBuf;
+use tracing;
 
 #[test]
 fn test_ep_full_stats() {

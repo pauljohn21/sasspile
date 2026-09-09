@@ -2,6 +2,7 @@
 mod hrx_support;
 use hrx_support::{HrxArchive, parse_hrx as hrx_parse};
 use std::path::{Path, PathBuf};
+use tracing;
 
 struct HrxCase {
     files: Vec<(String, String)>,
@@ -78,7 +79,7 @@ fn count_dir(subdir: &str) -> (usize, usize) {
     let mut fail = 0;
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for case in &parse_hrx(&content) {
                 if case.expected_output.is_empty() { continue; }
                 match compile_case(case, &spec_root, &stem) {
@@ -88,7 +89,7 @@ fn count_dir(subdir: &str) -> (usize, usize) {
             }
         }
     }
-    eprintln!("{subdir}: pass={pass} fail={fail}");
+    tracing::error!("{subdir}: pass={pass} fail={fail}");
     (pass, fail)
 }
 
@@ -96,6 +97,6 @@ fn count_dir(subdir: &str) -> (usize, usize) {
 fn hsl_count() {
     let (_, fail_hsl) = count_dir("core_functions/color/hsl");
     let (_, fail_hsla) = count_dir("core_functions/color/hsla");
-    eprintln!("HSL_TOTAL: hsl fail={fail_hsl}, hsla fail={fail_hsla}");
+    tracing::error!("HSL_TOTAL: hsl fail={fail_hsl}, hsla fail={fail_hsla}");
     let _ = (fail_hsl, fail_hsla);
 }

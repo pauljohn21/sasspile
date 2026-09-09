@@ -297,14 +297,10 @@ pub fn call(
                 (Value::Number(min, u_min), Value::Number(val, u_val), Value::Number(max, u_max)) => {
                     // 校验所有参数的单位兼容
                     if !crate::eval::value::units_compatible(u_min.as_deref(), u_val.as_deref()) {
-                        return Err(SassError::Eval(format!(
-                            "Incompatible units."
-                        )));
+                        return Err(SassError::Eval("Incompatible units.".to_string()));
                     }
                     if !crate::eval::value::units_compatible(u_val.as_deref(), u_max.as_deref()) {
-                        return Err(SassError::Eval(format!(
-                            "Incompatible units."
-                        )));
+                        return Err(SassError::Eval("Incompatible units.".to_string()));
                     }
                     Ok(Some(Value::Number(val.max(*min).min(*max), u_val.clone())))
                 }

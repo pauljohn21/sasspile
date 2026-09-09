@@ -3,7 +3,8 @@
     clippy::single_char_pattern,
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
+    clippy::cast_possible_wrap,
+    clippy::items_after_statements
 )]
 //! Color 内建函数 — HSL/HWB 通道操作。
 //!
@@ -106,15 +107,10 @@ fn format_hwb_passthrough(args: &[Value]) -> String {
     match args.len() {
         4 => {
             let h_deg = match &args[0] {
-                Value::Number(n, _) if !n.is_nan() => format!("{}deg", n),
+                Value::Number(n, _) if !n.is_nan() => format!("{n}deg"),
                 _ => format_hue(&args[0]),
             };
-            format!(
-                "hwb({h_deg} {} {} / {})",
-                args[1].to_string(),
-                args[2].to_string(),
-                args[3].to_string()
-            )
+            format!("hwb({h_deg} {} {} / {})", args[1], args[2], args[3])
         }
         _ => {
             let arg_strs: Vec<String> = args
@@ -143,7 +139,6 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                 Number(f64),
                 Missing,
             }
-
             /// 尝试从 Value 提取通道数值。
             /// Ok(Some(Number(n))) = 数值 n；Ok(Some(Missing)) = none 关键字；Ok(None) = 不可解析（透传）。
             fn extract_channel(v: &Value) -> Result<Option<ChannelVal>> {
@@ -266,7 +261,6 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             };
 
             // 如果有任何通道是 Missing（none 关键字），需构建特殊颜色
-            let _colors = [w_parsed, bk_parsed];
             let a_parsed = match flat.len() {
                 4 => match extract_alpha(&flat[3]) {
                     Ok(Some(n)) => n,

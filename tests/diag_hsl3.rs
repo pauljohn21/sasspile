@@ -2,6 +2,7 @@
 mod hrx_support;
 use hrx_support::{HrxArchive, parse_hrx as hrx_parse};
 use std::path::{Path, PathBuf};
+use tracing;
 
 struct HrxCase { files: Vec<(String, String)>, input_path: String, expected_output: String }
 
@@ -53,15 +54,15 @@ fn hsl_diffs() {
     let mut files = Vec::new(); collect_hrx(&sr.join("core_functions/color/hsl"), &mut files);
     let mut n = 0;
     for f in &files { if let Ok(content) = std::fs::read_to_string(f) {
-        let st = f.file_stem().unwrap().to_string_lossy().to_string();
+        let st = f.file_stem().expect("path should have stem").to_string_lossy().to_string();
         for case in &parse_hrx(&content) {
             if case.expected_output.is_empty() { continue; }
             if n >= 35 { break; }
             let nm = case.input_path.replace("input.scss", "");
             match cc(case, &sr, &st) {
                 Ok(r) if r.trim() == case.expected_output.trim() => {},
-                Ok(r) => { n += 1; eprintln!("[{st}/{nm}]\nEXPECTED:\n{}\nGOT:\n{}\n", case.expected_output.trim(), r.trim()); },
-                Err(e) => { n += 1; eprintln!("[{st}/{nm}] ERROR: {e}\n"); },
+                Ok(r) => { n += 1; tracing::error!("[{st}/{nm}]\nEXPECTED:\n{}\nGOT:\n{}\n", case.expected_output.trim(), r.trim()); },
+                Err(e) => { n += 1; tracing::error!("[{st}/{nm}] ERROR: {e}\n"); },
             }
         }
     }}

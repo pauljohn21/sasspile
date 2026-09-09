@@ -346,7 +346,7 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
             continue;
         }
 
-        let (input_name, _) = input_file.unwrap();
+        let (input_name, _) = input_file.expect("unexpected failure in test");
 
         let input_base = if dir_path == "." {
             input_name.clone()
@@ -476,7 +476,7 @@ pub fn parse_hrx_legacy(content: &str) -> Vec<ParsedCase> {
             continue;
         }
 
-        let (input_name, _) = input_file.unwrap();
+        let (input_name, _) = input_file.expect("unexpected failure in test");
 
         let input_path = if dir_path == "." {
             input_name.clone()

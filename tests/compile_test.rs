@@ -7,46 +7,46 @@ use sasspile::{OutputStyle, compile_expanded, compile_file, init_tracing};
 
 #[test]
 fn test_compile_simple() {
-    let css = compile_expanded("a { color: red; }").unwrap();
+    let css = compile_expanded("a { color: red; }").expect("unexpected failure in test");
     assert_eq!(css, "a {\n  color: red;\n}\n");
 }
 
 #[test]
 fn test_compile_variable() {
-    let css = compile_expanded("$w: 10px; a { width: $w; }").unwrap();
+    let css = compile_expanded("$w: 10px; a { width: $w; }").expect("unexpected failure in test");
     assert!(css.contains("width: 10px"));
 }
 
 #[test]
 fn test_compile_nested() {
-    let css = compile_expanded(".outer { color: red; .inner { color: blue; } }").unwrap();
+    let css = compile_expanded(".outer { color: red; .inner { color: blue; } }").expect("unexpected failure in test");
     assert!(css.contains(".outer"));
     assert!(css.contains(".outer .inner"));
 }
 
 #[test]
 fn test_compile_amp() {
-    let css = compile_expanded(".btn { &:hover { color: red; } }").unwrap();
+    let css = compile_expanded(".btn { &:hover { color: red; } }").expect("unexpected failure in test");
     assert!(css.contains(".btn:hover"));
 }
 
 #[test]
 fn test_compile_if() {
-    let css = compile_expanded("@if true { a { color: red; } }").unwrap();
+    let css = compile_expanded("@if true { a { color: red; } }").expect("unexpected failure in test");
     assert!(css.contains("color: red"));
 }
 
 #[test]
 fn test_compile_for() {
     let css =
-        compile_expanded("@for $i from 1 through 3 { .col-#{$i} { width: $i * 100%; } }").unwrap();
+        compile_expanded("@for $i from 1 through 3 { .col-#{$i} { width: $i * 100%; } }").expect("unexpected failure in test");
     assert!(css.contains("col-1"));
 }
 
 #[test]
 fn test_compile_mixin() {
     let css =
-        compile_expanded("@mixin bold { font-weight: bold; } .title { @include bold; }").unwrap();
+        compile_expanded("@mixin bold { font-weight: bold; } .title { @include bold; }").expect("unexpected failure in test");
     assert!(css.contains("font-weight: bold"));
 }
 
@@ -55,7 +55,7 @@ fn test_compile_content() {
     let css = compile_expanded(
         "@mixin wrapper { .inner { @content; } } @include wrapper { color: red; }",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     assert!(css.contains(".inner"));
     assert!(css.contains("color: red"));
 }
@@ -63,14 +63,14 @@ fn test_compile_content() {
 #[test]
 fn test_compile_each_map() {
     let css =
-        compile_expanded("@each $key, $val in (a: 1, b: 2) { .#{$key} { width: $val; } }").unwrap();
+        compile_expanded("@each $key, $val in (a: 1, b: 2) { .#{$key} { width: $val; } }").expect("unexpected failure in test");
     assert!(css.contains(".a"));
     assert!(css.contains("width: 1"));
 }
 
 #[test]
 fn test_compile_math_round() {
-    let css = compile_expanded("@use 'sass:math' as math; a { w: math.round(3.7); }").unwrap();
+    let css = compile_expanded("@use 'sass:math' as math; a { w: math.round(3.7); }").expect("unexpected failure in test");
     assert!(css.contains("w: 4"));
 }
 
@@ -78,20 +78,20 @@ fn test_compile_math_round() {
 fn test_compile_string_slice() {
     let css =
         compile_expanded("@use 'sass:string' as string; a { s: string.slice('hello', 2, 4); }")
-            .unwrap();
+            .expect("unexpected failure in test");
     assert!(css.contains("ell"));
 }
 
 #[test]
 fn test_compile_map_get() {
     let css =
-        compile_expanded("@use 'sass:map' as map; $m: (a: 1); a { v: map.get($m, a); }").unwrap();
+        compile_expanded("@use 'sass:map' as map; $m: (a: 1); a { v: map.get($m, a); }").expect("unexpected failure in test");
     assert!(css.contains("v: 1"));
 }
 
 #[test]
 fn test_compile_at_root() {
-    let css = compile_expanded(".parent { @at-root { .child { color: red; } } }").unwrap();
+    let css = compile_expanded(".parent { @at-root { .child { color: red; } } }").expect("unexpected failure in test");
     assert!(css.contains(".child"));
     assert!(!css.contains(".parent .child"));
 }
@@ -99,18 +99,18 @@ fn test_compile_at_root() {
 #[test]
 fn test_compile_user_function() {
     let css =
-        compile_expanded("@function double($x) { @return $x * 2; } a { w: double(5px); }").unwrap();
+        compile_expanded("@function double($x) { @return $x * 2; } a { w: double(5px); }").expect("unexpected failure in test");
     assert!(css.contains("w: 10px"));
 }
 
 #[test]
 fn test_compile_use_file() {
     let dir = std::env::temp_dir().join("sasspile_test_use");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("_config.scss"), "$primary: #ff0000;\n").unwrap();
+    std::fs::create_dir_all(&dir).expect("unexpected failure in test");
+    std::fs::write(dir.join("_config.scss"), "$primary: #ff0000;\n").expect("unexpected failure in test");
     let main = dir.join("main.scss");
-    std::fs::write(&main, "@use 'config';\na { color: config.$primary; }\n").unwrap();
-    let css = compile_file(&main, OutputStyle::Expanded).unwrap();
+    std::fs::write(&main, "@use 'config';\na { color: config.$primary; }\n").expect("unexpected failure in test");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("unexpected failure in test");
     assert!(
         css.contains("red") || css.contains("#ff0000"),
         "应该包含 config.$primary 的值: {css}"
@@ -121,11 +121,11 @@ fn test_compile_use_file() {
 #[test]
 fn test_compile_use_star() {
     let dir = std::env::temp_dir().join("sasspile_test_star");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("_vars.scss"), "$w: 100px;\n").unwrap();
+    std::fs::create_dir_all(&dir).expect("unexpected failure in test");
+    std::fs::write(dir.join("_vars.scss"), "$w: 100px;\n").expect("unexpected failure in test");
     let main = dir.join("main.scss");
-    std::fs::write(&main, "@use 'vars' as *;\na { width: $w; }\n").unwrap();
-    let css = compile_file(&main, OutputStyle::Expanded).unwrap();
+    std::fs::write(&main, "@use 'vars' as *;\na { width: $w; }\n").expect("unexpected failure in test");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("unexpected failure in test");
     assert!(css.contains("100px"), "应该包含 $w 的值: {css}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -133,7 +133,7 @@ fn test_compile_use_star() {
 #[test]
 fn test_compile_extend() {
     let css = compile_expanded(".btn { color: blue; } .large { @extend .btn; font-size: 20px; }")
-        .unwrap();
+        .expect("unexpected failure in test");
     assert!(css.contains(".btn"), "应该包含 .btn: {css}");
     assert!(css.contains(".large"), "应该包含 .large: {css}");
     assert!(css.contains("color: blue"), "应该包含 color: blue: {css}");
@@ -142,7 +142,7 @@ fn test_compile_extend() {
 
 #[test]
 fn test_compile_extend_placeholder() {
-    let css = compile_expanded("%base { color: red; } .child { @extend %base; }").unwrap();
+    let css = compile_expanded("%base { color: red; } .child { @extend %base; }").expect("unexpected failure in test");
     assert!(!css.contains("%base"), "占位符不应出现: {css}");
     assert!(css.contains(".child"), "应该包含 .child: {css}");
     assert!(css.contains("color: red"), "应该包含 color: red: {css}");
@@ -150,7 +150,7 @@ fn test_compile_extend_placeholder() {
 
 #[test]
 fn test_compile_hsl() {
-    let css = compile_expanded("a { color: hsl(120, 50%, 50%); }").unwrap();
+    let css = compile_expanded("a { color: hsl(120, 50%, 50%); }").expect("unexpected failure in test");
     assert!(
         css.contains("hsl(120, 50%, 50%)"),
         "应该保持 HSL 格式: {css}"
@@ -159,21 +159,21 @@ fn test_compile_hsl() {
 
 #[test]
 fn test_compile_append() {
-    let css = compile_expanded("$l: append((1 2), 3); a { v: $l; }").unwrap();
+    let css = compile_expanded("$l: append((1 2), 3); a { v: $l; }").expect("unexpected failure in test");
     assert!(css.contains('1'), "应该包含 1: {css}");
     assert!(css.contains('3'), "应该包含 3: {css}");
 }
 
 #[test]
 fn test_compile_clamp() {
-    let css = compile_expanded("a { w: clamp(1, 5, 10); }").unwrap();
+    let css = compile_expanded("a { w: clamp(1, 5, 10); }").expect("unexpected failure in test");
     assert!(css.contains('5'), "应该包含 5: {css}");
 }
 
 #[test]
 fn test_debug_interleaved() {
     init_tracing();
-    let css = compile_expanded(".a { b: c; .d { e: f; } }").unwrap();
+    let css = compile_expanded(".a { b: c; .d { e: f; } }").expect("unexpected failure in test");
     tracing::info!("DEBUG OUTPUT:\n{}", css);
     assert!(css.contains(".a .d"), "Missing .a .d: {css}");
 }
@@ -181,7 +181,7 @@ fn test_debug_interleaved() {
 #[test]
 fn test_debug_atfoo() {
     init_tracing();
-    let css = compile_expanded("@foo {}").unwrap();
+    let css = compile_expanded("@foo {}").expect("unexpected failure in test");
     tracing::info!("@foo OUTPUT: [{}]", css);
     assert!(!css.is_empty(), "Output should not be empty");
     assert!(css.contains("@foo"), "Should contain @foo: [{css}]");
@@ -216,14 +216,14 @@ fn test_init_tracing_shows_target() {
 
 #[test]
 fn test_lib_adjust_color() {
-    let css = compile_expanded("a { b: adjust-color(red, $red: -50); }").unwrap();
+    let css = compile_expanded("a { b: adjust-color(red, $red: -50); }").expect("unexpected failure in test");
     assert!(css.contains("#cd0000"), "should contain #cd0000: {css}");
 }
 
 #[test]
 fn test_compile_property_interpolation() {
     // 插值在属性名中：border-#{$side} → border-left
-    let css = compile_expanded("$side: left; .x { border-#{$side}: 1px solid; }").unwrap();
+    let css = compile_expanded("$side: left; .x { border-#{$side}: 1px solid; }").expect("unexpected failure in test");
     assert!(
         css.contains("border-left: 1px solid"),
         "应输出 border-left: {css}"
@@ -233,7 +233,7 @@ fn test_compile_property_interpolation() {
 #[test]
 fn test_compile_selector_list_with_amp() {
     // 选择器列表 + &
-    let css = compile_expanded(".a, .b { &:hover { color: red; } }").unwrap();
+    let css = compile_expanded(".a, .b { &:hover { color: red; } }").expect("unexpected failure in test");
     assert!(css.contains(".a:hover"), "应包含 .a:hover: {css}");
     assert!(css.contains(".b:hover"), "应包含 .b:hover: {css}");
 }
@@ -242,7 +242,7 @@ fn test_compile_selector_list_with_amp() {
 fn test_compile_css_custom_property() {
     // CSS 自定义属性 --var 和 var()
     let css = compile_expanded(":root { --main-color: red; } .foo { color: var(--main-color); }")
-        .unwrap();
+        .expect("unexpected failure in test");
     assert!(css.contains("--main-color: red"), "应定义 CSS 变量: {css}");
     assert!(
         css.contains("color: var(--main-color)"),
@@ -256,7 +256,7 @@ fn test_compile_media_nesting() {
     let css = compile_expanded(
         ".container { width: 100%; @media (min-width: 768px) { max-width: 720px; } }",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     assert!(css.contains("@media"), "应输出 @media: {css}");
     assert!(css.contains("max-width: 720px"), "应包含 max-width: {css}");
 }
@@ -264,7 +264,7 @@ fn test_compile_media_nesting() {
 #[test]
 fn test_compile_supports() {
     // @supports 输出
-    let css = compile_expanded(".foo { @supports (display: grid) { display: grid; } }").unwrap();
+    let css = compile_expanded(".foo { @supports (display: grid) { display: grid; } }").expect("unexpected failure in test");
     assert!(
         css.contains("@supports (display: grid)"),
         "应输出 @supports: {css}"
@@ -275,7 +275,7 @@ fn test_compile_supports() {
 fn test_compile_font_face() {
     // @font-face
     let css =
-        compile_expanded("@font-face { font-family: 'MyFont'; src: url('font.woff'); }").unwrap();
+        compile_expanded("@font-face { font-family: 'MyFont'; src: url('font.woff'); }").expect("unexpected failure in test");
     assert!(css.contains("@font-face"), "应输出 @font-face: {css}");
     assert!(
         css.contains("font-family: \"MyFont\""),
@@ -286,7 +286,7 @@ fn test_compile_font_face() {
 #[test]
 fn test_compile_selector_nesting_deep() {
     // 多层选择器嵌套展开
-    let css = compile_expanded(".a { .b { .c { color: red; } } }").unwrap();
+    let css = compile_expanded(".a { .b { .c { color: red; } } }").expect("unexpected failure in test");
     assert!(css.contains(".a .b .c"), "应输出 .a .b .c: {css}");
     assert!(css.contains("color: red"), "应包含 color: red: {css}");
 }
@@ -294,7 +294,7 @@ fn test_compile_selector_nesting_deep() {
 #[test]
 fn test_compile_css_calc() {
     // CSS calc 函数
-    let css = compile_expanded(".foo { width: calc(100% - 20px); }").unwrap();
+    let css = compile_expanded(".foo { width: calc(100% - 20px); }").expect("unexpected failure in test");
     assert!(
         css.contains("width: calc(100% - 20px)"),
         "应输出 calc: {css}"
@@ -304,7 +304,7 @@ fn test_compile_css_calc() {
 #[test]
 fn test_compile_css_url() {
     // CSS url 函数
-    let css = compile_expanded(".foo { background: url('test.png'); }").unwrap();
+    let css = compile_expanded(".foo { background: url('test.png'); }").expect("unexpected failure in test");
     assert!(
         css.contains("background: url(\"test.png\")"),
         "应输出 url: {css}"
@@ -315,7 +315,7 @@ fn test_compile_css_url() {
 fn test_compile_keyframes() {
     // @keyframes
     let css =
-        compile_expanded("@keyframes fade { from { opacity: 0; } to { opacity: 1; } }").unwrap();
+        compile_expanded("@keyframes fade { from { opacity: 0; } to { opacity: 1; } }").expect("unexpected failure in test");
     assert!(css.contains("@keyframes fade"), "应输出 @keyframes: {css}");
     assert!(css.contains("from"), "应包含 from: {css}");
     assert!(css.contains("to"), "应包含 to: {css}");
@@ -324,14 +324,14 @@ fn test_compile_keyframes() {
 #[test]
 fn test_compile_layer() {
     // @layer
-    let css = compile_expanded("@layer base { .foo { color: red; } }").unwrap();
+    let css = compile_expanded("@layer base { .foo { color: red; } }").expect("unexpected failure in test");
     assert!(css.contains("@layer base"), "应输出 @layer: {css}");
 }
 
 #[test]
 fn test_compile_media_merge() {
     // 相同 query 的 @media 应合并
-    let css = compile_expanded(".a { @media (min-width: 768px) { color: red; } } .b { @media (min-width: 768px) { color: blue; } }").unwrap();
+    let css = compile_expanded(".a { @media (min-width: 768px) { color: red; } } .b { @media (min-width: 768px) { color: blue; } }").expect("unexpected failure in test");
     // 应该只有一个 @media 块
     let media_count = css.matches("@media (min-width: 768px)").count();
     assert_eq!(media_count, 1, "应只输出 1 个 @media 块: {css}");
@@ -342,7 +342,7 @@ fn test_compile_media_merge() {
 #[test]
 fn test_compile_supports_merge() {
     // 相同 query 的 @supports 应合并
-    let css = compile_expanded(".a { @supports (display: grid) { display: grid; } } .b { @supports (display: grid) { display: grid; } }").unwrap();
+    let css = compile_expanded(".a { @supports (display: grid) { display: grid; } } .b { @supports (display: grid) { display: grid; } }").expect("unexpected failure in test");
     let count = css.matches("@supports (display: grid)").count();
     assert_eq!(count, 1, "应只输出 1 个 @supports 块: {css}");
 }
@@ -364,7 +364,7 @@ fn test_forward_with_config() {
         "$a: original !default;\nb {c: $a}\n",
     )
     .ok();
-    let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
+    let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).expect("unexpected failure in test");
     tracing::info!(css = %css, "forward_with result");
     assert!(
         css.contains("configured"),
@@ -388,7 +388,7 @@ fn test_import_twice_forward() {
         "$a: original !default;\nb {c: $a}\n",
     )
     .ok();
-    let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap();
+    let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).expect("unexpected failure in test");
     tracing::info!(css = %css, "import_twice result");
     assert!(
         css.contains("configured"),
@@ -402,7 +402,7 @@ fn test_import_twice_forward() {
 #[test]
 fn test_cli_compile() {
     let input = "a { color: red; }";
-    let css = compile_expanded(input).unwrap();
+    let css = compile_expanded(input).expect("unexpected failure in test");
     assert!(css.contains("color: red"));
 }
 
@@ -411,7 +411,7 @@ fn test_cli_compile() {
 #[test]
 fn test_compile_color_lab_basic() {
     // lab(L% a b): L=50%, a=20, b=30
-    let css = compile_expanded("a { color: lab(50% 20 30); }").unwrap();
+    let css = compile_expanded("a { color: lab(50% 20 30); }").expect("unexpected failure in test");
     assert!(
         css.contains("lab(50% 20 30)"),
         "应输出 lab(50% 20 30): {css}"
@@ -421,7 +421,7 @@ fn test_compile_color_lab_basic() {
 #[test]
 fn test_compile_color_lab_with_alpha() {
     // lab 带 alpha: L% a b / alpha
-    let css = compile_expanded("a { color: lab(50% 20 30 / 0.5); }").unwrap();
+    let css = compile_expanded("a { color: lab(50% 20 30 / 0.5); }").expect("unexpected failure in test");
     assert!(
         css.contains("lab(50% 20 30 / 0.5)"),
         "应输出 lab(50% 20 30 / 0.5): {css}"
@@ -431,7 +431,7 @@ fn test_compile_color_lab_with_alpha() {
 #[test]
 fn test_compile_color_lab_negative_values() {
     // lab 支持负值: a, b 通道可负
-    let css = compile_expanded("a { color: lab(75% -160 100); }").unwrap();
+    let css = compile_expanded("a { color: lab(75% -160 100); }").expect("unexpected failure in test");
     assert!(
         css.contains("lab(75% -160 100)"),
         "应输出 lab(75% -160 100): {css}"
@@ -441,7 +441,7 @@ fn test_compile_color_lab_negative_values() {
 #[test]
 fn test_compile_color_lch_basic() {
     // lch(L% C Hdeg): L=50%, C=30, H=180deg
-    let css = compile_expanded("a { color: lch(50% 30 180deg); }").unwrap();
+    let css = compile_expanded("a { color: lch(50% 30 180deg); }").expect("unexpected failure in test");
     assert!(
         css.contains("lch(50% 30 180deg)"),
         "应输出 lch(50% 30 180deg): {css}"
@@ -451,7 +451,7 @@ fn test_compile_color_lch_basic() {
 #[test]
 fn test_compile_color_lch_with_alpha() {
     // lch 带 alpha: L% C Hdeg / alpha
-    let css = compile_expanded("a { color: lch(50% 30 180deg / 0.8); }").unwrap();
+    let css = compile_expanded("a { color: lch(50% 30 180deg / 0.8); }").expect("unexpected failure in test");
     assert!(
         css.contains("lch(50% 30 180deg / 0.8)"),
         "应输出 lch(50% 30 180deg / 0.8): {css}"
@@ -461,7 +461,7 @@ fn test_compile_color_lch_with_alpha() {
 #[test]
 fn test_compile_color_lch_zero_chroma_none_hue() {
     // chroma=0 时 hue 输出为 none
-    let css = compile_expanded("a { color: lch(50% 0 180deg); }").unwrap();
+    let css = compile_expanded("a { color: lch(50% 0 180deg); }").expect("unexpected failure in test");
     assert!(
         css.contains("lch(50% 0 none)"),
         "chroma=0 时 hue 应输出 none: {css}"
@@ -471,7 +471,7 @@ fn test_compile_color_lch_zero_chroma_none_hue() {
 #[test]
 fn test_compile_color_oklab_basic() {
     // oklab(L% a b): L 百分比, a/b 小数
-    let css = compile_expanded("a { color: oklab(50% 0.1 -0.2); }").unwrap();
+    let css = compile_expanded("a { color: oklab(50% 0.1 -0.2); }").expect("unexpected failure in test");
     assert!(
         css.contains("oklab(50% 0.1 -0.2)"),
         "应输出 oklab(50% 0.1 -0.2): {css}"
@@ -481,7 +481,7 @@ fn test_compile_color_oklab_basic() {
 #[test]
 fn test_compile_color_oklab_with_alpha() {
     // oklab 带 alpha
-    let css = compile_expanded("a { color: oklab(75% -0.1 0.15 / 0.6); }").unwrap();
+    let css = compile_expanded("a { color: oklab(75% -0.1 0.15 / 0.6); }").expect("unexpected failure in test");
     assert!(
         css.contains("oklab(75% -0.1 0.15 / 0.6)"),
         "应输出 oklab(75% -0.1 0.15 / 0.6): {css}"
@@ -491,7 +491,7 @@ fn test_compile_color_oklab_with_alpha() {
 #[test]
 fn test_compile_color_oklab_lightness_scaling() {
     // oklab: 输入 channels 0-1 → 输出 L% 0-100%
-    let css = compile_expanded("a { color: oklab(0.6 0.1 0.2); }").unwrap();
+    let css = compile_expanded("a { color: oklab(0.6 0.1 0.2); }").expect("unexpected failure in test");
     assert!(
         css.contains("oklab(60% 0.1 0.2)"),
         "oklab lightness 0.6 应输出 60%: {css}"
@@ -501,7 +501,7 @@ fn test_compile_color_oklab_lightness_scaling() {
 #[test]
 fn test_compile_color_oklch_basic() {
     // oklch(L% C Hdeg)
-    let css = compile_expanded("a { color: oklch(50% 0.1 180deg); }").unwrap();
+    let css = compile_expanded("a { color: oklch(50% 0.1 180deg); }").expect("unexpected failure in test");
     assert!(
         css.contains("oklch(50% 0.1 180deg)"),
         "应输出 oklch(50% 0.1 180deg): {css}"
@@ -511,7 +511,7 @@ fn test_compile_color_oklch_basic() {
 #[test]
 fn test_compile_color_oklch_with_alpha() {
     // oklch 带 alpha
-    let css = compile_expanded("a { color: oklch(50% 0.1 180deg / 0.7); }").unwrap();
+    let css = compile_expanded("a { color: oklch(50% 0.1 180deg / 0.7); }").expect("unexpected failure in test");
     assert!(
         css.contains("oklch(50% 0.1 180deg / 0.7)"),
         "应输出 oklch(50% 0.1 180deg / 0.7): {css}"
@@ -521,7 +521,7 @@ fn test_compile_color_oklch_with_alpha() {
 #[test]
 fn test_compile_color_oklch_zero_chroma_none_hue() {
     // chroma=0 时 hue 输出为 none
-    let css = compile_expanded("a { color: oklch(50% 0 180deg); }").unwrap();
+    let css = compile_expanded("a { color: oklch(50% 0 180deg); }").expect("unexpected failure in test");
     assert!(
         css.contains("oklch(50% 0 none)"),
         "chroma=0 时 hue 应输出 none: {css}"
@@ -532,7 +532,7 @@ fn test_compile_color_oklch_zero_chroma_none_hue() {
 fn test_compile_color_lab_variable_use() {
     // lab 颜色可以作为变量使用
     let css =
-        compile_expanded("$c: lab(50% 20 30); a { color: $c; }").unwrap();
+        compile_expanded("$c: lab(50% 20 30); a { color: $c; }").expect("unexpected failure in test");
     assert!(
         css.contains("lab(50% 20 30)"),
         "lab 变量应正确序列化: {css}"
@@ -543,7 +543,7 @@ fn test_compile_color_lab_variable_use() {
 fn test_compile_color_oklch_variable_use() {
     // oklch 颜色可以作为变量使用
     let css =
-        compile_expanded("$c: oklch(60% 0.1 240deg); a { color: $c; }").unwrap();
+        compile_expanded("$c: oklch(60% 0.1 240deg); a { color: $c; }").expect("unexpected failure in test");
     assert!(
         css.contains("oklch(60% 0.1 240deg)"),
         "oklch 变量应正确序列化: {css}"

@@ -8,14 +8,14 @@ use sasspile::{OutputStyle, compile_expanded, compile_file, init_tracing_otel};
 fn compile_multi_file(files: &[(&str, &str)]) -> String {
     let () = init_tracing_otel();
     let dir = std::env::temp_dir().join(format!("sasspile_default_cfg_{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&dir).expect("unexpected failure in test");
     let mut main_path = dir.join("input.scss");
     for (name, content) in files {
         let path = dir.join(name);
         if name == &"input.scss" {
             main_path.clone_from(&path);
         }
-        std::fs::write(path, content).unwrap();
+        std::fs::write(path, content).expect("unexpected failure in test");
     }
     let css = compile_file(&main_path, OutputStyle::Expanded).unwrap_or_else(|e| {
         std::fs::remove_dir_all(&dir).ok();
@@ -89,38 +89,38 @@ fn through_forward_show() {
 fn distributed_vars() {
     let () = init_tracing_otel();
     let dir = std::env::temp_dir().join(format!("sasspile_distributed_{}", std::process::id()));
-    std::fs::create_dir_all(dir.join("module/a")).unwrap();
-    std::fs::create_dir_all(dir.join("module/b")).unwrap();
+    std::fs::create_dir_all(dir.join("module/a")).expect("unexpected failure in test");
+    std::fs::create_dir_all(dir.join("module/b")).expect("unexpected failure in test");
     std::fs::write(
         dir.join("input.scss"),
         "@use 'module' with ($a: 'a', $b: 'b');",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     std::fs::write(
         dir.join("module/_index.scss"),
         "@forward './a/a';\n@forward './b/b';",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     std::fs::write(
         dir.join("module/a/_variables.scss"),
         "$a: default !default;",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     std::fs::write(
         dir.join("module/a/a.scss"),
         "@forward './variables';\n@use './variables' as *;\n.a { content: #{$a}; }",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     std::fs::write(
         dir.join("module/b/_variables.scss"),
         "$b: default !default;",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     std::fs::write(
         dir.join("module/b/b.scss"),
         "@forward './variables';\n@use './variables' as *;\n.b { content: #{$b}; }",
     )
-    .unwrap();
+    .expect("unexpected failure in test");
     let css = compile_file(&dir.join("input.scss"), OutputStyle::Expanded).unwrap_or_else(|e| {
         std::fs::remove_dir_all(&dir).ok();
         panic!("编译失败: {e}");

@@ -30,14 +30,14 @@ fn test_eval_simple() {
     // 通过 Reactor 管线编译
     let css = Reactor::new("a { color: red; }")
         .lex()
-        .unwrap()
+        .expect("unexpected failure in test")
         .parse()
-        .unwrap()
+        .expect("unexpected failure in test")
         .evaluate()
-        .unwrap()
+        .expect("unexpected failure in test")
         .serialize(sasspile::OutputStyle::Expanded)
         .finish()
-        .unwrap();
+        .expect("unexpected failure in test");
     assert!(css.contains("color: red"));
 }
 
@@ -46,11 +46,11 @@ fn test_eval_variable() {
     let input = "$x: 10px; a { w: $x; }";
     let reactor = Reactor::new(input)
         .lex()
-        .unwrap()
+        .expect("unexpected failure in test")
         .parse()
-        .unwrap()
+        .expect("unexpected failure in test")
         .evaluate()
-        .unwrap();
+        .expect("unexpected failure in test");
     let nodes = reactor.css_nodes;
     // 验证变量求值结果——a 规则的第一个声明值应为 10px
     if let Some(CssNode::Rule { declarations, .. }) = nodes.first()

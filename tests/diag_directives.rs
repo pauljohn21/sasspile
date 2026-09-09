@@ -57,7 +57,7 @@ fn compile_hrx(hrx: &str) -> Vec<(String, Result<String, String>, Option<String>
             if input_file.is_none() {
                 continue;
             }
-            let (input_name, _input_content) = input_file.unwrap();
+            let (input_name, _input_content) = input_file.expect("unexpected failure in test");
             let expected_output = files
                 .iter()
                 .find(|(f, _)| f == "output.css")
@@ -114,7 +114,7 @@ fn diag_forward_extend() {
         } else {
             result.is_ok()
                 && expected.is_some()
-                && result.as_ref().unwrap().trim() == expected.as_ref().unwrap().trim()
+                && result.as_ref().expect("unexpected failure in test").trim() == expected.as_ref().expect("unexpected failure in test").trim()
         };
         if ok {
             pass += 1;
@@ -145,7 +145,7 @@ fn diag_forward_extend() {
         } else {
             result.is_ok()
                 && expected.is_some()
-                && result.as_ref().unwrap().trim() == expected.as_ref().unwrap().trim()
+                && result.as_ref().expect("unexpected failure in test").trim() == expected.as_ref().expect("unexpected failure in test").trim()
         };
         if ok {
             pass2 += 1;

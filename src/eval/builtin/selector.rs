@@ -2,6 +2,7 @@
 //!
 //! 包含 selector-append/nest/is-super/parse/simple-selectors/unify/extend/replace。
 //! 返回值统一为 Selector Format（list of lists of strings）。
+#![allow(clippy::expect_used)]
 
 use crate::css::selector_ast::Selector;
 use crate::css::selector_format;
@@ -173,7 +174,10 @@ fn call_nest(args: &[Value]) -> Result<Option<Value>> {
         .iter()
         .map(|a| selector_format::value_to_selector_format(a))
         .collect::<Result<Vec<_>>>()?;
-    let last = all_formats.last().expect("len > 1").clone();
+    let last = all_formats
+        .last()
+        .expect("selector-nest: len > 1 guaranteed by caller")
+        .clone();
     let leading = &all_formats[..all_formats.len() - 1];
     // 构建父级列表
     let parents = build_parents(leading)?;
@@ -190,15 +194,20 @@ fn call_nest(args: &[Value]) -> Result<Option<Value>> {
 }
 
 /// 将所有前置参数笛卡尔积后代连接为父级 complex 列表。
+/// 参数从外到内排列：leading[0] 是最内层，leading[last] 是最外层。
+/// 结果按外→内顺序排列，以便与 last（最外层父级）拼接。
 fn build_parents(leading: &[Vec<Vec<String>>]) -> Result<Vec<Vec<String>>> {
     match leading {
         [] => Ok(vec![vec![]]),
         [single] => Ok(single.clone()),
-        [first, rest @ ..] => {
-            let init = first.clone();
-            rest.iter().try_fold(init, |acc, next| {
-                cartesian_descendant(&acc, next)
-            })
+        _ => {
+            // 从最后一个（最外层）向第一个（最内层）折叠
+            let mut iter = leading.iter().rev();
+            let outermost = iter
+                .next()
+                .expect("build_parents: _ branch guarantees non-empty")
+                .clone();
+            iter.try_fold(outermost, |acc, next| cartesian_descendant(&acc, next))
         }
     }
 }
@@ -212,10 +221,7 @@ fn cartesian_descendant(a: &[Vec<String>], b: &[Vec<String>]) -> Result<Vec<Vec<
                 match (ca.is_empty(), cb.is_empty()) {
                     (true, _) => cb.clone(),
                     (_, true) => ca.clone(),
-                    _ => {
-                        let complex = ca.iter().chain(cb.iter()).cloned().collect::<Vec<_>>();
-                        complex
-                    }
+                    _ => ca.iter().chain(cb.iter()).cloned().collect::<Vec<_>>(),
                 }
             })
         })
@@ -224,10 +230,11 @@ fn cartesian_descendant(a: &[Vec<String>], b: &[Vec<String>]) -> Result<Vec<Vec<
 }
 
 /// 无 & 的 nest：父级 × 内层，后代连接。
+/// parents = 嵌套选择器（前面的参数），last = 父级（最后一个参数）
+/// 结果 = 父级 + 嵌套选择器（父级在前）
 fn nest_no_amp(parents: &[Vec<String>], last: &[Vec<String>]) -> Vec<Vec<String>> {
-    parents
-        .iter()
-        .flat_map(|p| last.iter().map(move |c| descendant_join(p, c)))
+    last.iter()
+        .flat_map(|p| parents.iter().map(move |c| descendant_join(p, c)))
         .collect()
 }
 
@@ -247,62 +254,57 @@ fn nest_with_amp(parents: &[Vec<String>], last: &[Vec<String>]) -> Result<Vec<Ve
         .map(|complex| complex.iter().filter(|c| c.contains('&')).count())
         .max()
         .unwrap_or(0);
-    let mut results: Vec<Vec<String>> = Vec::new();
-    if max_k >= 2 {
+    let results: Vec<Vec<String>> = if max_k >= 2 {
         // 含多个 &：按 complex 顺序遍历，k>=2 的使用全局笛卡尔
-        for complex in last {
-            let k = complex.iter().filter(|c| c.contains('&')).count();
-            if k >= 2 {
-                results.extend(cartesian_replace(parents, complex, k));
-            } else {
-                for parent in parents {
-                    results.push(replace_amp_in_complex(complex, parent));
+        last.iter()
+            .flat_map(|complex| {
+                let k = complex.iter().filter(|c| c.contains('&')).count();
+                match k >= 2 {
+                    true => cartesian_replace(parents, complex, k),
+                    false => parents
+                        .iter()
+                        .map(|parent| replace_amp_in_complex(complex, parent))
+                        .collect::<Vec<_>>(),
                 }
-            }
-        }
+            })
+            .collect()
     } else {
         // k <= 1：按 parent × complex 遍历
-        for parent in parents {
-            for complex in last {
-                results.push(replace_amp_in_complex(complex, parent));
-            }
-        }
-    }
+        parents
+            .iter()
+            .flat_map(|parent| {
+                last.iter()
+                    .map(|complex| replace_amp_in_complex(complex, parent))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    };
     Ok(results)
 }
 
 /// 全局笛卡尔替换多个 &。
 fn cartesian_replace(parents: &[Vec<String>], complex: &[String], k: usize) -> Vec<Vec<String>> {
-    let mut all_combos: Vec<Vec<usize>> = vec![vec![]];
-    for _ in 0..k {
-        all_combos = all_combos
-            .iter()
+    let all_combos: Vec<Vec<usize>> = (0..k).fold(vec![vec![]], |acc, _| {
+        acc.iter()
             .flat_map(|prefix| {
                 (0..parents.len()).map(move |i| {
-                    let mut new = prefix.clone();
-                    new.push(i);
-                    new
+                    prefix.iter().chain(std::iter::once(&i)).copied().collect::<Vec<_>>()
                 })
             })
-            .collect();
-    }
+            .collect()
+    });
     all_combos
         .iter()
         .map(|indices| {
-            let result: Vec<String> = complex
+            complex
                 .iter()
                 .map(|compound| {
-                    let mut replaced = compound.clone();
-                    for &idx in indices {
+                    indices.iter().fold(compound.clone(), |acc, &idx| {
                         let parent_str = parent_display(&parents[idx]);
-                        if replaced.contains('&') {
-                            replaced = replaced.replacen('&', &parent_str, 1);
-                        }
-                    }
-                    replaced
+                        acc.replacen('&', &parent_str, 1)
+                    })
                 })
-                .collect();
-            result
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -509,8 +511,8 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
 /// 将 Selector AST 转换为 Vec<Vec<String>> (selector format)。
 ///
 /// 组合器（>、+、~）会作为单独的字符串元素保留在列表中。
-/// 例如：`.a > .b` → [[".a", ">", ".b"]]
-/// 尾随组合器也会保留：`.a +` → [[".a", "+"]]
+/// 例如：`.a > .b` → `[[".a", ">", ".b"]]`
+/// 尾随组合器也会保留：`.a +` → `[[".a", "+"]]`
 fn fmt_to_vec_vec(selector: &Selector) -> Vec<Vec<String>> {
     use crate::css::selector_ast::Combinator;
 

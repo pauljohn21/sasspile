@@ -52,11 +52,9 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
         let dirs = vfs.walk();
 
         for (dir_path, files) in &dirs {
-            let input_file = files.iter().find(|(f, _)| f == "input.scss");
-            if input_file.is_none() {
+            let Some((input_name, input_content)) = files.iter().find(|(f, _)| f == "input.scss") else {
                 continue;
-            }
-            let (input_name, input_content) = input_file.unwrap();
+            };
             let expected_output = files
                 .iter()
                 .find(|(f, _)| f == "output.css")
@@ -213,7 +211,7 @@ fn diag_dir(dir: &Path, shown: &mut usize) {
                 }
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     let cases = parse_hrx(&content);
-                    let stem = path.file_stem().unwrap().to_string_lossy();
+                    let stem = path.file_stem().expect("path should have stem").to_string_lossy();
                     for case in &cases {
                         if *shown >= 10 {
                             return;

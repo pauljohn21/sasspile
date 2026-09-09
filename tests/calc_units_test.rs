@@ -38,7 +38,7 @@ fn test_time_units_compatible() {
 fn test_convert_deg_to_rad() {
     let result = convert_unit(180.0, "deg", "rad");
     assert!(result.is_some());
-    let r = result.unwrap();
+    let r = result.expect("deg→rad conversion should succeed");
     assert!((r - std::f64::consts::PI).abs() < 1e-6);
 }
 
@@ -46,7 +46,7 @@ fn test_convert_deg_to_rad() {
 fn test_convert_pt_to_px() {
     let result = convert_unit(72.0, "pt", "px");
     assert!(result.is_some());
-    let r = result.unwrap();
+    let r = result.expect("pt→px conversion should succeed");
     assert!((r - 96.0).abs() < 1e-6);
 }
 
@@ -54,7 +54,7 @@ fn test_convert_pt_to_px() {
 fn test_convert_ms_to_s() {
     let result = convert_unit(500.0, "ms", "s");
     assert!(result.is_some());
-    let r = result.unwrap();
+    let r = result.expect("ms→s conversion should succeed");
     assert!((r - 0.5).abs() < 1e-6);
 }
 

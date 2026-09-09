@@ -76,7 +76,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
             if input_file.is_none() {
                 continue;
             }
-            let (input_name, _) = input_file.unwrap();
+            let (input_name, _) = input_file.expect("unexpected failure in test");
             let input_path = if dir_path == "." {
                 input_name.clone()
             } else {
@@ -148,7 +148,7 @@ fn compile_case(
                 || p.extension().and_then(|s| s.to_str()) == Some("css"))
                 && let Ok(content) = std::fs::read_to_string(&p)
             {
-                let filename = p.file_name().unwrap().to_string_lossy().to_string();
+                let filename = p.file_name().expect("unexpected failure in test").to_string_lossy().to_string();
                 std::fs::write(tmp_dir.join(&filename), content).ok();
             }
         }
@@ -188,7 +188,7 @@ fn diag(subdir: &str, max_show: usize) {
             break;
         }
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for case in &parse_hrx(&content) {
                 if shown >= max_show {
                     break;
@@ -414,7 +414,7 @@ fn stats_subdir(subdir: &str) {
     let mut cases = 0;
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for case in &parse_hrx(&content) {
                 cases += 1;
                 if case.expected_output.is_empty() && !case.expect_error {

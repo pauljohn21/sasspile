@@ -146,6 +146,16 @@ pub struct ReactorTrace {
     pub entered_at: std::time::Instant,
 }
 
+impl Default for ReactorTrace {
+    fn default() -> Self {
+        Self {
+            trace_id: 0,
+            stage: CompileStage::Raw,
+            entered_at: std::time::Instant::now(),
+        }
+    }
+}
+
 impl ReactorTrace {
     /// 创建新的根 trace。
     pub fn new() -> Self {
@@ -259,7 +269,7 @@ fn rand_id() -> u128 {
     std::time::Instant::now().hash(&mut hasher);
     std::thread::current().id().hash(&mut hasher);
     let h = hasher.finish();
-    (h as u128) << 32 | h as u128
+    (u128::from(h)) << 32 | u128::from(h)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -361,7 +371,7 @@ impl Reactor<StateRaw> {
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "lex",
-            elapsed_us = start.elapsed().as_micros() as u64,
+            elapsed_us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX),
             n_tokens = n_tokens,
             "lex complete"
         );
@@ -406,7 +416,7 @@ impl Reactor<StateLexed> {
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "parse",
-            elapsed_us = start.elapsed().as_micros() as u64,
+            elapsed_us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX),
             "parse complete"
         );
 
@@ -466,7 +476,7 @@ impl Reactor<StateParsed> {
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "evaluate",
-            elapsed_us = start.elapsed().as_micros() as u64,
+            elapsed_us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX),
             n_nodes = n_nodes,
             "evaluate complete"
         );
@@ -509,7 +519,7 @@ impl Reactor<StateEvaluated> {
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "serialize",
-            elapsed_us = start.elapsed().as_micros() as u64,
+            elapsed_us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX),
             css_len = css_len,
             "serialize complete"
         );
@@ -550,8 +560,8 @@ impl Reactor<StateSerialized> {
         #[cfg(feature = "tracing")]
         crate::__tracing::debug!(
             stage = "finish",
-            elapsed_us = start.elapsed().as_micros() as u64,
-            total_elapsed_us = self.trace.entered_at.elapsed().as_micros() as u64,
+            elapsed_us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX),
+            total_elapsed_us = u64::try_from(self.trace.entered_at.elapsed().as_micros()).unwrap_or(u64::MAX),
             "compile complete"
         );
 

@@ -10,7 +10,7 @@ fn test_selector_append_basic() {
         @use 'sass:selector';\
         .a { x: selector.append(\".b\", \".c\"); }\
     ";
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
 }
 
@@ -20,7 +20,7 @@ fn test_selector_append_second_arg_leading_combinator_error() {
         @use 'sass:selector';\
         .a { x: selector.append(\".b\", \"> .c\"); }\
     ";
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for second arg starting with combinator");
 }
 
@@ -30,7 +30,7 @@ fn test_selector_append_first_arg_leading_combinator_ok() {
         @use 'sass:selector';\
         .a { x: selector.append(\"> .b\", \".c\"); }\
     ";
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains("> .b.c"), "Expected > .b.c, got {result}");
 }
 
@@ -39,7 +39,7 @@ fn test_global_selector_append() {
     let input = "\
         .a { x: selector-append(\".b\", \".c\"); }\
     ";
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
 }
 
@@ -49,7 +49,7 @@ fn test_selector_append_with_inner_combinator() {
         @use 'sass:selector';
         .a { x: selector.append(".b > .c", ".d"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".b > .c.d"), "Expected .b > .c.d, got {result}");
 }
 
@@ -59,7 +59,7 @@ fn test_selector_append_empty_args_error() {
         @use 'sass:selector';
         .a { x: selector.append(); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for empty args");
 }
 
@@ -69,7 +69,7 @@ fn test_selector_append_invalid_type_error() {
         @use 'sass:selector';
         .a { x: selector.append(1, 2); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for invalid type");
 }
 
@@ -79,7 +79,7 @@ fn test_selector_append_only_combinator_error() {
         @use 'sass:selector';
         .a { x: selector.append(".a", ">"); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for only combinator");
 }
 
@@ -89,7 +89,7 @@ fn test_selector_append_only_leading_combinator_error() {
         @use 'sass:selector';
         .a { x: selector.append(">", ".b"); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for leading only combinator");
 }
 
@@ -99,7 +99,7 @@ fn test_selector_append_trailing_combinator_error() {
         @use 'sass:selector';
         .a { x: selector.append(".a >", ".b"); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for trailing combinator");
 }
 
@@ -109,7 +109,7 @@ fn test_selector_nest_basic() {
         @use 'sass:selector';
         .a { x: selector.nest(".b", ".c"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".b .c"), "Expected .b .c, got {result}");
 }
 
@@ -119,7 +119,7 @@ fn test_selector_nest_with_parent_ref() {
         @use 'sass:selector';
         .a { x: selector.nest(".b", "&.c"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".b.c"), "Expected .b.c, got {result}");
 }
 
@@ -180,7 +180,7 @@ fn test_unify_descendant_same_type() {
     let result = selector_ops::unify(&a, &b);
     // .a b + .c b: 最后一个复合 b 和 b 统一 = b，前缀 .a + .c
     assert!(result.is_some());
-    let s = result.unwrap().to_string();
+    let s = result.expect("unexpected failure in test").to_string();
     assert!(s.contains("b"));
 }
 
@@ -198,7 +198,7 @@ fn test_unify_comma_list() {
     let b = parse_selector(".c");
     let result = selector_ops::unify(&a, &b);
     assert!(result.is_some());
-    let s = result.unwrap().to_string();
+    let s = result.expect("unexpected failure in test").to_string();
     assert!(s.contains(".a.c") || s.contains(".c.a"));
     assert!(s.contains(".b.c") || s.contains(".c.b"));
 }
@@ -212,7 +212,7 @@ fn test_extend_parent_replacement() {
         @use 'sass:selector';
         .a { x: selector.extend(".c.x .d", ".c", ".e"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c.x .d"), "Expected original .c.x .d, got {result}");
     assert!(result.contains(".x.e .d"), "Expected extended .x.e .d, got {result}");
 }
@@ -224,7 +224,7 @@ fn test_extend_multi_compound_extender() {
         @use 'sass:selector';
         .a { x: selector.extend(".c.x .d", ".c", ".e .f"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c.x .d"), "Expected original, got {result}");
     assert!(result.contains(".e .x.f .d"), "Expected .e .x.f .d, got {result}");
 }
@@ -236,7 +236,7 @@ fn test_extend_multi_extender_list() {
         @use 'sass:selector';
         .a { x: selector.extend(".c.x .d", ".c", ".e, .f"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c.x .d"), "Expected original, got {result}");
     assert!(result.contains(".x.e .d"), "Expected .x.e .d, got {result}");
     assert!(result.contains(".x.f .d"), "Expected .x.f .d, got {result}");
@@ -249,7 +249,7 @@ fn test_extend_grandparent_replacement() {
         @use 'sass:selector';
         .a { x: selector.extend(".c .d.x .e", ".d", ".f"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c .d.x .e"), "Expected original, got {result}");
     assert!(result.contains(".c .x.f .e"), "Expected .c .x.f .e, got {result}");
 }
@@ -261,7 +261,7 @@ fn test_extend_grandparent_multi_compound_extender() {
         @use 'sass:selector';
         .a { x: selector.extend(".c .d.x .e", ".d", ".f .g"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c .d.x .e"), "Expected original, got {result}");
     assert!(result.contains(".c .f .x.g .e"), "Expected .c .f .x.g .e, got {result}");
 }
@@ -273,7 +273,7 @@ fn test_extend_grandparent_list_extender() {
         @use 'sass:selector';
         .a { x: selector.extend(".c .d.x .e", ".d", ".f, .g"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c .d.x .e"), "Expected original, got {result}");
     assert!(result.contains(".c .x.f .e"), "Expected .c .x.f .e, got {result}");
     assert!(result.contains(".c .x.g .e"), "Expected .c .x.g .e, got {result}");
@@ -286,7 +286,7 @@ fn test_extend_leading_child_combinator() {
         @use 'sass:selector';
         .a { x: selector.extend(".c .d", ".d", "> .e"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c .d"), "Expected original, got {result}");
     assert!(result.contains(".c > .e"), "Expected .c > .e, got {result}");
 }
@@ -298,7 +298,7 @@ fn test_extend_leading_adjacent_combinator() {
         @use 'sass:selector';
         .a { x: selector.extend(".c .d", ".d", "+ .e"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains(".c .d"), "Expected original, got {result}");
     assert!(result.contains(".c + .e"), "Expected .c + .e, got {result}");
 }
@@ -312,7 +312,7 @@ fn test_unclosed_attribute_selector_error() {
         @use 'sass:selector';
         .a { x: selector.append("[c", "d"); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for unclosed attribute selector [c");
 }
 
@@ -323,7 +323,7 @@ fn test_unclosed_attribute_with_value_error() {
         @use 'sass:selector';
         .a { x: selector.append("[foo=bar", "d"); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for unclosed attribute selector [foo=bar");
 }
 
@@ -334,7 +334,7 @@ fn test_valid_attribute_selector_passes() {
         @use 'sass:selector';
         .a { x: selector.append('[foo="bar"]', "d"); }
     "#;
-    let result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate().unwrap().serialize(sasspile::OutputStyle::Expanded).finish().unwrap();
+    let result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate().expect("unexpected failure in test").serialize(sasspile::OutputStyle::Expanded).finish().expect("unexpected failure in test");
     assert!(result.contains("[foo=\"bar\"]"), "Expected [foo=\"bar\"] in result, got {result}");
 }
 
@@ -345,6 +345,6 @@ fn test_invalid_characters_error() {
         @use 'sass:selector';
         .a { x: selector.append("!invalid", ".b"); }
     "#;
-    let eval_result = Reactor::new(input).lex().unwrap().parse().unwrap().evaluate();
+    let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for invalid selector characters");
 }

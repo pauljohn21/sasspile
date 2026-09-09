@@ -43,7 +43,7 @@ $success: #198754;
 }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert_contains_color(&css, "#0d6efd");
     assert_contains_color(&css, "#6c757d");
 }
@@ -72,7 +72,7 @@ fn test_bootstrap_nesting() {
 }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains(".navbar .navbar-brand"));
     assert!(css.contains(".navbar .navbar-nav"));
     assert!(css.contains(".navbar .navbar-nav .nav-link"));
@@ -92,7 +92,7 @@ $spacer: 1rem;
 .p-3 { padding: $spacer; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("margin-top: 0.25rem"));
     assert!(css.contains("margin-top: 0.5rem"));
     assert!(css.contains("margin-top: 1rem"));
@@ -124,7 +124,7 @@ fn test_bootstrap_media_queries() {
 }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("@media"));
     assert!(css.contains("min-width: 576px"));
     assert!(css.contains("max-width: 540px"));
@@ -146,7 +146,7 @@ fn test_bootstrap_grid_system() {
 .col-auto { flex: 0 0 auto; width: auto; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("display: flex"));
     assert!(css.contains("flex-wrap: wrap"));
     assert!(css.contains("flex: 1 0 0%"));
@@ -163,7 +163,7 @@ fn test_bootstrap_utility_api() {
 .w-auto { width: auto; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("width: 25%"));
     assert!(css.contains("width: 50%"));
     assert!(css.contains("width: 75%"));
@@ -225,7 +225,7 @@ table {
 }
 "#;
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("box-sizing: border-box"));
     assert!(css.contains("font-family:"));
     assert!(css.contains("font-size: 2.5rem"));
@@ -252,7 +252,7 @@ fn test_bootstrap_color_values() {
 .bg-success { background-color: #198754; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert_contains_color(&css, "#0d6efd");
     assert_contains_color(&css, "#6c757d");
     assert_contains_color(&css, "#198754");
@@ -287,7 +287,7 @@ fn test_bootstrap_spacing_system() {
 .gap-3 { gap: 1rem; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("margin: 0"));
     assert!(css.contains("margin: 0.25rem"));
     assert!(css.contains("padding: 1rem"));
@@ -314,7 +314,7 @@ fn test_bootstrap_border_utilities() {
 .rounded-pill { border-radius: 50rem; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("border: 1px solid"));
     assert!(css.contains("border: 0"));
     assert!(css.contains("border-radius: 0.375rem"));
@@ -338,7 +338,7 @@ fn test_bootstrap_display_utilities() {
 .d-inline-flex { display: inline-flex; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("display: none"));
     assert!(css.contains("display: inline"));
     assert!(css.contains("display: block"));
@@ -368,7 +368,7 @@ fn test_bootstrap_flex_utilities() {
 .align-items-stretch { align-items: stretch; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert!(css.contains("flex-direction: row"));
     assert!(css.contains("flex-direction: column"));
     assert!(css.contains("justify-content: center"));
@@ -407,7 +407,7 @@ $primary: #0d6efd;
 .rounded { border-radius: 0.375rem; }
 ";
 
-    let css = sasspile::compile_expanded(scss).unwrap();
+    let css = sasspile::compile_expanded(scss).expect("unexpected failure in test");
     assert_contains_color(&css, "#0d6efd");
     assert!(css.contains(".nav .nav-item"));
     assert!(css.contains(".nav .nav-link"));

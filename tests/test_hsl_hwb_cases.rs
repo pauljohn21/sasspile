@@ -10,7 +10,7 @@ fn spec_hsl_units() {
         ("a { c: hsl(60rad, 100%, 50%) }", "hsl(197.7467707849, 100%, 50%)"),
     ];
     for (input, expected) in pass {
-        let r = compile_expanded(input).unwrap();
+        let r = compile_expanded(input).expect("unexpected failure in test");
         assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
     }
 }
@@ -24,7 +24,7 @@ fn spec_hsl_clamped() {
         ("a { c: hsl(0, 100%, 500%) }", "hsl(0, 100%, 500%)"),
     ];
     for (input, expected) in pass {
-        let r = compile_expanded(input).unwrap();
+        let r = compile_expanded(input).expect("unexpected failure in test");
         assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
     }
 }
@@ -38,7 +38,7 @@ fn spec_hsl_hue_wrap() {
         ("a { c: hsl(-360, 100%, 50%) }", "hsl(0, 100%, 50%)"),
     ];
     for (input, expected) in pass {
-        let r = compile_expanded(input).unwrap();
+        let r = compile_expanded(input).expect("unexpected failure in test");
         assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
     }
 }
@@ -51,7 +51,7 @@ fn spec_hsl_missing_channels() {
         ("a { c: hsl(0, 100%, none) }", "hsl(0deg 100% none)"),
     ];
     for (input, expected) in pass {
-        let r = compile_expanded(input).unwrap();
+        let r = compile_expanded(input).expect("unexpected failure in test");
         assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
     }
 }
@@ -94,7 +94,7 @@ fn spec_is_missing_channel() {
         ("a { c: color.is-missing(hsl(120, 50%, 50%), hue) }", "false"),
     ];
     for (input, expected) in pass {
-        let r = compile_expanded(input).unwrap();
+        let r = compile_expanded(input).expect("unexpected failure in test");
         assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
     }
 }

@@ -84,7 +84,7 @@ fn bench_parser(c: &mut Criterion) {
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()
-                .unwrap();
+                .expect("lex should succeed in bench");
             let ast = Parser::parse(&tokens);
             let _ = black_box(ast);
         });

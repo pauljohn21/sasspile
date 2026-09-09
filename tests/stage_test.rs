@@ -19,7 +19,7 @@ fn test_source_creation() {
 #[test]
 fn test_source_to_lexed() {
     // lex 后进入 Lexed 状态
-    let reactor = Reactor::new("a").lex().unwrap();
+    let reactor = Reactor::new("a").lex().expect("unexpected failure in test");
     assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Lex);
 }
 
@@ -28,9 +28,9 @@ fn test_lexed_parse() {
     // 管线: Raw → Lexed → Parsed
     let reactor = Reactor::new("a { color: red; }")
         .lex()
-        .unwrap()
+        .expect("unexpected failure in test")
         .parse()
-        .unwrap();
+        .expect("unexpected failure in test");
     assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Parse);
 }
 
@@ -39,11 +39,11 @@ fn test_parsed_evaluate() {
     // 管线: Raw → Lexed → Parsed → Evaluated (空输入产生 0 节点)
     let reactor = Reactor::new(String::new())
         .lex()
-        .unwrap()
+        .expect("unexpected failure in test")
         .parse()
-        .unwrap()
+        .expect("unexpected failure in test")
         .evaluate()
-        .unwrap();
+        .expect("unexpected failure in test");
     assert_eq!(reactor.stage(), sasspile::eval::reactor::CompileStage::Evaluate);
     assert!(reactor.css_nodes.is_empty());
 }
@@ -58,14 +58,14 @@ fn test_serialize_empty() {
     // 通过 Reactor 管线也产生相同结果
     let reactor_css = Reactor::new(String::new())
         .lex()
-        .unwrap()
+        .expect("unexpected failure in test")
         .parse()
-        .unwrap()
+        .expect("unexpected failure in test")
         .evaluate()
-        .unwrap()
+        .expect("unexpected failure in test")
         .serialize(OutputStyle::Expanded)
         .finish()
-        .unwrap();
+        .expect("unexpected failure in test");
     assert_eq!(reactor_css, "\n");
 }
 

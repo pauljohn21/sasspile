@@ -71,7 +71,7 @@ fn parse_hrx(content: &str) -> Vec<HrxCase> {
             if input_file.is_none() {
                 continue;
             }
-            let (input_name, _) = input_file.unwrap();
+            let (input_name, _) = input_file.expect("unexpected failure in test");
             let input_path = if dir_path == "." {
                 input_name.clone()
             } else {

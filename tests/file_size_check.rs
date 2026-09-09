@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::Path;
+use tracing;
 
 /// 遍历 src/**/*.rs 文件，找出所有 >500 行的文件。
 /// 返回 Vec<(文件路径, 行数)> — 空表示全部通过。
@@ -56,9 +57,9 @@ fn check_file_size_within_grace() {
     near_limit.sort_by(|a, b| b.1.cmp(&a.1));
     
     if !near_limit.is_empty() {
-        eprintln!("\n📏 文件行数预警（400-500 行，接近上限）：");
+        tracing::error!("\n📏 文件行数预警（400-500 行，接近上限）：");
         for (file, lines) in &near_limit {
-            eprintln!("  - {file}: {lines} 行（距离上限 {} 行）", 500 - lines);
+            tracing::error!("  - {file}: {lines} 行（距离上限 {} 行）", 500 - lines);
         }
     }
 }

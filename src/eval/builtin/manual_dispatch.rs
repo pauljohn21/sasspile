@@ -312,6 +312,13 @@ impl Evaluator {
             "module-variables" => Self::meta_module_variables(pos_args, kw_args, env),
             "accepts-content" => Self::meta_accepts_content(pos_args, kw_args, env),
             "keywords" => match pos_args {
+                [Value::ArgList(elements, _, _)] => {
+                    // 从 ArgList 末尾提取关键字参数 map
+                    match elements.last() {
+                        Some(Value::Map(pairs)) => Ok(Value::Map(pairs.clone())),
+                        _ => Ok(Value::Map(vec![])),
+                    }
+                }
                 [_] => Ok(Value::Map(vec![])),
                 _ => Err(SassError::Eval("keywords requires 1 argument".into())),
             },

@@ -1,6 +1,7 @@
 //! 选择器代数运算——unify（统一）、is_superselector（超选择器判断）、extend（扩展）。
 //!
 //! 这些算法基于 AST 结构操作，而非字符串匹配。
+#![allow(clippy::nonminimal_bool, clippy::missing_panics_doc, clippy::expect_used)]
 
 use super::selector_ast::{
     Combinator, ComplexSelector, CompoundSelector, Selector, SimpleSelector,
@@ -269,6 +270,10 @@ pub fn is_super_compound(super_c: &CompoundSelector, sub_c: &CompoundSelector) -
 ///
 /// NO-OP 检测：若 extender 是 extendee 的子集（即 extendee 是 extender 的超集），
 /// 则扩展不产生新选择器，返回原始 selector。
+///
+/// # Panics
+///
+/// 当 `unify_extendee_list` 返回 `None` 时 panic（理论上不会发生，因为前面已检查）。
 #[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender))]
 pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Selector) -> Selector {
     // 统一 extendee 列表为单个 complex
@@ -397,7 +402,7 @@ fn extend_complex(
             let suffix = &selector.compounds[match_pos + 1..];
             let is_last = match_pos == selector.compounds.len() - 1;
             let has_prefix = !prefix.is_empty();
-            let has_suffix = !suffix.is_empty();
+            let _has_suffix = !suffix.is_empty();
             let extender_has_multiple = extender.0.iter().any(|c| c.compounds.len() > 1);
 
             tracing::debug!(is_last, has_prefix, extender_has_multiple, match_pos, "extend_complex: NO-OP check");
@@ -616,10 +621,10 @@ fn build_extended_complex(
                         }
                     } else {
                         // 3+ compounds：prefix 插入 ext_head 不同位置
-                        let prefix_for_insert = if !prefix.is_empty() {
-                            &prefix[..prefix.len() - 1] // 去掉最后一个 compound（被 parent 替换）
-                        } else {
+                        let prefix_for_insert = if prefix.is_empty() {
                             prefix
+                        } else {
+                            &prefix[..prefix.len() - 1] // 去掉最后一个 compound（被 parent 替换）
                         };
 
                         (0..=ext_head.len())
@@ -851,6 +856,7 @@ fn replace_complex(
     }
 
     // Strategy 2: Compound-level subset matching — original 的单个化合物是 selector 某化合物的子集
+    // 例: selector-replace('c.d', 'c', 'e') → 'e.d'（type 替换 type，保持位置）
     // 例: selector-replace('.a.b', '.b', '.c') → '.a.c'
     // original 仅含一个化合物，且其简单选择器是 selector 某化合物的子集
     if orig_compounds.len() == 1 {
@@ -864,20 +870,23 @@ fn replace_complex(
         });
 
         if let Some((_idx, (comb, sel_compound))) = found {
-            // 新化合物 = (sel_compound 去掉 orig 的 simples) ∪ replacement 第一个化合物的 simples
             if let Some(rep_complex) = replacement.0.first() {
                 if let Some((_, rep_compound)) = rep_complex.compounds.first() {
-                    let remaining: Vec<SimpleSelector> = sel_compound
-                        .0
-                        .iter()
-                        .filter(|s| !orig_compound.0.contains(s))
-                        .cloned()
-                        .collect();
+                    // 替换：将 orig simples 替换为 rep simples，保持位置
+                    let mut new_simples: Vec<SimpleSelector> = Vec::new();
+                    let mut replacement_done = false;
 
-                    let new_simples: Vec<SimpleSelector> = remaining
-                        .into_iter()
-                        .chain(rep_compound.0.clone())
-                        .collect();
+                    for simple in &sel_compound.0 {
+                        if orig_compound.0.contains(simple) && !replacement_done {
+                            // 在第一个匹配位置插入替换 simples
+                            new_simples.extend(rep_compound.0.clone());
+                            replacement_done = true;
+                        } else if !orig_compound.0.contains(simple) {
+                            // 保留非匹配 simple
+                            new_simples.push(simple.clone());
+                        }
+                        // 跳过其他匹配 simple（已被替换）
+                    }
 
                     let new_compound = CompoundSelector(new_simples);
                     let new_complex = ComplexSelector {

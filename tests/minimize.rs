@@ -208,7 +208,7 @@ fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
             if input_file.is_none() {
                 continue;
             }
-            let (_, input_content) = input_file.unwrap();
+            let (_, input_content) = input_file.expect("unexpected failure in test");
             let output = files
                 .iter()
                 .find(|(f, _)| f == "output.css")
@@ -256,7 +256,7 @@ fn minimize_color_error() {
 
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for (name, input, _expected) in &parse_hrx(&content) {
                 if sasspile::compile_expanded(input).is_err() {
                     let minimized = minimize(input, &FailOracle::Error);
@@ -281,7 +281,7 @@ fn minimize_extend_error() {
 
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for (name, input, _expected) in &parse_hrx(&content) {
                 if sasspile::compile_expanded(input).is_err() {
                     let minimized = minimize(input, &FailOracle::Error);

@@ -126,7 +126,15 @@ impl Evaluator {
         for param in params {
             match param.rest {
                 true => {
-                    let rest: Vec<Value> = positional[pos_idx..].to_vec();
+                    let mut rest: Vec<Value> = positional[pos_idx..].to_vec();
+                    // 将关键字参数作为 map 追加到 rest 参数中
+                    if !keyword.is_empty() {
+                        let kw_pairs: Vec<(Value, Value)> = keyword
+                            .iter()
+                            .map(|(k, v)| (Value::String(k.clone(), true), v.clone()))
+                            .collect();
+                        rest.push(Value::Map(kw_pairs));
+                    }
                     new_env = new_env.bind(
                         param.name.clone(),
                         Value::ArgList(rest, Separator::Comma, false),

@@ -10,26 +10,29 @@ use std::path::PathBuf;
 
 #[test]
 fn test_adjust_color_kwarg() {
-    let css = compile_expanded("a { b: adjust-color(red, $red: -50); }").unwrap();
+    let css = compile_expanded("a { b: adjust-color(red, $red: -50); }")
+        .expect("adjust-color should compile");
     assert!(css.contains("#cd0000"), "should contain #cd0000: {css}");
 }
 
 #[test]
 fn test_color_module_adjust() {
-    let css =
-        compile_expanded("@use \"sass:color\"; a { b: color.adjust(red, $red: -50); }").unwrap();
+    let css = compile_expanded("@use \"sass:color\"; a { b: color.adjust(red, $red: -50); }")
+        .expect("color.adjust should compile");
     assert!(css.contains("#cd0000"), "should contain #cd0000: {css}");
 }
 
 #[test]
 fn test_change_color_kwarg() {
-    let css = compile_expanded("a { b: change-color(red, $red: 100); }").unwrap();
+    let css =
+        compile_expanded("a { b: change-color(red, $red: 100); }").expect("change-color should compile");
     assert!(css.contains("#64"), "should contain changed red: {css}");
 }
 
 #[test]
 fn test_scale_color_kwarg() {
-    let css = compile_expanded("a { b: scale-color(red, $lightness: 50%); }").unwrap();
+    let css = compile_expanded("a { b: scale-color(red, $lightness: 50%); }")
+        .expect("scale-color should compile");
     assert!(
         !css.contains("scale-color"),
         "should not contain raw function name: {css}"
@@ -41,16 +44,16 @@ fn test_scale_color_kwarg() {
 #[test]
 fn test_forward_as_prefix_variable() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_var");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("_upstream.scss"), "$c: e;\n").unwrap();
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(dir.join("_upstream.scss"), "$c: e;\n").expect("write upstream");
     std::fs::write(
         dir.join("_midstream.scss"),
         "@forward \"upstream\" as d-*;\n",
     )
-    .unwrap();
+    .expect("write midstream");
     let main = dir.join("main.scss");
-    std::fs::write(&main, "@use \"midstream\";\na {b: midstream.$d-c}\n").unwrap();
-    let css = compile_file(&main, OutputStyle::Expanded).unwrap();
+    std::fs::write(&main, "@use \"midstream\";\na {b: midstream.$d-c}\n").expect("write main");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("compile should succeed");
     assert!(css.contains("b: e"), "should contain b: e: {css}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -58,16 +61,16 @@ fn test_forward_as_prefix_variable() {
 #[test]
 fn test_forward_as_prefix_function() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_fn");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("_upstream.scss"), "@function c() {@return e}\n").unwrap();
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(dir.join("_upstream.scss"), "@function c() {@return e}\n").expect("write upstream");
     std::fs::write(
         dir.join("_midstream.scss"),
         "@forward \"upstream\" as d-*;\n",
     )
-    .unwrap();
+    .expect("write midstream");
     let main = dir.join("main.scss");
-    std::fs::write(&main, "@use \"midstream\";\na {b: midstream.d-c()}\n").unwrap();
-    let css = compile_file(&main, OutputStyle::Expanded).unwrap();
+    std::fs::write(&main, "@use \"midstream\";\na {b: midstream.d-c()}\n").expect("write main");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("compile should succeed");
     assert!(css.contains("b: e"), "should contain b: e: {css}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -75,16 +78,16 @@ fn test_forward_as_prefix_function() {
 #[test]
 fn test_forward_as_prefix_underscore() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_us");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("_upstream.scss"), "$c: e;\n").unwrap();
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(dir.join("_upstream.scss"), "$c: e;\n").expect("write upstream");
     std::fs::write(
         dir.join("_midstream.scss"),
         "@forward \"upstream\" as d_*;\n",
     )
-    .unwrap();
+    .expect("write midstream");
     let main = dir.join("main.scss");
-    std::fs::write(&main, "@use \"midstream\";\na {b: midstream.$d_c}\n").unwrap();
-    let css = compile_file(&main, OutputStyle::Expanded).unwrap();
+    std::fs::write(&main, "@use \"midstream\";\na {b: midstream.$d_c}\n").expect("write main");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("compile should succeed");
     assert!(css.contains("b: e"), "should contain b: e: {css}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -92,16 +95,16 @@ fn test_forward_as_prefix_underscore() {
 #[test]
 fn test_forward_as_prefix_mixin() {
     let dir = std::env::temp_dir().join("sasspile_fwd_as_mx");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("_upstream.scss"), "@mixin a() {c {d: e}}\n").unwrap();
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    std::fs::write(dir.join("_upstream.scss"), "@mixin a() {c {d: e}}\n").expect("write upstream");
     std::fs::write(
         dir.join("_midstream.scss"),
         "@forward \"upstream\" as b-*;\n",
     )
-    .unwrap();
+    .expect("write midstream");
     let main = dir.join("main.scss");
-    std::fs::write(&main, "@use \"midstream\";\n@include midstream.b-a;\n").unwrap();
-    let css = compile_file(&main, OutputStyle::Expanded).unwrap();
+    std::fs::write(&main, "@use \"midstream\";\n@include midstream.b-a;\n").expect("write main");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("compile should succeed");
     assert!(css.contains("d: e"), "should contain d: e: {css}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -116,13 +119,13 @@ fn test_compile_load_path() {
         return;
     }
     let tmp = std::env::temp_dir().join("sasspile_test_loadpath");
-    std::fs::create_dir_all(&tmp).unwrap();
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
     let input = tmp.join("input.scss");
     std::fs::write(
         &input,
         "@use \"core_functions/list/utils\";\na {b: utils.real-separator(())}\n",
     )
-    .unwrap();
+    .expect("write input");
     let result =
         sasspile::compile_file_with_load_paths(&input, OutputStyle::Expanded, vec![spec_root]);
     std::fs::remove_dir_all(&tmp).ok();

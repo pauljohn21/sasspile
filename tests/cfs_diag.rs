@@ -2,6 +2,7 @@
 mod hrx_support;
 use hrx_support::{HrxArchive, HrxEntry, Vfs, parse_hrx as hrx_parse};
 use std::path::{Path, PathBuf};
+use tracing;
 
 struct HrxCase {
     files: Vec<(String, String)>,
@@ -72,7 +73,7 @@ fn compile_case(case: &HrxCase, spec_root: &Path, hrx_dir: &Path, hrx_stem: &str
         for entry in entries.flatten() {
             let p = entry.path();
             if (p.extension().and_then(|s| s.to_str()) == Some("scss") || p.extension().and_then(|s| s.to_str()) == Some("css")) && let Ok(content) = std::fs::read_to_string(&p) {
-                let filename = p.file_name().unwrap().to_string_lossy().to_string();
+                let filename = p.file_name().expect("unexpected failure in test").to_string_lossy().to_string();
                 std::fs::write(tmp_dir.join(&filename), content).ok();
             }
         }
@@ -91,7 +92,7 @@ fn main_diag(subdir: &str, max: usize) {
     let mut shown = 0;
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for case in &parse_hrx(&content) {
                 if shown >= max { break; }
                 if case.expected_output.is_empty() && !case.expect_error { continue; }
@@ -102,16 +103,16 @@ fn main_diag(subdir: &str, max: usize) {
                         let e = case.expected_output.trim();
                         if case.expect_error {
                             shown += 1;
-                            eprintln!("ERR_EXP_OK: {stem}/{name}\n  actual: {a}");
+                            tracing::error!("ERR_EXP_OK: {stem}/{name}\n  actual: {a}");
                         } else if a != e {
                             shown += 1;
-                            eprintln!("DIFF: {stem}/{name}\n  exp: {e}\n  got: {a}");
+                            tracing::error!("DIFF: {stem}/{name}\n  exp: {e}\n  got: {a}");
                         }
                     }
                     Err(err_str) => {
                         if !case.expect_error {
                             shown += 1;
-                            eprintln!("ERR: {stem}/{name}\n  {err_str}");
+                            tracing::error!("ERR: {stem}/{name}\n  {err_str}");
                         }
                     }
                 }

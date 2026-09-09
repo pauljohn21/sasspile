@@ -5,9 +5,9 @@ use sasspile::parse::{Parser, ast::*};
 fn parse(input: &str) -> Ast {
     let tokens: Vec<Token> = Lexer::new(input)
         .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
-        .map(|t| t.unwrap())
+        .map(|t| t.expect("unexpected failure in test"))
         .collect();
-    Parser::parse(&tokens).unwrap()
+    Parser::parse(&tokens).expect("unexpected failure in test")
 }
 
 #[test]

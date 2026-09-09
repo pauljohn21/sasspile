@@ -28,9 +28,8 @@ pub(crate) fn is_pure_calc_expr(s: &str) -> bool {
     // 嵌套 calc/min/max/clamp 调用 —— 递归检查参数
     for prefix in &["calc(", "min(", "max(", "clamp("] {
         if let Some(rest) = s.strip_prefix(prefix) {
-            let inner = match rest.strip_suffix(")") {
-                Some(i) => i,
-                None => return false,
+            let Some(inner) = rest.strip_suffix(")") else {
+                return false;
             };
             let mut depth = 0i32;
             let mut arg_start = 0;

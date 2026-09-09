@@ -101,7 +101,7 @@ pub(super) fn fmt_color(
                     true => "none".to_string(),
                     false => {
                         let rounded = v.round() as i64;
-                        format!("{}", rounded)
+                        format!("{rounded}")
                     }
                 }
             };
@@ -145,7 +145,7 @@ pub(super) fn fmt_color(
             match (alpha_ok, named) {
                 (true, Some(name)) => write!(f, "{name}"),
                 (true, None) => match legacy_int {
-                    true => write!(f, "#{:02x}{:02x}{:02x}", rp_r, gp_r, bp_r),
+                    true => write!(f, "#{rp_r:02x}{gp_r:02x}{bp_r:02x}"),
                     false => write!(
                         f,
                         "rgb({}%, {}%, {}%)",
@@ -301,13 +301,7 @@ pub(super) fn fmt_color(
                     false => format!("{}{}", format_hue(h), DEG_UNIT),
                 };
                 match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                    true => write!(
-                        f,
-                        "lch({} {} {})",
-                        l_str,
-                        ch_str,
-                        h_str
-                    ),
+                    true => write!(f, "lch({l_str} {ch_str} {h_str})"),
                     false => write!(
                         f,
                         "lch({} {} {} / {})",
@@ -354,13 +348,7 @@ pub(super) fn fmt_color(
                     false => format!("{}{}", format_hue(h), DEG_UNIT),
                 };
                 match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
-                    true => write!(
-                        f,
-                        "oklch({} {} {})",
-                        l_str,
-                        ch_str,
-                        h_str
-                    ),
+                    true => write!(f, "oklch({l_str} {ch_str} {h_str})"),
                     false => write!(
                         f,
                         "oklch({} {} {} / {})",

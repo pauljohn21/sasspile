@@ -4,7 +4,7 @@ use sasspile::lex::token::Token;
 fn lex(input: &str) -> Vec<Token> {
     Lexer::new(input)
         .filter(|t| !matches!(t.as_ref(), Ok(Token::Whitespace | Token::Eof)))
-        .map(|t| t.unwrap())
+        .map(|t| t.expect("unexpected failure in test"))
         .collect()
 }
 

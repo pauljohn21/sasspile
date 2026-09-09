@@ -155,7 +155,7 @@ pub(super) fn scale_channel_min(
     raw_value(kw, key)
     .map(|n| {
         let pct = n / 100.0;
-        match (pct >= 0.0, max == f64::MAX) {
+        match (pct >= 0.0, (max - f64::MAX).abs() < f64::EPSILON) {
             // val 超上界 + 扩向上：无效（保持原值）
             (true, false) if val > max => val,
             // val 超下界 + 扩向下：无效（保持原值）
@@ -333,7 +333,7 @@ fn build_legacy_color(
             ColorSpace::Hsl => { let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b); Color::with_hsl(h, s, l, alpha, ColorOutput::Auto, [r, g, b]) }
             _ => {
                 // 超范围 RGB（超出 0-255，如 change-color(black, $red: 500)）→ 转 HSL 扩展输出
-                let rgb_in_range = r >= 0.0 && r <= 255.0 && g >= 0.0 && g <= 255.0 && b >= 0.0 && b <= 255.0;
+                let rgb_in_range = (0.0..=255.0).contains(&r) && (0.0..=255.0).contains(&g) && (0.0..=255.0).contains(&b);
                 let has_nan = r.is_nan() || g.is_nan() || b.is_nan() || alpha.is_nan();
                 match (has_nan, rgb_in_range) {
                     (true, _) => Color::with_rgb(r, g, b, alpha, ColorSpace::Rgb, ColorOutput::RgbModern),
@@ -481,9 +481,9 @@ let alpha = apply_channel(c.a, kw_args, "alpha", alpha_value, |_v, d| {
             let (nr, ng, nb, _) = hwb_to_rgb_channels(h, hw_n, hb_n, 1.0);
             let (nr_c, ng_c, nb_c) = (clean_ch(nr), clean_ch(ng), clean_ch(nb));
             let rgb_in_range = !has_nan
-                && nr_c >= 0.0 && nr_c <= 255.0
-                && ng_c >= 0.0 && ng_c <= 255.0
-                && nb_c >= 0.0 && nb_c <= 255.0;
+                && (0.0..=255.0).contains(&nr_c)
+                && (0.0..=255.0).contains(&ng_c)
+                && (0.0..=255.0).contains(&nb_c);
             return match rgb_in_range {
                 true => Ok(Value::Color(Color::with_space(
                     ColorSpace::Hwb,

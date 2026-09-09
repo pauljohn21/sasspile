@@ -11,7 +11,7 @@ use crate::parse::ast::*;
 /// 接受的单位：`deg`、`grad`、`turn`、无单位（弧度）。
 /// 其它单位报错。
 fn angle_to_radians(n: f64, unit: Option<&String>, param: &str) -> Result<f64> {
-    let rad = match unit.map(String::as_str).as_deref() {
+    let rad = match unit.map(String::as_str) {
         None => n,
         Some("deg") => n * std::f64::consts::PI / 180.0,
         Some("grad") => n * std::f64::consts::PI / 200.0,

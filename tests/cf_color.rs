@@ -46,7 +46,7 @@ fn parse_hrx(content: &str) -> Vec<(String, String, String)> {
             if input_file.is_none() {
                 continue;
             }
-            let (_, input_content) = input_file.unwrap();
+            let (_, input_content) = input_file.expect("unexpected failure in test");
             let output = files
                 .iter()
                 .find(|(f, _)| f == "output.css")
@@ -96,7 +96,7 @@ fn color_error_patterns() {
 
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
-            let stem = file.file_stem().unwrap().to_string_lossy().to_string();
+            let stem = file.file_stem().expect("unexpected failure in test").to_string_lossy().to_string();
             for (_name, input, expected) in &parse_hrx(&content) {
                 match sasspile::compile_expanded(input) {
                     Ok(actual) => {
