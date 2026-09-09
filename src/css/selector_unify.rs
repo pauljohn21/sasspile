@@ -17,9 +17,23 @@ pub(super) fn unify_extendee_list(extendee: &Selector) -> Option<ComplexSelector
     match extendee.0.as_slice() {
         [] => None,
         [single] => Some(single.clone()),
-        [first, rest @ ..] => rest.iter().try_fold(first.clone(), |acc, next| {
-            unify_complex(&acc, next)
-        }),
+        [first, rest @ ..] => {
+            // 仅当所有 selector 之间有严格 super/sub 关系才能统一
+            // 否则（如 .c 和 .d）无法合并为一个 extendee
+            rest.iter().try_fold(first.clone(), |acc, next| {
+                use super::selector_is_super::is_super_complex;
+                if is_super_complex(next, &acc) {
+                    // acc 更通用，下一代继续进行 super 检查
+                    Some(acc)
+                } else if is_super_complex(&acc, next) {
+                    // next 更通用，下一代以 next 为基准
+                    Some(next.clone())
+                } else {
+                    // 无法统一 → extendee 不兼容
+                    None
+                }
+            })
+        }
     }
 }
 

@@ -44,6 +44,43 @@ pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, exten
                 || matches!(s, SimpleSelector::Type { namespace: Namespace::Any, name: n } if n == "*")
         }))
     });
+
+    // 如果 extendee 列表无法统一，逐个尝试每个 extendee 元素
+    // 此时 replace 整个 matched compound（不保留 remaining simples）
+    if unified_extendee.is_none() && extendee.0.len() > 1 {
+        tracing::debug!(?extendee, "extend: multi-extendee path");
+        let sel_leading = selector.0.iter().any(|c| has_leading_combinator(c));
+        let sel_trailing = selector.0.iter().any(|c| has_trailing_combinator(c));
+        let ext_has_non_descendant = extender.0.iter().any(|c| {
+            c.compounds.iter().any(|(comb, _)| matches!(comb, Some(Combinator::Child) | Some(Combinator::Adjacent) | Some(Combinator::Sibling)))
+        });
+        let mut results: Vec<ComplexSelector> = Vec::new();
+        for complex in &selector.0 {
+            results.push(complex.clone());
+            let orig_combinator_0 = if !complex.compounds.is_empty() { complex.compounds[0].0 } else { None };
+            for ext_cs in &extendee.0 {
+                if ext_cs.compounds.len() != 1 { continue; }
+                let ext_compound = &ext_cs.compounds[0].1;
+                let match_positions: Vec<usize> = complex.compounds.iter().enumerate()
+                    .filter(|(_, (_, sel_compound))| is_semantic_subset(ext_compound, sel_compound))
+                    .map(|(i, _)| i).collect();
+                for &match_pos in &match_positions {
+                    // 在 multi-extendee 模式下，直接替换整个 compound 为 extender
+                    if let Some(extended) = replace_compound_with_ext(complex, extender, match_pos, ext_has_non_descendant, sel_leading, sel_trailing, orig_combinator_0) {
+                        for ec in extended {
+                            if !results.contains(&ec) {
+                                results.push(ec);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let result = Selector(results);
+        tracing::debug!(%result, "extend: result (multi-extendee)");
+        return result;
+    }
+
     let is_no_op = unified_extendee.is_none() || selector_has_universal || selector_any_namespace_no_op || is_more_specific_than(extender, extendee);
     if is_no_op {
         tracing::debug!("extend: NO-OP");
@@ -120,30 +157,43 @@ fn extend_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extend
     if match_positions.is_empty() { return None; }
 
     let unique_results: Vec<ComplexSelector> = match_positions.iter().filter_map(|&match_pos| {
-        let (_, sel_compound) = &selector.compounds[match_pos];
-        // remaining = simples in sel_compound that are NOT consumed by ext_compound
-        // A sel_simplex is consumed if it covers (is more general than or equal to) some ext_simplex
-        let remaining: Vec<SimpleSelector> = sel_compound.0.iter()
-            .filter(|s| !ext_compound.0.iter().any(|ext_s| selector_simple_covers_ext(s, ext_s)))
-            .cloned()
-            .collect();
-        let has_type_conflict = !remaining.is_empty() && extender.0.first()
-            .and_then(|c| c.compounds.first())
-            .map(|(_, ext_comp)| compounds_conflict(&remaining, ext_comp))
-            .unwrap_or(false);
-        // 检查：selector 在 match_pos 处有非 descendant 组合器，且 extender 也有非 descendant 组合器 → 冲突
-        let sel_comb_at_match = selector.compounds[match_pos].0;
-        let has_combinator_conflict = ext_has_non_descendant
-            && matches!(sel_comb_at_match, Some(Combinator::Child) | Some(Combinator::Adjacent) | Some(Combinator::Sibling));
-
-        (!has_type_conflict && !has_combinator_conflict).then(|| {
-            extender.0.iter().flat_map(|ext_complex| {
-                build_extended_complex(selector, ext_complex, match_pos, &remaining, sel_leading, sel_trailing)
-            }).collect::<Vec<_>>()
-        })
+        extend_complex_at(selector, ext_compound, extender, match_pos, ext_has_non_descendant, sel_leading, sel_trailing)
     }).flatten().fold(Vec::new(), |mut acc, c| { if !acc.contains(&c) { acc.push(c); } acc });
 
     (!unique_results.is_empty()).then_some(Selector(unique_results))
+}
+
+/// 在指定位置执行 extend 操作，返回扩展后的 complex selector 列表。
+fn extend_complex_at(
+    selector: &ComplexSelector,
+    ext_compound: &CompoundSelector,
+    extender: &Selector,
+    match_pos: usize,
+    ext_has_non_descendant: bool,
+    sel_leading: bool,
+    sel_trailing: bool,
+) -> Option<Vec<ComplexSelector>> {
+    let (_, sel_compound) = &selector.compounds[match_pos];
+    // remaining = simples in sel_compound that are NOT consumed by ext_compound
+    // A sel_simplex is consumed if it covers (is more general than or equal to) some ext_simplex
+    let remaining: Vec<SimpleSelector> = sel_compound.0.iter()
+        .filter(|s| !ext_compound.0.iter().any(|ext_s| selector_simple_covers_ext(s, ext_s)))
+        .cloned()
+        .collect();
+    let has_type_conflict = !remaining.is_empty() && extender.0.first()
+        .and_then(|c| c.compounds.first())
+        .map(|(_, ext_comp)| compounds_conflict(&remaining, ext_comp))
+        .unwrap_or(false);
+    // 检查：selector 在 match_pos 处有非 descendant 组合器，且 extender 也有非 descendant 组合器 → 冲突
+    let sel_comb_at_match = selector.compounds[match_pos].0;
+    let has_combinator_conflict = ext_has_non_descendant
+        && matches!(sel_comb_at_match, Some(Combinator::Child) | Some(Combinator::Adjacent) | Some(Combinator::Sibling));
+
+    (!has_type_conflict && !has_combinator_conflict).then(|| {
+        extender.0.iter().flat_map(|ext_complex| {
+            build_extended_complex(selector, ext_complex, match_pos, &remaining, sel_leading, sel_trailing)
+        }).collect::<Vec<_>>()
+    })
 }
 
 fn build_extended_complex(
@@ -238,6 +288,29 @@ fn build_extended_complex(
         };
         adjusted.into_iter().filter(|(comb, comp)| !comp.0.is_empty() || comb.is_some()).collect::<Vec<_>>()
     }).filter(|f| !f.is_empty()).map(|f| ComplexSelector { compounds: f }).collect()
+}
+
+/// 在 multi-extendee 模式下，将整个 matched compound 替换为 extender（不保留 remaining）。
+fn replace_compound_with_ext(
+    selector: &ComplexSelector,
+    extender: &Selector,
+    match_pos: usize,
+    ext_has_non_descendant: bool,
+    sel_leading: bool,
+    sel_trailing: bool,
+    _orig_combinator_0: Option<Combinator>,
+) -> Option<Vec<ComplexSelector>> {
+    let sel_comb_at_match = selector.compounds[match_pos].0;
+    let has_combinator_conflict = ext_has_non_descendant
+        && matches!(sel_comb_at_match, Some(Combinator::Child) | Some(Combinator::Adjacent) | Some(Combinator::Sibling));
+
+    if has_combinator_conflict { return None; }
+
+    // 使用空的 remaining 列表（替换整个 compound）
+    let remaining: Vec<SimpleSelector> = Vec::new();
+    Some(extender.0.iter().flat_map(|ext_complex| {
+        build_extended_complex(selector, ext_complex, match_pos, &remaining, sel_leading, sel_trailing)
+    }).collect())
 }
 
 fn try_exact_complex_match(selector: &ComplexSelector, extendee: &ComplexSelector, extender: &Selector) -> Option<Selector> {

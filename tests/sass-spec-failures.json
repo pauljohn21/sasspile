@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "timestamp": "1788953485",
+    "timestamp": "1788962754",
     "total_cases": 11869,
-    "pass": 7358,
-    "fail": 4511,
+    "pass": 7440,
+    "fail": 4429,
     "skip": 262
   },
   "failures": [
@@ -7378,32 +7378,11 @@
       "actual": "a {\n  b: .c .d, .e ~ .c .d .d;\n}"
     },
     {
-      "id": "core_functions/selector/extend/no_op/conflict/universal/default_and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *.c;\n}\n",
-      "actual": "a {\n  b: *.c, **;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/conflict/universal/default_and_namespace/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *.c;\n}\n",
-      "actual": "a {\n  b: *.c, *d|*;\n}"
-    },
-    {
       "id": "core_functions/selector/extend/no_op/conflict/universal/empty_and_default/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: |*.c;\n}\n",
-      "actual": "a {\n  b: *.c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/conflict/universal/empty_and_namespace/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*.c;\n}\n",
-      "actual": "a {\n  b: *.c;\n}"
+      "actual": "a {\n  b: |*.c, |**;\n}"
     },
     {
       "id": "core_functions/selector/extend/no_op/conflict/universal/namespace_and_default/input.scss",
@@ -7411,34 +7390,6 @@
       "type": "DIFF",
       "expected": "a {\n  b: c|*.d;\n}\n",
       "actual": "a {\n  b: c|*.d, c|**;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/unification/additional/ancestor/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: c, d c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/unification/additional/next_sibling/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: c, d c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/unification/additional/parent/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: c, d c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/unification/additional/sibling/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: c, d c;\n}"
     },
     {
       "id": "core_functions/selector/extend/no_op/unification/specificity_modification/where/input.scss",
@@ -7467,36 +7418,6 @@
       "type": "DIFF",
       "expected": "a {\n  b: .c:where(d);\n}\n",
       "actual": "a {\n  b: .c:where(d), .cd.e;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/error/extendee/complex/list/input.scss",
-      "dir": "core_functions",
-      "type": "ERR_EXP_OK",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/error/extendee/complex/string/input.scss",
-      "dir": "core_functions",
-      "type": "ERR_EXP_OK",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/error/extendee/parent/input.scss",
-      "dir": "core_functions",
-      "type": "ERR_EXP_OK",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/error/extender/parent/input.scss",
-      "dir": "core_functions",
-      "type": "ERR_EXP_OK",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/error/selector/parent/input.scss",
-      "dir": "core_functions",
-      "type": "ERR_EXP_OK",
-      "actual": "a {\n  b: &;\n}"
     },
     {
       "id": "core_functions/selector/extend/simple/pseudo/arg/class/equal/input.scss",
@@ -7952,195 +7873,6 @@
       "type": "DIFF",
       "expected": "a {\n  b: :nth-last-child(2n+1 of .c, .d);\n}\n",
       "actual": "a {\n  b: :nth-last-child(2n + 1 of .c);\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/equal/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *;\n}\n",
-      "actual": "a {\n  b: *, c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_class/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_type/empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_type/explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_type/implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_universal/empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*, c;\n}\n",
-      "actual": "a {\n  b: *, c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_universal/explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_universal/implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/empty/and_universal/universal/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_class/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_type/empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_type/explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_type/implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_universal/empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_universal/explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_universal/implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *, c *, * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/universal/namespace/universal/and_universal/universal/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}\n",
-      "actual": "a {\n  b: * *, c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/empty/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c, d;\n}\n",
-      "actual": "a {\n  b: c, d;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/empty/and_explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/empty/and_implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: c, d;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/empty/and_universal/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/universal/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c;\n}\n",
-      "actual": "a {\n  b: * c, * d;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/universal/and_explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/universal/and_implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c;\n}\n",
-      "actual": "a {\n  b: * c, * d;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/simple/type/namespace/universal/and_universal/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c, d;\n}",
-      "actual": "a {\n  b: * c, d;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/list/different_matches/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: .c.d, .g, .c .e, .g .e, .d .f, .g .f;\n}",
-      "actual": "a {\n  b: .c.d, .g, .c .e, .d .f;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/list/one_matches/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: .c, .e;\n}\n",
-      "actual": "a {\n  b: .c;\n}"
     },
     {
       "id": "core_functions/selector/extend/named/input.scss",
@@ -8743,46 +8475,18 @@
       "actual": "a {\n  b: :where(.d);\n}"
     },
     {
-      "id": "core_functions/selector/unify/simple/universal/and_type/any/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_type/any/and_default/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_type/any/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_type/any/and_explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c|d;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
       "id": "core_functions/selector/unify/simple/universal/and_type/default/and_any/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
+      "actual": "a {\n  b: *|c;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/universal/and_type/default/and_empty/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: c;\n}"
+      "actual": "a {\n  b: |c;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/universal/and_type/default/and_explicit/input.scss",
@@ -8792,74 +8496,18 @@
       "actual": "a {\n  b: c|d;\n}"
     },
     {
-      "id": "core_functions/selector/unify/simple/universal/and_type/empty/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_type/empty/and_default/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_type/empty/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_type/explicit/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c|d;\n}\n",
-      "actual": "a {\n  b: * d;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_universal/any/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|*;\n}",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_universal/any/and_default/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_universal/any/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/universal/and_universal/any/and_explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
       "id": "core_functions/selector/unify/simple/universal/and_universal/default/and_any/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: *;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
+      "actual": "a {\n  b: *|*;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/universal/and_universal/default/and_empty/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: *;\n}"
+      "actual": "a {\n  b: |*;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/universal/and_universal/default/and_explicit/input.scss",
@@ -8873,7 +8521,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
+      "actual": "a {\n  b: *|*;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/universal/and_universal/empty/and_default/input.scss",
@@ -8883,18 +8531,11 @@
       "actual": "a {\n  b: *;\n}"
     },
     {
-      "id": "core_functions/selector/unify/simple/universal/and_universal/empty/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*;\n}\n",
-      "actual": "a {\n  b: *;\n}"
-    },
-    {
       "id": "core_functions/selector/unify/simple/universal/and_universal/explicit/and_any/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: c|*;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
+      "actual": "a {\n  b: *|*;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/universal/and_universal/explicit/and_default/input.scss",
@@ -8904,39 +8545,11 @@
       "actual": "a {\n  b: *;\n}"
     },
     {
-      "id": "core_functions/selector/unify/simple/type/and_universal/any/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c;\n}",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
       "id": "core_functions/selector/unify/simple/type/and_universal/any/and_default/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_universal/any/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_universal/any/and_explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: d|c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_universal/default/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
+      "actual": "a {\n  b: *;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/type/and_universal/default/and_default/input.scss",
@@ -8946,39 +8559,11 @@
       "actual": "a {\n  b: *;\n}"
     },
     {
-      "id": "core_functions/selector/unify/simple/type/and_universal/default/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_universal/empty/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
-    },
-    {
       "id": "core_functions/selector/unify/simple/type/and_universal/empty/and_default/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: null;\n}\n",
       "actual": "a {\n  b: *;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_universal/empty/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_universal/explicit/and_any/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c|d;\n}\n",
-      "actual": "a {\n  b: * *;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/type/and_universal/explicit/and_default/input.scss",
@@ -8988,116 +8573,25 @@
       "actual": "a {\n  b: *;\n}"
     },
     {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_any/same/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: *|c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_default/different_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_default/same_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_empty/different_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_empty/same_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_explicit/different_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/any/and_explicit/same_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: d|c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/default/and_any/different_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: * d;\n}"
-    },
-    {
       "id": "core_functions/selector/unify/simple/type/and_type/default/and_any/same_type/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/default/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/empty/and_any/different_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: * d;\n}"
+      "actual": "a {\n  b: *|c;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/type/and_type/empty/and_any/same_type/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: * c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/empty/and_default/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/empty/and_empty/same/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |c;\n}\n",
-      "actual": "a {\n  b: c;\n}"
-    },
-    {
-      "id": "core_functions/selector/unify/simple/type/and_type/explicit/and_any/different_type/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: null;\n}\n",
-      "actual": "a {\n  b: * e;\n}"
+      "actual": "a {\n  b: *|c;\n}"
     },
     {
       "id": "core_functions/selector/unify/simple/type/and_type/explicit/and_any/same_type/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: c|d;\n}\n",
-      "actual": "a {\n  b: * d;\n}"
+      "actual": "a {\n  b: *|d;\n}"
     },
     {
       "id": "core_functions/selector/parse/error/inner_comma/input.scss",
@@ -9865,35 +9359,7 @@
       "actual": "a {\n  b: false;\n}"
     },
     {
-      "id": "core_functions/selector/is_superselector/simple/universal/namespace/universal/and_universal/empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: true;\n}\n",
-      "actual": "a {\n  b: false;\n}"
-    },
-    {
-      "id": "core_functions/selector/is_superselector/simple/universal/namespace/universal/and_universal/explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: true;\n}\n",
-      "actual": "a {\n  b: false;\n}"
-    },
-    {
-      "id": "core_functions/selector/is_superselector/simple/universal/namespace/universal/and_universal/implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: true;\n}\n",
-      "actual": "a {\n  b: false;\n}"
-    },
-    {
       "id": "core_functions/selector/is_superselector/simple/type/and_universal/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: false;\n}\n",
-      "actual": "a {\n  b: true;\n}"
-    },
-    {
-      "id": "core_functions/selector/is_superselector/simple/type/namespace/empty/and_implicit/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: false;\n}\n",
@@ -9912,27 +9378,6 @@
       "type": "DIFF",
       "expected": "a {\n  b: false;\n}\n",
       "actual": "a {\n  b: true;\n}"
-    },
-    {
-      "id": "core_functions/selector/is_superselector/simple/type/namespace/universal/and_empty/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: true;\n}\n",
-      "actual": "a {\n  b: false;\n}"
-    },
-    {
-      "id": "core_functions/selector/is_superselector/simple/type/namespace/universal/and_explicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: true;\n}\n",
-      "actual": "a {\n  b: false;\n}"
-    },
-    {
-      "id": "core_functions/selector/is_superselector/simple/type/namespace/universal/and_implicit/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: true;\n}\n",
-      "actual": "a {\n  b: false;\n}"
     },
     {
       "id": "core_functions/selector/nest/format/format/input/initial/input.scss",
@@ -18527,7 +17972,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: alpha(c=d, e=f, g=h);\n}\n",
-      "actual": "a {\n  b: alpha(g=h, e=f, c=d);\n}"
+      "actual": "a {\n  b: alpha(e=f, g=h, c=d);\n}"
     },
     {
       "id": "core_functions/color/alpha/error/non_legacy/input.scss",
@@ -18576,7 +18021,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: alpha(c=d, e=f, g=h);\n}\n",
-      "actual": "a {\n  b: alpha(g=h, e=f, c=d);\n}"
+      "actual": "a {\n  b: alpha(c=d, g=h, e=f);\n}"
     },
     {
       "id": "core_functions/color/adjust_hue/middle/input.scss",
@@ -28647,7 +28092,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  c: c value;\n  d: d value;\n  e: e value;\n}\n",
-      "actual": "a {\n  \"d\": d value;\n  \"e\": e value;\n  \"c\": c value;\n}"
+      "actual": "a {\n  \"e\": e value;\n  \"c\": c value;\n  \"d\": d value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/dash_sensitive/input.scss",
@@ -28667,7 +28112,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"d\": d value;\n  \"b\": b value;\n  \"c\": c value;\n}"
+      "actual": "a {\n  \"b\": b value;\n  \"d\": d value;\n  \"c\": c value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/named/input.scss",
@@ -28681,14 +28126,14 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-c: c value;\n  b-d: d value;\n  b-e: e value;\n}\n",
-      "actual": "a {\n  \"b-c\": c value;\n  \"b-d\": d value;\n  \"b-e\": e value;\n}"
+      "actual": "a {\n  \"b-d\": d value;\n  \"b-e\": e value;\n  \"b-c\": c value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/through_forward/bare/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"b\": b value;\n  \"c\": c value;\n  \"d\": d value;\n}"
+      "actual": "a {\n  \"c\": c value;\n  \"b\": b value;\n  \"d\": d value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/through_forward/hide/input.scss",
@@ -28709,7 +28154,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"d\": d value;\n  \"b\": b value;\n  \"c\": c value;\n}"
+      "actual": "a {\n  \"b\": b value;\n  \"c\": c value;\n  \"d\": d value;\n}"
     },
     {
       "id": "core_functions/meta/function_exists/different_module/chosen_prefix/input.scss",
@@ -29170,7 +28615,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c-d\": c-d value, \"e-f\": e_f value);\n}\n",
-      "actual": "a {\n  b: (\"e_f\": e_f value, \"c-d\": c-d value);\n}"
+      "actual": "a {\n  b: (\"c-d\": c-d value, \"e_f\": e_f value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/error/too_many_args/input.scss",
@@ -29183,7 +28628,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
-      "actual": "a {\n  b: (\"e\": e value, \"d\": d value, \"c\": c value);\n}"
+      "actual": "a {\n  b: (\"c\": c value, \"e\": e value, \"d\": d value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/named/input.scss",
@@ -29193,32 +28638,18 @@
       "actual": "a {\n  b: (\"c\": c value, \"e\": e value, \"d\": d value);\n}"
     },
     {
-      "id": "core_functions/meta/module_variables/through_forward/as/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: (\"c-d\": d value, \"c-e\": e value, \"c-f\": f value);\n}\n",
-      "actual": "a {\n  b: (\"c-e\": e value, \"c-d\": d value, \"c-f\": f value);\n}"
-    },
-    {
       "id": "core_functions/meta/module_variables/through_forward/bare/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
-      "actual": "a {\n  b: (\"d\": d value, \"c\": c value, \"e\": e value);\n}"
-    },
-    {
-      "id": "core_functions/meta/module_variables/through_forward/show/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: (\"c\": c value, \"d\": d value);\n}\n",
-      "actual": "a {\n  b: (\"d\": d value, \"c\": c value);\n}"
+      "actual": "a {\n  b: (\"c\": c value, \"e\": e value, \"d\": d value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/through_import/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
-      "actual": "a {\n  b: (\"d\": d value, \"c\": c value, \"e\": e value);\n}"
+      "actual": "a {\n  b: (\"e\": e value, \"d\": d value, \"c\": c value);\n}"
     },
     {
       "id": "core_functions/meta/content_exists/error/in_content/input.scss",
@@ -29249,7 +28680,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  c-c: value;\n  d-d: value;\n  e-e: value;\n}\n",
-      "actual": "a c: {\n  c: value;\n}\n\na e: {\n  e: value;\n}\n\na d: {\n  d: value;\n}"
+      "actual": "a c: {\n  c: value;\n}\n\na d: {\n  d: value;\n}\n\na e: {\n  e: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/core_module/input.scss",
@@ -29263,7 +28694,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-c-b-c: value;\n  d-e-d_e: value;\n}\n",
-      "actual": "a d_e: {\n  d_e: value;\n}\n\na b-c: {\n  b-c: value;\n}"
+      "actual": "a b-c: {\n  b-c: value;\n}\n\na d_e: {\n  d_e: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/error/too_many_args/input.scss",
@@ -29283,21 +28714,21 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a d: {\n  d: value;\n}\n\na b: {\n  b: value;\n}\n\na c: {\n  c: value;\n}"
+      "actual": "a c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}\n\na d: {\n  d: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_forward/as/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-c-c: value;\n  b-d-d: value;\n  b-e-e: value;\n}\n",
-      "actual": "a b-e: {\n  e: value;\n}\n\na b-c: {\n  c: value;\n}\n\na b-d: {\n  d: value;\n}"
+      "actual": "a b-c: {\n  c: value;\n}\n\na b-d: {\n  d: value;\n}\n\na b-e: {\n  e: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_forward/bare/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a b: {\n  b: value;\n}\n\na d: {\n  d: value;\n}\n\na c: {\n  c: value;\n}"
+      "actual": "a b: {\n  b: value;\n}\n\na c: {\n  c: value;\n}\n\na d: {\n  d: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_forward/hide/input.scss",
@@ -29318,7 +28749,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a b: {\n  b: value;\n}\n\na c: {\n  c: value;\n}\n\na d: {\n  d: value;\n}"
+      "actual": "a d: {\n  d: value;\n}\n\na b: {\n  b: value;\n}\n\na c: {\n  c: value;\n}"
     },
     {
       "id": "core_functions/math/comparable/error/wrong_name/input.scss",
@@ -30145,7 +29576,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: alpha(c=d, e=f, g=h);\n}\n",
-      "actual": "a {\n  b: alpha(c=d, g=h, e=f);\n}"
+      "actual": "a {\n  b: alpha(e=f, c=d, g=h);\n}"
     },
     {
       "id": "core_functions/modules/color/mix/input.scss",
@@ -30434,9 +29865,9 @@
       "err_exp_ok": 8
     },
     "core_functions": {
-      "diff": 2501,
+      "diff": 2424,
       "err": 224,
-      "err_exp_ok": 644
+      "err_exp_ok": 639
     },
     "css": {
       "diff": 165,
@@ -30470,8 +29901,8 @@
     }
   },
   "by_type": {
-    "DIFF": 2922,
+    "DIFF": 2845,
     "ERR": 431,
-    "ERR_EXP_OK": 1158
+    "ERR_EXP_OK": 1153
   }
 }

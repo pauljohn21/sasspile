@@ -495,6 +495,29 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
     let extender = parse_selector(&format_to_string(&extender_arg));
     tracing::debug!(%sel, %extendee, %extender, "call_extend: parsed selectors");
 
+    // Sass 规范：extendee 不能是复杂选择器（含组合器）
+    if extendee.0.iter().any(|c| c.compounds.len() > 1) {
+        return Err(SassError::Eval(format!(
+            "Can't extend complex selector {}.",
+            extendee
+        )));
+    }
+
+    // Sass 规范：任何参数都不能包含父选择器 &
+    use crate::css::selector_ast::SimpleSelector;
+    let has_parent_ref = |s: &Selector| s.0.iter().any(|c| {
+        c.compounds.iter().any(|(_, comp)| comp.0.iter().any(|s| matches!(s, SimpleSelector::ParentReference)))
+    });
+    if has_parent_ref(&sel) {
+        return Err(SassError::Eval("$selector: Parent selectors aren't allowed here.".to_string()));
+    }
+    if has_parent_ref(&extendee) {
+        return Err(SassError::Eval("$extendee: Parent selectors aren't allowed here.".to_string()));
+    }
+    if has_parent_ref(&extender) {
+        return Err(SassError::Eval("$extender: Parent selectors aren't allowed here.".to_string()));
+    }
+
     let uses_format = matches!(args[0], Value::List(_, _, _))
         || matches!(args[1], Value::List(_, _, _))
         || matches!(args[2], Value::List(_, _, _));
