@@ -16,6 +16,17 @@ fn compile(input: &str) -> Result<String, String> {
 }
 
 #[test]
+fn extend_named_type_selector() {
+    let result = compile(r#"@use "sass:selector"; a {b: selector.extend($selector: "c.d", $extendee: "c", $extender: "e")}"#);
+    match result {
+        Ok(s) => {
+            assert_eq!(s, "a {\n  b: c.d, e.d;\n}\n");
+        }
+        Err(e) => panic!("{}", e),
+    }
+}
+
+#[test]
 fn extend_list_one_matches() {
     let result = compile(r#"@use "sass:selector"; a {b: selector.extend(".c", ".c, .d", ".e")}"#);
     match result {

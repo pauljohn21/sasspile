@@ -220,7 +220,17 @@ fn build_extended_complex(
         }
         1 => {
             let ext_sims = &ext_complex.compounds[0].1 .0;
-            let merged: Vec<SimpleSelector> = remaining.iter().cloned().chain(ext_sims.iter().cloned()).collect();
+            // 合并 remaining 和 extender，保持 CSS 选择器顺序：
+            // - 如果 extendee 是 TYPE 选择器，extender 应该放在 remaining 之前
+            // - 否则（extendee 是 CLASS 等），extender 放在 remaining 之后
+            let ext_is_type = ext_sims.iter().any(|s| matches!(s, SimpleSelector::Type { .. }));
+            let merged: Vec<SimpleSelector> = if ext_is_type {
+                // TYPE 选择器放在前面
+                ext_sims.iter().cloned().chain(remaining.iter().cloned()).collect()
+            } else {
+                // 其他选择器放在后面
+                remaining.iter().cloned().chain(ext_sims.iter().cloned()).collect()
+            };
             let mut result = prefix.to_vec();
             (!merged.is_empty()).then(|| { result.push((resolved_first_combinator, CompoundSelector(merged))); });
             vec![result]
