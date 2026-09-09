@@ -488,7 +488,7 @@ cargo test --test failures_json -- --nocapture
 ```
 
 **通过标准**：57/57 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：7361/12131 = 62%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：7444/11869 = 62.7%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
