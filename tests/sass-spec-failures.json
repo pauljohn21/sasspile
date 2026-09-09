@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "timestamp": "1788963258",
+    "timestamp": "1788963725",
     "total_cases": 11869,
-    "pass": 7442,
-    "fail": 4427,
+    "pass": 7444,
+    "fail": 4425,
     "skip": 262
   },
   "failures": [
@@ -7376,20 +7376,6 @@
       "type": "DIFF",
       "expected": "a {\n  b: .c .d, .e ~ .d;\n}\n",
       "actual": "a {\n  b: .c .d, .e ~ .c .d .d;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/conflict/universal/empty_and_default/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: |*.c;\n}\n",
-      "actual": "a {\n  b: |*.c, |**;\n}"
-    },
-    {
-      "id": "core_functions/selector/extend/no_op/conflict/universal/namespace_and_default/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: c|*.d;\n}\n",
-      "actual": "a {\n  b: c|*.d, c|**;\n}"
     },
     {
       "id": "core_functions/selector/extend/no_op/unification/specificity_modification/where/input.scss",
@@ -17961,13 +17947,6 @@
       "actual": "a {\n  b: #808080;\n}"
     },
     {
-      "id": "core_functions/color/alpha/css_overloads/alpha/multi_arg/input.scss",
-      "dir": "core_functions",
-      "type": "DIFF",
-      "expected": "a {\n  b: alpha(c=d, e=f, g=h);\n}\n",
-      "actual": "a {\n  b: alpha(g=h, e=f, c=d);\n}"
-    },
-    {
       "id": "core_functions/color/alpha/error/non_legacy/input.scss",
       "dir": "core_functions",
       "type": "ERR_EXP_OK",
@@ -28078,14 +28057,14 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  c: c value;\n  d: d value;\n  e: e value;\n}\n",
-      "actual": "a {\n  \"d\": d value;\n  \"e\": e value;\n  \"c\": c value;\n}"
+      "actual": "a {\n  \"e\": e value;\n  \"d\": d value;\n  \"c\": c value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/dash_sensitive/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-c: b-c value;\n  d-e: d_e value;\n}\n",
-      "actual": "a {\n  \"b-c\": b-c value;\n  \"d_e\": d_e value;\n}"
+      "actual": "a {\n  \"d_e\": d_e value;\n  \"b-c\": b-c value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/error/too_many_args/input.scss",
@@ -28098,28 +28077,28 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"b\": b value;\n  \"c\": c value;\n  \"d\": d value;\n}"
+      "actual": "a {\n  \"d\": d value;\n  \"c\": c value;\n  \"b\": b value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/named/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"b\": b value;\n  \"c\": c value;\n  \"d\": d value;\n}"
+      "actual": "a {\n  \"b\": b value;\n  \"d\": d value;\n  \"c\": c value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/through_forward/as/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-c: c value;\n  b-d: d value;\n  b-e: e value;\n}\n",
-      "actual": "a {\n  \"b-e\": e value;\n  \"b-d\": d value;\n  \"b-c\": c value;\n}"
+      "actual": "a {\n  \"b-e\": e value;\n  \"b-c\": c value;\n  \"b-d\": d value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/through_forward/bare/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"c\": c value;\n  \"b\": b value;\n  \"d\": d value;\n}"
+      "actual": "a {\n  \"c\": c value;\n  \"d\": d value;\n  \"b\": b value;\n}"
     },
     {
       "id": "core_functions/meta/module_functions/through_forward/hide/input.scss",
@@ -28140,7 +28119,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: b value;\n  c: c value;\n  d: d value;\n}\n",
-      "actual": "a {\n  \"c\": c value;\n  \"b\": b value;\n  \"d\": d value;\n}"
+      "actual": "a {\n  \"d\": d value;\n  \"b\": b value;\n  \"c\": c value;\n}"
     },
     {
       "id": "core_functions/meta/function_exists/different_module/chosen_prefix/input.scss",
@@ -28594,7 +28573,7 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "b {\n  c: (\"d\": d value, \"e\": e value, \"f\": f value);\n}\n",
-      "actual": "b {\n  c: (\"d\": d value, \"f\": f value, \"e\": e value);\n}"
+      "actual": "b {\n  c: (\"e\": e value, \"d\": d value, \"f\": f value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/dash_sensitive/input.scss",
@@ -28614,28 +28593,35 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
-      "actual": "a {\n  b: (\"c\": c value, \"e\": e value, \"d\": d value);\n}"
+      "actual": "a {\n  b: (\"d\": d value, \"e\": e value, \"c\": c value);\n}"
+    },
+    {
+      "id": "core_functions/meta/module_variables/named/input.scss",
+      "dir": "core_functions",
+      "type": "DIFF",
+      "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
+      "actual": "a {\n  b: (\"e\": e value, \"c\": c value, \"d\": d value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/through_forward/as/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c-d\": d value, \"c-e\": e value, \"c-f\": f value);\n}\n",
-      "actual": "a {\n  b: (\"c-e\": e value, \"c-f\": f value, \"c-d\": d value);\n}"
+      "actual": "a {\n  b: (\"c-f\": f value, \"c-e\": e value, \"c-d\": d value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/through_forward/bare/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
-      "actual": "a {\n  b: (\"c\": c value, \"e\": e value, \"d\": d value);\n}"
+      "actual": "a {\n  b: (\"d\": d value, \"c\": c value, \"e\": e value);\n}"
     },
     {
       "id": "core_functions/meta/module_variables/through_import/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b: (\"c\": c value, \"d\": d value, \"e\": e value);\n}\n",
-      "actual": "a {\n  b: (\"e\": e value, \"c\": c value, \"d\": d value);\n}"
+      "actual": "a {\n  b: (\"d\": d value, \"e\": e value, \"c\": c value);\n}"
     },
     {
       "id": "core_functions/meta/content_exists/error/in_content/input.scss",
@@ -28693,28 +28679,28 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}\n\na d: {\n  d: value;\n}"
+      "actual": "a c: {\n  c: value;\n}\n\na d: {\n  d: value;\n}\n\na b: {\n  b: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/named/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}\n\na d: {\n  d: value;\n}"
+      "actual": "a d: {\n  d: value;\n}\n\na c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_forward/as/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-c-c: value;\n  b-d-d: value;\n  b-e-e: value;\n}\n",
-      "actual": "a b-d: {\n  d: value;\n}\n\na b-e: {\n  e: value;\n}\n\na b-c: {\n  c: value;\n}"
+      "actual": "a b-e: {\n  e: value;\n}\n\na b-c: {\n  c: value;\n}\n\na b-d: {\n  d: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_forward/bare/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a d: {\n  d: value;\n}\n\na c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}"
+      "actual": "a b: {\n  b: value;\n}\n\na c: {\n  c: value;\n}\n\na d: {\n  d: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_forward/hide/input.scss",
@@ -28728,14 +28714,14 @@
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n}\n",
-      "actual": "a c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}"
+      "actual": "a b: {\n  b: value;\n}\n\na c: {\n  c: value;\n}"
     },
     {
       "id": "core_functions/meta/module_mixins/through_import/input.scss",
       "dir": "core_functions",
       "type": "DIFF",
       "expected": "a {\n  b-b: value;\n  c-c: value;\n  d-d: value;\n}\n",
-      "actual": "a b: {\n  b: value;\n}\n\na d: {\n  d: value;\n}\n\na c: {\n  c: value;\n}"
+      "actual": "a d: {\n  d: value;\n}\n\na c: {\n  c: value;\n}\n\na b: {\n  b: value;\n}"
     },
     {
       "id": "core_functions/math/comparable/error/wrong_name/input.scss",
@@ -29851,7 +29837,7 @@
       "err_exp_ok": 8
     },
     "core_functions": {
-      "diff": 2422,
+      "diff": 2420,
       "err": 224,
       "err_exp_ok": 639
     },
@@ -29887,7 +29873,7 @@
     }
   },
   "by_type": {
-    "DIFF": 2843,
+    "DIFF": 2841,
     "ERR": 431,
     "ERR_EXP_OK": 1153
   }

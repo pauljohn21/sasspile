@@ -150,16 +150,42 @@ pub fn is_subset_compound(subset: &CompoundSelector, superset: &CompoundSelector
 pub fn compounds_conflict(remaining: &[SimpleSelector], ext_compound: &CompoundSelector) -> bool {
     let rem_type = remaining.iter().find(|s| matches!(s, SimpleSelector::Type { .. }));
     let ext_type = ext_compound.0.iter().find(|s| matches!(s, SimpleSelector::Type { .. }));
-    let rem_has_universal = remaining.iter().any(|s| matches!(s, SimpleSelector::Universal));
+    let rem_has_universal = remaining.iter().any(|s| {
+        matches!(s, SimpleSelector::Universal) || matches!(s, SimpleSelector::Type { name, .. } if name == "*")
+    });
+    let ext_has_universal = ext_compound.0.iter().any(|s| {
+        matches!(s, SimpleSelector::Universal) || matches!(s, SimpleSelector::Type { name, .. } if name == "*")
+    });
+
+    // 检查 Universal 命名空间冲突
+    let universal_conflict = match (rem_has_universal, ext_has_universal) {
+        (true, true) => {
+            // 两者都有 Universal，检查命名空间是否兼容
+            let get_universal_ns = |s: &SimpleSelector| -> Option<Namespace> {
+                match s {
+                    SimpleSelector::Universal => Some(Namespace::None),
+                    SimpleSelector::Type { namespace, name } if name == "*" => Some(namespace.clone()),
+                    _ => None,
+                }
+            };
+            let rem_universal_ns = remaining.iter().find_map(get_universal_ns);
+            let ext_universal_ns = ext_compound.0.iter().find_map(get_universal_ns);
+            match (rem_universal_ns, ext_universal_ns) {
+                (Some(ns_r), Some(ns_e)) => !namespaces_compatible(&ns_r, &ns_e),
+                _ => false,
+            }
+        }
+        _ => false,
+    };
+
     let type_conflict = match (rem_type, ext_type) {
         (Some(SimpleSelector::Type { namespace: ns_r, name: name_r }),
          Some(SimpleSelector::Type { namespace: ns_e, name: name_e })) => {
             // Conflict if type names differ OR namespaces are incompatible
             (name_r != name_e) || !namespaces_compatible(ns_r, ns_e)
         }
-        // remaining 有 Type 但 extender 无 Type → 不冲突（extender 可以是 class/id 等）
-        // remaining 有 Universal 且 extender 有 Type（特定命名空间）→ 冲突
-        (None, Some(_)) if rem_has_universal => true,
+        // remaining 有 Universal/Type{*, *} 且 extender 有 Type（特定命名空间）→ 冲突
+        (None, Some(SimpleSelector::Type { name, .. })) if rem_has_universal && name != "*" => true,
         _ => false,
     };
 
@@ -173,7 +199,7 @@ pub fn compounds_conflict(remaining: &[SimpleSelector], ext_compound: &CompoundS
         (Some(r), Some(e)) => !pseudo_element_eq_normalized(r, e),
         _ => false,
     };
-    type_conflict || id_conflict || pe_conflict
+    universal_conflict || type_conflict || id_conflict || pe_conflict
 }
 
 pub fn has_leading_combinator(complex: &ComplexSelector) -> bool {
