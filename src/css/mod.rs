@@ -6,6 +6,9 @@ pub mod selector_ast;
 mod selector;
 pub mod selector_format;
 pub mod selector_ops;
+pub mod selector_unify;
+pub mod selector_is_super;
+pub mod selector_extend;
 pub mod selector_parser;
 
 pub use node::CssNode;
