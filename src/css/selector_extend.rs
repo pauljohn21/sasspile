@@ -11,6 +11,15 @@ use super::selector_unify::unify_extendee_list;
 
 #[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender))]
 pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Selector) -> Selector {
+    extend_selector_with_mode(selector, extendee, extender, false)
+}
+
+/// 带模式选择的 extend_selector。
+///
+/// `full_match_only` 为 true 时（selector 以 List 形式传入），仅进行 FULL 复杂匹配：
+/// extendee 的 compound 数量必须与 selector 的 complex compound 数量完全相等。
+#[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender, full_match_only))]
+pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, extender: &Selector, full_match_only: bool) -> Selector {
     let unified_extendee = unify_extendee_list(extendee);
     tracing::debug!(unified = ?unified_extendee, "extend: unified extendee");
     let is_no_op = unified_extendee.is_none() || is_more_specific_than(extender, extendee);
@@ -21,8 +30,15 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
     let unified_extendee = unified_extendee.expect("checked");
     let results: Vec<ComplexSelector> = selector.0.iter().flat_map(|complex| {
         let original = std::iter::once(complex.clone());
-        let extended = extend_complex(complex, &unified_extendee, extender).map(|s| s.0.into_iter()).unwrap_or_default();
-        original.chain(extended)
+        let extendee_matches_complex = full_match_only && unified_extendee.compounds.len() != complex.compounds.len();
+        let extended = if extendee_matches_complex {
+            // list 模式：extendee compound 数量不匹配，跳过此 complex
+            None
+        } else {
+            extend_complex(complex, &unified_extendee, extender)
+        };
+        let extended_items = extended.map(|s| s.0.into_iter()).unwrap_or_default();
+        original.chain(extended_items)
     }).fold(Vec::new(), |mut acc, c| { if !acc.contains(&c) { acc.push(c); } acc });
     let result = Selector(results);
     tracing::debug!(%result, "extend: result");
@@ -58,6 +74,10 @@ fn extend_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extend
     let ext_trailing = extender_has_trailing_combinator(extender);
     if sel_leading && ext_leading { return None; }
     if sel_trailing && ext_trailing { return None; }
+    // 检查 extender 是否有非 descendant 组合器（>、+、~）
+    let ext_has_non_descendant = extender.0.iter().any(|c| {
+        c.compounds.iter().any(|(comb, _)| matches!(comb, Some(Combinator::Child) | Some(Combinator::Adjacent) | Some(Combinator::Sibling)))
+    });
     if extendee.compounds.len() != 1 { return try_exact_complex_match(selector, extendee, extender); }
 
     let ext_compound = &extendee.compounds[0].1;
@@ -68,17 +88,17 @@ fn extend_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extend
 
     let unique_results: Vec<ComplexSelector> = match_positions.iter().filter_map(|&match_pos| {
         let (_, sel_compound) = &selector.compounds[match_pos];
-        let prefix = &selector.compounds[..match_pos];
-        let is_last = match_pos == selector.compounds.len() - 1;
-        let has_prefix = !prefix.is_empty();
-        let extender_has_multiple = extender.0.iter().any(|c| c.compounds.len() > 1);
         let remaining: Vec<SimpleSelector> = sel_compound.0.iter().filter(|s| !ext_compound.0.contains(s)).cloned().collect();
-        let has_conflict = !remaining.is_empty() && extender.0.first()
+        let has_type_conflict = !remaining.is_empty() && extender.0.first()
             .and_then(|c| c.compounds.first())
             .map(|(_, ext_comp)| compounds_conflict(&remaining, ext_comp))
             .unwrap_or(false);
+        // 检查：selector 在 match_pos 处有非 descendant 组合器，且 extender 也有非 descendant 组合器 → 冲突
+        let sel_comb_at_match = selector.compounds[match_pos].0;
+        let has_combinator_conflict = ext_has_non_descendant
+            && matches!(sel_comb_at_match, Some(Combinator::Child) | Some(Combinator::Adjacent) | Some(Combinator::Sibling));
 
-        (!has_conflict).then(|| {
+        (!has_type_conflict && !has_combinator_conflict).then(|| {
             extender.0.iter().flat_map(|ext_complex| {
                 build_extended_complex(selector, ext_complex, match_pos, &remaining, sel_leading, sel_trailing)
             }).collect::<Vec<_>>()

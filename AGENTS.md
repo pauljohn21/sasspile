@@ -482,10 +482,13 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 
 # sass-spec 全量统计 + OTel 追踪（输出 span 到 stdout）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
+
+# 全量失败原因导出 JSON（~87 秒，输出 tests/sass-spec-failures.json）
+cargo test --test failures_json -- --nocapture
 ```
 
 **通过标准**：57/57 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：7365/12131 = 62%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：7361/12131 = 62%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -525,6 +528,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **failures-json**（2026-09-09）：全量失败原因 JSON 导出 — 新建 `tests/failures_json.rs`，运行全部 sass-spec case（11869 个，~87 秒），将每个失败的完整 expected/actual/error 写入 `tests/sass-spec-failures.json`（含 metadata + failures[] + by_dir + by_type 聚合）— 用于回归检测和失败模式分析
 - **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON、format! 内联变量、let...else 重写、items_after_statements 修复 — cargo clippy 零错误，核心测试全通过
 - **cf-noncolor-boost**（2026-09-08）：core_functions 非 color 子域修复 — list join/set-nth/zip/is-bracketed 修复 (+48)、math sin/cos/tan 角度单位转换 (+13)、meta module_exports 全覆盖 (+120) — sass-spec 7144→7365 (+221)
 - **color-adjust-units**（2026-09-06）：CIE+Modern RGB 颜色 adjust/change/scale percent 单位处理 — 新增 cie_channel 提取器（区分 unitless n 与 n%），CIE 各通道正确 max 值（Oklch/Oklab/Lch/Lab），Modern RGB 统一使用 cie_channel(max=1.0)，sass-spec 6426→6695 (+269)
@@ -629,6 +633,7 @@ sasspile 颜色系统基于 `ColorSpace` 枚举（17 种色彩空间）+ `ColorO
 |------|------|----------|
 | 代码统计 | `tests/sass_spec_stats.rs` | sass-spec 通过率报告、基线对比 |
 | 失败诊断 | `tests/css_diag.rs`、`tests/expr_diag.rs`、`tests/cfs_diag.rs`、`tests/diag_directives.rs` | 定位具体失败 case |
+| 失败导出 | `tests/failures_json.rs` → `tests/sass-spec-failures.json` | 全量失败原因结构化导出（含完整 expected/actual） |
 | 代码查询 | `codegraph callers/impact/node/explore/callees` | 调用链分析、影响范围 |
 | 链路追踪 | `RUST_LOG=trace --features otel` | 跨函数/跨阶段 bug 定位 |
 | 脚本处理 | `rust-script` 或 Rust test | 任何脚本/数据处理任务 |
@@ -644,7 +649,21 @@ cargo test --test sass_spec_stats -- --nocapture
 
 # 3. 保存当前为新基线
 BASELINE=1 cargo test --test sass_spec_stats -- --nocapture
+
+# 4. 导出全量失败原因 JSON（~87 秒）
+cargo test --test failures_json -- --nocapture
+# 输出: tests/sass-spec-failures.json（含完整 expected/actual/error）
 ```
+
+### failures_json 输出格式
+
+`tests/sass-spec-failures.json` 包含：
+- `metadata` — timestamp、total_cases、pass、fail、skip
+- `failures[]` — 每条含 `id`、`dir`、`type`（DIFF/ERR/ERR_EXP_OK）、完整 `expected`/`actual`/`error`
+- `by_dir` — 按目录聚合的各类型计数
+- `by_type` — DIFF/ERR/ERR_EXP_OK 总计数
+
+**用途**：回归检测（对比两次 JSON）、失败模式分析、修复优先级排序。
 
 ### 失败定位工具
 
@@ -676,9 +695,10 @@ RUST_LOG="cfs_diag=info" cargo test --test cfs_diag
 
 1. **统计需求** → `sass_spec` 后台运行 → `sass_spec_stats` 生成报告
 2. **定位失败** → 运行对应 `*_diag` 测试获取结构化输出
-3. **分析影响** → `codegraph callers/impact/node`
-4. **Bug 追踪** → `RUST_LOG=trace --features otel` + `#[instrument]`
-5. **数据转换** → 写 Rust test 或 `rust-script`
+3. **全量导出** → `failures_json` 生成 `sass-spec-failures.json`（回归检测/修复对比）
+4. **分析影响** → `codegraph callers/impact/node`
+5. **Bug 追踪** → `RUST_LOG=trace --features otel` + `#[instrument]`
+6. **数据转换** → 写 Rust test 或 `rust-script`
 
 ## 🔍 CodeGraph 优先
 

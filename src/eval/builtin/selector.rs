@@ -499,7 +499,12 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
         || matches!(args[1], Value::List(_, _, _))
         || matches!(args[2], Value::List(_, _, _));
 
-    let result = selector_ops::extend_selector(&sel, &extendee, &extender);
+    let result = if uses_format {
+        // List 输入模式：仅进行 FULL compound 匹配
+        selector_ops::extend_selector_with_mode(&sel, &extendee, &extender, true)
+    } else {
+        selector_ops::extend_selector(&sel, &extendee, &extender)
+    };
     tracing::debug!(%result, uses_format, "call_extend: result");
 
     // selector-extend 始终返回 selector format（list of lists of strings）

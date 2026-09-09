@@ -2,7 +2,7 @@
 
 pub use super::selector_unify::unify;
 pub use super::selector_is_super::is_superselector;
-pub use super::selector_extend::{extend_selector, replace_selector};
+pub use super::selector_extend::{extend_selector, extend_selector_with_mode, replace_selector};
 pub use super::selector_unify::unify_compound;
 pub use super::selector_unify::unify_complex;
 
@@ -108,11 +108,16 @@ pub fn is_subset_compound(subset: &CompoundSelector, superset: &CompoundSelector
 pub fn compounds_conflict(remaining: &[SimpleSelector], ext_compound: &CompoundSelector) -> bool {
     let rem_type = remaining.iter().find(|s| matches!(s, SimpleSelector::Type { .. }));
     let ext_type = ext_compound.0.iter().find(|s| matches!(s, SimpleSelector::Type { .. }));
+    let rem_has_universal = remaining.iter().any(|s| matches!(s, SimpleSelector::Universal));
     let type_conflict = match (rem_type, ext_type) {
         (Some(SimpleSelector::Type { namespace: ns_r, name: name_r }),
          Some(SimpleSelector::Type { namespace: ns_e, name: name_e })) => {
-            name_r == name_e && !namespaces_compatible(ns_r, ns_e)
+            // Conflict if type names differ OR namespaces are incompatible
+            (name_r != name_e) || !namespaces_compatible(ns_r, ns_e)
         }
+        // remaining 有 Type 但 extender 无 Type → 不冲突（extender 可以是 class/id 等）
+        // remaining 有 Universal 且 extender 有 Type（特定命名空间）→ 冲突
+        (None, Some(_)) if rem_has_universal => true,
         _ => false,
     };
 
