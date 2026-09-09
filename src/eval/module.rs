@@ -169,10 +169,26 @@ impl Evaluator {
             module_css
         };
         let (lv, lm, lf, fv, fm, ff) = final_env.take_scope_fields();
+        let star_imported = final_env.get_star_imported().clone();
+        // 过滤 local_* 中的 star_imported 成员：这些成员来自模块内部的 @use ... as *，
+        // 不应作为模块的 local 导出（避免下游 @use ... as * 时误触发 star 冲突）。
+        // 但如果同名成员同时被 @forward，则保留（forwarded 优先级更高）。
+        let local_vars: HashMap<String, Value> = lv
+            .into_iter()
+            .filter(|(k, _)| !star_imported.contains(k) || fv.contains_key(k))
+            .collect();
+        let local_mixins = lm
+            .into_iter()
+            .filter(|(k, _)| !star_imported.contains(k) || fm.contains_key(k))
+            .collect();
+        let local_functions = lf
+            .into_iter()
+            .filter(|(k, _)| !star_imported.contains(k) || ff.contains_key(k))
+            .collect();
         let exports = ModuleExports {
-            local_vars: lv,
-            local_mixins: lm,
-            local_functions: lf,
+            local_vars,
+            local_mixins,
+            local_functions,
             forwarded_vars: fv,
             forwarded_mixins: fm,
             forwarded_functions: ff,
@@ -182,7 +198,7 @@ impl Evaluator {
             module_cache: final_env.get_module_cache_rc(),
             consumed_config: final_env.get_consumed_config().clone(),
             selectors,
-            star_imported: final_env.get_star_imported().clone(),
+            star_imported,
             ..Default::default()
         };
         let exports_cache = exports.module_cache.clone();

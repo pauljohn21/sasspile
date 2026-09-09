@@ -156,18 +156,18 @@ impl Evaluator {
                     let ns = &name[..dot];
                     let var_name = &name[dot + 1..];
                     if let Some(module) = env.get_namespace(ns) {
-                        if let Some(val) = module
-                            .all_vars()
-                            .find(|(k, _)| *k == var_name)
-                            .map(|(_, v)| v)
-                        {
-                            return Ok(val.clone());
+                            if let Some(val) = module
+                                .all_vars()
+                                .find(|(k, _)| *k == var_name)
+                                .map(|(_, v)| v)
+                            {
+                                return Ok(val.clone());
+                            }
+                        } else {
+                            return Err(SassError::Eval(format!(
+                                "There is no module with the namespace \"{ns}\"."
+                            )));
                         }
-                    } else {
-                        return Err(SassError::Eval(format!(
-                            "There is no module with the namespace \"{ns}\"."
-                        )));
-                    }
                 }
                 match env.star_conflict(name).is_some() {
                     true => return Err(SassError::Eval(

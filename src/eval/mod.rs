@@ -210,9 +210,10 @@ fn eval_mixin_def(
     name: &str,
     params: &[Param],
     body: &[Node],
-    mut env: Env,
+    env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
-    let captured = std::mem::take(&mut env.namespaces);
+    // 克隆 namespaces 而非 take：同一模块中多个 mixin 定义都必须捕获命名空间。
+    let captured = env.namespaces.clone();
     Ok((
         vec![],
         env.define_mixin(
@@ -249,9 +250,11 @@ fn eval_func_def(
     name: &str,
     params: &[Param],
     body: &[Node],
-    mut env: Env,
+    env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
-    let captured = std::mem::take(&mut env.namespaces);
+    // 克隆 namespaces 而非 take：同一模块中多个函数定义都必须捕获命名空间。
+    // 过去用 std::mem::take 会导致只有第一个函数捕获到命名空间，后续函数获得空 map。
+    let captured = env.namespaces.clone();
     Ok((
         vec![],
         env.define_function(

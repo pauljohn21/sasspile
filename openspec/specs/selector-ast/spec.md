@@ -11,7 +11,7 @@
 - `CompoundSelector` — 无空格的简单选择器序列，包含 `Vec<SimpleSelector>`
 - `SimpleSelector` — 最小选择器单元，是以下之一的 enum：
   - `Universal` — `*`
-  - `Type(String)` — `div`, `a`, `span`
+  - `Type { namespace: Namespace, name: String }` — `div`, `svg|circle`, `*|type`（命名空间感知）
   - `Class(String)` — `.btn`
   - `Id(String)` — `#main`
   - `Attribute` — `[type="text"]`，含 name/op/value/modifier 字段
@@ -20,9 +20,15 @@
   - `Placeholder(String)` — `%button`
 - `Combinator` — enum: `Descendant`(空格) / `Child`(`>`) / `Adjacent`(`+`) / `Sibling`(`~`)
 
-### 1.2 所有类型必须 derive `Debug, Clone, PartialEq`
+### 1.2 Namespace 枚举
 
-### 1.3 Selector 必须实现 `std::fmt::Display`，序列化为规范 CSS 字符串
+`Namespace` 枚举包含四个变体：`None`（无前缀类型如 `c`）、`Empty`（空命名空间 `|c`）、`Any`（任意命名空间 `*|c`）、`Explicit(String)`（显式命名空间 `ns|type`）。
+
+### 1.3 所有类型必须 derive `Debug, Clone, PartialEq`
+
+### 1.4 Selector 必须实现 `std::fmt::Display`，序列化为规范 CSS 字符串
+
+`SimpleSelector::Type` 序列化规则：`Namespace::None` 无前缀，`Namespace::Empty` 输出 `|`，`Namespace::Any` 输出 `*|`，`Namespace::Explicit(ns)` 输出 `ns|`。
 
 ## 需求 2: 选择器解析器
 
@@ -43,7 +49,7 @@
 - 伪类 → `PseudoClass`（含参数，递归处理 `:not()`/`:is()` 内部）
 - 伪元素 → `PseudoElement`（`::` 双冒号和 `:` 单冒号旧语法）
 - 占位符 → `Placeholder`（`%` 前缀）
-- 命名空间前缀（`ns|type`）
+- 命名空间前缀（`ns|type`、`|type`、`*|type`、`ns|*`、`*|*`）→ 通过 `take_type_with_ns` 结构化解析为 `Namespace` + `name`
 
 ### 2.3 降级策略
 
@@ -56,12 +62,22 @@
 `pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<CompoundSelector>`
 
 规则：
-- 两个 `Type` 不同 → `None`
+- 两个 `Type` 按命名空间规则矩阵统一（见 3.1.1）
 - 两个 `Id` 不同 → `None`
 - 两个 `PseudoElement` 不同 → `None`
-- `Universal` + `Type` → `Type`（Universal 被收窄）
+- `Universal`（无前缀 `*`）+ 无命名空间 `Type` → `Type`（Universal 被收窄）
+- `Universal` + 有命名空间 `Type`（如 `svg|circle`）→ `None`（不兼容）
 - `Class`/`PseudoClass`/`Attribute` → 并集去重
 - 结果顺序：Type → Universal → Id → Class → Attribute → PseudoClass → PseudoElement
+
+### 3.1.1 Type 命名空间统一规则矩阵
+
+| A ns \\ B ns | None | Empty | Any | Explicit("c") |
+|--------------|------|-------|-----|---------------|
+| None | 同名统一 | 冲突 | 同名→B drop ns | 冲突 |
+| Empty | 冲突 | 同名统一 | 同名→B drop ns | 冲突 |
+| Any | 同名→A drop ns | 同名→A drop ns | 同名→drop ns | 同名→keep B ns + drop name if A="*" |
+| Explicit("c") | 冲突 | 冲突 | 同名→keep A ns + drop name if B="*" | 同名 ns → 统一；不同 ns → 冲突 |
 
 ### 3.2 unify_complex
 
@@ -74,6 +90,14 @@
 `pub fn unify(a: &Selector, b: &Selector) -> Option<Selector>`
 
 对 a 和 b 的所有 `ComplexSelector` 笛卡尔积调用 `unify_complex`，过滤 `None`。全部为 `None` 时返回 `None`。
+
+## 需求 3.x: 伪元素语法归一化
+
+系统 SHALL 将单冒号伪元素语法（`:before`、`:after`、`:first-line`、`:first-letter`）与对应双冒号语法视为语义等价。`is_super_compound` 和 `unify_compound` 比较/统一操作 SHALL 归一化后比较。
+
+### 需求 3.x: 伪类链式合并
+
+`unify_compound` SHALL 支持伪类链式合并：不同 name 的伪类 SHALL 合并为链式（`:c` + `:d` → `:c:d`），相同 name 的伪类 SHALL 后者覆盖前者（`:c(:x)` + `:c(:y)` → `:c(:y)`）。
 
 ## 需求 4: is_superselector 算法
 
@@ -114,6 +138,9 @@
 - 匹配时：用 `unify(匹配部分, extender)` 生成新选择器
 - 统一冲突时不追加（保持原选择器）
 - 返回原选择器 + 所有扩展选择器的并集（去重）
+- NO-OP 检测 SHALL 考虑命名空间兼容性：命名空间不兼容时不触发 NO-OP
+- `compounds_conflict` SHALL 在比较 Type 时考虑命名空间，不同命名空间视为冲突
+- `compounds_conflict` SHALL 在比较伪元素时归一化 `is_class_syntax`
 
 ### 5.2 replace_selector
 

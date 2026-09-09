@@ -33,13 +33,13 @@ impl Evaluator {
                 return Self::exec_mixin(&mixin, args, content, env);
             }
         }
-        // star 模块冲突检测：同名 mixin 被多个 as * 模块定义时报错
-        match !name.contains('.') && env.star_conflict(name).is_some() {
-            true => return Err(SassError::Eval(
-                "This mixin is available from multiple global modules.".into(),
-            )),
-            false => {}
-        }
+// star 模块冲突检测：同名 mixin 被多个 as * 模块定义时报错
+match !name.contains('.') && env.star_conflict(name).is_some() {
+    true => return Err(SassError::Eval(
+        "This mixin is available from multiple global modules.".into(),
+    )),
+    false => {}
+}
         let mixin = env
             .get_mixin(name)
             .ok_or_else(|| SassError::UndefinedMixin(name.to_string()))?

@@ -144,23 +144,44 @@ pub(crate) fn bind_exports(
                     let is_new_module = !new_env.star_module_loaded(stem);
                     match is_new_module {
                         true => {
-                    let member_names: Vec<&str> =
-                        merge_with_local_precedence(&exports.local_vars, &exports.forwarded_vars)
-                            .map(|(k, _)| k.as_str())
-                            .filter(|k| !(k.starts_with('-') || k.starts_with('_')))
-                            .chain(
-                                exports
-                                    .all_mixins()
-                                    .map(|(k, _)| k.as_str())
-                                    .filter(|k| !(k.starts_with('-') || k.starts_with('_'))),
-                            )
-                            .chain(
-                                exports
-                                    .all_functions()
-                                    .map(|(k, _)| k.as_str())
-                                    .filter(|k| !(k.starts_with('-') || k.starts_with('_'))),
-                            )
-                            .collect();
+                    // star_members 只追踪"真正本地定义或 forwarded"的成员，
+                    // 排除通过 @use ... as * 引入的成员（star_imported），
+                    // 避免嵌套 @use 误触发 star 冲突检测。
+                    let member_names: Vec<&str> = exports
+                        .local_vars
+                        .iter()
+                        .map(|(k, _)| k.as_str())
+                        .filter(|k| {
+                            !(k.starts_with('-')
+                                || k.starts_with('_')
+                                || (exports.star_imported.contains(*k)
+                                    && !exports.forwarded_vars.contains_key(*k)))
+                        })
+                        .chain(
+                            exports
+                                .local_mixins
+                                .keys()
+                                .map(|k| k.as_str())
+                                .filter(|k| {
+                                    !(k.starts_with('-')
+                                        || k.starts_with('_')
+                                        || (exports.star_imported.contains(*k)
+                                            && !exports.forwarded_mixins.contains_key(*k)))
+                                }),
+                        )
+                        .chain(
+                            exports
+                                .local_functions
+                                .keys()
+                                .map(|k| k.as_str())
+                                .filter(|k| {
+                                    !(k.starts_with('-')
+                                        || k.starts_with('_')
+                                        || (exports.star_imported.contains(*k)
+                                            && !exports.forwarded_functions.contains_key(*k)))
+                                }),
+                        )
+                        .collect();
                     new_env = new_env.add_star_members(stem, &member_names);
                         }
                         false => {}
@@ -197,7 +218,7 @@ pub(crate) fn bind_exports(
                     !is_star
                         || !(k.starts_with('-')
                             || k.starts_with('_')
-                            || star_imported.contains(k.as_str()))
+                            || (star_imported.contains(k.as_str()) && !exports.forwarded_vars.contains_key(k.as_str())))
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.bind(fmt_key(k), v.clone());
@@ -212,7 +233,7 @@ pub(crate) fn bind_exports(
                     !is_star
                         || !(k.starts_with('-')
                             || k.starts_with('_')
-                            || star_imported.contains(k.as_str()))
+                            || (star_imported.contains(k.as_str()) && !exports.forwarded_mixins.contains_key(k.as_str())))
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.define_local_mixin(fmt_key(k), v.clone());
@@ -227,7 +248,7 @@ pub(crate) fn bind_exports(
                     !is_star
                         || !(k.starts_with('-')
                             || k.starts_with('_')
-                            || star_imported.contains(k.as_str()))
+                            || (star_imported.contains(k.as_str()) && !exports.forwarded_functions.contains_key(k.as_str())))
                 })
                 .fold(new_env, |env, (k, v)| {
                     let env = env.define_local_function(fmt_key(k), v.clone());

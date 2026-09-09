@@ -68,6 +68,22 @@
 - **WHEN** 调用 `is-superselector("a.foo", "a")`
 - **THEN** 返回 `false`
 
+#### Scenario: 伪元素单双冒号归一化
+- **WHEN** 判断 `:before` 是否是 `::before` 的超选择器
+- **THEN** 返回 `true`（单冒号和双冒号语法视为相同伪元素）
+
+#### Scenario: sub 有伪元素 super 无
+- **WHEN** 判断 `"c"` 是否是 `"c::d"` 的超选择器
+- **THEN** 返回 `false`（sub 有伪元素但 super 无，super 更宽泛但伪元素目标不同）
+
+#### Scenario: super 有伪元素 sub 也有（归一化后相同）
+- **WHEN** 判断 `"::d"` 是否是 `"c::d"` 的超选择器
+- **THEN** 返回 `true`
+
+#### Scenario: super 伪类是 sub 伪类的超集
+- **WHEN** 判断 `":nth-child(2n+1)"` 是否是 `":nth-child(2n+1):hover"` 的超选择器
+- **THEN** 返回 `false`（sub 有 :hover 但 super 无）
+
 ### Requirement: simple-selectors 简单选择器分解
 
 `simple-selectors` 函数 MUST 将复合选择器分解为"简单选择器"组件列表。
