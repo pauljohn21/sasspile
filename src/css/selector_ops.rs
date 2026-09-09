@@ -30,6 +30,48 @@ pub fn namespaces_compatible(a: &Namespace, b: &Namespace) -> bool {
     }
 }
 
+/// 检查 `sub_simplex` 是否在 `super_set` 中被语义覆盖。
+///
+/// 对 Type 选择器进行命名空间感知比较：
+/// - super_set 的 Type{Any, name} 覆盖 sub 的 Type{Any/Empty/None/Explicit, name}（如果名同名）
+/// - super_set 的 Type{Empty, name} 只覆盖 sub 的 Type{Empty, name}
+/// - super_set 的 Type{None, name} 只覆盖 sub 的 Type{None, name}
+/// - super_set 的 Type{Explicit, name} 只覆盖 sub 的 Type{Explicit(same), name}
+pub fn simple_contained_in(super_set: &CompoundSelector, sub_simplex: &SimpleSelector) -> bool {
+    super_set.0.iter().any(|s| match (s, sub_simplex) {
+        (SimpleSelector::Universal, _) => true,
+        (SimpleSelector::Type { namespace: ns_s, name: name_s },
+         SimpleSelector::Type { namespace: ns_sub, name: name_sub }) => {
+            name_s == name_sub && (
+                ns_s == ns_sub || matches!(ns_s, Namespace::Any)
+            )
+        }
+        _ => s == sub_simplex,
+    })
+}
+
+/// 检查 `selector_simple` 是否"覆盖" `extender_simple`（selector 更通用或相等）。
+///
+/// 用于 extend 的"remaining"计算：如果 selector_simple 覆盖 extender_simple，
+/// 则 selector_simple 被消耗，不进入 remaining。
+pub fn selector_simple_covers_ext(selector_simple: &SimpleSelector, ext_simple: &SimpleSelector) -> bool {
+    match (selector_simple, ext_simple) {
+        (SimpleSelector::Universal, _) => true,
+        (SimpleSelector::Type { namespace: ns_s, name: name_s },
+         SimpleSelector::Type { namespace: ns_e, name: name_e }) => {
+            name_s == name_e && (
+                ns_s == ns_e || matches!(ns_e, Namespace::Any) || matches!(ns_s, Namespace::Any)
+            )
+        }
+        _ => selector_simple == ext_simple,
+    }
+}
+
+/// 语义级别的 compound 子集检查——ext_compound 中的所有 simple 必须在 sel_compound 中有覆盖。
+pub fn is_semantic_subset(ext_compound: &CompoundSelector, sel_compound: &CompoundSelector) -> bool {
+    ext_compound.0.iter().all(|ext_s| simple_contained_in(sel_compound, ext_s))
+}
+
 pub fn unify_namespace(a: &Namespace, b: &Namespace) -> Option<Namespace> {
     match (a, b) {
         (Namespace::None, Namespace::None) => Some(Namespace::None),

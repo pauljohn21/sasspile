@@ -131,9 +131,43 @@ impl Parser {
         while let Some(&c) = self.chars.peek() {
             match c {
                 _ if c.is_whitespace() || matches!(c, '>' | '+' | '~' | ',') => break,
+                '|' => {
+                    // 空命名空间 |type
+                    self.chars.next(); // 消费 '|'
+                    let name = match self.chars.peek() {
+                        Some(&'*') => {
+                            self.chars.next();
+                            "*".to_string()
+                        }
+                        _ => self.take_ident(),
+                    };
+                    simples.push(SimpleSelector::Type {
+                        namespace: Namespace::Empty,
+                        name,
+                    });
+                }
                 '*' => {
                     self.chars.next();
-                    simples.push(SimpleSelector::Universal);
+                    // 检查是否是 `*|type`（any namespace + type）或 `*|*`（any namespace + universal）
+                    match self.chars.peek() {
+                        Some(&'|') => {
+                            self.chars.next(); // 消费 '|'
+                            let name = match self.chars.peek() {
+                                Some(&'*') => {
+                                    self.chars.next();
+                                    "*".to_string()
+                                }
+                                _ => self.take_ident(),
+                            };
+                            simples.push(SimpleSelector::Type {
+                                namespace: Namespace::Any,
+                                name,
+                            });
+                        }
+                        _ => {
+                            simples.push(SimpleSelector::Universal);
+                        }
+                    }
                 }
                 '&' => {
                     self.chars.next();

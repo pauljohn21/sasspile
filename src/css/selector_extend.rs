@@ -4,7 +4,7 @@ use super::selector_ast::{Combinator, ComplexSelector, CompoundSelector, Namespa
 use super::selector_ops::{
     compounds_conflict, extender_has_leading_combinator, extender_has_multiple_combinators,
     extender_has_trailing_combinator, has_leading_combinator, has_multiple_combinators,
-    has_trailing_combinator, is_subset_compound,
+    has_trailing_combinator, is_semantic_subset, selector_simple_covers_ext, simple_contained_in,
 };
 use super::selector_is_super::is_super_compound;
 use super::selector_unify::unify_extendee_list;
@@ -22,7 +22,29 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
 pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, extender: &Selector, full_match_only: bool) -> Selector {
     let unified_extendee = unify_extendee_list(extendee);
     tracing::debug!(unified = ?unified_extendee, "extend: unified extendee");
-    let is_no_op = unified_extendee.is_none() || is_more_specific_than(extender, extendee);
+
+    // 检查 selector 是否有 *|type 模式是 extendee 的超集（需要更细致的检查）
+    let selector_any_namespace_no_op = {
+        // 如果 selector 有 Type{Any, name} 但 extendee 没有对应的 Type{Any, name}，
+        // 且 extendee 有 Type{其他namespace, name}，则 extend 是 no-op
+        let sel_has_any_type = selector.0.iter().any(|c| {
+            c.compounds.iter().any(|(_, comp)| comp.0.iter().any(|s| matches!(s, SimpleSelector::Type { namespace: Namespace::Any, .. })))
+        });
+        let ext_has_any_type = extendee.0.iter().any(|c| {
+            c.compounds.iter().any(|(_, comp)| comp.0.iter().any(|s| matches!(s, SimpleSelector::Type { namespace: Namespace::Any, .. })))
+        });
+        sel_has_any_type && !ext_has_any_type
+    };
+
+    // 如果 selector 包含 Universal 或 *|*（any namespace + wildcard name），任何 extend 都是 no-op
+    // *|* 等同于 Universal（匹配任何命名空间的任何类型）
+    let selector_has_universal = selector.0.iter().any(|c| {
+        c.compounds.iter().any(|(_, comp)| comp.0.iter().any(|s| {
+            matches!(s, SimpleSelector::Universal)
+                || matches!(s, SimpleSelector::Type { namespace: Namespace::Any, name: n } if n == "*")
+        }))
+    });
+    let is_no_op = unified_extendee.is_none() || selector_has_universal || selector_any_namespace_no_op || is_more_specific_than(extender, extendee);
     if is_no_op {
         tracing::debug!("extend: NO-OP");
         return selector.clone();
@@ -46,8 +68,16 @@ pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, exten
 }
 
 fn is_more_specific_than(extender: &Selector, extendee: &Selector) -> bool {
+    // extender 比 extendee 更具体 → extend 是 no-op
+    // 特殊情况1：extendee 包含 Universal → 任何 extender 都更具体 → no-op
+    // 特殊情况2：selector（原始选择器）包含 Universal → 任何 extend 都是 no-op
+    //   （因为 * 已经匹配所有元素，无法通过 extend 增加新信息）
     extender.0.iter().all(|ext_c| {
         extendee.0.iter().any(|ee_c| {
+            // 如果 extendee 的 compound 包含 Universal，任何 extender 都更具体
+            let ee_has_universal = ee_c.compounds.iter().any(|(_, comp)| comp.0.iter().any(|s| matches!(s, SimpleSelector::Universal)));
+            if ee_has_universal { return true; }
+            
             ext_c.compounds.len() >= ee_c.compounds.len()
                 && ee_c.compounds.iter().enumerate().all(|(i, (_, ee_comp))| {
                     ext_c.compounds.get(i).is_some_and(|(_, ext_comp)| {
@@ -82,13 +112,18 @@ fn extend_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extend
 
     let ext_compound = &extendee.compounds[0].1;
     let match_positions: Vec<usize> = selector.compounds.iter().enumerate()
-        .filter(|(_, (_, sel_compound))| is_subset_compound(ext_compound, sel_compound))
+        .filter(|(_, (_, sel_compound))| is_semantic_subset(ext_compound, sel_compound))
         .map(|(i, _)| i).collect();
     if match_positions.is_empty() { return None; }
 
     let unique_results: Vec<ComplexSelector> = match_positions.iter().filter_map(|&match_pos| {
         let (_, sel_compound) = &selector.compounds[match_pos];
-        let remaining: Vec<SimpleSelector> = sel_compound.0.iter().filter(|s| !ext_compound.0.contains(s)).cloned().collect();
+        // remaining = simples in sel_compound that are NOT consumed by ext_compound
+        // A sel_simplex is consumed if it covers (is more general than or equal to) some ext_simplex
+        let remaining: Vec<SimpleSelector> = sel_compound.0.iter()
+            .filter(|s| !ext_compound.0.iter().any(|ext_s| selector_simple_covers_ext(s, ext_s)))
+            .cloned()
+            .collect();
         let has_type_conflict = !remaining.is_empty() && extender.0.first()
             .and_then(|c| c.compounds.first())
             .map(|(_, ext_comp)| compounds_conflict(&remaining, ext_comp))
