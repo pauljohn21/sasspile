@@ -484,8 +484,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
 ```
 
-**通过标准**：57/57 + 10/10 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
-**sass-spec 基线**：6695/11824 = 56.2%（含 color 目录，跳过 libsass 不支持目录）
+**通过标准**：57/57 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
+**sass-spec 基线**：7365/12131 = 62%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -525,6 +525,8 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON、format! 内联变量、let...else 重写、items_after_statements 修复 — cargo clippy 零错误，核心测试全通过
+- **cf-noncolor-boost**（2026-09-08）：core_functions 非 color 子域修复 — list join/set-nth/zip/is-bracketed 修复 (+48)、math sin/cos/tan 角度单位转换 (+13)、meta module_exports 全覆盖 (+120) — sass-spec 7144→7365 (+221)
 - **color-adjust-units**（2026-09-06）：CIE+Modern RGB 颜色 adjust/change/scale percent 单位处理 — 新增 cie_channel 提取器（区分 unitless n 与 n%），CIE 各通道正确 max 值（Oklch/Oklab/Lch/Lab），Modern RGB 统一使用 cie_channel(max=1.0)，sass-spec 6426→6695 (+269)
 - **color-level4-complete**（2026-09-06）：CSS Color Level 4 测试工具链修复（.sass 过滤 + _utils.scss OnceLock 注入）+ 14 个 lab/lch/oklab/oklch 构造序列化测试 — 核心测试 100/100 全通过，sass-spec 6264→6426 (+162)
 - **sass-spec-boost**（2026-09-05）：color/to_space NaN 处理 + HWB/HSL 序列化 + scale/change HWB 通道扩展 — 202/202 核心测试全通过，sass-spec 6205→6264 (+59)
@@ -654,12 +656,11 @@ codegraph query <search>       # 搜索符号
 
 ## 参考文档（需要时查阅）
 
-- **代码导航**：CodeGraph（动态查询，优先）/ `docs/CODE_INDEX.md`（静态参考）
+- **代码导航**：CodeGraph（动态查询，优先）— `codegraph callers/impact/node/explore`
 - **综合开发技能**：根目录 `skill.md`（编译管线 + 内建函数 + CSS 序列化 + 调试追踪）
 - **函数式 Rust**：`.claude/skills/functional-rust/SKILL.md`（优先级表 + 正反对比 + 反模式检测）
 - **调试技能**：`.claude/skills/tracing-debug/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
-- **源文件结构**：见 `docs/CODE_INDEX.md`
 
 ## 文件解析架构（file_resolver.rs）
 

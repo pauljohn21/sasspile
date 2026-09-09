@@ -71,7 +71,7 @@ All `use` statements in `src/` SHALL use explicit imports rather than wildcards 
 
 ### Requirement: No test regression after lint fixes
 
-All existing tests SHALL continue to pass after lint fixes: `compile_test` (43), `stage_test` (10), `ast_test` (8), `common_test` (5), `interp_test` (15), `bs_spec` (15), `ep_full` (121), `default_config_test` (9). The sass-spec pass rate SHALL NOT decrease below 3216/5624.
+All existing tests SHALL continue to pass after lint fixes: `compile_test` (57), `stage_test` (8), `ast_test` (8), `common_test` (5), `interp_test` (15), `bs_spec` (15), `ep_full` (121), `default_config_test` (9). The sass-spec pass rate SHALL NOT decrease below 7365/12131.
 
 #### Scenario: core tests pass
 

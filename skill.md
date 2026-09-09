@@ -725,7 +725,7 @@ cargo test --test ep_full -- --nocapture    # 121 个（Element Plus，约 120 �
 
 # sass-spec 全量统计（约 75 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：6695/11824 = 56.2%（含 color 目录，跳过 libsass 不支持目录）
+# 基线：7365/12131 = 62%（含 color 目录，跳过 libsass 不支持目录）
 # ep_full：121/121 = 100%
 
 # sass-spec 全量统计 + OTel 追踪
@@ -742,7 +742,7 @@ RUST_LOG=info cargo test --test sass_spec_full test_sass_spec_full_stats -- --no
 
 ## 10. CodeGraph 代码导航
 
-> **优先使用 CodeGraph 进行动态代码查询**（调用者/被调用者/影响分析），`docs/CODE_INDEX.md` 仅作静态参考。
+> **优先使用 CodeGraph 进行动态代码查询**（调用者/被调用者/影响分析）。
 
 ### 10.1 同步规则
 

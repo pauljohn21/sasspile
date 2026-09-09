@@ -59,8 +59,7 @@ src/
 │   ├── mod.rs        # Serializer 核心
 │   ├── node.rs       # CssNode 定义
 │   └── selector.rs   # 选择器处理
-├── stage/            # 管线阶段类型
-├── lib.rs            # 库入口
+├── lib.rs            # 库入口 (Reactor 类型状态机)
 └── main.rs           # CLI 入口
 ```
 
@@ -114,8 +113,8 @@ Serializer 直接写入 `String` 缓冲区：
 
 ```bash
 # 全部测试
-cargo test --test compile_test    # 41 个
-cargo test --test stage_test      # 10 个
+cargo test --test compile_test    # 57 个
+cargo test --test stage_test      # 8 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 cargo test --test bs_spec         # 15 个 (Bootstrap 验证)
@@ -123,9 +122,9 @@ cargo test --test bs_spec         # 15 个 (Bootstrap 验证)
 # sass-spec 完整验证
 cargo test --test ep_full         # 121 个 (Element Plus 验证)
 
-# sass-spec 全量统计（约 70 秒）
+# sass-spec 全量统计（约 75 秒）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
-# 基线：3478/11775 = 29%（全量统计，只跳过 libsass/non_conformant 弃用目录）
+# 基线：7365/12131 = 62%（含 color 目录，跳过 libsass 不支持目录）
 
 # 基准测试
 cargo bench
