@@ -7,7 +7,7 @@
 //! - 所有条件分派用 `match`，禁止裸 `if`
 
 use super::selector_ast::{
-    Combinator, ComplexSelector, CompoundSelector, Selector, SimpleSelector,
+    Combinator, ComplexSelector, CompoundSelector, Namespace, Selector, SimpleSelector,
 };
 use std::iter::Peekable;
 
@@ -52,10 +52,16 @@ impl Parser {
 
         match complexes.is_empty() {
             true => {
-                // 降级：剩余字符串作为单个 Type
+                // 降级：剩余字符串作为单个 Type（无命名空间）
                 let rest: String = self.chars.by_ref().collect();
                 Selector(vec![ComplexSelector {
-                    compounds: vec![(None, CompoundSelector(vec![SimpleSelector::Type(rest)]))],
+                    compounds: vec![(
+                        None,
+                        CompoundSelector(vec![SimpleSelector::Type {
+                            namespace: Namespace::None,
+                            name: rest,
+                        }]),
+                    )],
                 }])
             }
             false => Selector(complexes),
@@ -175,8 +181,8 @@ impl Parser {
                     }
                 }
                 _ if c.is_ascii_alphabetic() || c == '_' || c == '-' => {
-                    let name = self.take_type_with_ns();
-                    simples.push(SimpleSelector::Type(name));
+                    let (namespace, name) = self.take_type_with_ns();
+                    simples.push(SimpleSelector::Type { namespace, name });
                 }
                 _ => {
                     self.chars.next();
@@ -202,38 +208,41 @@ impl Parser {
     }
 
     /// 消费类型选择器（含命名空间 `ns|type` 或 `ns|*`）。
+    ///
+    /// 返回 `(Namespace, name)` 对：
+    /// - `svg|circle` → `(Namespace::Explicit("svg"), "circle")`
+    /// - `|circle` → `(Namespace::Empty, "circle")`
+    /// - `*|circle` → `(Namespace::Any, "circle")`
+    /// - `circle` → `(Namespace::None, "circle")`
+    /// - `ns|*` → `(Namespace::Explicit("ns"), "*")`
+    /// - `*|*` → `(Namespace::Any, "*")`
     #[allow(clippy::expect_used)]
-    fn take_type_with_ns(&mut self) -> String {
-        let mut s = String::new();
-        while let Some(&c) = self.chars.peek() {
-            match c {
-                c if c.is_ascii_alphanumeric() || c == '_' || c == '-' => {
-                    s.push(c);
-                    self.chars.next();
-                }
-                '|' => {
-                    s.push(c);
-                    self.chars.next();
-                    match self.chars.peek() {
-                        Some(&'*') => {
-                            s.push('*');
-                            self.chars.next();
-                        }
-                        _ => {
-                            // peek+next 循环收集命名空间类型名
-                            while self.chars.peek().is_some_and(|c| {
-                                c.is_ascii_alphanumeric() || *c == '_' || *c == '-'
-                            }) {
-                                // peek 已确认 Some，next 必然返回 Some
-                                s.push(self.chars.next().expect("take_type_with_ns: peek matched"));
-                            }
-                        }
+    fn take_type_with_ns(&mut self) -> (Namespace, String) {
+        let prefix = self.take_ident();
+        match self.chars.peek() {
+            Some(&'|') => {
+                self.chars.next(); // 消费 '|'
+                // 判断前缀是 `*|`（Any）还是 `ns|`（Explicit/Empty）
+                let namespace = match prefix.as_str() {
+                    "*" => Namespace::Any,
+                    "" => Namespace::Empty,
+                    ns => Namespace::Explicit(ns.to_string()),
+                };
+                // 消费类型名（可能是 `*` 或标识符）
+                let name = match self.chars.peek() {
+                    Some(&'*') => {
+                        self.chars.next();
+                        "*".to_string()
                     }
-                }
-                _ => break,
+                    _ => self.take_ident(),
+                };
+                (namespace, name)
+            }
+            _ => {
+                // 无前缀类型
+                (Namespace::None, prefix)
             }
         }
-        s
     }
 
     /// 消费伪类/伪元素参数 `(...)`。

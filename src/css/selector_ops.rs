@@ -4,16 +4,12 @@
 #![allow(clippy::nonminimal_bool, clippy::missing_panics_doc, clippy::expect_used)]
 
 use super::selector_ast::{
-    Combinator, ComplexSelector, CompoundSelector, Selector, SimpleSelector,
+    Combinator, ComplexSelector, CompoundSelector, Namespace, Selector, SimpleSelector,
 };
 
 // ─── 辅助函数 ──────────────────────────────────────────────────
 
 /// 检查 complex selector 是否有多个连续组合器（中间、前导或尾随）。
-/// 多个组合器的特征：存在两个连续 compound 都有 combinator，且第一个是空的。
-/// 例如 `.c ~ ~ .d` 解析为 `[(None,.c),(Sibling,""),(Sibling,.d)]`，
-/// 其中 `(Sibling,"")` 和 `(Sibling,.d)` 是连续的组合器。
-/// 正常选择器如 `.c .d`、`> .c`、`.c +`（单个尾随组合器）没有多个连续组合器。
 fn has_multiple_combinators(complex: &ComplexSelector) -> bool {
     complex
         .compounds
@@ -21,17 +17,13 @@ fn has_multiple_combinators(complex: &ComplexSelector) -> bool {
         .any(|w| {
             let (comb1, comp1) = &w[0];
             let (comb2, _) = &w[1];
-            // 连续组合器 = 第一个 compound 有 combinator 且为空，第二个也有 combinator
             comb1.is_some() && comp1.0.is_empty() && comb2.is_some()
         })
 }
 
 /// 检查 extender Selector 是否有多个连续组合器。
 fn extender_has_multiple_combinators(extender: &Selector) -> bool {
-    extender
-        .0
-        .iter()
-        .any(|c| has_multiple_combinators(c))
+    extender.0.iter().any(|c| has_multiple_combinators(c))
 }
 
 /// 检查 subset 是否是 superset 的 simple selector 子集。
@@ -39,12 +31,108 @@ fn is_subset_compound(subset: &CompoundSelector, superset: &CompoundSelector) ->
     subset.0.iter().all(|s| superset.0.contains(s))
 }
 
+/// 从 compound 中提取 Type 选择器引用。
+fn find_type(compound: &CompoundSelector) -> Option<&SimpleSelector> {
+    compound.0.iter().find(|s| matches!(s, SimpleSelector::Type { .. }))
+}
+
+/// 从 compound 中提取 Id 选择器引用。
+fn find_id(compound: &CompoundSelector) -> Option<&SimpleSelector> {
+    compound.0.iter().find(|s| matches!(s, SimpleSelector::Id(_)))
+}
+
+/// 从 compound 中提取 PseudoElement 选择器引用。
+fn find_pseudo_element(compound: &CompoundSelector) -> Option<&SimpleSelector> {
+    compound
+        .0
+        .iter()
+        .find(|s| matches!(s, SimpleSelector::PseudoElement { .. }))
+}
+
+/// 从 compound 中提取所有 PseudoClass 选择器引用。
+fn find_pseudo_classes(compound: &CompoundSelector) -> Vec<&SimpleSelector> {
+    compound
+        .0
+        .iter()
+        .filter(|s| matches!(s, SimpleSelector::PseudoClass { .. }))
+        .collect()
+}
+
+/// 判断两个命名空间是否兼容（可统一）。
+fn namespaces_compatible(a: &Namespace, b: &Namespace) -> bool {
+    match (a, b) {
+        (Namespace::None, Namespace::None) => true,
+        (Namespace::Empty, Namespace::Empty) => true,
+        (Namespace::Any, _) | (_, Namespace::Any) => true,
+        (Namespace::Explicit(na), Namespace::Explicit(nb)) => na == nb,
+        _ => false,
+    }
+}
+
+/// 根据命名空间规则矩阵统一两个 Type 选择器的命名空间。
+/// 返回统一后的 Namespace（name 单独处理）。
+fn unify_namespace(a: &Namespace, b: &Namespace) -> Option<Namespace> {
+    match (a, b) {
+        // None + None → None
+        (Namespace::None, Namespace::None) => Some(Namespace::None),
+        // Empty + Empty → Empty
+        (Namespace::Empty, Namespace::Empty) => Some(Namespace::Empty),
+        // 任何一方是 Any → 取另一方（drop any）
+        (Namespace::Any, other) | (other, Namespace::Any) => Some(other.clone()),
+        // Explicit + Explicit → 相同 ns 保留，不同 ns 冲突
+        (Namespace::Explicit(na), Namespace::Explicit(nb)) => {
+            if na == nb {
+                Some(Namespace::Explicit(na.clone()))
+            } else {
+                None
+            }
+        }
+        // None + Empty → 冲突
+        (Namespace::None, Namespace::Empty) | (Namespace::Empty, Namespace::None) => None,
+        // None + Explicit → 冲突
+        (Namespace::None, Namespace::Explicit(_)) | (Namespace::Explicit(_), Namespace::None) => {
+            None
+        }
+        // Empty + Explicit → 冲突
+        (Namespace::Empty, Namespace::Explicit(_))
+        | (Namespace::Explicit(_), Namespace::Empty) => None,
+    }
+}
+
+/// 归一化伪元素比较：单双冒号语法视为等价。
+/// 比较 name 和 arg，忽略 is_class_syntax 字段。
+fn pseudo_element_eq_normalized(a: &SimpleSelector, b: &SimpleSelector) -> bool {
+    match (a, b) {
+        (
+            SimpleSelector::PseudoElement {
+                name: na,
+                arg: aa,
+                ..
+            },
+            SimpleSelector::PseudoElement {
+                name: nb,
+                arg: ab,
+                ..
+            },
+        ) => na == nb && aa == ab,
+        _ => false,
+    }
+}
+
+/// 检查 compound 是否包含归一化后等价的伪元素。
+fn has_normalized_pseudo_element(
+    compound: &CompoundSelector,
+    target: &SimpleSelector,
+) -> bool {
+    compound
+        .0
+        .iter()
+        .any(|s| pseudo_element_eq_normalized(s, target))
+}
+
 // ─── unify 算法 ──────────────────────────────────────────────────
 
 /// 统一两个选择器列表（笛卡尔积）。
-///
-/// `.a` + `.b` → `.a.b`
-/// `div` + `span` → None（类型冲突）
 #[tracing::instrument(level = "debug", fields(a = %a, b = %b))]
 pub fn unify(a: &Selector, b: &Selector) -> Option<Selector> {
     let results: Vec<ComplexSelector> = a
@@ -55,34 +143,23 @@ pub fn unify(a: &Selector, b: &Selector) -> Option<Selector> {
     (!results.is_empty()).then_some(Selector(results))
 }
 
-/// 将extendee列表（Selector可能包含多个complex）统一为单个complex。
-/// 用于extendee是列表时，先统一再匹配。
+/// 将 extendee 列表统一为单个 complex。
 fn unify_extendee_list(extendee: &Selector) -> Option<ComplexSelector> {
     match extendee.0.as_slice() {
         [] => None,
         [single] => Some(single.clone()),
-        [first, rest @ ..] => {
-            rest.iter().try_fold(first.clone(), |acc, next| {
-                unify_complex(&acc, next)
-            })
-        }
+        [first, rest @ ..] => rest.iter().try_fold(first.clone(), |acc, next| {
+            unify_complex(&acc, next)
+        }),
     }
 }
 
 /// 统一两个复杂选择器——从右向左逐位置合并复合选择器。
-///
-/// 算法：
-/// 1. 若 a 是 b 的超选择器（或反之），返回更具体的那个。
-/// 2. 对齐两 complex 的 compounds 从最右端。
-/// 3. 对每对相同位置（从右数）的 compound 调用 `unify_compound`。
-/// 4. 较长 selector 的左侧尾部（未对齐部分）保持原样。
 #[tracing::instrument(level = "trace", fields(a = %a, b = %b))]
 pub fn unify_complex(a: &ComplexSelector, b: &ComplexSelector) -> Option<ComplexSelector> {
-    // 若 a 是 b 的超选择器，b 更具体——直接返回 b
     if is_super_complex(a, b) {
         return Some(b.clone());
     }
-    // 若 b 是 a 的超选择器，a 更具体——直接返回 a
     if is_super_complex(b, a) {
         return Some(a.clone());
     }
@@ -91,7 +168,6 @@ pub fn unify_complex(a: &ComplexSelector, b: &ComplexSelector) -> Option<Complex
     let b_len = b.compounds.len();
     let min_len = a_len.min(b_len);
 
-    // 从右向左逐位置 unify
     let mut unified_from_right: Vec<(Option<Combinator>, CompoundSelector)> = (0..min_len)
         .try_fold(Vec::with_capacity(min_len), |mut acc, i| {
             let a_idx = a_len - 1 - i;
@@ -103,14 +179,12 @@ pub fn unify_complex(a: &ComplexSelector, b: &ComplexSelector) -> Option<Complex
             Some(acc)
         })?;
 
-    // 较长 selector 的左侧尾部（未对齐部分）
     let tail = match a_len.cmp(&b_len) {
         std::cmp::Ordering::Greater => &a.compounds[..a_len - min_len],
         std::cmp::Ordering::Less => &b.compounds[..b_len - min_len],
         std::cmp::Ordering::Equal => &[],
     };
 
-    // 反转恢复从左到右顺序
     unified_from_right.reverse();
 
     let compounds: Vec<(Option<Combinator>, CompoundSelector)> = tail
@@ -124,51 +198,112 @@ pub fn unify_complex(a: &ComplexSelector, b: &ComplexSelector) -> Option<Complex
 
 /// 统一两个复合选择器——合并简单选择器。
 ///
-/// - Type 冲突 → None；Id 冲突 → None；PseudoElement 冲突 → None
-/// - Universal + Type → Type；Class/PseudoClass/Attribute → 并集去重
+/// 算法：
+/// 1. Type 冲突检测：按命名空间规则矩阵判断
+/// 2. Id 冲突检测：不同 → None
+/// 3. PseudoElement 冲突检测：归一化后比较
+/// 4. PseudoClass 链式合并：同 name 覆盖，不同 name 链式
+/// 5. 其余：并集去重
 #[tracing::instrument(level = "trace", fields(a = %a, b = %b))]
 pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<CompoundSelector> {
-    // 冲突检测
-    let a_type = a.0.iter().find(|s| matches!(s, SimpleSelector::Type(_)));
-    let b_type = b.0.iter().find(|s| matches!(s, SimpleSelector::Type(_)));
-    match (a_type, b_type) {
-        (Some(SimpleSelector::Type(t1)), Some(SimpleSelector::Type(t2))) if t1 != t2 => {
-            return None;
+    // ── 1. Type 冲突检测（命名空间感知）──
+    let a_type = find_type(a);
+    let b_type = find_type(b);
+    let unified_type = match (a_type, b_type) {
+        (
+            Some(SimpleSelector::Type {
+                namespace: ns_a,
+                name: name_a,
+            }),
+            Some(SimpleSelector::Type {
+                namespace: ns_b,
+                name: name_b,
+            }),
+        ) => {
+            let unified_ns = unify_namespace(ns_a, ns_b)?;
+            // 确定 name：如果一方是 "*"，取另一方
+            let unified_name = match (name_a.as_str(), name_b.as_str()) {
+                ("*", other) | (other, "*") => other.to_string(),
+                (na, nb) if na == nb => na.to_string(),
+                _ => return None, // 不同 name → 冲突
+            };
+            Some(SimpleSelector::Type {
+                namespace: unified_ns,
+                name: unified_name,
+            })
         }
-        _ => {}
-    }
+        (Some(SimpleSelector::Type { .. }), None)
+        | (None, Some(SimpleSelector::Type { .. })) => {
+            // 只一方有 Type，直接保留
+            if let Some(t) = a_type {
+                Some(t.clone())
+            } else {
+                b_type.cloned()
+            }
+        }
+        (Some(_), None) | (None, Some(_)) | (Some(_), Some(_)) => {
+            // 非 Type 选择器（不应发生，find_type 已过滤）或双方非 Type
+            None
+        }
+        (None, None) => None,
+    };
 
-    let a_id = a.0.iter().find(|s| matches!(s, SimpleSelector::Id(_)));
-    let b_id = b.0.iter().find(|s| matches!(s, SimpleSelector::Id(_)));
+    // ── 2. Id 冲突检测 ──
+    let a_id = find_id(a);
+    let b_id = find_id(b);
     match (a_id, b_id) {
-        (Some(SimpleSelector::Id(i1)), Some(SimpleSelector::Id(i2))) if i1 != i2 => {
+        (Some(SimpleSelector::Id(i1)), Some(SimpleSelector::Id(i2))) if i1 != i2 => return None,
+        _ => {}
+    }
+    let unified_id = b_id.or(a_id).cloned();
+
+    // ── 3. Universal + Type 兼容检查 ──
+    let a_has_universal = a.0.contains(&SimpleSelector::Universal);
+    let b_has_universal = b.0.contains(&SimpleSelector::Universal);
+    // Universal + Explicit namespace Type（单方 Type）→ 冲突
+    if a_has_universal || b_has_universal {
+        let explicit_ns_type_only = match (&a_type, &b_type) {
+            (Some(SimpleSelector::Type { namespace, .. }), None)
+            | (None, Some(SimpleSelector::Type { namespace, .. })) => {
+                matches!(namespace, Namespace::Explicit(_))
+            }
+            _ => false,
+        };
+        if explicit_ns_type_only && unified_type.is_none() {
             return None;
         }
-        _ => {}
     }
+    let has_universal = unified_type.is_none() && unified_id.is_none()
+        && (a_has_universal || b_has_universal)
+        // Universal + Explicit ns Type（单方 Type）→ 不含 Universal
+        && !match (&a_type, &b_type) {
+            (Some(SimpleSelector::Type { namespace, .. }), None)
+            | (None, Some(SimpleSelector::Type { namespace, .. })) => {
+                matches!(namespace, Namespace::Explicit(_))
+            }
+            _ => false,
+        };
 
-    let a_pe = a
-        .0
-        .iter()
-        .find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
-    let b_pe = b
-        .0
-        .iter()
-        .find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
-    match (a_pe, b_pe) {
-        (Some(pa), Some(pb)) if pa != pb => return None,
-        _ => {}
-    }
+    // ── 4. PseudoElement 冲突检测（归一化）──
+    let a_pe = find_pseudo_element(a);
+    let b_pe = find_pseudo_element(b);
+    let unified_pe = match (a_pe, b_pe) {
+        (Some(pa), Some(pb)) => {
+            if pseudo_element_eq_normalized(pa, pb) {
+                // 归一化后相同，取 class syntax 版本
+                Some(normalize_pseudo_element(pa))
+            } else {
+                return None;
+            }
+        }
+        (Some(p), None) | (None, Some(p)) => Some(p.clone()),
+        (None, None) => None,
+    };
 
-    // 合并：优先保留 Type（覆盖 Universal），其余取并集
-    let chosen_type = b_type.or(a_type).cloned();
-    let chosen_id = b_id.or(a_id).cloned();
+    // ── 5. PseudoClass 链式合并 ──
+    let unified_pseudo_classes = merge_pseudo_classes(a, b);
 
-    let has_universal = chosen_type.is_none()
-        && (a.0.contains(&SimpleSelector::Universal)
-            || b.0.contains(&SimpleSelector::Universal));
-
-    // 其余：并集去重
+    // ── 6. 其余：并集去重 ──
     let rest: Vec<SimpleSelector> = a
         .0
         .iter()
@@ -176,14 +311,14 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
         .filter(|s| {
             !matches!(
                 s,
-                SimpleSelector::Type(_) | SimpleSelector::Universal | SimpleSelector::Id(_)
+                SimpleSelector::Type { .. }
+                    | SimpleSelector::Universal
+                    | SimpleSelector::Id(_)
+                    | SimpleSelector::PseudoClass { .. }
+                    | SimpleSelector::PseudoElement { .. }
             )
         })
         .cloned()
-        .collect();
-
-    let rest: Vec<SimpleSelector> = rest
-        .into_iter()
         .fold(Vec::new(), |mut acc, s| {
             if !acc.contains(&s) {
                 acc.push(s);
@@ -191,15 +326,72 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
             acc
         });
 
-    // 组装：Type → Universal → Id → rest
-    let merged: Vec<SimpleSelector> = chosen_type
+    // ── 7. 组装：Type → Universal → Id → PseudoClass → PseudoElement → rest ──
+    let merged: Vec<SimpleSelector> = unified_type
         .into_iter()
         .chain(has_universal.then_some(SimpleSelector::Universal))
-        .chain(chosen_id.into_iter())
+        .chain(unified_id.into_iter())
+        .chain(unified_pseudo_classes.into_iter())
+        .chain(unified_pe.into_iter())
         .chain(rest.into_iter())
         .collect();
 
     (!merged.is_empty()).then_some(CompoundSelector(merged))
+}
+
+/// 归一化伪元素为 class syntax（单冒号）。
+fn normalize_pseudo_element(pe: &SimpleSelector) -> SimpleSelector {
+    match pe {
+        SimpleSelector::PseudoElement {
+            name,
+            arg,
+            is_class_syntax: _,
+        } => SimpleSelector::PseudoElement {
+            name: name.clone(),
+            arg: arg.clone(),
+            is_class_syntax: true,
+        },
+        other => other.clone(),
+    }
+}
+
+/// 合并伪类：同名覆盖，不同名链式。
+/// 合并策略：先收集 a 中所有伪类，再用 b 中伪类覆盖同名项。
+fn merge_pseudo_classes(a: &CompoundSelector, b: &CompoundSelector) -> Vec<SimpleSelector> {
+    let mut result: Vec<SimpleSelector> = Vec::new();
+    let mut name_index: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+
+    // 先加入 a 中的伪类
+    for s in &a.0 {
+        if let SimpleSelector::PseudoClass { name, arg } = s {
+            name_index.insert(name.clone(), result.len());
+            result.push(SimpleSelector::PseudoClass {
+                name: name.clone(),
+                arg: arg.clone(),
+            });
+        }
+    }
+
+    // 用 b 中伪类覆盖同名项
+    for s in &b.0 {
+        if let SimpleSelector::PseudoClass { name, arg } = s {
+            if let Some(&idx) = name_index.get(name) {
+                result[idx] = SimpleSelector::PseudoClass {
+                    name: name.clone(),
+                    arg: arg.clone(),
+                };
+            } else {
+                name_index.insert(name.clone(), result.len());
+                result.push(SimpleSelector::PseudoClass {
+                    name: name.clone(),
+                    arg: arg.clone(),
+                });
+            }
+        }
+    }
+
+    result
 }
 
 // ─── is_superselector 算法 ────────────────────────────────────────
@@ -207,26 +399,20 @@ pub fn unify_compound(a: &CompoundSelector, b: &CompoundSelector) -> Option<Comp
 /// 判断 `super_sel` 是否是 `sub_sel` 的超选择器。
 #[tracing::instrument(level = "debug", fields(super_ = %super_sel, sub = %sub_sel))]
 pub fn is_superselector(super_sel: &Selector, sub_sel: &Selector) -> bool {
-    sub_sel
-        .0
-        .iter()
-        .all(|sub_complex| {
-            super_sel
-                .0
-                .iter()
-                .any(|super_complex| is_super_complex(super_complex, sub_complex))
-        })
+    sub_sel.0.iter().all(|sub_complex| {
+        super_sel
+            .0
+            .iter()
+            .any(|super_complex| is_super_complex(super_complex, sub_complex))
+    })
 }
 
 /// 判断 `super_c` 是否是 `sub_c` 的超复杂选择器。
-///
-/// super 的复合选择器序列必须是 sub 的子序列。
 #[tracing::instrument(level = "trace", fields(super_ = %super_c, sub = %sub_c))]
 pub fn is_super_complex(super_c: &ComplexSelector, sub_c: &ComplexSelector) -> bool {
     let super_compounds: Vec<&CompoundSelector> = super_c.compounds.iter().map(|(_, c)| c).collect();
     let sub_compounds: Vec<&CompoundSelector> = sub_c.compounds.iter().map(|(_, c)| c).collect();
 
-    // 子序列匹配：用 try_fold 跟踪 sub 中的匹配位置
     super_compounds
         .iter()
         .try_fold(0usize, |si, super_comp| {
@@ -240,47 +426,72 @@ pub fn is_super_complex(super_c: &ComplexSelector, sub_c: &ComplexSelector) -> b
 
 /// 判断 `super_c` 是否是 `sub_c` 的超复合选择器。
 ///
-/// super_c 中的每个简单选择器都出现在 sub_c 中（子集关系）。
+/// spec 规则：
+/// - super 中每个 Type 必须在 sub 中存在兼容的 Type 或 Universal
+/// - super 中每个伪元素必须在 sub 中存在（归一化比较）
+/// - super 中每个伪类必须在 sub 中存在（name 相同）
+/// - super 中其他 simples 必须在 sub 中存在
+/// - sub 中多出的伪元素使 super 不是超选择器
 #[tracing::instrument(level = "trace", fields(super_ = %super_c, sub = %sub_c))]
 pub fn is_super_compound(super_c: &CompoundSelector, sub_c: &CompoundSelector) -> bool {
     // `*` 是任何复合选择器的超选择器
-    super_c.0.contains(&SimpleSelector::Universal)
-        || super_c.0.iter().all(|super_s| {
-            match super_s {
-                SimpleSelector::Type(t) => sub_c.0.iter().any(|sub_s| match sub_s {
-                    SimpleSelector::Type(st) => st == t,
-                    SimpleSelector::Universal => true,
-                    _ => false,
-                }),
-                SimpleSelector::PseudoElement { name, arg, .. } => sub_c.0.iter().any(|sub_s| match sub_s {
-                    SimpleSelector::PseudoElement { name: sn, arg: sa, .. } => sn == name && sa == arg,
-                    _ => false,
-                }),
-                _ => sub_c.0.contains(super_s),
+    if super_c.0.contains(&SimpleSelector::Universal) {
+        return true;
+    }
+
+    super_c.0.iter().all(|super_s| match super_s {
+        SimpleSelector::Type {
+            namespace: ns_s,
+            name: name_s,
+        } => sub_c.0.iter().any(|sub_s| match sub_s {
+            SimpleSelector::Type {
+                namespace: ns_sub,
+                name: name_sub,
+            } => {
+                // 同名 + 命名空间兼容
+                name_s == name_sub
+                    && (ns_s == ns_sub
+                        || matches!(ns_s, Namespace::Any)
+                        || matches!(ns_sub, Namespace::Any))
             }
-        })
+            SimpleSelector::Universal => true,
+            _ => false,
+        }),
+        SimpleSelector::PseudoElement { .. } => {
+            // super 中的伪元素必须在 sub 中存在（归一化比较）
+            has_normalized_pseudo_element(sub_c, super_s)
+        }
+        SimpleSelector::PseudoClass { name, .. } => {
+            // super 中的伪类必须在 sub 中存在（name 相同）
+            sub_c.0.iter().any(|sub_s| match sub_s {
+                SimpleSelector::PseudoClass { name: sub_name, .. } => sub_name == name,
+                _ => false,
+            })
+        }
+        _ => sub_c.0.contains(super_s),
+    }) && {
+        // 额外条件：sub 中的伪元素必须在 super 中存在（归一化比较）
+        let sub_pe = find_pseudo_classes(sub_c); // 这里错了，应该是 PseudoElement
+        let sub_pe: Vec<_> = sub_c
+            .0
+            .iter()
+            .filter(|s| matches!(s, SimpleSelector::PseudoElement { .. }))
+            .collect();
+        sub_pe.is_empty()
+            || sub_pe
+                .iter()
+                .all(|pe| has_normalized_pseudo_element(super_c, pe))
+    }
 }
 
 // ─── extend/replace 算法 ──────────────────────────────────────────
 
 /// 扩展选择器：在 `selector` 中查找匹配 `extendee` 的部分，用 `extender` 追加。
-///
-/// 算法：对 selector 的每个 complex，先统一 extendee 列表为单个 complex，
-/// 然后在任意位置匹配 extendee compound，用 extender 替换。
-///
-/// NO-OP 检测：若 extender 是 extendee 的子集（即 extendee 是 extender 的超集），
-/// 则扩展不产生新选择器，返回原始 selector。
-///
-/// # Panics
-///
-/// 当 `unify_extendee_list` 返回 `None` 时 panic（理论上不会发生，因为前面已检查）。
 #[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender))]
 pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Selector) -> Selector {
-    // 统一 extendee 列表为单个 complex
     let unified_extendee = unify_extendee_list(extendee);
     tracing::debug!(unified = ?unified_extendee, "extend_selector: unified extendee");
 
-    // NO-OP 检测：无法统一 extendee 或 extender 更具体 → 返回原始 selector
     let is_no_op = unified_extendee.is_none() || is_more_specific_than(extender, extendee);
 
     if is_no_op {
@@ -290,7 +501,6 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
 
     let unified_extendee = unified_extendee.expect("checked above");
 
-    // 对每个 complex 生成原始 + 扩展结果，去重
     let results: Vec<ComplexSelector> = selector
         .0
         .iter()
@@ -313,18 +523,32 @@ pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Sele
     result
 }
 
-/// 检查 extender 是否比 extendee 更具体（extender 匹配的元素都是 extendee 匹配的元素）。
-/// 用于 NO-OP 检测：如果 extender 更具体，扩展不产生新选择器。
+/// 检查 extender 是否比 extendee 更具体（用于 NO-OP 检测）。
 fn is_more_specific_than(extender: &Selector, extendee: &Selector) -> bool {
-    // extender 的每个 complex 必须比 extendee 的某个 complex 更具体
     extender.0.iter().all(|ext_c| {
         extendee.0.iter().any(|ee_c| {
-            // 更具体 = extender 的 compound 数量 >= extendee 的 compound 数量
-            // 且 extender 的每个 compound 都包含 extendee 对应位置的 compound
             ext_c.compounds.len() >= ee_c.compounds.len()
                 && ee_c.compounds.iter().enumerate().all(|(i, (_, ee_comp))| {
                     ext_c.compounds.get(i).is_some_and(|(_, ext_comp)| {
-                        ee_comp.0.iter().all(|s| ext_comp.0.contains(s))
+                        ee_comp.0.iter().all(|s| match s {
+                            // Type: extender 必须与 extendee 同名（命名空间兼容）
+                            SimpleSelector::Type {
+                                namespace: ns_ee,
+                                name: name_ee,
+                            } => ext_comp.0.iter().any(|es| match es {
+                                SimpleSelector::Type {
+                                    namespace: ns_ext,
+                                    name: name_ext,
+                                } => {
+                                    name_ee == name_ext
+                                        && (ns_ee == ns_ext
+                                            || matches!(ns_ee, Namespace::Any)
+                                            || matches!(ns_ext, Namespace::Any))
+                                }
+                                _ => false,
+                            }),
+                            _ => ext_comp.0.contains(s),
+                        })
                     })
                 })
         })
@@ -332,35 +556,15 @@ fn is_more_specific_than(extender: &Selector, extendee: &Selector) -> bool {
 }
 
 /// 在单个复杂选择器上执行 extend。
-///
-/// 算法：在任意位置匹配 unified extendee compound，用 extender 替换。
-/// 支持多位置匹配：如果 extendee 匹配多个 compound，为每个位置生成扩展。
-///
-/// 匹配规则：
-/// - extendee 的单个 compound 是 selector 某 compound 的子集或精确匹配
-/// - 匹配位置可以是首 compound、中间 compound 或尾 compound
-/// - 尾 compound 匹配且 prefix 非空时，NO-OP（避免冗余扩展）
-///
-/// 冲突检测（proper subset 时）：
-/// - 若 remaining simples 与 extender 首 compound 存在 Type/Id/PseudoElement 冲突 → NO-OP
-///
-/// 组合器规则：
-/// - 多连续组合器（selector 或 extender）→ NO-OP
-/// - 双 leading combinator → NO-OP
-/// - 双 trailing combinator → NO-OP
-/// - extender leading 优先于 selector leading
-/// - extender trailing 优先于 selector trailing
 fn extend_complex(
     selector: &ComplexSelector,
     extendee: &ComplexSelector,
     extender: &Selector,
 ) -> Option<Selector> {
-    // 1. 多组合器 NO-OP 检测
     if has_multiple_combinators(selector) || extender_has_multiple_combinators(extender) {
         return None;
     }
 
-    // 2. 双 leading/trailing combinator NO-OP
     let sel_leading = has_leading_combinator(selector);
     let sel_trailing = has_trailing_combinator(selector);
     let ext_leading = extender_has_leading_combinator(extender);
@@ -372,15 +576,12 @@ fn extend_complex(
         return None;
     }
 
-    // 3. 统一 extendee 必须是单 compound（用于 subset matching）
     if extendee.compounds.len() != 1 {
-        // 多 compound extendee：仅支持 suffix/whole-complex 精确匹配
         return try_exact_complex_match(selector, extendee, extender);
     }
 
     let ext_compound = &extendee.compounds[0].1;
 
-    // 4. 找到所有匹配的 compound 位置（subset 或 exact）
     let match_positions: Vec<usize> = selector
         .compounds
         .iter()
@@ -393,7 +594,6 @@ fn extend_complex(
         return None;
     }
 
-    // 5. 对每个匹配位置生成扩展，然后去重
     let unique_results: Vec<ComplexSelector> = match_positions
         .iter()
         .filter_map(|&match_pos| {
@@ -402,15 +602,10 @@ fn extend_complex(
             let suffix = &selector.compounds[match_pos + 1..];
             let is_last = match_pos == selector.compounds.len() - 1;
             let has_prefix = !prefix.is_empty();
-            let _has_suffix = !suffix.is_empty();
             let extender_has_multiple = extender.0.iter().any(|c| c.compounds.len() > 1);
 
-            tracing::debug!(is_last, has_prefix, extender_has_multiple, match_pos, "extend_complex: NO-OP check");
-
-            // NO-OP 检测：尾 compound 匹配 + prefix 非空 + extender 单 compound
             let is_no_op = is_last && has_prefix && !extender_has_multiple;
 
-            // 计算 remaining simples
             let remaining: Vec<SimpleSelector> = sel_compound
                 .0
                 .iter()
@@ -418,7 +613,6 @@ fn extend_complex(
                 .cloned()
                 .collect();
 
-            // 冲突检测：remaining 与 extender 首 compound 冲突
             let has_conflict = !remaining.is_empty()
                 && extender
                     .0
@@ -431,7 +625,6 @@ fn extend_complex(
                 tracing::debug!("extend_complex: NO-OP triggered");
             }
 
-            // 对 extender 的每个 complex 生成替换
             (!is_no_op && !has_conflict).then(|| {
                 extender
                     .0
@@ -461,17 +654,30 @@ fn extend_complex(
 }
 
 /// 检查 remaining simples 是否与 extender compound 冲突。
-/// 冲突定义：两者都有 Type 但不同，或都有 Id 但不同，或都有 PseudoElement 但不同。
+/// 命名空间感知版本。
 fn compounds_conflict(remaining: &[SimpleSelector], ext_compound: &CompoundSelector) -> bool {
-    let rem_type = remaining.iter().find_map(|s| match s {
-        SimpleSelector::Type(t) => Some(t),
-        _ => None,
-    });
-    let ext_type = ext_compound.0.iter().find_map(|s| match s {
-        SimpleSelector::Type(t) => Some(t),
-        _ => None,
-    });
-    let type_conflict = rem_type.zip(ext_type).is_some_and(|(r, e)| r != e);
+    let rem_type = remaining.iter().find(|s| matches!(s, SimpleSelector::Type { .. }));
+    let ext_type = ext_compound
+        .0
+        .iter()
+        .find(|s| matches!(s, SimpleSelector::Type { .. }));
+
+    let type_conflict = match (rem_type, ext_type) {
+        (
+            Some(SimpleSelector::Type {
+                namespace: ns_r,
+                name: name_r,
+            }),
+            Some(SimpleSelector::Type {
+                namespace: ns_e,
+                name: name_e,
+            }),
+        ) => {
+            // 同名 Type 但命名空间不兼容 → 冲突
+            name_r == name_e && !namespaces_compatible(ns_r, ns_e)
+        }
+        _ => false,
+    };
 
     let rem_id = remaining.iter().find_map(|s| match s {
         SimpleSelector::Id(i) => Some(i),
@@ -483,15 +689,22 @@ fn compounds_conflict(remaining: &[SimpleSelector], ext_compound: &CompoundSelec
     });
     let id_conflict = rem_id.zip(ext_id).is_some_and(|(r, e)| r != e);
 
-    let rem_pe = remaining.iter().find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
-    let ext_pe = ext_compound.0.iter().find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
-    let pe_conflict = rem_pe.zip(ext_pe).is_some_and(|(r, e)| r != e);
+    let rem_pe = remaining
+        .iter()
+        .find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
+    let ext_pe = ext_compound
+        .0
+        .iter()
+        .find(|s| matches!(s, SimpleSelector::PseudoElement { .. }));
+    let pe_conflict = match (rem_pe, ext_pe) {
+        (Some(r), Some(e)) => !pseudo_element_eq_normalized(r, e),
+        _ => false,
+    };
 
     type_conflict || id_conflict || pe_conflict
 }
 
 /// 构建扩展后的 complex selector。
-/// 返回 Vec 因为多 compound extender 可能产生多个结果（不同插入位置）。
 fn build_extended_complex(
     selector: &ComplexSelector,
     ext_complex: &ComplexSelector,
@@ -504,7 +717,6 @@ fn build_extended_complex(
     let suffix = &selector.compounds[match_pos + 1..];
     let orig_combinator = selector.compounds[match_pos].0;
 
-    // 确定首 compound 的 combinator
     let ext_first_combinator = ext_complex.compounds.first().and_then(|(c, _)| *c);
     let resolved_first_combinator = if sel_leading {
         orig_combinator.or(ext_first_combinator).or(Some(Combinator::Descendant))
@@ -514,15 +726,15 @@ fn build_extended_complex(
 
     let remaining_to_attach = remaining;
 
-    // 根据 extender 结构分派构建逻辑，返回 Vec<Vec<Compound>>（多结果支持）
     let results: Vec<Vec<(Option<Combinator>, CompoundSelector)>> = match ext_complex.compounds.len() {
-        // ── 0 compounds：纯组合器（如 >）──
-        0 => vec![vec![(resolved_first_combinator.or(Some(Combinator::Descendant)), CompoundSelector(Vec::new()))]],
-
-        // ── 1 compound：区分空 compound（纯组合器）vs 正常 compound ──
-        1 if ext_complex.compounds[0].1.0.is_empty() => {
-            vec![vec![(resolved_first_combinator.or(Some(Combinator::Descendant)), CompoundSelector(Vec::new()))]]
-        }
+        0 => vec![vec![(
+            resolved_first_combinator.or(Some(Combinator::Descendant)),
+            CompoundSelector(Vec::new()),
+        )]],
+        1 if ext_complex.compounds[0].1.0.is_empty() => vec![vec![(
+            resolved_first_combinator.or(Some(Combinator::Descendant)),
+            CompoundSelector(Vec::new()),
+        )]],
         1 => {
             let ext_sims = &ext_complex.compounds[0].1 .0;
             let merged: Vec<SimpleSelector> = remaining_to_attach
@@ -536,8 +748,6 @@ fn build_extended_complex(
             });
             vec![result]
         }
-
-        // ── 多 compounds：区分尾随组合器 vs 正常 ──
         _ => {
             let last_idx = ext_complex.compounds.len() - 1;
             let ext_has_trailing = ext_complex.compounds[last_idx].1.0.is_empty();
@@ -565,7 +775,6 @@ fn build_extended_complex(
                     vec![head.into_iter().chain(tail).collect()]
                 }
                 false => {
-                    // 多 compound extender
                     let parent_idx = last_idx - 1;
                     let ext_head = &ext_complex.compounds[..parent_idx];
                     let (_, ext_parent) = &ext_complex.compounds[parent_idx];
@@ -580,13 +789,7 @@ fn build_extended_complex(
 
                     let is_two_compound = ext_complex.compounds.len() <= 2;
 
-                    // 2-compound extender：parent + prefix + tail
-                    // 3+ compound extender：prefix 插入 ext_head 不同位置
                     if is_two_compound {
-                        // 2-compound：根据 prefix 长度决定顺序
-                        // prefix 空（match 在开头）：extender + suffix
-                        // prefix 1 元素：ext_head + prefix + ext_tail（extender head 插入 prefix 前）
-                        // prefix 2+ 元素：prefix + extender（extender 放在 prefix 后）
                         let parent_comp = (None, ext_parent.clone());
                         let prefix_part: Vec<_> = prefix
                             .iter()
@@ -597,34 +800,24 @@ fn build_extended_complex(
                             .collect();
 
                         match prefix.len() {
-                            0 => {
-                                // match 在开头：parent + tail + suffix
-                                vec![std::iter::once(parent_comp)
-                                    .chain(std::iter::once(tail_comp))
-                                    .collect()]
-                            }
-                            1 => {
-                                // prefix 1 元素：ext_head + prefix + ext_tail
-                                vec![std::iter::once(parent_comp)
-                                    .chain(prefix_part)
-                                    .chain(std::iter::once(tail_comp))
-                                    .collect()]
-                            }
-                            _ => {
-                                // prefix 2+ 元素：prefix + extender
-                                vec![prefix_part
-                                    .into_iter()
-                                    .chain(std::iter::once(parent_comp))
-                                    .chain(std::iter::once(tail_comp))
-                                    .collect()]
-                            }
+                            0 => vec![std::iter::once(parent_comp)
+                                .chain(std::iter::once(tail_comp))
+                                .collect()],
+                            1 => vec![std::iter::once(parent_comp)
+                                .chain(prefix_part)
+                                .chain(std::iter::once(tail_comp))
+                                .collect()],
+                            _ => vec![prefix_part
+                                .into_iter()
+                                .chain(std::iter::once(parent_comp))
+                                .chain(std::iter::once(tail_comp))
+                                .collect()],
                         }
                     } else {
-                        // 3+ compounds：prefix 插入 ext_head 不同位置
                         let prefix_for_insert = if prefix.is_empty() {
                             prefix
                         } else {
-                            &prefix[..prefix.len() - 1] // 去掉最后一个 compound（被 parent 替换）
+                            &prefix[..prefix.len() - 1]
                         };
 
                         (0..=ext_head.len())
@@ -668,15 +861,10 @@ fn build_extended_complex(
         }
     };
 
-    // 对每个结果添加 suffix + 尾随组合器继承 + 过滤
     results
         .into_iter()
         .map(|built| {
-            let with_suffix: Vec<_> = built
-                .into_iter()
-                .chain(suffix.iter().cloned())
-                .collect();
-
+            let with_suffix: Vec<_> = built.into_iter().chain(suffix.iter().cloned()).collect();
             let len = with_suffix.len();
             let adjusted: Vec<_> = match (sel_trailing, len) {
                 (true, 0) => with_suffix,
@@ -689,7 +877,6 @@ fn build_extended_complex(
                     .collect(),
                 _ => with_suffix,
             };
-
             adjusted
                 .into_iter()
                 .filter(|(comb, comp)| !comp.0.is_empty() || comb.is_some())
@@ -700,8 +887,7 @@ fn build_extended_complex(
         .collect()
 }
 
-/// 精确匹配：extendee 的 compounds 序列与 selector 的某个子序列完全匹配。
-/// 用于多 compound extendee（如 `c.d` 匹配 `c.d`）。
+/// 精确匹配多 compound extendee。
 fn try_exact_complex_match(
     selector: &ComplexSelector,
     extendee: &ComplexSelector,
@@ -714,7 +900,6 @@ fn try_exact_complex_match(
         return None;
     }
 
-    // 尝试在任意位置匹配 extendee 序列（迭代器链替代 for 循环）
     (0..=sel_compounds.len() - ext_compounds.len())
         .find(|&start| {
             let slice = &sel_compounds[start..start + ext_compounds.len()];
@@ -761,9 +946,6 @@ fn has_leading_combinator(complex: &ComplexSelector) -> bool {
 }
 
 /// 检查 complex selector 的最后一个 compound 是否有 trailing combinator。
-/// 尾随组合器指最后一个 compound 是空的（有 combinator 但无 simple selector）。
-/// 例如 `.c +` 解析为 `[(None, .c), (Some(Sibling), empty)]`。
-/// 正常选择器如 `.c .d` 的最后一个 compound 是 `.d`，没有尾随组合器。
 fn has_trailing_combinator(complex: &ComplexSelector) -> bool {
     complex
         .compounds
@@ -773,18 +955,12 @@ fn has_trailing_combinator(complex: &ComplexSelector) -> bool {
 
 /// 检查 extender Selector 的任意 complex 是否有 leading combinator。
 fn extender_has_leading_combinator(extender: &Selector) -> bool {
-    extender
-        .0
-        .iter()
-        .any(|c| has_leading_combinator(c))
+    extender.0.iter().any(|c| has_leading_combinator(c))
 }
 
 /// 检查 extender Selector 的任意 complex 是否有 trailing combinator。
 fn extender_has_trailing_combinator(extender: &Selector) -> bool {
-    extender
-        .0
-        .iter()
-        .any(|c| has_trailing_combinator(c))
+    extender.0.iter().any(|c| has_trailing_combinator(c))
 }
 
 /// 替换选择器：在 `selector` 中查找匹配 `original` 的部分，用 `replacement` 替换。
@@ -798,11 +974,10 @@ pub fn replace_selector(
         .0
         .iter()
         .flat_map(|complex| {
-            let replaced =
-                original
-                    .0
-                    .iter()
-                    .find_map(|oc| replace_complex(complex, oc, replacement));
+            let replaced = original
+                .0
+                .iter()
+                .find_map(|oc| replace_complex(complex, oc, replacement));
             match replaced {
                 Some(sel) => sel.0.into_iter().collect::<Vec<_>>(),
                 None => vec![complex.clone()],
@@ -827,7 +1002,6 @@ fn replace_complex(
     let sel_compounds: Vec<&CompoundSelector> = selector.compounds.iter().map(|(_, c)| c).collect();
     let orig_compounds: Vec<&CompoundSelector> = original.compounds.iter().map(|(_, c)| c).collect();
 
-    // Strategy 1: Complex-level suffix matching — original 的化合物序列作为 selector 的后缀精确匹配
     if sel_compounds.len() >= orig_compounds.len() {
         let start = sel_compounds.len() - orig_compounds.len();
         let suffix = &sel_compounds[start..];
@@ -855,10 +1029,6 @@ fn replace_complex(
         }
     }
 
-    // Strategy 2: Compound-level subset matching — original 的单个化合物是 selector 某化合物的子集
-    // 例: selector-replace('c.d', 'c', 'e') → 'e.d'（type 替换 type，保持位置）
-    // 例: selector-replace('.a.b', '.b', '.c') → '.a.c'
-    // original 仅含一个化合物，且其简单选择器是 selector 某化合物的子集
     if orig_compounds.len() == 1 {
         let orig_compound = orig_compounds[0];
 
@@ -872,20 +1042,16 @@ fn replace_complex(
         if let Some((_idx, (comb, sel_compound))) = found {
             if let Some(rep_complex) = replacement.0.first() {
                 if let Some((_, rep_compound)) = rep_complex.compounds.first() {
-                    // 替换：将 orig simples 替换为 rep simples，保持位置
                     let mut new_simples: Vec<SimpleSelector> = Vec::new();
                     let mut replacement_done = false;
 
                     for simple in &sel_compound.0 {
                         if orig_compound.0.contains(simple) && !replacement_done {
-                            // 在第一个匹配位置插入替换 simples
                             new_simples.extend(rep_compound.0.clone());
                             replacement_done = true;
                         } else if !orig_compound.0.contains(simple) {
-                            // 保留非匹配 simple
                             new_simples.push(simple.clone());
                         }
-                        // 跳过其他匹配 simple（已被替换）
                     }
 
                     let new_compound = CompoundSelector(new_simples);

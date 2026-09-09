@@ -12,6 +12,36 @@ use std::fmt;
 
 // ─── AST 类型定义 ─────────────────────────────────────────────────
 
+/// 命名空间前缀——类型选择器的命名空间部分。
+///
+/// CSS 命名空间语法：
+/// - `div` → `None`（无前缀）
+/// - `|div` → `Empty`（空命名空间）
+/// - `*|div` → `Any`（任意命名空间）
+/// - `svg|div` → `Explicit("svg")`（显式命名空间）
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Namespace {
+    /// 无前缀（默认）
+    None,
+    /// 空命名空间 `|`
+    Empty,
+    /// 任意命名空间 `*|`
+    Any,
+    /// 显式命名空间 `ns|`
+    Explicit(String),
+}
+
+impl fmt::Display for Namespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => Ok(()),
+            Self::Empty => write!(f, "|"),
+            Self::Any => write!(f, "*|"),
+            Self::Explicit(ns) => write!(f, "{ns}|"),
+        }
+    }
+}
+
 /// 顶层选择器——逗号分隔的复杂选择器列表。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Selector(pub Vec<ComplexSelector>);
@@ -33,8 +63,11 @@ pub struct CompoundSelector(pub Vec<SimpleSelector>);
 pub enum SimpleSelector {
     /// `*`
     Universal,
-    /// `div`、`a`、`span`
-    Type(String),
+    /// `div`、`a`、`span`（含命名空间信息）
+    Type {
+        namespace: Namespace,
+        name: String,
+    },
     /// `.btn`
     Class(String),
     /// `#main`
@@ -131,7 +164,7 @@ impl fmt::Display for SimpleSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Universal => write!(f, "*"),
-            Self::Type(s) => write!(f, "{s}"),
+            Self::Type { namespace, name } => write!(f, "{namespace}{name}"),
             Self::Class(s) => write!(f, ".{s}"),
             Self::Id(s) => write!(f, "#{s}"),
             Self::Attribute { name, op, value, modifier } => {
