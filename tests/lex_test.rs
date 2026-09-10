@@ -1,3 +1,19 @@
+//! —— Lexer token 化测试 ——
+//!
+//! 概要：验证 Lexer 将 SCSS 源码正确 token 化为 Token 序列。
+//!
+//! ## 覆盖场景
+//! - 基础 token：Ident、Number、String、Interp
+//! - 选择器 token：Amp (&)、DotDotDot (...)、Colon
+//! - 特殊 token：Dollar ($var)、Hash (#ff0000)、AtRule (@media)
+//! - 注释：LineComment (//)、BlockComment (/* */)
+//! - 操作符：==、!=、<=、>=
+//! - 关键字：true、false、null、and、or、not
+//! - 复合选择器 token 序列（如 `a:hover`）
+//!
+//! ## sass-spec 参照
+//! - 无直接对应（Lexer 内部测试，为 parser 前置）
+
 use sasspile::lex::Lexer;
 use sasspile::lex::token::Token;
 

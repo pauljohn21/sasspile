@@ -1,4 +1,12 @@
-//! 模块辅助函数——绑定、配置、合并逻辑。
+//! —— 模块辅助函数 ——
+//!
+//! 概要：提供模块系统的辅助函数（绑定、配置、合并逻辑）。
+//!
+//! ## 核心概念
+//! - `bind_exports`：将模块导出绑定到当前作用域
+//! - `merge_module_cache`：合并全局模块缓存
+//! - `BindMode`：绑定模式（import/use/forward）
+//! - `FilterConfig`：成员过滤配置（show/hide）
 
 use super::*;
 use crate::error::{Result, SassError};

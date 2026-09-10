@@ -1,4 +1,12 @@
-//! sasspile v2 CLI —— 纯 Rust 函数式 SCSS 编译器。
+//! —— sasspile v2 CLI ——
+//!
+//! 概要：sasspile 命令行入口，纯 Rust 函数式 SCSS 编译器。
+//!
+//! ## 核心概念
+//! - `run()` 异步主函数读取输入、调用管线、输出 CSS
+//! - 支持文件模式（`input.scss`）和 stdin 模式
+//! - `OutputStyle` 选项（Expanded / Compressed）
+//! - OTel 追踪初始化
 
 use std::io::{self, Read};
 

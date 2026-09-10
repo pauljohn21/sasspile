@@ -1,4 +1,13 @@
-//! extend/replace 算法——选择器扩展与替换。
+//! —— 选择器 extend/replace 算法 ——
+//!
+//! 概要：实现 sass:selector 模块的 extend 和 replace 算法。
+//!
+//! ## 核心概念
+//! - `extend_selector`：将选择器中匹配 extendee 的部分替换为 extender
+//! - `replace_selector`：精确替换选择器中匹配 original 的部分
+//! - 前导/尾随组合器检测与处理
+//! - 多组合器 extendee 拆分
+//! - `compounds_conflict` 检查扩展冲突
 
 use super::selector_ast::{Combinator, ComplexSelector, CompoundSelector, Namespace, Selector, SimpleSelector};
 use super::selector_ops::{

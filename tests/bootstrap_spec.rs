@@ -1,9 +1,18 @@
-//! Bootstrap 5.3.8 验证测试。
+//! —— Bootstrap 5.3.8 特性验证测试 ——
 //!
-/// 测试 Bootstrap 使用的核心 SCSS 特性。
-/// 注意：完整 Bootstrap 编译需要 @import、@mixin、父选择器 & 等高级特性支持。
-/// 当前版本会将 hex 颜色转换为 `rgba()` 格式。
-/// 检查 CSS 是否包含颜色（支持 hex 和 rgba 格式）。
+//! 概要：验证 Bootstrap 使用的核心 SCSS 特性编译正确性。
+//!
+//! ## 覆盖场景
+//! - Bootstrap 变量定义（$primary、$secondary、$success 等）
+//! - 选择器嵌套（.navbar .navbar-brand 等）
+//! - 数学运算（$spacer * 0.25 等）
+//! - 媒体查询（@media min-width: 576px/768px/992px）
+//! - 网格系统（.row、.col、flex 布局）
+//! - 工具类 API：间距、颜色、边框、显示、flex
+//! - hex 颜色 → rgba() 转换验证
+//!
+//! ## sass-spec 参照
+//! - 无直接对应（针对 Bootstrap 项目的特性验证）
 fn assert_contains_color(css: &str, hex: &str) {
     // 将 hex 转换为 rgba 进行比较
     let rgba = hex_to_rgba(hex);

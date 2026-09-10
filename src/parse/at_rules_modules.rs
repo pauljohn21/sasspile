@@ -1,4 +1,12 @@
-//! 模块系统 @规则解析：@use / @forward / @import。
+//! —— 模块系统 @规则解析 ——
+//!
+//! 概要：解析 SCSS 模块系统 @规则：@use、@forward、@import。
+//!
+//! ## 核心概念
+//! - `@use "url" as namespace` 解析与命名空间绑定
+//! - `@forward "url" as prefix-*` 转发规则解析
+//! - `@import "url"` 传统导入解析
+//! - 配置参数（`with ($key: value)`）处理
 
 use super::Parser;
 use super::ast::*;

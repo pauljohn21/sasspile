@@ -203,7 +203,7 @@ fn test_unify_comma_list() {
     assert!(s.contains(".b.c") || s.contains(".c.b"));
 }
 
-// ─── selector-extend tests ───────────────────────────────────────
+// ─── selector-extend tests ─────────────────────────────────────────────────
 
 #[test]
 fn test_extend_parent_replacement() {
@@ -303,7 +303,7 @@ fn test_extend_leading_adjacent_combinator() {
     assert!(result.contains(".c + .e"), "Expected .c + .e, got {result}");
 }
 
-// ─── Parser error detection tests ────────────────────────────────
+// ─── Parser error detection tests ──────────────────────────────────────────
 
 #[test]
 fn test_unclosed_attribute_selector_error() {

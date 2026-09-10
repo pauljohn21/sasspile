@@ -1,4 +1,11 @@
-//! CSS @import 提升策略——将所有 `@import` `AtRule` 提升到输出顶部。
+//! —— CSS @import 提升策略 ——
+//!
+//! 概要：将所有 `@import` AtRule 提升到输出 CSS 的顶部。
+//!
+//! ## 核心概念
+//! - 遍历 CssNode 树收集 `@import` 节点
+//! - 按原始顺序移到输出顶部
+//! - 从原来位置移除
 
 use crate::css::node::CssNode;
 

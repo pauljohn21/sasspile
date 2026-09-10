@@ -1,4 +1,15 @@
-//! Bootstrap 5.3.8 编译验证测试。
+//! —— Bootstrap 5.3.8 编译验证测试 ——
+//!
+//! 概要：对 Bootstrap 5.3.8 项目各组件执行编译验证。
+//!
+//! ## 覆盖场景
+//! - 各组件独立编译（reboot、alert、badge、close、containers 等）
+//! - 全量 bootstrap.scss 编译
+//! - bootstrap-reboot.scss 编译
+//! - _functions.scss / _variables.scss / _mixins.scss 编译
+//!
+//! ## sass-spec 参照
+//! - 无直接对应（针对 Bootstrap 项目的编译验证）
 
 use sasspile::*;
 use std::path::PathBuf;

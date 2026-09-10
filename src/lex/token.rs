@@ -1,4 +1,14 @@
-//! Token 定义——词法分析器的产出。
+//! —— Token 定义 ——
+//!
+//! 概要：词法分析器产出的 Token 枚举定义。
+//!
+//! ## 核心概念
+//! - 基础 token：Ident、Number、String、Hash、Dollar
+//! - 选择器 token：Amp、Colon、DotDotDot、Comma
+//! - 操作符：Eq、NotEq、LessEq、GreaterEq
+//! - 关键字：True、False、Null、And、Or、Not
+//! - 结构 token：LParen、RParen、LBrace、RBrace
+//! - 特殊 token：Interp、Comment、AtRule
 
 /// 词法单元。
 #[derive(Debug, Clone, PartialEq)]

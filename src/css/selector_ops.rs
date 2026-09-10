@@ -1,4 +1,13 @@
-//! 选择器代数运算——公共辅助函数 + 公开 API 重导出。
+//! —— 选择器代数运算 ——
+//!
+//! 概要：选择器操作的公共辅助函数（化合物冲突、组合器检测等）+ 公开 API 重导出。
+//!
+//! ## 核心概念
+//! - `compounds_conflict`：检查 compound selector 是否冲突
+//! - `extender_has_leading_combinator` / `has_leading_combinator`：前导组合器检测
+//! - `is_semantic_subset`：语义子集判断
+//! - `selector_simple_covers_ext`：selector 覆盖检测
+//! - 重导出 `extend_selector`、`replace_selector`、`unify_selector`
 
 pub use super::selector_unify::unify;
 pub use super::selector_is_super::is_superselector;

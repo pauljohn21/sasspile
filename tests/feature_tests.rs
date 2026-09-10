@@ -1,7 +1,16 @@
-//! 功能测试——关键字参数、@forward as prefix-* 等特性的集成测试。
+//! —— 特性集成测试 ——
 //!
-//! 这些测试使用公共 `API（compile_expanded` / `compile_file`），
-//! 在独立编译单元中运行，与源码隔离。
+//! 概要：关键字参数、@forward as prefix-* 等特性的集成测试。
+//!
+//! ## 覆盖场景
+//! - 颜色函数关键字参数：adjust-color、color.adjust、change-color、scale-color
+//! - @forward as prefix-* 变量访问：$variable、function()、@mixin
+//! - @forward as prefix_* 下划线风格
+//! - load path 编译（compile_file_with_load_paths）
+//!
+//! ## sass-spec 参照
+//! - `core_functions/color/adjust-color.hrx` — 关键字参数
+//! - `directives/forward/` — @forward as prefix-* 形式
 
 use sasspile::{OutputStyle, compile_expanded, compile_file};
 use std::path::PathBuf;

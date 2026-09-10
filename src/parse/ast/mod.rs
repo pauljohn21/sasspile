@@ -1,4 +1,13 @@
-//! AST 定义——语法分析器的产出。
+//! —— AST 节点定义 ——
+//!
+//! 概要：语法分析器产出的 AST 节点类型定义。
+//!
+//! ## 核心概念
+//! - `Node` 枚举：Rule、Decl、Variable、If、For、Each、While、Include、Extend、Use 等
+//! - `Value` 枚举：Number、String、Color、List、Map、Bool、Null、Variable、FunctionCall
+//! - `VarFlags`：变量标志（default/global）
+//! - `Separator`：列表分隔符（Comma/Space/Slash）
+//! - 子模块：`color_types`、`color_fmt`、`display`、`escape`、`named_colors`
 
 mod color_fmt;
 mod color_types;

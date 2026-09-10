@@ -1,3 +1,15 @@
+//! —— SCSS 反向序列化测试 ——
+//!
+//! 概要：验证 AST 节点 to_scss() 方法正确生成 SCSS 源码。
+//!
+//! ## 覆盖场景
+//! - Rule / Decl / Variable / Comment 序列化
+//! - If / For / Include / Extend / Use / Return / Content 序列化
+//! - 缩进与格式化正确性
+//!
+//! ## sass-spec 参照
+//! - 无直接对应（AST round-trip 内部测试）
+
 use sasspile::parse::ast::*;
 
 #[test]

@@ -1,3 +1,17 @@
+//! —— 求值器插值 + Reactor 管线测试 ——
+//!
+//! 概要：验证求值器在插值表达式和 Reactor 管线中的正确性。
+//!
+//! ## 覆盖场景
+//! - 插值关键字透传（#{"not"} css() → not css()）
+//! - 插值逻辑关键字（#{"and"} → 透传不求值）
+//! - Reactor 管线编译（lex → parse → evaluate → serialize → finish）
+//! - 变量求值（$x: 10px → declaration value 验证）
+//!
+//! ## sass-spec 参照
+//! - `values/strings/` — 字符串插值
+//! - `at_rules/` — at-rule 内求值
+
 use sasspile::css::node::CssNode;
 use sasspile::eval::reactor::Reactor;
 use sasspile::compile_expanded;

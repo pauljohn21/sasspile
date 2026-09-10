@@ -1,4 +1,13 @@
-//! 语法分析器——递归下降 + Pratt 表达式解析。
+//! —— 语法分析器 ——
+//!
+//! 概要：SCSS 语法分析器，递归下降 + Pratt 表达式解析。
+//!
+//! ## 核心概念
+//! - `Parser` 结构体持有 Token 流和位置状态
+//! - 顶层 `parse_top` 分派到各节点解析
+//! - `parse_rule`、`parse_decl`、`parse_variable` 等语句解析
+//! - Pratt 解析处理表达式优先级
+//! - 子模块：`at_rules`、`expr`、`nodes`、`params`
 
 pub mod ast;
 mod ast_impl;

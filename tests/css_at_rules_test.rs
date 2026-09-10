@@ -1,4 +1,22 @@
-//! CSS at-rules 功能测试——@keyframes, @font-face, @page, @charset, @namespace, @layer, @container。
+//! —— CSS at-rules 编译测试 ——
+//!
+//! 概要：验证 CSS at-rules 的完整编译能力。
+//!
+//! ## 覆盖场景
+//! - @keyframes：基础、百分比、列表选择器、vendor 前缀、bubble、插值名称
+//! - @font-face：字体声明
+//! - @page：基础、伪类（:first）
+//! - @charset / @namespace
+//! - @layer：声明形式、嵌套 block
+//! - @container：条件查询
+//! - @supports：嵌套
+//!
+//! ## sass-spec 参照
+//! - `at_rules/keyframes/` — 动画关键帧
+//! - `at_rules/font_face/` — 字体声明
+//! - `at_rules/page/` — 页规则
+//! - `at_rules/layer/` — 层规则
+//! - `at_rules/container/` — 容器查询
 
 fn compile_expanded(input: &str) -> Result<String, String> {
     sasspile::compile_expanded(input).map_err(|e| e.to_string())

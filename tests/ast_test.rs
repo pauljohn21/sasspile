@@ -1,3 +1,18 @@
+//! —— AST Value/List/Color Display 测试 ——
+//!
+//! 概要：验证 sasspile AST 节点（Value、Color、List、Map）的 Display 实现正确性。
+//!
+//! ## 覆盖场景
+//! - Number/String/Color/List/Map/Bool/Null 的 Display 格式化
+//! - 命名颜色反向查找（rgb(255,0,0) → "red"）
+//! - List 分隔符（comma / space）
+//! - Color rgb/rgba 构造与 alpha 通道
+//!
+//! ## sass-spec 参照
+//! - `values/colors/` — 颜色构造与输出格式
+//! - `values/lists/` — list 序列化
+//! - `values/numbers/` — 数字格式化与单位
+
 #![allow(clippy::float_cmp)]
 use sasspile::parse::ast::*;
 

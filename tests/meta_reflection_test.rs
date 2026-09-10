@@ -1,4 +1,20 @@
-//! meta 反射函数测试——feature-exists, content-exists, global-variable-exists, variable-exists, call。
+//! —— meta 反射函数测试 ——
+//!
+//! 概要：验证 sass:meta 模块反射函数的正确性。
+//!
+//! ## 覆盖场景
+//! - feature-exists：支持/不支持的 feature 检测
+//! - global-variable-exists / variable-exists：全局/局部变量存在性
+//! - content-exists：mixin 内 @content 检测
+//! - mixin-exists / function-exists：mixin/function 存在性
+//! - call：通过 get-function 调用函数
+//!
+//! ## sass-spec 参照
+//! - `core_functions/meta/feature-exists.hrx`
+//! - `core_functions/meta/global-variable-exists.hrx`
+//! - `core_functions/meta/variable-exists.hrx`
+//! - `core_functions/meta/content-exists.hrx`
+//! - `core_functions/meta/call.hrx`
 
 fn compile(input: &str) -> Result<String, String> {
     sasspile::compile_expanded(input).map_err(|e| e.to_string())

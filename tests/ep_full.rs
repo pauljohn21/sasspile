@@ -1,6 +1,14 @@
-//! element-plus 全量编译验证测试。
+//! —— element-plus 全量编译验证 ——
 //!
-//! 使用 tracing 进行问题追踪，不使用 tracing::error!/println!。
+//! 概要：对 element-plus 项目所有 SCSS 文件执行全量编译验证，输出统计报告。
+//!
+//! ## 覆盖场景
+//! - 遍历 `packages/theme-chalk/src/` 全部 `.scss` 文件
+//! - 统计成功/失败数、错误分类（未定义函数、类型错误、参数错误等）
+//! - 使用 tracing 进行问题追踪（无 println!/eprintln!）
+//!
+//! ## sass-spec 参照
+//! - 无直接对应（针对 element-plus 项目的编译验证）
 
 use sasspile::*;
 use std::path::PathBuf;

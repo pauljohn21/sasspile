@@ -1,4 +1,17 @@
-//! 测试 @media/@supports 参数中的表达式求值。
+//! —— @media/@supports 参数表达式求值测试 ——
+//!
+//! 概要：验证 @media 和 @supports at-rule 参数中的表达式求值正确性。
+//!
+//! ## 覆盖场景
+//! - @supports 声明左侧/右侧表达式求值
+//! - @supports 插值名称解析
+//! - @supports not / and / or 逻辑操作符
+//! - @media 范围表达式（width < 500px + 100px）
+//! - @media 变量范围表达式
+//!
+//! ## sass-spec 参照
+//! - `at_rules/media/` — 媒体查询表达式
+//! - `at_rules/supports/` — supports 条件表达式
 
 use sasspile::compile_expanded;
 

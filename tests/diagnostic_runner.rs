@@ -70,34 +70,56 @@ fn diag(subdir: &str, max_show: usize) {
 
 // ─── 测试函数：core_functions / directives 模块 ──────────────────────────
 
-#[test] fn diag_list() { diag("core_functions/list", 15); }
-#[test] fn diag_selector() { diag("core_functions/selector", 15); }
-#[test] fn diag_math() { diag("core_functions/math", 15); }
-#[test] fn diag_expressions() { diag("expressions", 15); }
-#[test] fn diag_meta() { diag("core_functions/meta", 15); }
-#[test] fn diag_import() { diag("directives/import", 50); }
-#[test] fn diag_use() { diag("directives/use", 50); }
-#[test] fn diag_css() { diag("css", 20); }
-#[test] fn diag_non_conformant() { diag("non_conformant", 20); }
-#[test] fn diag_function() { diag("directives/function", 15); }
-#[test] fn diag_extend() { diag("directives/extend", 50); }
-#[test] fn diag_forward() { diag("directives/forward", 50); }
-#[test] fn diag_numbers() { diag("values/numbers", 20); }
-#[test] fn diag_string() { diag("core_functions/string", 20); }
-#[test] fn diag_map() { diag("core_functions/map", 15); }
-#[test] fn diag_for() { diag("directives/for", 15); }
-#[test] fn diag_each() { diag("directives/each", 15); }
-#[test] fn diag_while() { diag("directives/while", 15); }
-#[test] fn diag_media() { diag("directives/media", 15); }
-#[test] fn diag_values_maps() { diag("values/maps", 10); }
+#[test]
+fn diag_list() { diag("core_functions/list", 15); }
+#[test]
+fn diag_selector() { diag("core_functions/selector", 15); }
+#[test]
+fn diag_math() { diag("core_functions/math", 15); }
+#[test]
+fn diag_expressions() { diag("expressions", 15); }
+#[test]
+fn diag_meta() { diag("core_functions/meta", 15); }
+#[test]
+fn diag_import() { diag("directives/import", 50); }
+#[test]
+fn diag_use() { diag("directives/use", 50); }
+#[test]
+fn diag_css() { diag("css", 20); }
+#[test]
+fn diag_non_conformant() { diag("non_conformant", 20); }
+#[test]
+fn diag_function() { diag("directives/function", 15); }
+#[test]
+fn diag_extend() { diag("directives/extend", 50); }
+#[test]
+fn diag_forward() { diag("directives/forward", 50); }
+#[test]
+fn diag_numbers() { diag("values/numbers", 20); }
+#[test]
+fn diag_string() { diag("core_functions/string", 20); }
+#[test]
+fn diag_map() { diag("core_functions/map", 15); }
+#[test]
+fn diag_for() { diag("directives/for", 15); }
+#[test]
+fn diag_each() { diag("directives/each", 15); }
+#[test]
+fn diag_while() { diag("directives/while", 15); }
+#[test]
+fn diag_media() { diag("directives/media", 15); }
+#[test]
+fn diag_values_maps() { diag("values/maps", 10); }
 
-#[test] fn stats_list() {
+#[test]
+fn stats_list() {
     let (pass, fail, total) = stats_subdir("core_functions/list");
     let pct = if total > 0 { pass * 100 / total } else { 0 };
     tracing::info!(pass, fail, total, pct, "stats_list");
 }
 
-#[test] fn stats_math() {
+#[test]
+fn stats_math() {
     let (pass, fail, total) = stats_subdir("core_functions/math");
     let pct = if total > 0 { pass * 100 / total } else { 0 };
     tracing::info!(pass, fail, total, pct, "stats_math");

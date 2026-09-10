@@ -1,4 +1,13 @@
-//! Env 方法实现——move 语义 + Rc<Scope> 父链。
+//! —— Env 方法实现 ——
+//!
+//! 概要：Env 结构体的方法实现，基于 move 语义和 Rc<Scope> 父链管理作用域。
+//!
+//! ## 核心概念
+//! - `Env` 持有 `Rc<Scope>` 指向当前活跃作用域
+//! - 方法消费 `self` 返回新 `Env`（链式调用零 clone）
+//! - `enter_scope()` / `exit_scope()` 通过 parent 链管理嵌套
+//! - 写操作利用 `Rc::try_unwrap` 在引用计数为 1 时零 clone 写入
+//! - 变量查找沿 scope 链向上搜索
 
 use super::env::{Env, FunctionDef, MixinDef, ModuleExports};
 use super::scope::Scope;

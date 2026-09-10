@@ -1,4 +1,17 @@
-//! calc 单位兼容性 + 转换测试。
+//! —— calc 单位兼容性 + 转换测试 ——
+//!
+//! 验证 calc 表达式中单位兼容性判断与单位转换的正确性。
+//!
+//! ## 覆盖场景
+//! - 同单位兼容性（px-px、deg-deg）
+//! - 不兼容单位（px-deg、s-px）
+//! - 长度单位兼容性（px-em、px-pt、cm-mm、in-pt）
+//! - 角度单位兼容性（deg-rad、deg-grad、deg-turn）
+//! - 时间单位兼容性（s-ms）
+//! - 单位转换：deg→rad、pt→px、ms→s
+//!
+//! ## sass-spec 参照
+//! - `values/calc/` — calc 表达式单位处理
 
 use sasspile::eval::value::calc_units::{convert_unit, units_compatible};
 

@@ -361,7 +361,7 @@ fn test_cli_compile() {
     assert!(css.contains("color: red"));
 }
 
-// ─── HWB 诊断测试（从 hwb_spec_diag.rs 合并） ──────────────────────────────
+// ─── HWB 诊断测试（从 hwb_spec_diag.rs 合并） ───────────────────────────────────────
 
 #[test]
 fn hwb_degenerate_hue() {
@@ -403,7 +403,7 @@ fn hwb_whiteness_nan_infinity() {
     }
 }
 
-// ─── 文件行数检测（从 file_size_check.rs 合并） ──────────────────────────
+// ─── 文件行数检测（从 file_size_check.rs 合并） ───────────────────────────────────────
 
 use std::fs;
 use std::path::Path;

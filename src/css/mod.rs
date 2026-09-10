@@ -1,4 +1,11 @@
-//! CSS 序列化器——CssNode 树 → CSS 字符串。
+//! —— CSS 序列化器 ——
+//!
+//! 概要：将 CssNode 树序列化为 CSS 字符串输出。
+//!
+//! ## 核心概念
+//! - `Serializer` 封装输出样式（Expanded / Compressed）
+//! - 递归遍历 CssNode 树生成字符串
+//! - 入口函数：`serialize(nodes, style)`
 
 pub mod node;
 mod serialize;

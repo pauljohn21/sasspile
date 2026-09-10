@@ -1,4 +1,13 @@
-//! Lexer 扫描方法——标识符/数字/字符串/注释/插值/转义等。
+//! —— Lexer 扫描方法 ——
+//!
+//! 概要：Lexer 的核心扫描方法实现。
+//!
+//! ## 核心概念
+//! - 标识符扫描 (`scan_ident`)
+//! - 数字扫描（含单位）(`scan_number`)
+//! - 字符串/注释/插值扫描
+//! - 转义字符处理
+//! - Iterator 实现逐字符推进
 
 use super::token::Token;
 use crate::error::{Result, SassError};

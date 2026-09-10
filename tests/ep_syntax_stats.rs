@@ -1,4 +1,17 @@
-//! EP SCSS 语法特性统计。运行: cargo test --test ep_syntax_stats -- --nocapture
+//! —— EP (element-plus) 语法覆盖率统计 ——
+//!
+//! 概要：统计 element-plus 项目中各类 SCSS 语法特性使用频次，输出 Markdown 报告。
+//!
+//! ## 覆盖场景
+//! - 模块系统：@use、@import、@forward
+//! - 混入与函数：@mixin、@function、@include、@content
+//! - 流程控制：@if、@else、@for、@each、@while
+//! - CSS 指令：@media、@supports、@keyframes、@font-face、@layer、@container
+//! - 变量与插值、Sass 模块（math/list/meta/string/selector）、颜色函数
+//! - 写入 `tests/ep_syntax_stats.md`
+//!
+//! ## sass-spec 参照
+//! - 无直接对应（针对 element-plus 项目的语法统计）
 
 use std::collections::HashMap;
 use std::path::PathBuf;

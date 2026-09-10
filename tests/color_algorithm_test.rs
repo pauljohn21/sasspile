@@ -1,4 +1,21 @@
-//! 颜色算法测试——scale, change, invert, to-space。
+//! —— 颜色算法精度测试 ——
+//!
+//! 概要：验证颜色操作函数（scale、change、invert、to-space）的算法正确性。
+//!
+//! ## 覆盖场景
+//! - scale-color：lightness/saturation/red 通道缩放
+//! - change-color：lightness/hue/alpha/red 通道修改与 clamping
+//! - invert：百分比参数、HSL 输入
+//! - adjust-hue：色相调整
+//! - color.to-space：色彩空间转换
+//! - color 模块函数：color.scale、color.change、color.invert
+//!
+//! ## sass-spec 参照
+//! - `core_functions/color/scale.hrx`
+//! - `core_functions/color/change.hrx`
+//! - `core_functions/color/invert.hrx`
+//! - `core_functions/color/adjust_hue.hrx`
+//! - `core_functions/color/to_space.hrx`
 
 fn compile_expanded(input: &str) -> Result<String, String> {
     sasspile::compile_expanded(input).map_err(|e| e.to_string())

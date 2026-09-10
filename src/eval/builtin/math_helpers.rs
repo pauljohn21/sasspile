@@ -1,4 +1,12 @@
-//! Math 函数辅助工具——参数名映射、参数合并、参数验证。
+//! —— Math 函数辅助工具 ——
+//!
+//! 概要：提供 math 函数的参数名映射、参数合并和参数验证辅助函数。
+//!
+//! ## 核心概念
+//! - 参数别名映射（如 `from` → `start`）
+//! - 默认参数合并
+//! - 参数类型与范围校验
+//! - 公开 API：`map_named_args`、`merge_args_with_defaults`
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;

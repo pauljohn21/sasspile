@@ -1,4 +1,18 @@
-//! calc 简化规则测试——对照 sass-spec 预期值。
+//! —— calc 简化规则测试 ——
+//!
+//! 概要：验证 calc 表达式简化函数按 sass-spec 预期值正确简化。
+//!
+//! ## 覆盖场景
+//! - 同单位加减（1px + 2px → 3px）
+//! - 乘除运算（含/不含单位）
+//! - 角度转换（180deg + pi rad → 360deg）
+//! - min/max/clamp/abs/sqrt/round 函数简化
+//! - 嵌套表达式（2 * (3px + 4px)）
+//! - 不兼容单位错误（1px + 1deg → err）
+//! - var() 保留不简化
+//!
+//! ## sass-spec 参照
+//! - `values/calc/simplify.hrx` — calc 简化预期
 
 use sasspile::eval::value::calc_ast::{parse_calc_expr, CalcError, CalcNode};
 use sasspile::eval::value::calc_simplify::simplify_calc_node;

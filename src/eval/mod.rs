@@ -1,4 +1,13 @@
-//! 求值器——纯函数式管线 + move 语义（零 clone）。
+//! —— 求值器核心 ——
+//!
+//! 概要：纯函数式管线 + move 语义的 SCSS 求值器（零 clone）。
+//!
+//! ## 核心概念
+//! - `eval_top`：顶层节点分派入口
+//! - `eval_expr`：表达式求值（Pratt 解析后的 AST）
+//! - flow control（`@if`/`@for`/`@each`/`@while`）求值
+//! - 消费 `Env` move → 返回 `(Vec<CssNode>, Env)`
+//! - 模块系统：`@use` / `@forward` / `@import` 绑定
 
 use crate::__tracing::warn;
 use crate::css::node::CssNode;

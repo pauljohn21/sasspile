@@ -1,8 +1,13 @@
-//! 内建函数分派入口。
+//! —— 内建函数分派入口 ——
 //!
-//! `call_builtin` 按 match 分派到各函数组。
-//! 各函数组已拆分到子模块：color/list/map/string/selector。
-//! 手工分派函数（rgba/rgb/darken/lighten/mix/if/inspect/type-of 等）在 `manual_dispatch` 中。
+//! 概要：`call_builtin` 按函数名分派到各函数组。
+//!
+//! ## 核心概念
+//! - 按 match 分派：`color.*`、`list.*`、`map.*`、`string.*`、`selector.*` 等
+//! - 子模块：`color.rs`、`list.rs`、`map.rs`、`string.rs`、`selector.rs`
+//! - 手工分派函数（rgba/rgb/darken/lighten/mix/if/inspect/type-of 等）在 `manual_dispatch.rs`
+//! - `is_known_builtin` 快速检查函数是否存在（由 sasspile-macros 宏生成）
+//! - `dispatch_builtin_module` 模块级分派（宏生成）
 
 pub mod color;
 pub mod color_adjust;

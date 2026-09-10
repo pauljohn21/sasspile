@@ -1,4 +1,22 @@
-//! HSL/HWB 手动 spec 验证
+//! —— HSL/HWB 边界测试 ——
+//!
+//! 概要：手动验证 HSL/HWB 色彩空间的边界条件和 channel missing 处理。
+//!
+//! ## 覆盖场景
+//! - HSL 单位转换（deg、rad、in → deg）
+//! - HSL 饱和度/亮度 clamping
+//! - HSL hue wrap（390 → 30、-30 → 330）
+//! - HSL missing channels（none 值处理）
+//! - HWB 基础转换（hwb → hsl 规范化）
+//! - HWB alpha clamping（1.1 → 1、-0.1 → 0）
+//! - HWB missing channels
+//! - color.is-missing 函数验证
+//!
+//! ## sass-spec 参照
+//! - `core_functions/color/hsl.hrx` — HSL 构造与边界
+//! - `core_functions/color/hwb.hrx` — HWB 构造与边界
+//! - `core_functions/color/is_missing.hrx` — channel missing 检测
+
 use sasspile::compile_expanded;
 
 #[test]

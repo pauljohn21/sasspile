@@ -1,4 +1,12 @@
-//! `@forward` 指令处理——模块成员转发。
+//! —— @forward 指令处理 ——
+//!
+//! 概要：处理 `@forward` 指令，将上游模块的成员转发到当前模块。
+//!
+//! ## 核心概念
+//! - 解析 `@forward "url" as prefix-*` 形式（前缀/后缀过滤）
+//! - 支持 `show` / `hide` 成员过滤
+//! - `forwarded_vars` / `forwarded_functions` / `forwarded_mixins` 跟踪
+//! - 转发成员的 namespace 重写
 
 use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
 use super::*;

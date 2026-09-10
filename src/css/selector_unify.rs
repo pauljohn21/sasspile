@@ -1,4 +1,12 @@
-//! unify 算法——选择器统一。
+//! —— 选择器 unify 算法 ——
+//!
+//! 概要：实现 `selector-unify($selector1, $selector2)` 合并两个选择器。
+//!
+//! ## 核心概念
+//! - 按位合并 compound selector
+//! - 处理 type 选择器的命名空间冲突
+//! - `:is()` / `:where()` / `:not()` 伪类合并
+//! - 返回 `None` 表示无法统一
 
 use super::selector_ast::{Combinator, ComplexSelector, CompoundSelector, Namespace, Selector, SimpleSelector};
 use super::selector_ops::{find_id, find_pseudo_element, find_type, merge_pseudo_classes, normalize_pseudo_element, pseudo_element_eq_normalized, unify_namespace};

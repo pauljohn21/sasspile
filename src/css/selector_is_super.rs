@@ -1,4 +1,12 @@
-//! is_superselector 算法——超选择器判断。
+//! —— is_superselector 算法 ——
+//!
+//! 概要：实现 `is-superselector($super, $sub)` 判断 $super 是否覆盖 $sub。
+//!
+//! ## 核心概念
+//! - 逐层匹配 compound selector
+//! - 伪类参数递归比较
+//! - 组合器（`>`、`+`、`~`）敏感的比较逻辑
+//! - `selector_simple_covers_ext` 检查 simple selector 覆盖
 
 use super::selector_ast::{ComplexSelector, CompoundSelector, Namespace, Selector, SimpleSelector};
 use super::selector_ops::has_normalized_pseudo_element;

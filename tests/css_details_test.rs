@@ -1,4 +1,17 @@
-//! CSS 细节测试——@media bubbling, @supports 格式, CSS custom properties, selector.replace/nest。
+//! —— CSS 细节输出测试 ——
+//!
+//! 概要：验证 CSS 细节输出（@media bubbling、@supports、custom properties、选择器操作）。
+//!
+//! ## 覆盖场景
+//! - @media bubbling：嵌套 @media 提升合并
+//! - @supports：基础、not、and 逻辑操作符
+//! - CSS custom properties：声明、var()、fallback、插值
+//! - 选择器操作：selector-nest、selector-replace、selector-parse、selector-unify、selector-extend、is-superselector
+//!
+//! ## sass-spec 参照
+//! - `at_rules/media/` — 媒体查询 bubbling
+//! - `at_rules/supports/` — supports 格式
+//! - `core_functions/selector/` — 选择器操作函数
 
 fn compile_expanded(input: &str) -> Result<String, String> {
     sasspile::compile_expanded(input).map_err(|e| e.to_string())

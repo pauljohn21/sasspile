@@ -17,7 +17,7 @@ fn compile(src: &str) -> String {
     compile_expanded(src).expect("编译应成功")
 }
 
-// —— sass-spec: distributed_vars.hrx 核心场景 ——
+// ─── sass-spec: distributed_vars.hrx 核心场景 ──────────────────────────────────
 
 #[test]
 fn bare_variable_interp() {
@@ -37,7 +37,7 @@ fn string_interp() {
     );
 }
 
-// —— sass-spec: interpolated-strings.hrx ——
+// ─── sass-spec: interpolated-strings.hrx ───────────────────────────────────
 
 #[test]
 fn prefix_suffix_interp() {
@@ -69,7 +69,7 @@ fn quoted_string_in_interp() {
     );
 }
 
-// —— sass-spec: hyphen-interpolated.hrx ——
+// ─── sass-spec: hyphen-interpolated.hrx ────────────────────────────────────
 
 #[test]
 fn hyphen_prefix_expr_interp() {
@@ -81,7 +81,7 @@ fn hyphen_prefix_expr_interp() {
     );
 }
 
-// —— sass-spec: weird_added_space.hrx ——
+// ─── sass-spec: weird_added_space.hrx ──────────────────────────────────────
 
 #[test]
 fn moz_prefix_variable_interp() {
@@ -93,7 +93,7 @@ fn moz_prefix_variable_interp() {
     );
 }
 
-// —— sass-spec: zero-compression.hrx ——
+// ─── sass-spec: zero-compression.hrx ───────────────────────────────────────
 
 #[test]
 fn zero_minus_variable_interp() {
@@ -105,7 +105,7 @@ fn zero_minus_variable_interp() {
     );
 }
 
-// —— sass-spec: null.hrx ——
+// ─── sass-spec: null.hrx ───────────────────────────────────────────────────
 
 #[test]
 fn null_interp() {
@@ -117,7 +117,7 @@ fn null_interp() {
     );
 }
 
-// —— sass-spec: 多段插值拼接 ——
+// ─── sass-spec: 多段插值拼接 ─────────────────────────────────────────────────────
 
 #[test]
 fn multiple_interp_segments() {
@@ -125,7 +125,7 @@ fn multiple_interp_segments() {
     assert!(css.contains("content: foobar"), "多段插值拼接应正确: {css}");
 }
 
-// —— 表达式插值+后缀 ——
+// ─── 表达式插值+后缀 ──────────────────────────────────────────────────────────────
 
 #[test]
 fn expression_with_suffix_interp() {
@@ -151,7 +151,7 @@ fn pure_expression_interp() {
     assert!(css.contains("width: 3"), "纯表达式插值应求值: {css}");
 }
 
-// —— sass-spec: basic_prop_name_interpolation.hrx ——
+// ─── sass-spec: basic_prop_name_interpolation.hrx ──────────────────────────
 
 #[test]
 fn property_name_expr_interp() {
@@ -160,7 +160,7 @@ fn property_name_expr_interp() {
     assert!(css.contains("bar3: blip"), "属性名表达式插值应求值: {css}");
 }
 
-// —— sass-spec: quotes-in-interpolated-strings.hrx ——
+// ─── sass-spec: quotes-in-interpolated-strings.hrx ─────────────────────────
 
 #[test]
 fn interp_value_quoted_vs_unquoted() {
