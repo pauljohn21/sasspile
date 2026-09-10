@@ -498,8 +498,7 @@ fn call_extend(args: &[Value]) -> Result<Option<Value>> {
     // Sass 规范：extendee 不能是复杂选择器（含组合器）
     if extendee.0.iter().any(|c| c.compounds.len() > 1) {
         return Err(SassError::Eval(format!(
-            "Can't extend complex selector {}.",
-            extendee
+            "Can't extend complex selector {extendee}."
         )));
     }
 

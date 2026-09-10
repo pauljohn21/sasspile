@@ -4,7 +4,6 @@
 
 use sasspile::*;
 use std::path::PathBuf;
-use tracing;
 
 #[test]
 fn test_ep_full_stats() {

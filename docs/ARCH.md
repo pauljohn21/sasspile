@@ -139,6 +139,7 @@ RUST_LOG=info cargo test --test compile_test <test_name> -- --nocapture
 # 追踪特定模块
 RUST_LOG="sasspile::color=trace" cargo test --test compile_test -- --nocapture
 
-# sass-spec 诊断
-cargo test --test cf_diag diag_<subdir> -- --nocapture
+# sass-spec 诊断（统一入口）
+cargo test --test diagnostic_runner -- --nocapture
+cargo test --test diag_color -- --nocapture
 ```

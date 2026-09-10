@@ -105,15 +105,15 @@ fn test_ep_syntax_stats() {
 
     let mut md = String::new();
     md.push_str("# EP (element-plus) SCSS 语法特性统计\n\n");
-    md.push_str(&format!("**数据源**: `packages/theme-chalk/src/`  \n"));
-    md.push_str(&format!("**总文件数**: {}  \n", total_files));
-    md.push_str(&format!("**总行数**: {}  \n\n", total_lines));
+    md.push_str("**数据源**: `packages/theme-chalk/src/`  \n");
+    md.push_str(&format!("**总文件数**: {total_files}  \n"));
+    md.push_str(&format!("**总行数**: {total_lines}  \n\n"));
     md.push_str("---\n\n");
     md.push_str("## 按频次排序\n\n");
     md.push_str("| 频次 | 语法特性 |\n");
     md.push_str("|------|----------|\n");
     for (k, v) in &sorted {
-        md.push_str(&format!("| {} | {} |\n", v, k));
+        md.push_str(&format!("| {v} | {k} |\n"));
     }
 
     md.push_str("\n---\n\n");
@@ -147,11 +147,11 @@ fn has_any(line: &str, patterns: &[&str]) -> bool {
 fn add_table(md: &mut String, title: &str, keys: &[&str], sorted: &[(String, usize)]) {
     let items: Vec<_> = sorted.iter().filter(|(k, _)| keys.contains(&k.as_str())).collect();
     if items.is_empty() { return; }
-    md.push_str(&format!("### {}\n\n", title));
+    md.push_str(&format!("### {title}\n\n"));
     md.push_str("| 频次 | 语法特性 |\n");
     md.push_str("|------|----------|\n");
     for (k, v) in items {
-        md.push_str(&format!("| {} | {} |\n", v, k));
+        md.push_str(&format!("| {v} | {k} |\n"));
     }
     md.push('\n');
 }

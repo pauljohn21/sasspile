@@ -170,10 +170,13 @@ Level 4：`is-powerless`/`is-in-gamut`/`is-legacy`/`to-space`/`to-gamut`/`channe
 
 ```bash
 # 核心测试
-cargo test --test compile_test      # 57 个
+cargo test --test compile_test      # 48 个
+cargo test --test compile_color_test # 14 个（CSS Color Level 4 色彩空间）
 cargo test --test stage_test        # 8 个
 cargo test --test ast_test          # 8 个
 cargo test --test common_test       # 5 个
+cargo test --test interp_test       # 15 个
+cargo test --test default_config_test -- --test-threads=1  # 9 个
 
 # 兼容性测试
 cargo test --test bs_spec           # 15 Bootstrap 测试
@@ -186,7 +189,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 RUST_LOG=info cargo test --features otel --test sass_spec_full -- --nocapture
 ```
 
-全部通过：**compile 57/57 + stage 8/8 + ast 8/8 + common 5/5 + BS 15/15 + EP 121/121 + sass-spec 7365/12131 (62%)**
+全部通过：**compile 48/48 + color 14/14 + stage 8/8 + ast 8/8 + common 5/5 + interp 15/15 + BS 15/15 + EP 121/121 + default 9/9 + sass-spec 7444/11869 (62.7%)**
 
 > 详见根目录 `skill.md` 获取完整开发指南。
 

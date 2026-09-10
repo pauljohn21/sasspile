@@ -16,9 +16,7 @@ const BASELINE_PATH: &str = "tests/sass-spec-baseline.json";
 #[test]
 fn generate_sass_spec_stats() {
     let raw = fs::read_to_string(LOG_PATH).unwrap_or_default();
-    if raw.is_empty() {
-        panic!("日志不存在: {LOG_PATH}");
-    }
+    assert!(!raw.is_empty(), "日志不存在: {LOG_PATH}");
 
     let log = strip_ansi(&raw);
     let sections = parse_all_sections(&log);
@@ -67,7 +65,7 @@ fn parse_all_sections(log: &str) -> Vec<DirStats> {
             }
         }
     }
-    sections.sort_by(|a, b| a.pct.cmp(&b.pct));
+    sections.sort_by_key(|a| a.pct);
     sections
 }
 
@@ -147,18 +145,18 @@ fn generate_report(current: &[DirStats], total: &Option<DirStats>, baseline: Opt
         if baseline.is_some() { md.push_str(" 基线 | 变化 |"); }
         md.push_str("\n|------|------|");
         if baseline.is_some() { md.push_str("------|------|"); }
-        md.push_str("\n");
+        md.push('\n');
 
         if let Some(bl) = baseline {
-            let diff = t.pass as i64 - bl.total_pass as i64;
-            let diff_str = format!("{:+}", diff);
+            let diff = i64::from(t.pass) - i64::from(bl.total_pass);
+            let diff_str = format!("{diff:+}");
             md.push_str(&format!(
                 "| PASS | {} | {} | {} |\n",
                 t.pass, bl.total_pass, diff_str
             ));
-            md.push_str(&format!("| FAIL | {} | {} | {:+} |\n", t.fail, bl.total_fail, t.fail as i64 - bl.total_fail as i64));
-            md.push_str(&format!("| SKIP | {} | {} | {:+} |\n", t.skip, bl.total_skip, t.skip as i64 - bl.total_skip as i64));
-            md.push_str(&format!("| 通过率 | {}% | {}% | {:+}pp |\n\n", t.pct, bl.total_pass * 100 / bl.total_cases.max(1), t.pct as i64 - (bl.total_pass * 100 / bl.total_cases.max(1)) as i64));
+            md.push_str(&format!("| FAIL | {} | {} | {:+} |\n", t.fail, bl.total_fail, i64::from(t.fail) - i64::from(bl.total_fail)));
+            md.push_str(&format!("| SKIP | {} | {} | {:+} |\n", t.skip, bl.total_skip, i64::from(t.skip) - i64::from(bl.total_skip)));
+            md.push_str(&format!("| 通过率 | {}% | {}% | {:+}pp |\n\n", t.pct, bl.total_pass * 100 / bl.total_cases.max(1), i64::from(t.pct) - i64::from(bl.total_pass * 100 / bl.total_cases.max(1))));
         } else {
             md.push_str(&format!("| PASS | {} |\n", t.pass));
             md.push_str(&format!("| FAIL | {} |\n", t.fail));
@@ -173,13 +171,13 @@ fn generate_report(current: &[DirStats], total: &Option<DirStats>, baseline: Opt
     if baseline.is_some() { md.push_str(" 变化 |"); }
     md.push_str("\n|------|------|------|------|------|--------|");
     if baseline.is_some() { md.push_str("------|"); }
-    md.push_str("\n");
+    md.push('\n');
 
-    if let Some(ref bl) = baseline {
+    if let Some(bl) = baseline {
         for s in current {
             let bl_pass = bl.dirs.get(&s.dir).map_or(0, |b| b.pass);
-            let diff = s.pass as i64 - bl_pass as i64;
-            let diff_str = if diff != 0 { format!("{:+}", diff) } else { "-".to_string() };
+            let diff = i64::from(s.pass) - i64::from(bl_pass);
+            let diff_str = if diff != 0 { format!("{diff:+}") } else { "-".to_string() };
             md.push_str(&format!(
                 "| {} | {} | {} | {} | {} | {}% | {} |\n",
                 s.dir, s.pass, s.fail, s.skip, s.total, s.pct, diff_str
@@ -195,10 +193,10 @@ fn generate_report(current: &[DirStats], total: &Option<DirStats>, baseline: Opt
     }
 
     // 退化详情（仅对比模式）
-    if let Some(ref bl) = baseline {
+    if let Some(bl) = baseline {
         let regressions: Vec<_> = current.iter().filter_map(|s| {
             let bl_pass = bl.dirs.get(&s.dir).map_or(0, |b| b.pass);
-            let diff = s.pass as i64 - bl_pass as i64;
+            let diff = i64::from(s.pass) - i64::from(bl_pass);
             (diff < 0).then_some((s.dir.clone(), bl_pass, s.pass, diff))
         }).collect();
 
@@ -207,13 +205,13 @@ fn generate_report(current: &[DirStats], total: &Option<DirStats>, baseline: Opt
             md.push_str("| 目录 | 基线通过 | 当前通过 | 变化 |\n");
             md.push_str("|------|----------|----------|------|\n");
             for (dir, bl_pass, cur_pass, diff) in &regressions {
-                md.push_str(&format!("| {} | {} | {} | {:+} |\n", dir, bl_pass, cur_pass, diff));
+                md.push_str(&format!("| {dir} | {bl_pass} | {cur_pass} | {diff:+} |\n"));
             }
         }
 
         let improvements: Vec<_> = current.iter().filter_map(|s| {
             let bl_pass = bl.dirs.get(&s.dir).map_or(0, |b| b.pass);
-            let diff = s.pass as i64 - bl_pass as i64;
+            let diff = i64::from(s.pass) - i64::from(bl_pass);
             (diff > 0).then_some((s.dir.clone(), bl_pass, s.pass, diff))
         }).collect();
 
@@ -222,7 +220,7 @@ fn generate_report(current: &[DirStats], total: &Option<DirStats>, baseline: Opt
             md.push_str("| 目录 | 基线通过 | 当前通过 | 变化 |\n");
             md.push_str("|------|----------|----------|------|\n");
             for (dir, bl_pass, cur_pass, diff) in &improvements {
-                md.push_str(&format!("| {} | {} | {} | +{} |\n", dir, bl_pass, cur_pass, diff));
+                md.push_str(&format!("| {dir} | {bl_pass} | {cur_pass} | +{diff} |\n"));
             }
         }
     }
@@ -238,7 +236,7 @@ fn strip_ansi(s: &str) -> String {
     let mut chars = s.chars();
     while let Some(c) = chars.next() {
         if c == '\x1b' {
-            while let Some(c) = chars.next() {
+            for c in chars.by_ref() {
                 if c.is_ascii_alphabetic() { break; }
             }
         } else {

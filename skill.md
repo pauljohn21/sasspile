@@ -590,7 +590,7 @@ RUST_LOG="sasspile::color=trace" cargo test --test compile_test -- --nocapture
 RUST_LOG="sasspile::eval::extend=debug" cargo test --test compile_test -- --nocapture
 
 # CSS Diff 详情
-RUST_LOG="cssdiff=debug" cargo test --test cf_diag diag_<subdir> -- --nocapture
+RUST_LOG="cssdiff=debug" cargo test --test diagnostic_runner -- --nocapture
 
 # 最小化失败用例
 RUST_LOG="minimize=info" cargo test --test minimize minimize_color_error -- --nocapture
@@ -731,8 +731,11 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 # sass-spec 全量统计 + OTel 追踪
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
 
-# sass-spec 诊断
-cargo test --test cf_diag diag_<subdir> -- --nocapture
+# sass-spec 诊断（统一入口 diagnostic_runner）
+cargo test --test diagnostic_runner -- --nocapture
+
+# 颜色专项诊断
+cargo test --test diag_color -- --nocapture
 
 # 全量统计
 RUST_LOG=info cargo test --test sass_spec_full test_sass_spec_full_stats -- --nocapture

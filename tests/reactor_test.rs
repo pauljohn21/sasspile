@@ -86,14 +86,14 @@ fn test_reactor_compressed_output() {
 #[test]
 fn test_reactor_variables() {
     let css = Reactor::new(
-        r#"
+        r"
         $primary: #3498db;
         $padding: 10px;
         .btn {
             background: $primary;
             padding: $padding;
         }
-        "#,
+        ",
     )
     .lex()
     .expect("unexpected failure in test")
@@ -112,7 +112,7 @@ fn test_reactor_variables() {
 #[test]
 fn test_reactor_nesting() {
     let css = Reactor::new(
-        r#"
+        r"
         .card {
             background: white;
             &:hover {
@@ -122,7 +122,7 @@ fn test_reactor_nesting() {
                 font-size: 18px;
             }
         }
-        "#,
+        ",
     )
     .lex()
     .expect("unexpected failure in test")

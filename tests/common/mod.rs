@@ -1,6 +1,6 @@
 //! 共享测试工具——CSS diff 和辅助函数。
 //!
-//! 被 `cf_diag.rs` 和 `minimize.rs` 引用。
+//! 被 `diag_helper.rs`（间接由 `diagnostic_runner.rs` / `diag_color.rs` 使用）和 `minimize.rs` 引用。
 
 #![allow(dead_code)]
 
@@ -30,6 +30,7 @@ pub struct DiffResult {
 
 impl DiffResult {
     /// 分类错误模式——用于统计。
+    #[must_use]
     pub fn classify(&self) -> &'static str {
         if self.lines.is_empty() {
             return "identical";
@@ -52,6 +53,7 @@ impl DiffResult {
     }
 
     /// 格式化为终端可读文本。
+    #[must_use]
     pub fn format_terminal(&self) -> String {
         self.lines
             .iter()

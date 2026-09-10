@@ -55,20 +55,20 @@ fn test_selector_append_with_inner_combinator() {
 
 #[test]
 fn test_selector_append_empty_args_error() {
-    let input = r#"
+    let input = r"
         @use 'sass:selector';
         .a { x: selector.append(); }
-    "#;
+    ";
     let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for empty args");
 }
 
 #[test]
 fn test_selector_append_invalid_type_error() {
-    let input = r#"
+    let input = r"
         @use 'sass:selector';
         .a { x: selector.append(1, 2); }
-    "#;
+    ";
     let eval_result = Reactor::new(input).lex().expect("unexpected failure in test").parse().expect("unexpected failure in test").evaluate();
     assert!(eval_result.is_err(), "Expected error for invalid type");
 }

@@ -1,17 +1,13 @@
 //! 内联 HRX 解析支持模块——替代 hrx-auditor crate 依赖。
 //!
 //! 提供三个核心功能：
-//! - `parse_hrx()` — 解析 HRX 文本为 `HrxArchive`
-//! - `Vfs::from_archive()` — 从归档构建虚拟文件系统
-
+//! - `parse_hrx()` / `Vfs::from_archive()` — HRX 解析 + 虚拟文件系统
 #![allow(
     clippy::case_sensitive_file_extension_comparisons,
     clippy::missing_errors_doc,
     clippy::missing_panics_doc
 )]
-//! - `ParsedHrx` — 解析后的测试用例集合
-//!
-//! 每个测试文件是独立 crate，`dead_code` lint 会误报——全局抑制。
+//! 每个测试文件独立 crate，`dead_code` 全局抑制。
 
 #![allow(dead_code)]
 
@@ -432,7 +428,7 @@ pub fn run_case(case: &HrxCase) -> bool {
 
 /// 兼容旧接口：`ParsedHrx` 返回 `(files, input_path, expected_output, expect_error)` 列表。
 ///
-/// 用于 `diag_detail.rs`、`cf_diag.rs` 等需要按 `===` 分组访问的测试。
+/// 用于需要按 `===` 分组访问的测试（如 `diag_helper.rs` 的 legacy 兼容接口）。
 pub struct ParsedCase {
     pub files: Vec<(String, String)>,
     pub input_path: String,

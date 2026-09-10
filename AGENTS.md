@@ -487,7 +487,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 cargo test --test failures_json -- --nocapture
 ```
 
-**通过标准**：57/57 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9
+**通过标准**：48/48 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 243/243
 **sass-spec 基线**：7444/11869 = 62.7%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
@@ -499,8 +499,8 @@ cargo test --test failures_json -- --nocapture
 - **SKIP_DIRS**（`tests/spec_manifest.rs`）：`core_functions/color` + `values/colors` — 全量统计和诊断自动跳过
 - **#[ignore] 测试函数**：
   - `sass_spec_full::test_core_functions_subdirs` — 17 个颜色子目录统计
-  - `cf_diag::diag_color` — core_functions/color 诊断
-  - `cf_diag::diag_values_colors` — values/colors 诊断
+  - `diag_color::diag_color` — core_functions/color 诊断
+  - `diag_color::diag_values_colors` — values/colors 诊断
   - `cf_color::color_error_patterns` — 颜色错误模式统计
   - `minimize::minimize_color_error` — 颜色错误最小化
 - **手动触发颜色测试**：`cargo test --test <file> -- --ignored`
@@ -514,7 +514,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 - `hrx_support::parse_hrx_to_cases(content, hrx_rel_path)` → `Vec<HrxCase>`（高级 API，路径加 HRX 名作前缀）
 - 测试代码**不再按 `===` 分组隔离**——所有条目共享同一个 VFS，路径加 HRX 目录前缀，使 `@use` 跨组引用能正确解析
 - **颜色相关目录自动注入 `_utils.scss`**：使用 `OnceLock` 缓存物理文件 `sass-spec/spec/core_functions/color/_utils.scss`，首次访问时读取并注入到 VFS 文件列表，解决跨组 `@use 'core_functions/color/_...'` 路径解析问题
-- 共享模块被 9 个测试文件引用：`sass_spec_full.rs`、`cf_diag.rs`、`css_diag.rs`、`expr_diag.rs`、`sass_spec.rs`、`diag_detail.rs`、`minimize.rs`、`cf_color.rs`、`diag_directives.rs`
+- 共享模块被 8 个测试文件引用：`sass_spec_full.rs`、`diag_helper.rs`、`sass_spec.rs`、`minimize.rs`、`cf_color.rs`、`failures_json.rs` + 通过 diag_helper 间接使用的 `diagnostic_runner.rs`、`diag_color.rs`
 
 ## 🔄 Git 规范
 
@@ -528,6 +528,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **tests-cleanup**（2026-09-10）：测试架构清理合 — 15 个诊断文件合并为 `diag_helper.rs` + `diagnostic_runner.rs` + `diag_color.rs`，单文件 ≤ 500 行合规
 - **failures-json**（2026-09-09）：全量失败原因 JSON 导出 — 新建 `tests/failures_json.rs`，运行全部 sass-spec case（11869 个，~87 秒），将每个失败的完整 expected/actual/error 写入 `tests/sass-spec-failures.json`（含 metadata + failures[] + by_dir + by_type 聚合）— 用于回归检测和失败模式分析
 - **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON、format! 内联变量、let...else 重写、items_after_statements 修复 — cargo clippy 零错误，核心测试全通过
 - **cf-noncolor-boost**（2026-09-08）：core_functions 非 color 子域修复 — list join/set-nth/zip/is-bracketed 修复 (+48)、math sin/cos/tan 角度单位转换 (+13)、meta module_exports 全覆盖 (+120) — sass-spec 7144→7365 (+221)
@@ -632,7 +633,7 @@ sasspile 颜色系统基于 `ColorSpace` 枚举（17 种色彩空间）+ `ColorO
 | 类别 | 工具 | 触发场景 |
 |------|------|----------|
 | 代码统计 | `tests/sass_spec_stats.rs` | sass-spec 通过率报告、基线对比 |
-| 失败诊断 | `tests/css_diag.rs`、`tests/expr_diag.rs`、`tests/cfs_diag.rs`、`tests/diag_directives.rs` | 定位具体失败 case |
+| 失败诊断 | `tests/diagnostic_runner.rs`（统一入口，通过 `mod diag_helper` 共享辅助） | 定位具体失败 case（CSS/expr/core_functions/指令全量诊断） |
 | 失败导出 | `tests/failures_json.rs` → `tests/sass-spec-failures.json` | 全量失败原因结构化导出（含完整 expected/actual） |
 | 代码查询 | `codegraph callers/impact/node/explore/callees` | 调用链分析、影响范围 |
 | 链路追踪 | `RUST_LOG=trace --features otel` | 跨函数/跨阶段 bug 定位 |
@@ -667,18 +668,17 @@ cargo test --test failures_json -- --nocapture
 
 ### 失败定位工具
 
+`sasspile` 将所有诊断统一到 `diagnostic_runner.rs`，不同子领域通过独立 test 函数访问：
+
 ```bash
-# CSS 失败（含 selector/extend）
-RUST_LOG="css_diag=info" cargo test --test css_diag
+# 全量诊断（core_functions/color + CSS + 表达式 + 指令）
+cargo test --test diagnostic_runner -- --nocapture
 
-# 表达式失败
-RUST_LOG="expr_diag=info" cargo test --test expr_diag
+# 颜色专项诊断
+cargo test --test diag_color -- --nocapture
 
-# 指令失败
-RUST_LOG="diag_directives=info" cargo test --test diag_directives
-
-# core_functions 失败
-RUST_LOG="cfs_diag=info" cargo test --test cfs_diag
+# 带日志输出
+RUST_LOG="diagnostic_runner=info" cargo test --test diagnostic_runner -- --nocapture
 ```
 
 ### 禁止模式
@@ -687,14 +687,14 @@ RUST_LOG="cfs_diag=info" cargo test --test cfs_diag
 |------|------|
 | `grep -r "xxx" /tmp/log \| head -20` 反复查询 | 写 Rust test 解析日志，一次生成报告 |
 | `codegraph callers` 重复 5 次不同角度 | `codegraph explore` 一次探索完整上下文 |
-| 手动逐行翻日志 200 行 | `cargo test --test xxx_diag` 输出结构化失败汇总 |
+| 手动逐行翻日志 200 行 | `cargo test --test diagnostic_runner` 输出结构化失败汇总 |
 | python3 处理数据 | `rust-script -e` 或新建 test 文件 |
 | bash 循环分析 | Rust test 中用迭代器链处理 |
 
 ### 工作流
 
 1. **统计需求** → `sass_spec` 后台运行 → `sass_spec_stats` 生成报告
-2. **定位失败** → 运行对应 `*_diag` 测试获取结构化输出
+2. **定位失败** → 运行 `diagnostic_runner`（统一入口）获取结构化输出
 3. **全量导出** → `failures_json` 生成 `sass-spec-failures.json`（回归检测/修复对比）
 4. **分析影响** → `codegraph callers/impact/node`
 5. **Bug 追踪** → `RUST_LOG=trace --features otel` + `#[instrument]`

@@ -4,7 +4,7 @@ use super::selector_ast::{Combinator, ComplexSelector, CompoundSelector, Namespa
 use super::selector_ops::{
     compounds_conflict, extender_has_leading_combinator, extender_has_multiple_combinators,
     extender_has_trailing_combinator, has_leading_combinator, has_multiple_combinators,
-    has_trailing_combinator, is_semantic_subset, selector_simple_covers_ext, simple_contained_in,
+    has_trailing_combinator, is_semantic_subset, selector_simple_covers_ext,
 };
 use super::selector_is_super::is_super_compound;
 use super::selector_unify::unify_extendee_list;
@@ -57,7 +57,7 @@ pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, exten
         let mut results: Vec<ComplexSelector> = Vec::new();
         for complex in &selector.0 {
             results.push(complex.clone());
-            let orig_combinator_0 = if !complex.compounds.is_empty() { complex.compounds[0].0 } else { None };
+            let orig_combinator_0 = if complex.compounds.is_empty() { None } else { complex.compounds[0].0 };
             for ext_cs in &extendee.0 {
                 if ext_cs.compounds.len() != 1 { continue; }
                 let ext_compound = &ext_cs.compounds[0].1;
@@ -215,7 +215,7 @@ fn build_extended_complex(
     };
 
     let results: Vec<Vec<(Option<Combinator>, CompoundSelector)>> = match ext_complex.compounds.len() {
-        0 | 1 if ext_complex.compounds.get(0).map_or(true, |(c, comp)| c.is_some() && comp.0.is_empty()) => {
+        0 | 1 if ext_complex.compounds.first().is_none_or(|(c, comp)| c.is_some() && comp.0.is_empty()) => {
             vec![vec![(resolved_first_combinator.or(Some(Combinator::Descendant)), CompoundSelector(Vec::new()))]]
         }
         1 => {
