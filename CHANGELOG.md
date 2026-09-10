@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.9.10] — 2026-09-10
+
+### Fixed
+
+- **空输出 case 不再跳过**：移除测试框架中 `expected_output.is_empty() && !expect_error → skip` 的逻辑
+  - 影响: `tests/specstore/runner.rs`、`tests/hrx_support.rs`、`tests/sass_spec_full.rs`
+  - `variables/` 目录通过率 21% → 100%（whitespace/semi_global/double_flag/comments 全 100%）
+  - 全局新增 ~2600 个评估 case（9511 → 12131）
+- **变量声明注释解析**：修复 `$a /**/: b` 解析失败问题 — `parse_variable` 改用 `skip_ws_and_comments`
+- **变量声明尾部注释**：修复 `$a: b /**/` 错误产生 `/*  */` CSS 输出 — 声明后消耗尾部注释
+
+### Changed
+
+- sass-spec 通过率：7718/12131 = 63.6%（全部 case 均评估，无 SKIP）
+
 ## [0.9.9] — 2026-09-10
 
 ### Fixed

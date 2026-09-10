@@ -280,16 +280,18 @@ impl Parser<'_> {
                 });
             }
         };
-        self.skip_ws();
+        self.skip_ws_and_comments();
         self.expect(&Token::Colon)?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let value = self.parse_value()?;
         let flags = self.parse_var_flags()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::Semicolon) => { self.advance(); }
             _ => {}
         }
+        // 消耗行尾注释，避免被顶层解析为独立 Comment 节点产生 CSS 输出
+        self.skip_ws_and_comments();
         Ok(Node::Variable { name, value, flags })
     }
 

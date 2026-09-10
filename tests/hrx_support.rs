@@ -375,10 +375,6 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
 
 /// 运行单个测试用例——写入临时目录并编译。
 pub fn run_case(case: &HrxCase) -> bool {
-    if case.expected_output.is_empty() && !case.expect_error {
-        return true;
-    }
-
     let total_size: usize = case.files.iter().map(|(_, c)| c.len()).sum();
     if total_size > 50_000 {
         return false;

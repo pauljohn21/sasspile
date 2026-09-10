@@ -74,7 +74,7 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
 
     let (files, skipped) = collect_hrx_files_with_manifest(&dir, spec_root);
 
-    let (mut pass, mut fail, mut skip, mut cases) = (0, 0, 0, 0);
+    let (mut pass, mut fail, skip, mut cases) = (0, 0, 0, 0);
     for file in &files {
         if let Ok(content) = std::fs::read_to_string(file) {
             let rel_path = file
@@ -88,10 +88,6 @@ fn run_spec_dir(spec_root: &Path, dir_name: &str) -> (usize, usize, usize, usize
                     continue;
                 }
                 cases += 1;
-                if case.expected_output.is_empty() && !case.expect_error {
-                    skip += 1;
-                    continue;
-                }
                 if run_case(case) {
                     pass += 1;
                 } else {

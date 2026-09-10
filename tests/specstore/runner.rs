@@ -39,16 +39,6 @@ pub fn run_case(
     let span = info_span!("run_case", input = %input_path);
     let _enter = span.enter();
 
-    if expected_css.is_empty() && !expect_error {
-        return CaseResult {
-            case_id: input_path.to_string(),
-            status: CaseStatus::Skip,
-            failure_type: None,
-            actual_css: None,
-            error: None,
-        };
-    }
-
     let tmp_dir = std::env::temp_dir().join(format!(
         "ss-{}",
         std::time::SystemTime::now()
