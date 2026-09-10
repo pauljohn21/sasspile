@@ -444,8 +444,10 @@ pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Color(a), Value::Color(b)) => a == b,
         (Value::Null, Value::Null) => true,
-        (Value::List(a, _, _), Value::List(b, _, _)) => {
-            a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_eq(x, y))
+        (Value::List(a, _, a_bracketed), Value::List(b, _, b_bracketed)) => {
+            a_bracketed == b_bracketed
+                && a.len() == b.len()
+                && a.iter().zip(b.iter()).all(|(x, y)| values_eq(x, y))
         }
         (Value::Map(a), Value::Map(b)) => {
             a.len() == b.len()

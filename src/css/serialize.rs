@@ -279,6 +279,10 @@ impl Serializer {
                 value,
                 important,
             } => {
+                // 空字符串值不输出属性声明（Sass 规范）
+                if value.is_empty() {
+                    return;
+                }
                 buf.push_str(indent);
                 buf.push_str(property);
                 buf.push_str(": ");
@@ -327,6 +331,10 @@ impl Serializer {
                             value,
                             important,
                         } => {
+                            // 空字符串值不输出属性声明（Sass 规范）
+                            if value.is_empty() {
+                                return None;
+                            }
                             let mut s = String::new();
                             s.push_str(&inner);
                             s.push_str(property);
@@ -443,6 +451,10 @@ impl Serializer {
                 value,
                 important,
             } => {
+                // 空字符串值不输出属性声明（Sass 规范）
+                if value.is_empty() {
+                    return;
+                }
                 buf.push_str(property);
                 buf.push(':');
                 buf.push_str(value);

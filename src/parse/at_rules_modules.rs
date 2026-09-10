@@ -22,7 +22,7 @@ impl Parser<'_> {
             )),
             (false, false) => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let url = match self.peek() {
             Some(Token::String(s, _)) => {
                 let s = s.clone();
@@ -34,11 +34,11 @@ impl Parser<'_> {
         let mut namespace = None;
         let mut star = false;
         let mut config = Vec::new();
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek_keyword("as") {
             true => {
                 self.advance();
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 match self.peek() {
                     Some(&Token::Star) => {
                         self.advance();
@@ -49,17 +49,17 @@ impl Parser<'_> {
             }
             false => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek_keyword("with") {
             true => {
                 self.advance();
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 self.expect(&Token::LParen)?;
                 config = self.parse_config(false)?;
             }
             false => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(&Token::Semicolon) => {
                 self.advance();
@@ -82,7 +82,7 @@ impl Parser<'_> {
             )),
             (false, false) => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let url = match self.peek() {
             Some(Token::String(s, _)) => {
                 let s = s.clone();
@@ -94,11 +94,11 @@ impl Parser<'_> {
         let mut show = Vec::new();
         let mut hide = Vec::new();
         let mut prefix = None;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek_keyword("as") {
             true => {
                 self.advance();
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 match self.peek() {
                     Some(Token::Ident(s)) => {
                         prefix = Some(s.clone());
@@ -106,14 +106,14 @@ impl Parser<'_> {
                     }
                     _ => return Err(SassError::Eval("Expected identifier.".into())),
                 }
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 match self.peek() {
                     Some(&Token::Star) => {
                         self.advance();
                     }
                     _ => return Err(SassError::Eval("expected \"*\".".into())),
                 }
-                self.skip_ws();
+                self.skip_ws_and_comments();
             }
             false => {}
         }
@@ -127,7 +127,7 @@ impl Parser<'_> {
                     )),
                     false => {}
                 }
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 match self.peek_keyword("hide") {
                     true => return Err(SassError::Eval("expected \";\".".into())),
                     false => {}
@@ -142,7 +142,7 @@ impl Parser<'_> {
                     )),
                     false => {}
                 }
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 match self.peek_keyword("show") {
                     true => return Err(SassError::Eval("expected \";\".".into())),
                     false => {}
@@ -150,15 +150,15 @@ impl Parser<'_> {
             }
             _ => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let mut config = Vec::new();
         match self.peek_keyword("with") {
             true => {
                 self.advance();
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 self.expect(&Token::LParen)?;
                 config = self.parse_config(true)?;
-                self.skip_ws();
+                self.skip_ws_and_comments();
                 match self.peek_keyword("as") || self.peek_keyword("show") || self.peek_keyword("hide") {
                     true => return Err(SassError::Eval("expected \";\".".into())),
                     false => {}
@@ -166,7 +166,7 @@ impl Parser<'_> {
             }
             false => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(&Token::Semicolon) => {
                 self.advance();

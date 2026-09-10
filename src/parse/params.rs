@@ -281,13 +281,13 @@ impl Parser<'_> {
     pub(crate) fn parse_config(&mut self, allow_default: bool) -> Result<Vec<ConfigVar>> {
         let mut config = Vec::new();
         let mut seen = std::collections::HashSet::new();
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::RParen) => return Err(SassError::Eval("expected \"$\".".into())),
             _ => {}
         }
         loop {
-            self.skip_ws();
+            self.skip_ws_and_comments();
             match self.peek() {
                 Some(Token::RParen) => break,
                 _ => {}
@@ -306,11 +306,11 @@ impl Parser<'_> {
                     return Err(SassError::Eval("expected \"$\".".into()));
                 }
             };
-            self.skip_ws();
+            self.skip_ws_and_comments();
             self.expect(&Token::Colon)?;
-            self.skip_ws();
+            self.skip_ws_and_comments();
             let value = self.parse_expr(0)?;
-            self.skip_ws();
+            self.skip_ws_and_comments();
             // @use with() 中不允许 !default 标志；@forward with() 允许
             let mut is_default = false;
             match self.peek() {
@@ -320,7 +320,7 @@ impl Parser<'_> {
                         true => {}
                     }
                     self.advance();
-                    self.skip_ws();
+                    self.skip_ws_and_comments();
                     match self.peek() {
                         Some(Token::Ident(s)) => {
                             match s.as_str() {
@@ -328,7 +328,7 @@ impl Parser<'_> {
                                 _ => {}
                             }
                             self.advance();
-                            self.skip_ws();
+                            self.skip_ws_and_comments();
                         }
                         _ => {}
                     }
@@ -377,7 +377,7 @@ impl Parser<'_> {
 
     pub(crate) fn parse_member_list(&mut self) -> Result<Vec<String>> {
         let mut members = Vec::new();
-        self.skip_ws();
+        self.skip_ws_and_comments();
         loop {
             match self.peek() {
                 Some(Token::Semicolon | Token::LBrace) | None => break,
@@ -403,11 +403,11 @@ impl Parser<'_> {
                     ));
                 }
             }
-            self.skip_ws();
+            self.skip_ws_and_comments();
             match self.peek() {
                 Some(Token::Comma) => {
                     self.advance();
-                    self.skip_ws();
+                    self.skip_ws_and_comments();
                     let is_ok = matches!(self.peek(), Some(Token::Dollar(_)));
                     match is_ok {
                         false => match self.peek() {
