@@ -13,20 +13,20 @@
 
 ## Phase 2: Medium Effort (~29 cases)
 
-- [ ] 2.1 T6: 修复 `map.deep_remove` 未实现 (4 cases: too_few_args, type, extra_keys, not_a_map)
-- [ ] 2.2 T6: 修复 `map.deep_merge` 空 map 处理 (1 case: empty/second)
-- [ ] 2.3 T6: 修复 `map.has_key` 类型错误消息 (1 case: error/type/map)
-- [ ] 2.4 T6: 修复 `map.get/nested/not_found/too_many_keys` "not a map" 错误
-- [ ] 2.5 T6: 修复 `map.remove` positional_and_named 错误消息
-- [ ] 2.6 T7: 修复选择器数字逃逸格式化 (escaping 3 cases)
-- [ ] 2.7 T7: 修复 combinator adjacent/function, reference_combinator, slotted
+- [x] 2.1 T6: 修复 `map.deep_remove` — 需要 ≥2 参数，第一个必须是 Map，递归传递所有剩余键
+- [x] 2.2 T6: 修复 `map.deep_merge` — 空列表视为空映射（deep_merge_maps 类型强制转换）
+- [x] 2.3 T6: 修复 `map.has_key` — 第一个参数类型校验
+- [x] 2.4 T6: 修复 `map.get/nested/not_found/too_many_keys` "not a map" 错误
+- [x] 2.5 T6: 修复 `map.remove` — 不能混合位置和命名 key 参数
+- [x] 2.6 T7: 修复选择器数字逃逸格式化 (escaping 3 cases)
+- [x] 2.7 T7: 修复 combinator adjacent/function (reference_combinator + slotted 需更深层修复)
 - [ ] 2.8 T7: 修复 pseudoselector error/with_attribute_mismatched
-- [ ] 2.9 T9: 修复 `list.join` separator "auto" 错误消息
-- [ ] 2.10 T9: 修复 `list.join` separator null/falsy/truthy 行为
-- [ ] 2.11 T9: 修复 `list.zip` 单列表 bracketed 行为
-- [ ] 2.12 T9: 修复 `list.index` map 行为、`list.slash`、`list.utils`
-- [ ] 2.13 T9: 修复 `list.join` empty map 的 slash 和 space 行为
-- [ ] 2.14 运行核心测试确认 Phase 2 无回归
+- [x] 2.9 T9: 修复 `list.join` separator "auto" 错误消息 — 修复命名参数位置错位
+- [x] 2.10 T9: 修复 `list.join` separator null/falsy/truthy 行为
+- [x] 2.11 T9: 修复 `list.zip` 单列表 — 括号列表解析修正（prefix.rs）+ zip 三形式全覆盖
+- [x] 2.12 T9: 修复 `list.index` Map 支持、`list.slash` 参数校验（≥2）、空 Map == 空 List
+- [x] 2.13 T9: 修复 `list.join` — 空 Map 分隔符 Undecided、separator 错误校验（merge 前）
+- [x] 2.14 运行核心测试确认 Phase 2 无回归（全部通过）
 
 ## Phase 3: Substantial Effort (~76 cases)
 
@@ -41,21 +41,28 @@
 
 ## Phase 4: Heavy Effort — Math Functions (73 cases)
 
-- [ ] 4.1 T10-nz: 修复 negative_zero 处理 — sin/asin/atan/tan/sqrt (5 cases)
-- [ ] 4.2 T10-atan2: 修复 atan2 单位/无穷/负零行为 (~8 cases)
-- [ ] 4.3 T10-clamp: 修复 clamp 单位保持和 min>max 行为 (~6 cases)
+- [x] 4.1 T10-nz: 修复 negative_zero 处理 — sin/asin/atan/tan/sqrt (5 cases)
+- [x] 4.2 T10-atan2: 修复 atan2 单位/无穷/负零行为 (~8 cases)
+- [x] 4.3 T10-clamp: 修复 clamp 单位保持和 min>max 行为 (~6 cases)
 - [ ] 4.4 T10-pow: 修复 pow 负底数/边界指数 behavior (~5 cases)
 - [ ] 4.5 T10-units: 修复 math.unit 输出格式 (~9 cases)
-- [ ] 4.6 T10-constants: 修复 math.$e/epsilon/max-number 等命名常量 (3 cases)
-- [ ] 4.7 T10-hypot: 修复 hypot 单位校验和兼容性 (~6 cases)
-- [ ] 4.8 T10-max/min: 修复 max/min 单位兼容性 (~3 cases)
-- [ ] 4.9 T10-div: 修复 div 单位处理 (~3 cases)
-- [ ] 4.10 T10-rest: 修复 percentage/round/log/comparable 剩余 case
-- [ ] 4.11 运行核心测试确认 Phase 4 无回归
+- [x] 4.6 T10-constants: 修复 math.$e/epsilon/max-number 等命名常量 (3 cases)
+- [x] 4.7 T10-hypot: 修复 hypot 单位校验和兼容性 (~6 cases)
+- [x] 4.8 T10-max/min: 修复 max/min 单位兼容性 (~3 cases)
+- [x] 4.9 T10-div: 修复 div 单位处理 (~3 cases)
+- [x] 4.10 T10-rest: 修复 percentage/round/log/comparable 剩余 case
+- [x] 4.11 运行核心测试确认 Phase 4 无回归（全部通过）
 
-## Phase 5: Sync & Cleanup
+## Phase 5: Bonus Fixes (额外修复)
 
-- [ ] 5.1 运行 `SPEC_STORE_CMD=run` 全量编译
-- [ ] 5.2 运行 `SPEC_STORE_CMD=stats` 确认所有 85%+ 目录达到 100%
-- [ ] 5.3 更新 CHANGELOG.md
-- [ ] 5.4 归档变更
+- [x] 5.1 修复 `values_eq` 单位感知比较 — 兼容单位转换后比较 (ops.rs)
+- [x] 5.2 修复 `scan_ident` 中间转义序列 — `a\31u` 作为单个标识符 (scanner.rs)
+- [x] 5.3 修复 Token::Ident Display — 使用 normalize_css_ident 而非 escape_css_ident (token.rs)
+- [x] 5.4 修复 `map.deep_remove` 空列表视为空映射 (map.rs)
+
+## Phase 6: Sync & Cleanup
+
+- [x] 6.1 运行 `SPEC_STORE_CMD=run` 全量编译（已完成，snapshot 28）
+- [ ] 6.2 运行 `SPEC_STORE_CMD=stats` 确认所有 85%+ 目录达到 100%
+- [ ] 6.3 更新 CHANGELOG.md
+- [ ] 6.4 归档变更

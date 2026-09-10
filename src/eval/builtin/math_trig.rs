@@ -8,17 +8,18 @@ use crate::error::{Result, SassError};
 use crate::parse::ast::*;
 
 /// 将角度单位转为弧度。
-/// 接受的单位：`deg`、`grad`、`turn`、无单位（弧度）。
+/// 接受的单位：`deg`、`rad`、`grad`、`turn`、无单位（弧度）。
 /// 其它单位报错。
 fn angle_to_radians(n: f64, unit: Option<&String>, param: &str) -> Result<f64> {
     let rad = match unit.map(String::as_str) {
         None => n,
+        Some("rad") => n,
         Some("deg") => n * std::f64::consts::PI / 180.0,
         Some("grad") => n * std::f64::consts::PI / 200.0,
         Some("turn") => n * 2.0 * std::f64::consts::PI,
         Some(other) => {
             return Err(SassError::Eval(format!(
-                "${param}: Expected {n}{other} to have an angle unit (deg, grad, turn) or no units."
+                "${param}: Expected {n}{other} to have an angle unit (deg, rad, grad, turn) or no units."
             )))
         }
     };
@@ -26,7 +27,7 @@ fn angle_to_radians(n: f64, unit: Option<&String>, param: &str) -> Result<f64> {
 }
 
 /// 单参数三角函数（sin/cos/tan）——支持角度单位转换。
-/// 接受 deg/grad/turn/unitless(弧度)，其它角度单位报错。
+/// 接受 deg/rad/grad/turn/unitless(弧度)，其它角度单位报错。
 fn trig_func(
     args: &[Value],
     func_name: &str,
@@ -259,22 +260,28 @@ fn call_atan2(args: &[Value]) -> Result<Option<Value>> {
         Value::Number(n, u) => (*n, u.clone()),
         other => return Err(SassError::Eval(format!("$x: {other} is not a number."))),
     };
-    match !crate::eval::value::units_compatible(uy.as_deref(), ux.as_deref()) {
-        true => {
-            let u1_str = uy.as_deref().unwrap_or("");
-            let u2_str = ux.as_deref().unwrap_or("");
-            match (uy.is_some() && ux.is_none()) || (uy.is_none() && ux.is_some()) {
-                true => return Err(SassError::Eval(format!(
-                    "$x: {x}{u2_str} and $y: {y}{u1_str} have incompatible units (one has units and the other doesn't)."
-                ))),
-                false => return Err(SassError::Eval(format!(
-                    "$x: {x}{u2_str} and $y: {y}{u1_str} have incompatible units."
-                ))),
-            }
-        }
-        false => {}
+    // atan2 要求两个参数同为 unitless 或同为有单位（不可混用）
+    if uy.is_some() != ux.is_some() {
+        let u1_str = uy.as_deref().unwrap_or("");
+        let u2_str = ux.as_deref().unwrap_or("");
+        return Err(SassError::Eval(format!(
+            "$x: {x}{u2_str} and $y: {y}{u1_str} have incompatible units (one has units and the other doesn't)."
+        )));
+    }
+    if !crate::eval::value::units_compatible(uy.as_deref(), ux.as_deref()) {
+        let u1_str = uy.as_deref().unwrap_or("");
+        let u2_str = ux.as_deref().unwrap_or("");
+        return Err(SassError::Eval(format!(
+            "$x: {x}{u2_str} and $y: {y}{u1_str} have incompatible units."
+        )));
     }
     let result = y.atan2(x).to_degrees();
+    // 保留负零的符号：atan2(-0.0, +infinity) 应该返回 -0.0
+    let result = if result == 0.0 && y.is_sign_negative() {
+        -0.0
+    } else {
+        result
+    };
     Ok(Some(Value::Number(result, Some("deg".to_string()))))
 }
 
@@ -353,23 +360,37 @@ fn call_hypot(args: &[Value]) -> Result<Option<Value>> {
             Value::Number(n, u) => nums.push((*n, u.clone())),
             other => return Err(SassError::Eval(format!("{other} is not a number."))),
         }
-        match i > 0 {
-            true => {
-                let u0 = nums[0].1.as_deref();
-                let ui = nums[i].1.as_deref();
-                match !crate::eval::value::units_compatible(u0, ui) {
-                    true => return Err(SassError::Eval(format!(
-                        "$numbers[{}]: {}{} and $numbers[1]: {}{} have incompatible units.",
-                        i + 1,
-                        nums[i].0,
-                        ui.unwrap_or(""),
-                        nums[0].0,
-                        u0.unwrap_or("")
-                    ))),
-                    false => {}
-                }
-            }
-            false => {}
+    }
+    // 检查：所有参数必须同为 unitless 或同为有单位（不可混用）
+    let first_has_unit = nums[0].1.is_some();
+    for (i, (_, u)) in nums.iter().enumerate().skip(1) {
+        let this_has_unit = u.is_some();
+        if first_has_unit != this_has_unit {
+            let u0 = nums[0].1.as_deref().unwrap_or("");
+            let ui = u.as_deref().unwrap_or("");
+            return Err(SassError::Eval(format!(
+                "$numbers[{}]: {}{} and $numbers[1]: {}{} have incompatible units.",
+                i + 1,
+                nums[i].0,
+                ui,
+                nums[0].0,
+                u0
+            )));
+        }
+    }
+    // 检查单位兼容性（有单位时）
+    for (i, (_, u)) in nums.iter().enumerate().skip(1) {
+        let u0 = nums[0].1.as_deref();
+        let ui = u.as_deref();
+        if !crate::eval::value::units_compatible(u0, ui) {
+            return Err(SassError::Eval(format!(
+                "$numbers[{}]: {}{} and $numbers[1]: {}{} have incompatible units.",
+                i + 1,
+                nums[i].0,
+                ui.unwrap_or(""),
+                nums[0].0,
+                u0.unwrap_or("")
+            )));
         }
     }
     let sum: f64 = nums.iter().map(|(n, _)| n * n).sum();

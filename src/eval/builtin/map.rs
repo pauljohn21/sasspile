@@ -154,18 +154,22 @@ impl Evaluator {
                     }
                     false => {}
                 }
-                args[1..]
-                    .iter()
-                    .try_fold(args[0].clone(), |current, key| -> Result<Value> {
-                        let pairs = Self::value_to_map(&current)?;
-                        match pairs
-                            .iter()
-                            .find(|(k, _)| crate::eval::value::values_eq(k, key))
-                        {
-                            Some((_, v)) => Ok(v.clone()),
-                            None => Ok(Value::Null),
-                        }
-                    })?
+                // 嵌套键遍历：遇到非 Map 值时返回 null（Sass 规范 graceful fallback）
+                let mut current = args[0].clone();
+                for key in &args[1..] {
+                    let pairs = match Self::value_to_map(&current) {
+                        Ok(p) => p,
+                        Err(_) => return Ok(Some(Value::Null)),
+                    };
+                    match pairs
+                        .iter()
+                        .find(|(k, _)| crate::eval::value::values_eq(k, key))
+                    {
+                        Some((_, v)) => current = v.clone(),
+                        None => return Ok(Some(Value::Null)),
+                    }
+                }
+                current
             }
             "map-keys" => {
                 match args.len() != 1 {
@@ -201,6 +205,15 @@ impl Evaluator {
                         ))
                     }
                     false => {}
+                }
+                // 验证第一个参数是 map（或空列表/Null 视为空 map）
+                let is_valid_map = match &args[0] {
+                    Value::Map(_) | Value::Null => true,
+                    Value::List(elements, _, _) => elements.is_empty(),
+                    _ => false,
+                };
+                if !is_valid_map {
+                    return Err(SassError::Eval(format!("{} is not a map.", args[0])));
                 }
                 let mut current = args[0].clone();
                 let mut found = true;
@@ -321,12 +334,24 @@ impl Evaluator {
                 .find(|(k1, _)| crate::eval::value::values_eq(k1, k2))
             {
                 Some(entry) => {
-                    match (&entry.1, v2) {
-                        (Value::Map(inner1), Value::Map(inner2)) => {
-                            entry.1 = Value::Map(Self::deep_merge_maps(inner1, inner2));
+                    // 将空列表视为空映射（SCSS 语义：() 既是空列表也是空映射）
+                    let inner1 = match &entry.1 {
+                        Value::Map(pairs) => pairs.clone(),
+                        Value::List(elements, _, _) if elements.is_empty() => Vec::new(),
+                        _ => {
+                            entry.1 = v2.clone();
+                            return acc;
                         }
-                        _ => entry.1 = v2.clone(),
-                    }
+                    };
+                    let inner2 = match v2 {
+                        Value::Map(pairs) => pairs.clone(),
+                        Value::List(elements, _, _) if elements.is_empty() => Vec::new(),
+                        _ => {
+                            entry.1 = v2.clone();
+                            return acc;
+                        }
+                    };
+                    entry.1 = Value::Map(Self::deep_merge_maps(&inner1, &inner2));
                 }
                 None => acc.push((k2.clone(), v2.clone())),
             }
@@ -337,10 +362,16 @@ impl Evaluator {
     /// map-deep-remove 递归实现。
     fn map_deep_remove(args: &[Value], env: &Env) -> Result<Value> {
         match args {
+            [Value::List(lst, _, _), key @ ..] if lst.is_empty() => {
+                // 空列表视为空映射
+                Ok(Value::List(vec![], Separator::Comma, false))
+            }
             [Value::Map(pairs), key @ ..] => {
                 let keys: Vec<&Value> = key.iter().collect();
                 match keys.is_empty() {
-                    true => return Ok(Value::Map(pairs.clone())),
+                    true => return Err(SassError::Eval(
+                        "map-deep-remove requires at least 2 arguments".into(),
+                    )),
                     false => {}
                 }
                 let target_key = keys[0];
@@ -357,9 +388,12 @@ impl Evaluator {
                             true => match (remaining_keys.is_empty(), v) {
                                 (true, _) => Ok((acc, true)),
                                 (false, Value::Map(inner)) => {
+                                    // 传递所有剩余键（remaining_keys 可能包含多个）
+                                    let mut rec_args = vec![Value::Map(inner.clone())];
+                                    rec_args.extend(remaining_keys.iter().map(|v| (*v).clone()));
                                     let new_inner = Self::call_builtin(
                                         "map-deep-remove",
-                                        &[Value::Map(inner.clone()), remaining_keys[0].clone()],
+                                        &rec_args,
                                         &HashMap::new(),
                                         env,
                                     )?;
@@ -377,7 +411,7 @@ impl Evaluator {
                 )?;
                 Ok(Value::Map(result))
             }
-            [other, ..] => Ok(other.clone()),
+            [other, ..] => Err(SassError::Eval(format!("{other} is not a map"))),
             _ => Err(SassError::Eval(
                 "map-deep-remove requires at least 1 argument".into(),
             )),

@@ -17,7 +17,7 @@ fn format_num(n: f64) -> String {
     }
     let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
     match n.fract() == 0.0 {
-        true => format!("{}", n as i64),
+        true => format!("{n:.0}"),
         false => format!("{n}"),
     }
 }

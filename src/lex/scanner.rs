@@ -57,13 +57,27 @@ impl<'src> Lexer<'src> {
         c
     }
 
-    /// 扫描标识符或关键字（支持 Unicode）。
+    /// 扫描标识符或关键字（支持 Unicode 和中间转义序列）。
     pub(crate) fn scan_ident(&mut self) -> Token {
         let start = self.pos;
         while let Some(c) = self.peek() {
-            match c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() {
-                true => { self.next_char(); }
-                false => break,
+            match c {
+                // CSS 转义序列（中间）：\xhh 或 \xhh 后跟空格
+                '\\' => {
+                    // 消费反斜杠 + hex 数字 + 可选尾随空格
+                    self.next_char();
+                    while self.peek().is_some_and(|h| h.is_ascii_hexdigit()) {
+                        self.next_char();
+                    }
+                    // 跳过 CSS 转义终止空格
+                    if self.peek().is_some_and(|c| c == ' ') {
+                        self.next_char();
+                    }
+                }
+                c if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() => {
+                    self.next_char();
+                }
+                _ => break,
             }
         }
         let text = &self.source[start..self.pos];

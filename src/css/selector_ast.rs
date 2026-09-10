@@ -153,7 +153,16 @@ impl fmt::Display for ComplexSelector {
 
 impl fmt::Display for CompoundSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for sel in &self.0 {
+        for (i, sel) in self.0.iter().enumerate() {
+            // 在属性选择器后跟类型/通配符选择器时添加空格（防止歧义）
+            if i > 0 {
+                let prev = &self.0[i - 1];
+                let need_space = matches!(prev, SimpleSelector::Attribute { .. })
+                    && matches!(sel, SimpleSelector::Type { .. } | SimpleSelector::Universal);
+                if need_space {
+                    write!(f, " ")?;
+                }
+            }
             write!(f, "{sel}")?;
         }
         Ok(())
@@ -164,9 +173,18 @@ impl fmt::Display for SimpleSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Universal => write!(f, "*"),
-            Self::Type { namespace, name } => write!(f, "{namespace}{name}"),
-            Self::Class(s) => write!(f, ".{s}"),
-            Self::Id(s) => write!(f, "#{s}"),
+            Self::Type { namespace, name } => {
+                let escaped = crate::parse::ast::Value::normalize_css_ident(name);
+                write!(f, "{namespace}{escaped}")
+            }
+            Self::Class(s) => {
+                let escaped = crate::parse::ast::Value::normalize_css_ident(s);
+                write!(f, ".{escaped}")
+            }
+            Self::Id(s) => {
+                let escaped = crate::parse::ast::Value::normalize_css_ident(s);
+                write!(f, "#{escaped}")
+            }
             Self::Attribute { name, op, value, modifier } => {
                 write!(f, "[{name}")?;
                 if let Some(op) = op {
@@ -199,7 +217,10 @@ impl fmt::Display for SimpleSelector {
                 }
                 Ok(())
             }
-            Self::Placeholder(s) => write!(f, "%{s}"),
+            Self::Placeholder(s) => {
+                let escaped = crate::parse::ast::Value::normalize_css_ident(s);
+                write!(f, "%{escaped}")
+            }
             Self::ParentReference => write!(f, "&"),
         }
     }

@@ -429,7 +429,7 @@ fn extract_units_from_calc(c: &str) -> (Vec<String>, Vec<String>) {
 
 pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
     match (l, r) {
-        (Value::Number(a, _), Value::Number(b, _)) => {
+        (Value::Number(a, au), Value::Number(b, bu)) => {
             match a.is_nan() && b.is_nan() {
                 true => return true,
                 false => {}
@@ -438,7 +438,23 @@ pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
                 true => return true,
                 false => {}
             }
-            (a - b).abs() < f64::EPSILON
+            // 单位检查：一个有单位、一个无单位 → 不等
+            match (au.is_some(), bu.is_some()) {
+                (true, false) | (false, true) => return false,
+                // 都有单位但不兼容 → 不等
+                (true, true) => match units_compatible(au.as_deref(), bu.as_deref()) {
+                    true => {}
+                    false => return false,
+                },
+                _ => {}
+            }
+            // 单位兼容时转换到同一单位再比较
+            let factor = crate::eval::builtin::math_css::unit_conversion_factor(
+                bu.as_deref().unwrap_or(""),
+                au.as_deref().unwrap_or(""),
+            );
+            let b_converted = b * factor;
+            (a - b_converted).abs() < f64::EPSILON
         }
         (Value::String(a, _), Value::String(b, _)) => a == b,
         (Value::Bool(a), Value::Bool(b)) => a == b,
@@ -455,6 +471,10 @@ pub(crate) fn values_eq(l: &Value, r: &Value) -> bool {
                     b.iter()
                         .any(|(k2, v2)| values_eq(k, k2) && values_eq(v, v2))
                 })
+        }
+        // 空 Map == 空 List（SCSS 语义：() 既是空列表也是空映射）
+        (Value::Map(pairs), Value::List(items, _, _)) | (Value::List(items, _, _), Value::Map(pairs)) => {
+            pairs.is_empty() && items.is_empty()
         }
         _ => false,
     }

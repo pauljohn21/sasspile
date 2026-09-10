@@ -226,12 +226,23 @@ impl Parser<'_> {
                     Some(Token::RBracket) => { self.advance(); }
                     _ => {}
                 }
-                let sep = match (saw_comma, items.len()) {
-                    (true, _) => Separator::Comma,
-                    (false, n) if n <= 1 => Separator::Undecided,
-                    (false, _) => Separator::Space,
-                };
-                Ok(Value::List(items, sep, true))
+                // 单元素无逗号：如果内部是 List，提升为 bracketed（保留分隔符）
+                // 例如 [1 2 3] → List([1,2,3], Space, true) 而非 List([List([1,2,3])], Undecided, true)
+                match items.len() == 1 && !saw_comma {
+                    true => match items.into_iter().next() {
+                        Some(Value::List(inner_items, inner_sep, _)) => {
+                            Ok(Value::List(inner_items, inner_sep, true))
+                        }
+                        other => Ok(Value::List(other.into_iter().collect(), Separator::Undecided, true)),
+                    },
+                    false => {
+                        let sep = match saw_comma {
+                            true => Separator::Comma,
+                            false => Separator::Space,
+                        };
+                        Ok(Value::List(items, sep, true))
+                    }
+                }
             }
             Some(Token::Percent) => {
                 // % 作为独立值 = 字符串 %

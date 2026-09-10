@@ -58,6 +58,26 @@ pub fn call(
     pos_args: &[Value],
     kw_args: &HashMap<String, Value>,
 ) -> Result<Option<Value>> {
+    // join 的 $separator 命名参数校验（必须在 merge 之前，否则无法区分来源）
+    if name == "join" {
+        if let Some(sep_val) = kw_args.get("separator").or_else(|| kw_args.get("$separator")) {
+            match sep_val {
+                Value::String(s, _) => {
+                    if !["comma", "space", "slash", "auto"].contains(&s.as_str()) {
+                        return Err(SassError::Eval(format!(
+                            "\"{s}\" is not a valid separator for join()."
+                        )));
+                    }
+                }
+                Value::Bool(_) | Value::Null => {}
+                other => {
+                    return Err(SassError::Eval(format!(
+                        "$separator: {other} is not a valid separator argument."
+                    )));
+                }
+            }
+        }
+    }
     let args = merge_list_args(pos_args, kw_args, name);
     let args = args.as_slice();
     match name {
@@ -193,6 +213,7 @@ pub fn call(
                 }
             }
             // 提取 list1 的 items 和 separator
+            // 空 Map 的分隔符为 Undecided（与空列表一致），非空 Map 为 Comma
             let (a_items, a_sep, a_bracketed) = match &args[0] {
                 Value::List(items, sep, br) => (items.clone(), sep.clone(), *br),
                 Value::Map(pairs) => {
@@ -202,7 +223,8 @@ pub fn call(
                             Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
                         })
                         .collect();
-                    (items, Separator::Comma, false)
+                    let sep = if pairs.is_empty() { Separator::Undecided } else { Separator::Comma };
+                    (items, sep, false)
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
             };
@@ -216,7 +238,8 @@ pub fn call(
                             Value::List(vec![k.clone(), v.clone()], Separator::Space, false)
                         })
                         .collect();
-                    (items, Separator::Comma, false)
+                    let sep = if pairs.is_empty() { Separator::Undecided } else { Separator::Comma };
+                    (items, sep, false)
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
             };
@@ -305,15 +328,31 @@ pub fn call(
             };
             let mut items = a_items;
             items.extend(b_items);
+            // join() 结果分隔符不得为 Undecided——默认为 Space
+            let sep = match sep {
+                Separator::Undecided => Separator::Space,
+                other => other,
+            };
             Ok(Some(Value::List(items, sep, bracketed)))
         }
         "index" => match args {
             [Value::List(items, _, _), needle] => {
                 for (i, item) in items.iter().enumerate() {
-                match crate::eval::value::values_eq(item, needle) {
-                    true => return Ok(Some(Value::Number((i + 1) as f64, None))),
-                    false => {}
+                    match crate::eval::value::values_eq(item, needle) {
+                        true => return Ok(Some(Value::Number((i + 1) as f64, None))),
+                        false => {}
+                    }
                 }
+                Ok(Some(Value::Null))
+            }
+            [Value::Map(pairs), needle] => {
+                // Map index: 将每个键值对转为 [k, v] 列表与 needle 比较
+                for (i, (k, v)) in pairs.iter().enumerate() {
+                    let pair = Value::List(vec![k.clone(), v.clone()], Separator::Space, false);
+                    match crate::eval::value::values_eq(&pair, needle) {
+                        true => return Ok(Some(Value::Number((i + 1) as f64, None))),
+                        false => {}
+                    }
                 }
                 Ok(Some(Value::Null))
             }
@@ -408,7 +447,7 @@ pub fn call(
             ))),
         },
         "list-slash" => match args.len() {
-            0 => Err(SassError::Eval("Missing argument $elements.".into())),
+            0 | 1 => Err(SassError::Eval("Missing argument $elements.".into())),
             _ => Ok(Some(Value::List(args.to_vec(), Separator::Slash, false))),
         },
         "zip" => {

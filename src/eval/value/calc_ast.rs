@@ -93,10 +93,11 @@ pub(crate) fn format_number_static(n: f64, unit: Option<&str>) -> String {
     if n.is_nan() {
         return "NaN".to_string();
     }
-    let n = match n == 0.0 { true => n.abs(), false => n };
-    let num_str = match n.fract() == 0.0 && n.abs() < 1e15 {
-        true => format!("{n:.0}"),
-        false => format!("{n}"),
+    // 整数格式化：在 f64 精确表示范围内使用 {:.0}，避免科学计数法
+    let num_str = if n.fract() == 0.0 && n.abs() <= 9_007_199_254_740_991.0 {
+        format!("{n:.0}")
+    } else {
+        format!("{n}")
     };
     match unit {
         Some(u) => format!("{num_str}{u}"),

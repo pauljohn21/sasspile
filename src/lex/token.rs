@@ -126,7 +126,7 @@ impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use crate::parse::ast::Value;
         match self {
-            Token::Ident(s) => write!(f, "{}", Value::escape_css_ident(s)),
+            Token::Ident(s) => write!(f, "{}", Value::normalize_css_ident(s)),
             Token::Number(s) => write!(f, "{s}"),
             Token::String(s, _q) => {
                 let (quote, escaped) = Value::escape_quoted_string(s);

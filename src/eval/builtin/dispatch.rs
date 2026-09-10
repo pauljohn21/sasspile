@@ -2,7 +2,7 @@
 //!
 //! 替代旧的 `module_dispatch.rs`（宏生成版本），不依赖 proc-macro。
 
-use crate::error::Result;
+use crate::error::{Result, SassError};
 use crate::eval::Env;
 use crate::parse::ast::Value;
 use imbl::HashMap;
@@ -237,6 +237,12 @@ pub(crate) fn map_dispatch(
     match map_is_known(name) {
         true => {
             let global_name = map_builtin_name(name).unwrap_or(name);
+            // map-remove: 不允许位置参数和命名参数混合（key 必须全是位置或全是命名）
+            if global_name == "map-remove" && !pos_args.is_empty() && pos_args.len() > 1 && !kw_args.is_empty() {
+                return Some(Err(SassError::Eval(
+                    "map-remove: can't mix positional and named key arguments".into(),
+                )));
+            }
             let combined = super::merge_map_args(pos_args, kw_args, name);
             match super::Evaluator::call_map_builtin(global_name, &combined, env) {
                 Ok(Some(v)) => Some(Ok(v)),
