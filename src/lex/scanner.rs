@@ -64,14 +64,22 @@ impl<'src> Lexer<'src> {
             match c {
                 // CSS 转义序列（中间）：\xhh 或 \xhh 后跟空格
                 '\\' => {
-                    // 消费反斜杠 + hex 数字 + 可选尾随空格
-                    self.next_char();
-                    while self.peek().is_some_and(|h| h.is_ascii_hexdigit()) {
-                        self.next_char();
-                    }
-                    // 跳过 CSS 转义终止空格
-                    if self.peek().is_some_and(|c| c == ' ') {
-                        self.next_char();
+                    self.next_char(); // 消费 '\'
+                    match self.peek() {
+                        Some(next) if next.is_ascii_hexdigit() => {
+                            // 十六进制转义：消费 hex 数字 + 可选尾随空格
+                            while self.peek().is_some_and(|h| h.is_ascii_hexdigit()) {
+                                self.next_char();
+                            }
+                            if self.peek().is_some_and(|c| c == ' ') {
+                                self.next_char();
+                            }
+                        }
+                        Some(next) => {
+                            // 非十六进制转义：消费转义字符本身（如 \$ → $）
+                            self.next_char();
+                        }
+                        None => {}
                     }
                 }
                 c if c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii() => {

@@ -133,32 +133,43 @@ pub(crate) fn normalize_css_ident(raw: &str) -> String {
         result
     }
 
-    /// 核心转义逻辑——遍历字符并转义特殊字符。
-    /// `is_quote` 判断当前字符是否为需要转义的引号。
-    pub(crate) fn escape_css_chars(s: &str, is_quote: impl Fn(char) -> bool) -> String {
-        let chars: Vec<char> = s.chars().collect();
-        let mut result = String::new();
-        for (i, &c) in chars.iter().enumerate() {
-            match c {
-                '\\' => result.push_str("\\\\"),
-                c if is_quote(c) => {
-                    result.push('\\');
-                    result.push(c);
-                }
-                '\0' => result.push_str("\\0 "),
-                c if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) => {
-                    let hex = format!("{:x}", c as u32);
-                    result.push('\\');
-                    result.push_str(&hex);
-                    let next = chars.get(i + 1).copied();
-                    match next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
-                        true => result.push(' '),
-                        false => {}
-                    }
-                }
-                _ => result.push(c),
+/// 核心转义逻辑——遍历字符并转义特殊字符。
+/// `is_quote` 判断当前字符是否为需要转义的引号。
+///
+/// 注意：NULL 和控制字符的 CSS 转义（如 `\0 `）本身包含反斜杠，
+/// 在字符串字面量中需要再次转义为 `\\0 `，确保 CSS 解析器正确解码。
+pub(crate) fn escape_css_chars(s: &str, is_quote: impl Fn(char) -> bool) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut result = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        match c {
+            '\\' => result.push_str("\\\\"),
+            c if is_quote(c) => {
+                result.push('\\');
+                result.push(c);
             }
+            '\0' => {
+                // NULL → CSS 转义 `\0 `（带尾随空格，dart-sass 规范）
+                // 在字符串字面量中需双反斜杠：`\\0 `
+                let next = chars.get(i + 1).copied();
+                match next.is_some_and(|nc| nc.is_ascii_hexdigit()) {
+                    true => result.push_str("\\\\0 "),  // 后跟 hex 数字，需要空格
+                    false => result.push_str("\\\\0 "),  // dart-sass 总是加空格
+                }
+            }
+            c if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) => {
+                let hex = format!("{:x}", c as u32);
+                result.push_str("\\\\");  // 双反斜杠（字符串转义）
+                result.push_str(&hex);
+                let next = chars.get(i + 1).copied();
+                match next.is_some_and(|nc| nc.is_ascii_hexdigit() || nc.is_whitespace()) {
+                    true => result.push(' '),
+                    false => {}
+                }
+            }
+            _ => result.push(c),
         }
-        result
     }
+    result
+}
 }

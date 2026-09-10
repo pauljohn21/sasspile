@@ -30,21 +30,94 @@ fn is_valid_selector_token(token: &str) -> bool {
 /// - `"a > b"` → `[["a", ">", "b"]]`
 /// - `"a + b ~ c"` → `[["a", "+", "b", "~", "c"]]`
 /// - `".a > .b"` → `[[".a", ">", ".b"]]`
+/// - `"[c]d"` → `[["[c]", "d"]]`
 pub fn string_to_selector_format(input: &str) -> Vec<Vec<String>> {
     input
         .split(',')
-        .map(|part| {
-            part.split_whitespace()
-                .filter(|s| !s.is_empty())
-                .map(|s| {
-                    // 处理开头是组合符的情况，比如 "> .b" 会 split成 [">", ".b"]，保留即可
-                    s.trim().to_string()
-                })
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-        })
+        .map(|part| split_compound_selector(part))
         .filter(|v| !v.is_empty())
         .collect()
+}
+
+/// 将单个 complex selector 字符串拆分为 compound 标记列表。
+///
+/// 处理复合选择器边界（如 `[c]d` → `["[c]", "d"]`）。
+fn split_compound_selector(input: &str) -> Vec<String> {
+    let chars: Vec<char> = input.chars().collect();
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut i = 0;
+    let mut bracket_depth: i32 = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        // 在顶层（不在括号/引号/括号内）检查是否是新 simple selector 的开始
+        if bracket_depth == 0 && !current.is_empty() {
+            let starts_new = matches!(c, '.' | '#' | '%' | '[' | ':' | '&' | '*')
+                || c.is_ascii_alphanumeric();
+            // 特殊情况：当前以 ] 结尾，后跟字母/数字 → 新 type selector
+            let prev_bracket_close = current.ends_with(']');
+            if starts_new && (prev_bracket_close || !c.is_ascii_alphanumeric()) {
+                // 但如果当前是组合符（> + ~）或空，不分割
+                if !matches!(current.as_str(), ">" | "+" | "~") && !current.is_empty() {
+                    result.push(current);
+                    current = String::new();
+                }
+            }
+        }
+        current.push(c);
+        match c {
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth -= 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    if !current.is_empty() && !current.trim().is_empty() {
+        result.push(current);
+    }
+    // 分割组合符：如果某个 token 包含组合符（> + ~），进一步拆分
+    result
+        .into_iter()
+        .flat_map(|token| split_combinators(token))
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// 将包含组合符的 token 拆分为独立标记。
+/// 例如 `"a > b"` → `["a", ">", "b"]`。
+fn split_combinators(token: String) -> Vec<String> {
+    let trimmed = token.trim();
+    // 如果是纯组合符
+    if matches!(trimmed, ">" | "+" | "~") {
+        return vec![trimmed.to_string()];
+    }
+    // 不包含组合符
+    if !trimmed.contains(['>', '+', '~']) {
+        return vec![trimmed.to_string()];
+    }
+    // 拆分组合符
+    let mut result = Vec::new();
+    let mut current = String::new();
+    for c in trimmed.chars() {
+        if matches!(c, '>' | '+' | '~') {
+            if !current.trim().is_empty() {
+                result.push(current.trim().to_string());
+            }
+            result.push(c.to_string());
+            current = String::new();
+        } else if c.is_whitespace() {
+            if !current.trim().is_empty() {
+                result.push(current.trim().to_string());
+                current = String::new();
+            }
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        result.push(current.trim().to_string());
+    }
+    result
 }
 
 /// 解析选择器字符串为 Selector Format，带验证。
