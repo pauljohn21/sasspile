@@ -2,6 +2,29 @@
 
 # Changelog
 
+## [0.9.8] — 2026-09-10
+
+### Added
+
+- **spec-store** SQLite 数据管理工具：`tests/spec_store.rs` + `tests/specstore/` 子模块（8 文件，≤ 300 行/文件）
+  - HRX 入库（`SPEC_STORE_CMD=index`）：12,131 个 case 写入 SQLite WAL
+  - 全量运行 + 快照（`SPEC_STORE_CMD=run`）：7,489 PASS / 4,380 FAIL / 262 SKIP，~125 秒
+  - 目录统计报告（`SPEC_STORE_CMD=stats`）：Markdown 表格，按通过率排序
+  - 函数级趋势（`SPEC_STORE_CMD=trend FN=math.sin`）：ASCII 折线图
+  - 代码↔spec 桥接（`SPEC_STORE_CMD=link FN=math.sin`）：CodeGraph callers
+  - 两 snapshot 对比（`SPEC_STORE_CMD=diff FROM=1 TO=2`）：回归检测
+  - 五表 schema：spec_cases / case_files / snapshots / case_results / case_deltas
+
+### Removed
+
+- `tests/failures_json.rs`、`tests/sass_spec_stats.rs`、`sass-spec-failures.json`、`sass-spec-baseline.json`、`sass-spec-stats.md` — 由 spec_store 取代
+
+### Changed
+
+- `AGENTS.md`：工具链/工作流/验证清单全面更新为 spec_store 命令
+- `STYLE_GUIDE.md`：命名示例更新为 `cmd_stats` / `cmd_trend`
+- `.githooks/post-commit`：每次 commit 自动 snapshot 标记时间点
+
 ## [0.9.6] — 2026-08-19
 
 ### Added

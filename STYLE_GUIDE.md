@@ -216,7 +216,7 @@ expect("应该包含 color: red")
 | `test_` | 单元/集成测试 | `test_compile_simple` |
 | `diag_` | sass-spec 诊断 | `diag_list` |
 | `stats_` | 统计报告 | `stats_math` |
-| `generate_` | 报告生成 | `generate_sass_spec_stats` |
+| `generate_` | 报告生成 | `cmd_stats` / `cmd_trend` (spec_store) |
 | `check_` | 检测/验证 | `check_file_size_limits` |
 | `hwb_` / `hsl_` | 颜色相关 | `hwb_degenerate_hue` |
 

@@ -18,6 +18,52 @@ use super::selector_ops::{
 use super::selector_is_super::is_super_compound;
 use super::selector_unify::unify_extendee_list;
 
+// ─── 伪类检测辅助函数 ─────────────────────────────────────────────
+
+/// 检测 compound 是否包含 `:not()` 伪类。
+fn has_not_pseudo(compound: &CompoundSelector) -> bool {
+    compound.0.iter().any(|s| matches!(s, SimpleSelector::PseudoClass { name, .. } if name == "not"))
+}
+
+/// 提取 `:not()` 伪类的参数（如 `.c` 或 `.c, .d`）。
+fn extract_not_arg(compound: &CompoundSelector) -> Option<String> {
+    compound.0.iter().find_map(|s| match s {
+        SimpleSelector::PseudoClass { name, arg } if name == "not" => arg.clone(),
+        _ => None,
+    })
+}
+
+/// 在 compound 上追加新的 `:not()` 伪类。
+#[allow(dead_code)]
+fn append_not_pseudo(compound: &CompoundSelector, new_not: &SimpleSelector) -> CompoundSelector {
+    let mut simples: Vec<SimpleSelector> = compound.0.clone();
+    simples.push(new_not.clone());
+    CompoundSelector(simples)
+}
+
+/// 检查 extender 是否包含任何 `:not()` 伪类。
+/// 如果包含，根据 Sass known limitation，扩展是 no-op。
+fn extender_contains_not(extender: &Selector) -> bool {
+    extender.0.iter().any(|c| {
+        c.compounds.iter().any(|(_, comp)| has_not_pseudo(comp))
+    })
+}
+
+/// 伪类参数匹配：检查两个参数化伪类是否匹配。
+///
+/// 用于 `:nth-child()`, `:nth-last-child()` 等需要参数匹配的伪类。
+/// 对于这些伪类，必须参数完全一致才算匹配。
+fn pseudo_args_match(name: &str, arg1: Option<&String>, arg2: Option<&String>) -> bool {
+    match name {
+        "nth-child" | "nth-last-child" | "nth-of-type" | "nth-last-of-type" => {
+            // 这些伪类需要参数完全一致
+            arg1 == arg2
+        }
+        // 其他参数化伪类（如 :not, :is, :where, :matches）走默认匹配
+        _ => true,
+    }
+}
+
 #[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender))]
 pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Selector) -> Selector {
     extend_selector_with_mode(selector, extendee, extender, false)
@@ -90,7 +136,7 @@ pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, exten
         return result;
     }
 
-    let is_no_op = unified_extendee.is_none() || selector_has_universal || selector_any_namespace_no_op || is_more_specific_than(extender, extendee);
+    let is_no_op = unified_extendee.is_none() || selector_has_universal || selector_any_namespace_no_op || is_more_specific_than(selector, extender, extendee);
     if is_no_op {
         tracing::debug!("extend: NO-OP");
         return selector.clone();
@@ -113,10 +159,21 @@ pub fn extend_selector_with_mode(selector: &Selector, extendee: &Selector, exten
     result
 }
 
-fn is_more_specific_than(extender: &Selector, extendee: &Selector) -> bool {
+fn is_more_specific_than(selector: &Selector, extender: &Selector, extendee: &Selector) -> bool {
     // extender 比 extendee 更具体 → extend 是 no-op
     // 即：extendee 是 extender 的超选择器（extendee 匹配更多元素）
     use crate::css::selector_is_super::is_super_compound;
+
+    // 检查 extendee 是 selector 中 compound 内部的 :is/:where/:matches → no-op
+    // （如 .c:is(.d) + :is(.d) 扩展 = no-op，但 :is(.a, .b) + :is(.a, .b) = 正常扩展）
+    if selector.0.iter().any(|c| extendee_is_is_where_matches_subselector(c, extendee)) {
+        return true;
+    }
+
+    // 检查 extendee 是 :is/:where/:matches 的 subselector → no-op
+    if is_is_where_matches_subselector(extender, extendee) {
+        return true;
+    }
 
     extender.0.iter().all(|ext_c| {
         extendee.0.iter().any(|ee_c| {
@@ -145,7 +202,108 @@ fn is_more_specific_than(extender: &Selector, extendee: &Selector) -> bool {
     })
 }
 
+/// 检查 extendee 是选择器中 `:is()`, `:where()`, `:matches()` 的 subselector。
+///
+/// 如果是 subselector，extend 是 no-op 因为扩展不会缩小匹配范围。
+fn is_is_where_matches_subselector(extender: &Selector, extendee: &Selector) -> bool {
+    // extendee 必须是单个 simple 选择器
+    let ee_simple = extendee.0.first().and_then(|c| c.compounds.first()).and_then(|(_, comp)| comp.0.first());
+    let ee_simple = match ee_simple {
+        Some(s) => s,
+        None => return false,
+    };
+
+    // 检查 extender 的任何 compound 包含 :is/:where/:matches 且参数包含该 subselector
+    extender.0.iter().any(|ext_c| {
+        ext_c.compounds.iter().any(|(_, comp)| {
+            comp.0.iter().any(|s| match s {
+                SimpleSelector::PseudoClass { name, arg: Some(arg) }
+                    if (name == "is" || name == "where" || name == "matches") =>
+                {
+                    // 解析参数为列表，检查是否包含 ee_simple
+                    parse_selector_list_to_simples(arg).iter().any(|sel| {
+                        let normalized = normalize_pseudo_compound(sel);
+                        normalized == *ee_simple
+                    })
+                }
+                _ => false,
+            })
+        })
+    })
+}
+
+/// 检查 extendee 是否是 `:is()`, `:where()`, `:matches()` 伪类且 selector compound
+/// 中包含该伪类和其他 simples（compound 长度 > 1）。
+///
+/// 这种情况下扩展是 no-op，因为扩展一个 compound 内部的 `:is()` 没有语义意义。
+/// 但当整个 compound 只有一个 `:is()` simple 时（如 `:is(.a, .b)`），扩展应正常进行。
+fn extendee_is_is_where_matches_subselector(selector: &ComplexSelector, extendee: &Selector) -> bool {
+    // extendee 必须是纯粹的 :is/:where/:matches
+    if !extendee.0.iter().any(|c| {
+        c.compounds.iter().any(|(_, comp)| {
+            comp.0.len() == 1 && matches!(&comp.0[0],
+                SimpleSelector::PseudoClass { name, .. } if name == "is" || name == "where" || name == "matches"
+            )
+        })
+    }) {
+        return false;
+    }
+
+    // 且 selector 中存在某个 compound 包含该 :is/:where/:matches 和其他 simple
+    let ee_name = extendee.0.iter()
+        .flat_map(|c| c.compounds.iter())
+        .find_map(|(_, comp)| {
+            comp.0.first().and_then(|s| match s {
+                SimpleSelector::PseudoClass { name, .. } if name == "is" || name == "where" || name == "matches" => Some(name.clone()),
+                _ => None,
+            })
+        });
+
+    let ee_name = match ee_name {
+        Some(n) => n,
+        None => return false,
+    };
+
+    selector.compounds.iter().any(|(_, comp)| {
+        // compound 长度 > 1 且包含 :is/:where/:matches → 扩展 extendee 是 no-op
+        comp.0.len() > 1 && comp.0.iter().any(|s| matches!(s,
+            SimpleSelector::PseudoClass { name, .. } if *name == ee_name
+        ))
+    })
+}
+
+/// 将"伪" simple (`:__compound__`, `:__selector__`, `:__complex__`) 还原为普通 simple。
+fn normalize_pseudo_compound(s: &SimpleSelector) -> SimpleSelector {
+    match s {
+        SimpleSelector::PseudoClass { name, arg: Some(arg) }
+            if (name == "__compound__" || name == "__selector__" || name == "__complex__") =>
+        {
+            parse_single_simple_selector(arg).unwrap_or_else(|| s.clone())
+        }
+        _ => s.clone(),
+    }
+}
+
+/// 将单个 simple selector 字符串解析为 SimpleSelector（仅支持基础 simple）。
+fn parse_single_simple_selector(input: &str) -> Option<SimpleSelector> {
+    let input = input.trim();
+    if input.starts_with('.') && !input[1..].contains('.') && !input[1..].contains(':') && !input[1..].contains(' ') {
+        Some(SimpleSelector::Class(input[1..].to_string()))
+    } else if input.starts_with('#') && !input[1..].contains('#') && !input[1..].contains(':') && !input[1..].contains(' ') {
+        Some(SimpleSelector::Id(input[1..].to_string()))
+    } else if !input.starts_with(&['.', '#', ':', '[', '*']) && !input.contains(' ') {
+        Some(SimpleSelector::Type { namespace: Namespace::None, name: input.to_string() })
+    } else {
+        None
+    }
+}
+
 fn extend_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extender: &Selector) -> Option<Selector> {
+    // :not() 特殊处理：在 match_positions 计算之前检测
+    if let Some(result) = try_extend_not_in_complex(selector, extendee, extender) {
+        return Some(result);
+    }
+
     if has_multiple_combinators(selector) || extender_has_multiple_combinators(extender) { return None; }
     let sel_leading = has_leading_combinator(selector);
     let sel_trailing = has_trailing_combinator(selector);
@@ -203,6 +361,224 @@ fn extend_complex_at(
             build_extended_complex(selector, ext_complex, match_pos, &remaining, sel_leading, sel_trailing)
         }).collect::<Vec<_>>()
     })
+}
+
+/// 尝试对 complex 中的 `:not()` 伪类进行特殊扩展。
+///
+/// 在标准 match_positions 匹配之前调用，因为 `:not(.c)` 不包含 `.c` simple，
+/// 标准匹配会失败。这里检测 selector 的 compound 是否包含 `:not()`，
+/// 且 extendee 是否匹配 `:not()` 内部的选择器。
+fn try_extend_not_in_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extender: &Selector) -> Option<Selector> {
+    if extendee.compounds.len() != 1 { return None; }
+    let ext_compound = &extendee.compounds[0].1;
+    let sel_leading = has_leading_combinator(selector);
+    let sel_trailing = has_trailing_combinator(selector);
+
+    // 检查是否有任何 compound 包含 :not()
+    let not_positions: Vec<usize> = selector.compounds.iter().enumerate()
+        .filter(|(_, (_, comp))| has_not_pseudo(comp))
+        .map(|(i, _)| i).collect();
+
+    if not_positions.is_empty() { return None; }
+
+    // 对包含 :not() 的 compound 执行扩展
+    let mut all_results: Vec<ComplexSelector> = Vec::new();
+    let mut any_extended = false;
+
+    for &match_pos in &not_positions {
+        let (_, sel_compound) = &selector.compounds[match_pos];
+        if let Some(extended) = extend_not_pseudo(selector, sel_compound, ext_compound, extender, match_pos, sel_leading, sel_trailing) {
+            for ec in extended {
+                if !all_results.contains(&ec) {
+                    all_results.push(ec);
+                }
+            }
+            any_extended = true;
+        }
+    }
+
+    any_extended.then(|| {
+        let original = selector.clone();
+        let mut results = vec![original];
+        results.extend(all_results);
+        Selector(results)
+    })
+}
+
+/// `:not()` 特殊扩展语义：追加新的 `:not()` 到 compound。
+///
+/// 根据 sass-spec：
+/// - `extend(":not(.c)", ".c", ".d")` → `:not(.c):not(.d)`
+/// - `extend(":not(.c)", ".c", ".d, .e")` → `:not(.c):not(.d):not(.e)`
+/// - `extend(":not(.c, .d)", ".c", ".e")` → `:not(.c, .e, .d)`（添加到列表）
+fn extend_not_pseudo(
+    selector: &ComplexSelector,
+    sel_compound: &CompoundSelector,
+    ext_compound: &CompoundSelector,
+    extender: &Selector,
+    match_pos: usize,
+    sel_leading: bool,
+    _sel_trailing: bool,
+) -> Option<Vec<ComplexSelector>> {
+    // 提取 :not() 的参数
+    let not_arg = extract_not_arg(sel_compound)?;
+
+    // 解析 :not() 内部为选择器，检查 ext_compound 是否匹配
+    let inner_selector = super::selector_parser::parse_selector(&not_arg);
+    let inner_compound = inner_selector.0.first()?;
+
+    // ext_compound 必须是 :not() 内部选择器的子集（意味着 extendee 匹配 :not() 的内容）
+    if !is_semantic_subset(ext_compound, &inner_compound.compounds[0].1) {
+        // 检查是否为单 simple 匹配（ext_compound 只有 1 个 simple 且在 inner 中存在）
+        if ext_compound.0.len() != 1 { return None; }
+        let ext_simple = &ext_compound.0[0];
+        if !inner_compound.compounds[0].1 .0.iter().any(|s| s == ext_simple) {
+            return None;
+        }
+    }
+
+    // Sass 已知限制：extender 包含 :not() 时是 no-op
+    // 因为会产生嵌套 :not(:not(...))，而 Sass 选择忽略嵌套 :not
+    if extender_contains_not(extender) {
+        return None;
+    }
+
+    // 收集 extender 中的所有 simple 选择器（展开列表/:is/:where/:matches）
+    let extender_simples = flatten_extender_simples(extender);
+
+    // 构建新的 compound：在原有 compound 基础上追加新的 :not()
+    let prefix = &selector.compounds[..match_pos];
+    let suffix = &selector.compounds[match_pos + 1..];
+    let orig_combinator = selector.compounds[match_pos].0;
+    let resolved_first_combinator = if sel_leading { orig_combinator.or(Some(Combinator::Descendant)) } else { orig_combinator };
+
+    // 构建扩展后的 compound：原有 simples + 新的 :not(extender_simple)
+    let extended_compound_with_nots: Vec<SimpleSelector> = sel_compound.0.iter().cloned()
+        .chain(extender_simples.iter().map(|s| {
+            // 将"伪" simple 转换为正确的 :not() 参数
+            let not_arg = match s {
+                SimpleSelector::PseudoClass { name, arg: Some(arg) }
+                    if name == "__compound__" || name == "__selector__" || name == "__complex__" => arg.clone(),
+                _ => s.to_string(),
+            };
+            SimpleSelector::PseudoClass {
+                name: "not".to_string(),
+                arg: Some(not_arg),
+            }
+        }))
+        .collect();
+
+    let mut result_compounds: Vec<(Option<Combinator>, CompoundSelector)> = prefix.to_vec();
+    result_compounds.push((resolved_first_combinator, CompoundSelector(extended_compound_with_nots)));
+    result_compounds.extend(suffix.iter().cloned());
+
+    let complex = ComplexSelector { compounds: result_compounds };
+    Some(vec![complex])
+}
+
+/// 将 extender 中的选择器展开为 simple selector 列表。
+///
+/// 处理以下场景：
+/// - `.d, .e` → [.d, .e]
+/// - `:is(.d, .e)` → [.d, .e]
+/// - `:where(.d .e, .f .g)` → [.d .e, .f .g]（每个 compound 转字符串）
+/// - `:matches(.d, .e)` → [.d, .e]
+/// - `.d:is(.e, .f)` → [.d:is(.e, .f)]（整体保留）
+fn flatten_extender_simples(extender: &Selector) -> Vec<SimpleSelector> {
+    // 如果 extender 只有一个 complex 且只有一个 compound，直接取该 compound 的 simples
+    if extender.0.len() == 1 {
+        let complex = &extender.0[0];
+        if complex.compounds.len() == 1 {
+            let compound = &complex.compounds[0].1;
+
+            // 只在 compound 仅由一个 :is/:where/:matches simple 组成时才展开
+            // 如果 compound 包含其他 simples（如 .d:is(.e,.f)），整体保留
+            let is_only_is_where_matches = compound.0.len() == 1 && matches!(&compound.0[0],
+                SimpleSelector::PseudoClass { name, arg: Some(_) }
+                if name == "is" || name == "where" || name == "matches"
+            );
+
+            if !is_only_is_where_matches {
+                // 普通情况：每个 simple 单独为一项
+                // 但如果 compound 有多个 simples（比如 .d:is(.e,.f)），整体作为一个 SimpleSelector 不合适
+                // 这里我们返回一个"伪" simple 表示整个 compound
+                if compound.0.len() == 1 {
+                    return vec![compound.0[0].clone()];
+                }
+                // compound 有多个 simples 但不包含 :is/:where/:matches
+                // 将整个 compound 编码到一个 PseudoClass 中（特殊情况）
+                return vec![SimpleSelector::PseudoClass {
+                    name: "__compound__".to_string(),
+                    arg: Some(compound.to_string()),
+                }];
+            }
+
+            // 包含 :is/:where/:matches，需要提取其参敂
+            if let Some(arg) = compound.0.iter().find_map(|s| match s {
+                SimpleSelector::PseudoClass { name, arg } if name == "is" || name == "where" || name == "matches" => arg.clone(),
+                _ => None,
+            }) {
+                // 解析参敂为逗号分隔的选择器列表
+                return parse_selector_list_to_simples(&arg);
+            }
+        }
+    }
+
+    // extender 是逗号分隔列表：.d, .e → 展开
+    extender.0.iter().flat_map(|complex| {
+        if complex.compounds.len() == 1 {
+            let compound = &complex.compounds[0].1;
+            if compound.0.len() == 1 {
+                vec![compound.0[0].clone()]
+            } else {
+                vec![SimpleSelector::PseudoClass {
+                    name: "__compound__".to_string(),
+                    arg: Some(compound.to_string()),
+                }]
+            }
+        } else {
+            // multi-compound complex selector
+            vec![SimpleSelector::PseudoClass {
+                name: "__complex__".to_string(),
+                arg: Some(complex.to_string()),
+            }]
+        }
+    }).collect()
+}
+
+/// 将逗号分隔的选择器列表字符串解析为 SimpleSelector 向量。
+fn parse_selector_list_to_simples(input: &str) -> Vec<SimpleSelector> {
+    // 按逗号分割，但需要处理括号内的逗号
+    let mut result = Vec::new();
+    let mut depth = 0usize;
+    let mut current = String::new();
+
+    for ch in input.chars() {
+        match ch {
+            '(' => { depth += 1; current.push(ch); }
+            ')' => { depth = depth.saturating_sub(1); current.push(ch); }
+            ',' if depth == 0 => {
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    result.push(SimpleSelector::PseudoClass {
+                        name: "__selector__".to_string(),
+                        arg: Some(trimmed),
+                    });
+                }
+                current = String::new();
+                continue;
+            }
+            _ => current.push(ch),
+        }
+    }
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        result.push(SimpleSelector::PseudoClass {
+            name: "__selector__".to_string(),
+            arg: Some(trimmed),
+        });
+    }
+    result
 }
 
 fn build_extended_complex(

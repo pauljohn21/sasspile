@@ -23,7 +23,7 @@
 ## Impact
 
 - 影响文件: `src/css/selector_extend.rs`, `src/css/selector_ops.rs`
-- 影响测试: `tests/sass-spec-failures.json`（预期减少 65 个失败）
+- 影响测试: `tests/spec-store.db`（预期减少 65 个失败，用 `SPEC_STORE_CMD=diff` 验证）
 - API 变更: 无（内部算法改进）
 - 依赖变更: 无
 
