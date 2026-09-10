@@ -1,0 +1,9 @@
+#!/bin/bash
+# spec-store: 每次 commit 后自动创建空 snapshot 标记时间点
+# 安装: git config core.hooksPath .githooks
+# 注意: 全量运行 (SPEC_STORE_CMD=run) 需手动触发，不在 hook 中执行
+
+set +e  # 不因任何失败而阻断 commit 流程
+
+# 创建空 snapshot 标记 commit 时间点（精确到秒级）
+SPEC_STORE_CMD=snapshot cargo test --test spec_store -- --quiet 2>/dev/null

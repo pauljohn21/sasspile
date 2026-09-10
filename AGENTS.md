@@ -483,8 +483,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 # sass-spec 全量统计 + OTel 追踪（输出 span 到 stdout）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test sass_spec_full -- --nocapture
 
-# 全量失败原因导出 JSON（~87 秒，输出 tests/sass-spec-failures.json）
-cargo test --test failures_json -- --nocapture
+# spec-store: 全量运行 + SQLite 存储（~125 秒）
+SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 ```
 
 **通过标准**：48/48 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 243/243
@@ -514,7 +514,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 - `hrx_support::parse_hrx_to_cases(content, hrx_rel_path)` → `Vec<HrxCase>`（高级 API，路径加 HRX 名作前缀）
 - 测试代码**不再按 `===` 分组隔离**——所有条目共享同一个 VFS，路径加 HRX 目录前缀，使 `@use` 跨组引用能正确解析
 - **颜色相关目录自动注入 `_utils.scss`**：使用 `OnceLock` 缓存物理文件 `sass-spec/spec/core_functions/color/_utils.scss`，首次访问时读取并注入到 VFS 文件列表，解决跨组 `@use 'core_functions/color/_...'` 路径解析问题
-- 共享模块被 8 个测试文件引用：`sass_spec_full.rs`、`diag_helper.rs`、`sass_spec.rs`、`minimize.rs`、`cf_color.rs`、`failures_json.rs` + 通过 diag_helper 间接使用的 `diagnostic_runner.rs`、`diag_color.rs`
+- 共享模块被多个测试文件引用：`sass_spec_full.rs`、`diag_helper.rs`、`sass_spec.rs`、`minimize.rs`、`cf_color.rs` + 通过 diag_helper 间接使用的 `diagnostic_runner.rs`、`diag_color.rs`
 
 ## 🔄 Git 规范
 
@@ -528,8 +528,8 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **spec-store**（2026-09-10）：sass-spec SQLite 数据管理工具 — 取代 `failures_json.rs` + `sass_spec_stats.rs`，用 SQLite WAL 存储 case 结果/快照/Delta，集成统计/趋势/桥接/回归定位，12131 个 case 入库
 - **tests-cleanup**（2026-09-10）：测试架构清理合 — 15 个诊断文件合并为 `diag_helper.rs` + `diagnostic_runner.rs` + `diag_color.rs`，单文件 ≤ 500 行合规
-- **failures-json**（2026-09-09）：全量失败原因 JSON 导出 — 新建 `tests/failures_json.rs`，运行全部 sass-spec case（11869 个，~87 秒），将每个失败的完整 expected/actual/error 写入 `tests/sass-spec-failures.json`（含 metadata + failures[] + by_dir + by_type 聚合）— 用于回归检测和失败模式分析
 - **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON、format! 内联变量、let...else 重写、items_after_statements 修复 — cargo clippy 零错误，核心测试全通过
 - **cf-noncolor-boost**（2026-09-08）：core_functions 非 color 子域修复 — list join/set-nth/zip/is-bracketed 修复 (+48)、math sin/cos/tan 角度单位转换 (+13)、meta module_exports 全覆盖 (+120) — sass-spec 7144→7365 (+221)
 - **color-adjust-units**（2026-09-06）：CIE+Modern RGB 颜色 adjust/change/scale percent 单位处理 — 新增 cie_channel 提取器（区分 unitless n 与 n%），CIE 各通道正确 max 值（Oklch/Oklab/Lch/Lab），Modern RGB 统一使用 cie_channel(max=1.0)，sass-spec 6426→6695 (+269)
@@ -632,39 +632,38 @@ sasspile 颜色系统基于 `ColorSpace` 枚举（17 种色彩空间）+ `ColorO
 
 | 类别 | 工具 | 触发场景 |
 |------|------|----------|
-| 代码统计 | `tests/sass_spec_stats.rs` | sass-spec 通过率报告、基线对比 |
+| 代码统计 | `tests/spec_store.rs` + `SPEC_STORE_CMD=stats` | sass-spec 通过率报告 + 目录聚合 |
+| 全量运行 | `SPEC_STORE_CMD=run` | 编译所有 case + 快照入库（SQLite） |
+| 历史趋势 | `SPEC_STORE_CMD=trend FN=math.sin` | 函数级通过率时间序列 |
+| 代码桥接 | `SPEC_STORE_CMD=link FN=math.sin` | spec case ↔ CodeGraph 调用链 |
 | 失败诊断 | `tests/diagnostic_runner.rs`（统一入口，通过 `mod diag_helper` 共享辅助） | 定位具体失败 case（CSS/expr/core_functions/指令全量诊断） |
-| 失败导出 | `tests/failures_json.rs` → `tests/sass-spec-failures.json` | 全量失败原因结构化导出（含完整 expected/actual） |
 | 代码查询 | `codegraph callers/impact/node/explore/callees` | 调用链分析、影响范围 |
 | 链路追踪 | `RUST_LOG=trace --features otel` | 跨函数/跨阶段 bug 定位 |
 | 脚本处理 | `rust-script` 或 Rust test | 任何脚本/数据处理任务 |
 
-### sass-spec 诊断工具
+### spec-store 工具（sass-spec 数据管理）
 
 ```bash
-# 1. 全量统计（~4 分钟，后台运行）
-RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture > /tmp/sass-spec-full.log 2>&1 &
+# 1. HRX 入库（一次性，~6 秒，12131 个 case）
+SPEC_STORE_CMD=index cargo test --test spec_store -- --nocapture
 
-# 2. 生成 MD 报告 + 基线对比
-cargo test --test sass_spec_stats -- --nocapture
+# 2. 全量运行 + 快照（~125 秒）
+SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 
-# 3. 保存当前为新基线
-BASELINE=1 cargo test --test sass_spec_stats -- --nocapture
+# 3. 统计报告（Markdown 表格）
+SPEC_STORE_CMD=stats cargo test --test spec_store -- --nocapture
 
-# 4. 导出全量失败原因 JSON（~87 秒）
-cargo test --test failures_json -- --nocapture
-# 输出: tests/sass-spec-failures.json（含完整 expected/actual/error）
+# 4. 函数趋势查询
+SPEC_STORE_CMD=trend FN=math.sin cargo test --test spec_store -- --nocapture
+
+# 5. 代码 ↔ spec 桥接（CodeGraph）
+SPEC_STORE_CMD=link FN=math.sin cargo test --test spec_store -- --nocapture
+
+# 6. 两 snapshot 对比
+SPEC_STORE_CMD=diff FROM=1 TO=2 cargo test --test spec_store -- --nocapture
 ```
 
-### failures_json 输出格式
-
-`tests/sass-spec-failures.json` 包含：
-- `metadata` — timestamp、total_cases、pass、fail、skip
-- `failures[]` — 每条含 `id`、`dir`、`type`（DIFF/ERR/ERR_EXP_OK）、完整 `expected`/`actual`/`error`
-- `by_dir` — 按目录聚合的各类型计数
-- `by_type` — DIFF/ERR/ERR_EXP_OK 总计数
-
-**用途**：回归检测（对比两次 JSON）、失败模式分析、修复优先级排序。
+数据库: `tests/spec-store.db`（SQLite WAL 模式）
 
 ### 失败定位工具
 
@@ -693,10 +692,10 @@ RUST_LOG="diagnostic_runner=info" cargo test --test diagnostic_runner -- --nocap
 
 ### 工作流
 
-1. **统计需求** → `sass_spec` 后台运行 → `sass_spec_stats` 生成报告
+1. **统计需求** → `SPEC_STORE_CMD=run` 全量运行 → `SPEC_STORE_CMD=stats` 生成报告
 2. **定位失败** → 运行 `diagnostic_runner`（统一入口）获取结构化输出
-3. **全量导出** → `failures_json` 生成 `sass-spec-failures.json`（回归检测/修复对比）
-4. **分析影响** → `codegraph callers/impact/node`
+3. **回归检测** → `SPEC_STORE_CMD=diff FROM=n TO=m` 对比两次快照
+4. **分析影响** → `codegraph callers/impact/node` 或 `SPEC_STORE_CMD=link FN=xxx`
 5. **Bug 追踪** → `RUST_LOG=trace --features otel` + `#[instrument]`
 6. **数据转换** → 写 Rust test 或 `rust-script`
 
@@ -778,5 +777,5 @@ codegraph query <search>       # 搜索符号
 - [ ] 调试遵循 4 步协议（如果是 bug 修复）
 - [ ] OTel 追踪可用：`cargo test --features otel` 输出 span 正常
 - [ ] CodeGraph 用于代码查询
-- [ ] 使用高效工具链（sass_spec_stats / *_diag / codegraph / OTel），未手动 grep/逐行分析
+- [ ] 使用高效工具链（spec_store / diagnostic_runner / codegraph / OTel），未手动 grep/逐行分析
 - [ ] Commit 等用户确认后再推送
