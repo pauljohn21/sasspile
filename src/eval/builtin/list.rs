@@ -32,7 +32,7 @@ fn list_param_names(name: &str) -> &'static [&'static str] {
 /// 合并位置参数和命名参数（复用 string 模块的 `merge_args` 逻辑）。
 fn merge_list_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &str) -> Vec<Value> {
     let param_names = list_param_names(name);
-    let mut result: Vec<Value> = param_names
+    let result: Vec<Value> = param_names
         .iter()
         .enumerate()
         .filter_map(|(i, pname)| {
@@ -44,10 +44,13 @@ fn merge_list_args(pos_args: &[Value], kw_args: &HashMap<String, Value>, name: &
         })
         .collect();
     match pos_args.len() > param_names.len() {
-        true => result.extend_from_slice(&pos_args[param_names.len()..]),
-        false => {}
+        true => {
+            let mut r = result;
+            r.extend_from_slice(&pos_args[param_names.len()..]);
+            r
+        }
+        false => result,
     }
-    result
 }
 
 pub fn call(
@@ -176,9 +179,14 @@ pub fn call(
                     return Err(SassError::Eval(format!("Argument `{bare}` doesn't exist.")));
                 }
             }
-            // 校验 separator 类型
+            // 校验 separator 类型——仅当 args[2] 确实是 separator 时检查
+            // 当 separator 未提供而 bracketed 通过命名参数传入时，args[2] 可能是 bracketed 值
             if let Some(sep_val) = args.get(2) {
-                if !matches!(sep_val, Value::String(_, _)) && !matches!(sep_val, Value::Bool(_)) {
+                if !matches!(sep_val, Value::String(_, _))
+                    && !matches!(sep_val, Value::Bool(_))
+                    && !matches!(sep_val, Value::Null)
+                    && args.get(3).is_some()
+                {
                     return Err(SassError::Eval(format!(
                         "$separator: {sep_val} is not a valid separator argument."
                     )));
@@ -212,35 +220,88 @@ pub fn call(
                 }
                 other => (vec![other.clone()], Separator::Undecided, false),
             };
-            // 解析 separator 参数
-            let sep = if let Some(Value::String(s, _)) = args.get(2) {
-                match s.as_str() {
-                    "comma" => Separator::Comma,
-                    "space" => Separator::Space,
-                    "slash" => Separator::Slash,
-                    _ => {
-                        return Err(SassError::Eval(format!(
-                            "\"{s}\" is not a valid separator for join()."
-                        )));
+            // 解析 separator 和 bracketed 参数
+            // 注意：当 separator 未提供而 bracketed 通过命名参数传入时，
+            // args[2] 可能是 bracketed 值而非 separator
+            let (sep, bracketed) = match args.get(3) {
+                // 4+ 参数：args[2] = separator, args[3] = bracketed
+                Some(bracketed_val) => {
+                    let sep = match args.get(2).and_then(|v| match v {
+                        Value::String(s, _) => Some(s.as_str()),
+                        _ => None,
+                    }) {
+                        Some("comma") => Separator::Comma,
+                        Some("space") => Separator::Space,
+                        Some("slash") => Separator::Slash,
+                        Some(s) => {
+                            return Err(SassError::Eval(format!(
+                                "\"{s}\" is not a valid separator for join()."
+                            )));
+                        }
+                        None => {
+                            // 无 separator → auto
+                            let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                            match auto_sep == Separator::SlashLiteral {
+                                true => Separator::Slash,
+                                false => auto_sep,
+                            }
+                        }
+                    };
+                    let bracketed = match bracketed_val {
+                        Value::Bool(b) => *b,
+                        Value::String(s, _) if s == "auto" => a_bracketed,
+                        // truthy 非 bool 值（如标识符 e）视为 true
+                        other => crate::eval::Evaluator::is_truthy(other),
+                    };
+                    (sep, bracketed)
+                }
+                // 3 或更少参数：args[2] 可能是 separator 或 bracketed
+                // Null/非字符串非 bool → 视为 bracketed（falsy）
+                None => match args.get(2) {
+                    Some(Value::String(s, _)) => match s.as_str() {
+                        "comma" => (Separator::Comma, a_bracketed),
+                        "space" => (Separator::Space, a_bracketed),
+                        "slash" => (Separator::Slash, a_bracketed),
+                        // 非 separator 字符串 → 视为 bracketed 值
+                        _ => {
+                            let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                            let auto_sep = match auto_sep == Separator::SlashLiteral {
+                                true => Separator::Slash,
+                                false => auto_sep,
+                            };
+                            // "auto" 表示自动检测；非空字符串视为 truthy
+                            let bracketed = if s == "auto" { a_bracketed } else { !s.is_empty() };
+                            (auto_sep, bracketed)
+                        }
+                    },
+                    Some(Value::Bool(b)) => {
+                        // args[2] 是 bool → bracketed
+                        let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                        let auto_sep = match auto_sep == Separator::SlashLiteral {
+                            true => Separator::Slash,
+                            false => auto_sep,
+                        };
+                        (auto_sep, *b)
                     }
-                }
-            } else {
-                // 无 separator 参数 → auto
-                let auto_sep = if a_sep == Separator::Undecided {
-                    b_sep
-                } else {
-                    a_sep
-                };
-                match auto_sep == Separator::SlashLiteral {
-                    true => Separator::Slash,
-                    false => auto_sep,
-                }
-            };
-            // 解析 bracketed 参数
-            let bracketed = match args.get(3) {
-                Some(Value::Bool(b)) => *b,
-                Some(Value::String(s, _)) => s == "auto",
-                _ => a_bracketed,
+                    Some(Value::Null) => {
+                        // Null → bracketed = false
+                        let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                        let auto_sep = match auto_sep == Separator::SlashLiteral {
+                            true => Separator::Slash,
+                            false => auto_sep,
+                        };
+                        (auto_sep, false)
+                    }
+                    _ => {
+                        // 无第三参数 → auto separator, 默认 bracketed
+                        let auto_sep = if a_sep == Separator::Undecided { b_sep } else { a_sep };
+                        let auto_sep = match auto_sep == Separator::SlashLiteral {
+                            true => Separator::Slash,
+                            false => auto_sep,
+                        };
+                        (auto_sep, a_bracketed)
+                    }
+                },
             };
             let mut items = a_items;
             items.extend(b_items);
