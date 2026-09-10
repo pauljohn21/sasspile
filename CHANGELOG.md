@@ -2,6 +2,27 @@
 
 # Changelog
 
+## [0.9.9] — 2026-09-10
+
+### Fixed
+
+- **calc() 特殊常量格式化**：`infinity`/`-infinity`/`NaN` 在 calc 输出中格式化为规范大小写
+  - `format_number` 映射：INFINITY → "infinity", NEG_INFINITY → "-infinity", NaN → "NaN"
+  - `parse_ident_or_func` 识别特殊常量关键词（大小写不敏感）
+  - `try_ast_simplify` 保留特殊常量的 `calc()` 包装（颜色格式化需要）
+- **extract_unitless 特殊浮点常量支持**：接受 `infinity`/`-infinity`/`nan` 作为合法数值输入
+  - `pow`/`sqrt`/`log`/`asin`/`acos`/`atan` 可处理特殊浮点值
+  - `sqrt(infinity)` → `infinity`, `asin(infinity)` → `NaN`, `atan(infinity)` → `90deg`
+- **calc-size() 保留**：加入 `is_css_function` 列表，原样输出不编译时求值
+- **反三角函数变量保留**：`atan`/`asin`/`acos` 遇 Sass 变量时保留函数形式不编译时求值
+- **type-of(calc(特殊常量))**：含 infinity/-infinity/NaN 的 calc 返回 `number` 而非 `calculation`
+
+### Changed
+
+- sass-spec 通过率：7444 → 7499（+55），62.7% → 63.1%
+- values/calculation：+9（log/pow 特殊常量）
+- core_functions/math：+7（pow/sqrt/log 特殊值传播）
+
 ## [0.9.8] — 2026-09-10
 
 ### Added

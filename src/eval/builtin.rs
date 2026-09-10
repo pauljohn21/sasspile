@@ -110,7 +110,7 @@ impl Evaluator {
             | "cubic-bezier" | "steps" | "frames" | "path" | "paint" | "image"
             | "cross-fade" | "element" | "counter" | "counters" | "symbols"
             | "attr" | "fit-content" | "min-content" | "max-content"
-            | "repeat" | "minmax" | "clamp" | "calc" | "env" | "var" | "url"
+            | "repeat" | "minmax" | "clamp" | "calc" | "calc-size" | "env" | "var" | "url"
             | "hsl" | "hsla" | "lab" | "lch" | "oklab" | "oklch"
             | "color" | "color-mix" | "color-contrast"
             | "gradient" | "icrgb" | "device-cmyk"

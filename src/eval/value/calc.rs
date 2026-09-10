@@ -102,6 +102,12 @@ impl Evaluator {
         let node = super::calc_ast::parse_calc_expr(inner)?;
         let simplified = super::calc_simplify::simplify_calc_node(node).ok()?;
         match simplified {
+            super::calc_ast::CalcNode::Number(n, unit)
+                if n.is_infinite() || n.is_nan() =>
+            {
+                // 特殊浮点常量保留 calc() 包装（颜色格式化需要 calc(infinity) 格式）
+                Some(Value::Calc(format!("calc({})", super::calc_ast::format_number_static(n, unit.as_deref()))))
+            }
             super::calc_ast::CalcNode::Number(n, unit) => Some(Value::Number(n, unit)),
             // Var / 非 calc 节点保留原始 calc() 包装
             super::calc_ast::CalcNode::Var { .. } => Some(Value::Calc(s.to_string())),

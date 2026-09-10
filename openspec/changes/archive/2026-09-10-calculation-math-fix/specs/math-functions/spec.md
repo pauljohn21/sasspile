@@ -1,8 +1,7 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: math 函数边界值与精度
-
-所有 math 模块内建函数 MUST 符合 CSS Math 规范和 sass-spec 精度要求。**扩展：** 特殊浮点常量 (`infinity`, `-infinity`, `NaN`) SHALL 被视为合法数值输入。
+所有 math 模块内建函数 MUST 符合 CSS Math 规范和 sass-spec 精度要求。**扩展：** 特殊浮点常量 (`infinity`, `-infinity`, `NaN`)  SHALL 被视为合法数值输入。
 
 #### Scenario: percentage 函数的整数输入
 - **WHEN** 调用 `math.percentage(0.5)`

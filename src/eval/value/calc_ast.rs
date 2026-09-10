@@ -81,17 +81,32 @@ impl fmt::Display for CalcNode {
     }
 }
 
-/// 格式化数字——避免显示 `-0`，整数不加 `.0`。
+/// 格式化数字——特殊常量映射 + 常规数字格式化。
+/// infinity → "infinity", -infinity → "-infinity", NaN → "NaN"。
+pub(crate) fn format_number_static(n: f64, unit: Option<&str>) -> String {
+    if n.is_infinite() {
+        return match n > 0.0 {
+            true => "infinity".to_string(),
+            false => "-infinity".to_string(),
+        };
+    }
+    if n.is_nan() {
+        return "NaN".to_string();
+    }
+    let n = match n == 0.0 { true => n.abs(), false => n };
+    let num_str = match n.fract() == 0.0 && n.abs() < 1e15 {
+        true => format!("{n:.0}"),
+        false => format!("{n}"),
+    };
+    match unit {
+        Some(u) => format!("{num_str}{u}"),
+        None => num_str,
+    }
+}
+
+/// 格式化数字（Display trait 用）——委托给 `format_number_static`。
 fn format_number(f: &mut fmt::Formatter<'_>, n: f64, unit: Option<&str>) -> fmt::Result {
-        let n = match n == 0.0 { true => n.abs(), false => n };
-        match n.fract() == 0.0 && n.abs() < 1e15 {
-            true => write!(f, "{n:.0}")?,
-            false => write!(f, "{n}")?,
-        }
-        if let Some(u) = unit {
-            write!(f, "{u}")?;
-        }
-    Ok(())
+    write!(f, "{}", format_number_static(n, unit))
 }
 
 // ─── 解析器 ──────────────────────────────────────────────────────
@@ -297,9 +312,14 @@ impl Parser {
                 self.parse_func_args(&name)
             }
             false => {
+                // 特殊浮点常量作为独立节点 — 后续 simplify 时保留 calc() 包装
+                // （颜色格式化需要 calc(infinity) 格式）
                 match name.to_lowercase().as_str() {
                     "pi" => Some(CalcNode::Number(std::f64::consts::PI, None)),
                     "e" => Some(CalcNode::Number(std::f64::consts::E, None)),
+                    "infinity" => Some(CalcNode::Number(f64::INFINITY, None)),
+                    "-infinity" => Some(CalcNode::Number(f64::NEG_INFINITY, None)),
+                    "nan" => Some(CalcNode::Number(f64::NAN, None)),
                     _ => None,
                 }
             }

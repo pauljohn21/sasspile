@@ -75,7 +75,20 @@ impl Evaluator {
                 [Value::Null] => Ok(Value::String("null".into(), false)),
                 [Value::MixinRef(..)] => Ok(Value::String("mixin".into(), false)),
                 [Value::FunctionRef(..)] => Ok(Value::String("function".into(), false)),
-                [Value::Calc(..)] => Ok(Value::String("calculation".into(), false)),
+                [Value::Calc(c)] => {
+                    // 仅含特殊常量（infinity/NaN）的 calc → number
+                    let inner = c
+                        .strip_prefix("calc(")
+                        .and_then(|s| s.strip_suffix(")"))
+                        .unwrap_or(c.as_str())
+                        .trim();
+                    match inner {
+                        "infinity" | "-infinity" | "NaN" => {
+                            Ok(Value::String("number".into(), false))
+                        }
+                        _ => Ok(Value::String("calculation".into(), false)),
+                    }
+                }
                 [_, _, ..] => Err(SassError::Eval(format!(
                     "Only 1 argument allowed, but {} were passed.",
                     pos_args.len()

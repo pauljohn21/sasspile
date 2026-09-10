@@ -72,12 +72,17 @@ fn unitless_unary_func(
 }
 
 /// 单参数反三角函数（asin/acos/atan）——参数 unitless，返回 deg。
+/// 参数含变量或无法编译时求值时保留函数形式。
 fn inverse_trig_func(
     args: &[Value],
     func_name: &str,
     f: impl Fn(f64) -> f64,
 ) -> Result<Option<Value>> {
     validate_single_number(args)?;
+    // 含变量或字符串表达式 → 保留函数形式
+    if let Some(arg_str) = inverse_trig_arg_str(&args[0]) {
+        return Ok(Some(Value::String(format!("{func_name}({arg_str})"), false)));
+    }
     let n = extract_unitless(&args[0], "number")?;
     match &args[0] {
         Value::Number(_, _) => {
@@ -92,6 +97,41 @@ fn inverse_trig_func(
             Ok(Some(Value::String(format!("{func_name}({inner})"), false)))
         }
         _ => unreachable!(),
+    }
+}
+
+/// 当反三角函数参数含变量/字符串时，返回应保留的参数字符串。
+/// 纯数字/单位返回 None 以走编译时求值路径。
+fn inverse_trig_arg_str(v: &Value) -> Option<String> {
+    match v {
+        Value::Variable(name) => Some(name.clone()),
+        Value::String(s, _) => match s.contains("var(") || s.contains('$') {
+            true => Some(s.clone()),
+            false => None,
+        },
+        Value::Interp(segments) => {
+            // 检查 Text 段是否含 var( 或 $，Expr 段保留为占位符
+            let mut has_var = false;
+            let mut combined = String::new();
+            for seg in segments {
+                match seg {
+                    crate::parse::ast::InterpSegment::Text(t) => {
+                        if t.contains("var(") || t.contains('$') {
+                            has_var = true;
+                        }
+                        combined.push_str(t);
+                    }
+                    crate::parse::ast::InterpSegment::Expr(_) => {
+                        combined.push_str("#{}");
+                    }
+                }
+            }
+            match has_var {
+                true => Some(combined),
+                false => None,
+            }
+        }
+        _ => None,
     }
 }
 
@@ -110,14 +150,21 @@ fn value_to_str(v: &Value) -> Result<String> {
 }
 
 /// 提取无单位数字——报错如果有单位。
+/// 特殊浮点常量（infinity、-infinity、NaN）作为字符串值传入时映射为 f64 特殊值。
 fn extract_unitless(v: &Value, param: &str) -> Result<f64> {
     match v {
         Value::Number(n, u) => match u.is_some() {
-            true => return Err(SassError::Eval(format!(
+            true => Err(SassError::Eval(format!(
                 "${param}: Expected {n}{} to have no units.",
                 u.as_deref().unwrap_or("")
             ))),
             false => Ok(*n),
+        },
+        Value::String(s, _) => match s.trim() {
+            "infinity" => Ok(f64::INFINITY),
+            "-infinity" => Ok(f64::NEG_INFINITY),
+            "nan" | "NaN" => Ok(f64::NAN),
+            _ => Err(SassError::Eval(format!("${param}: {v} is not a number."))),
         },
         _ => Err(SassError::Eval(format!("${param}: {v} is not a number."))),
     }

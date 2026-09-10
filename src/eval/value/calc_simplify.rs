@@ -77,6 +77,10 @@ fn simplify_op(op: CalcOp, left: CalcNode, right: CalcNode) -> Result<CalcNode, 
 /// 简化两个数字的运算。
 ///
 /// 调用前已确保乘除法的不兼容单位已在 `simplify_op` 中拦截保留。
+/// 特殊常量规则（按 IEEE 754）：
+/// - 任何数 op NaN → NaN
+/// - ±infinity op 有限数 → ±infinity（加减乘）、符号修正（除法）
+/// - 1/0 → infinity, -1/0 → -infinity（除法保留符号）
 fn simplify_number_op(
     op: CalcOp,
     a: f64,
@@ -84,17 +88,22 @@ fn simplify_number_op(
     b: f64,
     ub: &Option<String>,
 ) -> Result<CalcNode, CalcError> {
+    // NaN 传播
+    if a.is_nan() || b.is_nan() {
+        return Ok(CalcNode::Number(f64::NAN, ua.clone().or(ub.clone())));
+    }
     match op {
         CalcOp::Add | CalcOp::Sub => simplify_add_sub(op, a, ua, b, ub),
         CalcOp::Mul => {
+            // infinity * 0 → NaN, 其余按 IEEE 754 自然传播
+            let result = a * b;
             let unit = ua.clone().or(ub.clone());
-            Ok(CalcNode::Number(a * b, unit))
+            Ok(CalcNode::Number(result, unit))
         }
         CalcOp::Div => {
-            if b == 0.0 {
-                return Err(CalcError::DivisionByZero);
-            }
-            Ok(CalcNode::Number(a / b, ua.clone()))
+            // 除法符号处理：a / 0 → ±infinity, 0 / 0 → NaN
+            let result = a / b;  // f64 除法自动符合 IEEE 754
+            Ok(CalcNode::Number(result, ua.clone()))
         }
     }
 }
