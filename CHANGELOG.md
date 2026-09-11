@@ -2,6 +2,47 @@
 
 # Changelog
 
+## [0.9.11] — 2026-09-11
+
+### Fixed
+
+- **math.unit 输出格式**：返回带引号的字符串（`math.unit(1px)` → `"px"` 而非 `px`）
+  - 影响：`math.rs`、`core_functions/math` +3 cases
+- **selector.parse compound 边界**：`[c]d` 正确拆分为 `[c]` + `d`
+  - 影响：`selector_format.rs`、`css/selector` +1 case
+- **scan_ident 非十六进制转义**：`\$` 正确解析为 `$`（选择器转义修复）
+  - 影响：`scanner.rs`、`css/selector/escaping/dollar_char`
+- **escape_css_chars NULL/控制字符**：双反斜杠转义序列
+  - 影响：`escape.rs`、`core_functions/string/quote/escape`
+- **values_eq 单位感知比较**：兼容单位转换后比较，unitless ≠ 有单位
+  - 影响：`ops.rs`、`core_functions/list/index`
+
+### Changed
+
+- sass-spec 通过率：7694 → 7698（+4），63.4% → 63.4%
+- 24 个目录达到 100% 通过率
+
+### 100% 目录（24 个）
+
+variables/whitespace, variables/semi_global, variables/double_flag, variables/comments,
+parser/selector, parser/operator_precedence, parser/interpolation, operators/slash,
+expressions/syntax, directives/while, directives/return, css/url, css/style_rule,
+css/percent, css/mixin, css/important, css/function_name_identifiers, css/empty_block_directive,
+css/directive_with_lots_of_whitespace, css/blockless_directive_without_semicolon,
+core_functions/map, callable/whitespace, callable/parameters
+
+### 待修复目录（85-99%，需深度架构修复）
+
+- core_functions/list: 230/233 (98.7%) — 嵌套属性块解析
+- core_functions/string: 152/155 (98.1%) — 转义/引号解析
+- directives/extend: 19/20 (95.0%) — `:is()` 选择器传递
+- css/selector: 92/96 (95.8%) — 伪选择器验证/转义
+- expressions/if: 197/211 (93.4%) — `css()`/`and`/`or`/`not` 解析
+- directives/forward: 201/216 (93.1%) — 成员导入优先级
+- directives/at_root: 25/27 (92.6%) — `@use`+`@import` 嵌套
+- core_functions/math: 448/486 (92.1%) — 单位系统/浮点精度
+- directives/use: 236/267 (88.4%) — 模块系统
+
 ## [0.9.10] — 2026-09-10
 
 ### Fixed
