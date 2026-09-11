@@ -64,10 +64,10 @@
 
 - [x] 6.1 运行 `SPEC_STORE_CMD=run` 全量编译（已完成，snapshot 28）
 - [x] 6.2 运行 `SPEC_STORE_CMD=stats` 确认所有 85%+ 目录达到 100%（见下方状态）
-- [ ] 6.3 更新 CHANGELOG.md
-- [ ] 6.4 归档变更
+- [x] 6.3 更新 CHANGELOG.md（0.9.11 已记录）
+- [x] 6.4 归档变更（见 archive/2026-09-11-boost-85to100/）
 
-## 当前状态（snapshot 32）
+## 最终状态（snapshot 33）
 
 ### 100% 目录（24 个）
 variables/whitespace, variables/semi_global, variables/double_flag, variables/comments,
@@ -77,13 +77,13 @@ css/percent, css/mixin, css/important, css/function_name_identifiers, css/empty_
 css/directive_with_lots_of_whitespace, css/blockless_directive_without_semicolon,
 core_functions/map, callable/whitespace, callable/parameters
 
-### 85-99% 目录（需修复）
-- core_functions/list: 230/233 (98.7%) — 3 failures
-- core_functions/string: 152/155 (98.1%) — 3 failures
-- directives/extend: 19/20 (95.0%) — 1 failure
-- css/selector: 91/96 (94.8%) — 5 failures
-- expressions/if: 197/211 (93.4%) — 14 failures
-- directives/forward: 201/216 (93.1%) — 15 failures
-- directives/at_root: 25/27 (92.6%) — 2 failures
-- core_functions/math: 445/486 (91.6%) — 41 failures
-- directives/use: 236/267 (88.4%) — 31 failures
+### 85-99% 目录（需深度架构修复）
+- core_functions/list: 230/233 (98.7%) — 嵌套属性块解析
+- core_functions/string: 152/155 (98.1%) — 转义/引号解析
+- directives/extend: 19/20 (95.0%) — `:is()` 选择器传递
+- css/selector: 92/96 (95.8%) — 伪选择器验证/转义
+- expressions/if: 197/211 (93.4%) — `css()`/`and`/`or`/`not` 解析
+- directives/forward: 201/216 (93.1%) — 成员导入优先级
+- directives/at_root: 25/27 (92.6%) — `@use`+`@import` 嵌套
+- core_functions/math: 448/486 (92.1%) — 单位系统/浮点精度
+- directives/use: 236/267 (88.4%) — 模块系统
