@@ -171,6 +171,11 @@ impl Env {
         self
     }
 
+    pub(crate) fn clear_selector(mut self) -> Self {
+        self.current_selector = None;
+        self
+    }
+
     pub fn get_selector(&self) -> Option<&str> {
         self.current_selector.as_deref()
     }
@@ -292,6 +297,20 @@ impl Env {
 
     pub(crate) fn add_star_imported(mut self, name: String) -> Self {
         self.star_imported.insert(name);
+        self
+    }
+
+    pub(crate) fn get_css_imports(&self) -> &[String] {
+        &self.css_imports
+    }
+
+    pub(crate) fn add_css_imports(mut self, urls: &[String]) -> Self {
+        for url in urls {
+            match self.css_imports.contains(url) {
+                true => {}
+                false => self.css_imports.push(url.clone()),
+            }
+        }
         self
     }
 
@@ -421,15 +440,18 @@ impl Env {
     }
 
     /// 合并 forwarded 表到 local 表。
+    ///
+    /// 转发成员优先级高于本地成员（import-forward-precedence 语义）。
+    /// `forwarded.union(local)` 确保 forwarded 值覆盖同名 local 值。
     pub(crate) fn merge_forwarded_to_local(self) -> Self {
         let (mut scope, env) = self.mutate_scope();
         let forwarded_vars: HashMap<String, Value> = std::mem::take(&mut scope.forwarded_vars);
-        scope.local_vars = scope.local_vars.union(forwarded_vars);
+        scope.local_vars = forwarded_vars.union(scope.local_vars);
         let forwarded_mixins: HashMap<String, MixinDef> = std::mem::take(&mut scope.forwarded_mixins);
-        scope.local_mixins = scope.local_mixins.union(forwarded_mixins);
+        scope.local_mixins = forwarded_mixins.union(scope.local_mixins);
         let forwarded_functions: HashMap<String, FunctionDef> =
             std::mem::take(&mut scope.forwarded_functions);
-        scope.local_functions = scope.local_functions.union(forwarded_functions);
+        scope.local_functions = forwarded_functions.union(scope.local_functions);
         env.with_scope(scope)
     }
 

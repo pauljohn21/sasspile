@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 pub(crate) use env::{Env, FunctionDef, MixinDef, ModuleExports};
 // 子模块通过 `use super::*` 获取这些类型
-pub(crate) use imbl::HashMap;
+pub(crate) use imbl::{HashMap, HashSet};
 pub(crate) use std::rc::Rc;
 
 /// 求值器。
@@ -34,14 +34,17 @@ impl Evaluator {
     pub fn evaluate(ast: &Ast) -> Result<Vec<CssNode>> {
         let (css, final_env) = Self::eval_nodes(&ast.nodes, Env::default())?;
         let extends = final_env.get_extends().to_vec();
-        let css = if extends.is_empty() {
-            css
-        } else {
-            let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
-            let css = Self::apply_extends(css, &extends, &module_selectors);
-            Self::check_extend_targets(&css, &extends)?;
-            css
+        let css = match extends.is_empty() {
+            true => css,
+            false => {
+                let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
+                let css = Self::apply_extends(css, &extends, &module_selectors);
+                let global_placeholders = Self::build_global_placeholders(final_env.get_module_cache());
+                Self::check_extend_targets(&css, &extends, &global_placeholders, &module_selectors)?;
+                css
+            }
         };
+        let css = Self::prepend_module_css_imports(css, final_env.get_css_imports());
         Ok(hoist::hoist_css_imports(css))
     }
 
@@ -53,15 +56,41 @@ impl Evaluator {
     pub(crate) fn evaluate_with_env(ast: &Ast, env: Env) -> Result<Vec<CssNode>> {
         let (css, final_env) = Self::eval_nodes(&ast.nodes, env)?;
         let extends = final_env.get_extends().to_vec();
-        let css = if extends.is_empty() {
-            css
-        } else {
-            let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
-            let css = Self::apply_extends(css, &extends, &module_selectors);
-            Self::check_extend_targets(&css, &extends)?;
-            css
+        let css = match extends.is_empty() {
+            true => css,
+            false => {
+                let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
+                let css = Self::apply_extends(css, &extends, &module_selectors);
+                let global_placeholders = Self::build_global_placeholders(final_env.get_module_cache());
+                Self::check_extend_targets(&css, &extends, &global_placeholders, &module_selectors)?;
+                css
+            }
         };
+        let css = Self::prepend_module_css_imports(css, final_env.get_css_imports());
         Ok(hoist::hoist_css_imports(css))
+    }
+
+    /// 将从 @use'd 模块累积的 CSS @import AtRule 添加到输出顶部。
+    fn prepend_module_css_imports(
+        mut nodes: Vec<CssNode>,
+        imports: &[String],
+    ) -> Vec<CssNode> {
+        match imports.is_empty() {
+            true => nodes,
+            false => {
+                let mut result: Vec<CssNode> = imports
+                    .iter()
+                    .map(|url| CssNode::AtRule {
+                        name: "import".to_string(),
+                        params: Some(url.clone()),
+                        children: vec![],
+                        has_body: false,
+                    })
+                    .collect();
+                result.extend(nodes);
+                result
+            }
+        }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(nodes, env), fields(depth = env.get_depth(), n = nodes.len())))]

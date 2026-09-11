@@ -304,6 +304,11 @@ fn extend_complex(selector: &ComplexSelector, extendee: &ComplexSelector, extend
         return Some(result);
     }
 
+    // :is()/:where()/:matches() arg 内部扩展：标准匹配失败时检测
+    if let Some(result) = try_extend_is_where_matches_in_complex(selector, extendee, extender) {
+        return Some(result);
+    }
+
     if has_multiple_combinators(selector) || extender_has_multiple_combinators(extender) { return None; }
     let sel_leading = has_leading_combinator(selector);
     let sel_trailing = has_trailing_combinator(selector);
@@ -361,6 +366,88 @@ fn extend_complex_at(
             build_extended_complex(selector, ext_complex, match_pos, &remaining, sel_leading, sel_trailing)
         }).collect::<Vec<_>>()
     })
+}
+
+/// 尝试对 complex 中的 `:is()`, `:where()`, `:matches()` 伪类进行特殊扩展。
+///
+/// 当 extendee 匹配某个伪类参数（arg）内部的选择器时，将 extender 追加到该伪类参数中。
+/// 例如：`downstream {@extend midstream}` 且 selector 为 `:is(midstream)`，
+/// 标准匹配失败（`:is(midstream)` 的 simple 不包含 `midstream` type），
+/// 此函数检测到 `midstream` 在 `:is()` arg 内部，生成 `:is(midstream, downstream)`。
+fn try_extend_is_where_matches_in_complex(
+    selector: &ComplexSelector,
+    extendee: &ComplexSelector,
+    extender: &Selector,
+) -> Option<Selector> {
+    if extendee.compounds.len() != 1 {
+        return None;
+    }
+    let ext_compound = &extendee.compounds[0].1;
+
+    // 查找所有包含 :is/:where/:matches 且 extendee 匹配 arg 内部选择器的 compound
+    let mut match_positions: Vec<(usize, usize)> = Vec::new();
+    for (ci, (_, compound)) in selector.compounds.iter().enumerate() {
+        for (si, simple) in compound.0.iter().enumerate() {
+            let (name, arg) = match simple {
+                SimpleSelector::PseudoClass { name, arg: Some(arg) }
+                    if name == "is" || name == "where" || name == "matches" =>
+                {
+                    (name, arg)
+                }
+                _ => continue,
+            };
+
+            // 解析 arg 为选择器，检查 ext_compound 是否匹配其中某个 compound
+            let arg_selector = super::selector_parser::parse_selector(arg);
+            let arg_matches = arg_selector.0.iter().any(|arg_complex| {
+                arg_complex.compounds.iter().any(|(_, arg_comp)| {
+                    super::selector_ops::is_semantic_subset(ext_compound, arg_comp)
+                })
+            });
+            if arg_matches {
+                match_positions.push((ci, si));
+            }
+        }
+    }
+
+    if match_positions.is_empty() {
+        return None;
+    }
+
+    // 对每个匹配位置，创建新 compound：将 extender 追加到伪类参数中
+    // 语义：extend into pseudo-arg 是 MODIFY IN-PLACE（替换原 compound 中的伪类 arg），
+    // 不是添加新 complex——否则 standalone 的原 selector 会残留（不符合 sass-spec）。
+    let mut extended_complexes: Vec<ComplexSelector> = Vec::new();
+    for (compound_idx, simple_idx) in &match_positions {
+        let (comb, old_compound) = &selector.compounds[*compound_idx];
+        let (pseudo_name, pseudo_arg) = match old_compound.0.get(*simple_idx) {
+            Some(SimpleSelector::PseudoClass { name, arg: Some(arg) })
+                if name == "is" || name == "where" || name == "matches" =>
+            {
+                (name.clone(), arg.clone())
+            }
+            _ => continue,
+        };
+
+        let extender_str = extender.to_string();
+        let new_arg = format!("{pseudo_arg}, {extender_str}");
+        let new_simple = SimpleSelector::PseudoClass {
+            name: pseudo_name,
+            arg: Some(new_arg),
+        };
+
+        let mut new_simples: Vec<SimpleSelector> = old_compound.0.clone();
+        new_simples[*simple_idx] = new_simple;
+        let mut new_compounds = selector.compounds.clone();
+        new_compounds[*compound_idx] = (*comb, CompoundSelector(new_simples));
+        extended_complexes.push(ComplexSelector { compounds: new_compounds });
+    }
+
+    if extended_complexes.is_empty() {
+        return None;
+    }
+
+    Some(Selector(extended_complexes))
 }
 
 /// 尝试对 complex 中的 `:not()` 伪类进行特殊扩展。

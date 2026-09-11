@@ -32,6 +32,11 @@ pub(crate) struct ModuleExports {
     /// 内建模块的 FunctionDef 条目仅用于 meta 内省（module-functions 等），
     /// 实际调用应走 `call_builtin` 路径。
     pub(crate) is_builtin: bool,
+    /// 模块 AST 中的 CSS @import URL 列表（用于提升到输出顶部）。
+    pub(crate) css_imports: Vec<String>,
+    /// 该模块定义的 placeholder 选择器名（如 "%foo"），用于 scope 违规检测。
+    /// placeholder 不会出现在最终 CSS 中，所以 selectors 集合无法追踪它们。
+    pub(crate) placeholder_selectors: HashSet<String>,
 }
 
 impl ModuleExports {
@@ -87,6 +92,8 @@ pub struct Env {
     pub(crate) star_members: HashMap<String, Vec<String>>,
     /// 通过 `@use ... as *` 引入到当前作用域的成员名集合。
     pub(crate) star_imported: HashSet<String>,
+    /// 累积的 CSS @import URL（从 @use'd 模块收集，最终提升到输出顶部）。
+    pub(crate) css_imports: Vec<String>,
 }
 
 impl Clone for Env {
@@ -109,6 +116,7 @@ impl Clone for Env {
             consumed_config: self.consumed_config.clone(),
             star_members: self.star_members.clone(),
             star_imported: self.star_imported.clone(),
+            css_imports: self.css_imports.clone(),
         }
     }
 }

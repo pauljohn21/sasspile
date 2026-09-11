@@ -137,8 +137,8 @@ pub(crate) fn bind_exports(
     let span = crate::__tracing::debug_span!("bind_exports", mode = ?mode, source = %source_path.display());
     let _enter = span.enter();
     let mut new_env = env;
-    let fmt_key =
-        |k: &str| -> String { prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}")) };
+let fmt_key =
+|k: &str| -> String { prefix.map_or_else(|| k.to_string(), |p| format!("{p}{k}")) };
     match mode {
         BindMode::Use => {
             // `as *` 模式：追踪每个成员名到 star_members 以检测冲突

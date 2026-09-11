@@ -56,6 +56,58 @@ impl Evaluator {
             .collect()
     }
 
+    /// 从 AST 中递归收集所有 placeholder 选择器名（以 % 开头的选择器）。
+    fn collect_placeholder_selectors(nodes: &[crate::parse::ast::Node]) -> HashSet<String> {
+        fn collect<'a>(
+            nodes: &'a [crate::parse::ast::Node],
+            acc: &mut HashSet<String>,
+        ) {
+            for node in nodes {
+                match node {
+                    crate::parse::ast::Node::Rule { selector, body } => {
+                        if selector.starts_with('%') {
+                            acc.insert(selector.clone());
+                        }
+                        collect(body, acc);
+                    }
+                    crate::parse::ast::Node::If {
+                        branches,
+                        else_body,
+                    } => {
+                        for (_, b) in branches {
+                            collect(b, acc);
+                        }
+                        if let Some(eb) = else_body {
+                            collect(eb, acc);
+                        }
+                    }
+                    crate::parse::ast::Node::For { body, .. }
+                    | crate::parse::ast::Node::Each { body, .. }
+                    | crate::parse::ast::Node::While { body, .. }
+                    | crate::parse::ast::Node::AtRoot { body, .. }
+                    | crate::parse::ast::Node::MixinDef { body, .. }
+                    | crate::parse::ast::Node::FunctionDef { body, .. } => {
+                        collect(body, acc);
+                    }
+                    crate::parse::ast::Node::Include { content, .. } => {
+                        if let Some(c) = content {
+                            collect(c, acc);
+                        }
+                    }
+                    crate::parse::ast::Node::AtRule { body, .. } => {
+                        if let Some(b) = body {
+                            collect(b, acc);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut acc = HashSet::new();
+        collect(nodes, &mut acc);
+        acc
+    }
+
     pub(crate) fn load_module(
         path: &Path,
         config: &[(String, Value)],
@@ -163,6 +215,8 @@ impl Evaluator {
             &ast,
             final_env.get_load_paths(),
         );
+        // 收集 placeholder 选择器（不会出现在最终 CSS 中，需独立追踪）
+        let placeholder_selectors = Self::collect_placeholder_selectors(&ast.nodes);
         let css = if is_plain_css {
             vec![crate::css::node::CssNode::AtRoot(module_css, None)]
         } else {
@@ -199,6 +253,7 @@ impl Evaluator {
             consumed_config: final_env.get_consumed_config().clone(),
             selectors,
             star_imported,
+            placeholder_selectors,
             ..Default::default()
         };
         let exports_cache = exports.module_cache.clone();

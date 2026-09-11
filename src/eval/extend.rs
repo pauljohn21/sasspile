@@ -62,22 +62,21 @@ impl Evaluator {
                                     true => return sel_ast,
                                     false => {}
                                 }
-                                // 模块 scope 检查——仅当 module_selectors 非空时执行
-                                // 非模块化编译时 module_selectors 为空，跳过检查（全局匹配）
-                                if let Some(module_path) = module {
-                                    if !module_selectors.is_empty() {
-                                        let in_scope = module_selectors
-                                            .get(module_path)
-                                            .map(|s| s.contains(target_trimmed))
-                                            .unwrap_or_else(|| {
-                                                module_selectors
-                                                    .values()
-                                                    .any(|s| s.contains(target_trimmed))
-                                            });
+                                // 模块 scope 检查——仅当 module_selectors 非空且 module 在 map 中时执行
+                                // - module_selectors 为空：无模块化编译，跳过检查（全局匹配）
+                                // - module_path 不在 map 中：extend 来自入口文件（全局上下文），视为可见
+                                // - module_path 在 map 中：检查 target 在该模块 selector set 中的可见性
+                                 if let Some(module_path) = module {
+                                    if let Some(set) = module_selectors.get(module_path) {
+                                        // 子串匹配：选择器字符串是组合形式（如 "%in-other.a"），
+                                        // 而 target 是子部分（如 "%in-other"），需用 iter+contains 做子串检查
+                                        let in_scope = set.iter().any(|sel| sel.contains(target_trimmed));
                                         if !in_scope {
                                             return sel_ast;
                                         }
                                     }
+                                    // module_path 不在 module_selectors 中 → 入口文件/forwarded 上下文
+                                    // 视为全局可见（与 no-modules 编译语义一致）
                                 }
                                 let extendee = parse_selector(target_trimmed);
                                 let ext = parse_selector(extender_trimmed);
@@ -138,34 +137,73 @@ impl Evaluator {
     }
 
     /// 检查未匹配的 extend target——非 optional 的未匹配 target 报错。
+    ///
+    /// `global_placeholders`: 所有已加载模块中定义的 placeholder 选择器集合。
+    /// `module_selectors`: 每个模块路径 → 该模块可见的选择器集合（含传递 @use）。
+    /// 用于检测跨模块 scope 违规（target 存在但声明模块不可见）。
     pub(crate) fn check_extend_targets(
         css: &[CssNode],
         extends: &[(String, String, bool, Option<PathBuf>)],
+        global_placeholders: &HashSet<String>,
+        module_selectors: &HashMap<PathBuf, HashSet<String>>,
     ) -> Result<()> {
         let span = crate::__tracing::debug_span!("check_extend_targets", n_extends = extends.len());
         let _enter = span.enter();
         let all_selectors = Self::collect_selectors(css);
+        // 全局 public 选择器集合（所有模块的 selectors 并集）
+        let global_selectors: HashSet<String> = module_selectors
+            .values()
+            .flat_map(|s| s.iter().cloned())
+            .collect();
         extends
             .iter()
-            .try_fold((), |(), (_extender, target, optional, _module)| {
+            .try_fold((), |(), (_extender, target, optional, module)| {
                                 match *optional {
                                     true => return Ok(()),
                                     false => {}
                                 }
                 let target_trimmed = target.trim();
-                // 占位符选择器不需要在 CSS 中存在
+                // 占位符选择器：在最终 CSS 中不可见，但可能在某模块中定义。
                 match target_trimmed.starts_with('%') {
-                    true => return Ok(()),
+                    true => {
+                        match global_placeholders.contains(target_trimmed) {
+                            true => return Err(SassError::Eval(format!(
+                                "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
+                            ))),
+                            false => return Ok(()),
+                        }
+                    }
                     false => {}
                 }
-                let found = all_selectors.iter().any(|s| s.contains(target_trimmed));
-                match found {
-                    false => return Err(SassError::Eval(format!(
-                        "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
-                    ))),
-                    true => {}
+                // 检查 public target 是否存在于最终 CSS（快速路径）
+                let in_final_css = all_selectors.iter().any(|s| s.contains(target_trimmed));
+                match in_final_css {
+                    true => {
+                        // target 存在于最终 CSS。检查声明模块是否能看见它。
+                        // 仅当 module_selectors 非空且 module 存在于 map 中时才做 scope 检查——
+                        // - 空 map：无模块化上下文（无 @use），scope 限制不适用。
+                        // - module 不在 map 中（如顶层 file 不被 @use 加载）：视为完全可见。
+                        if let Some(mod_path) = module {
+                            if let Some(set) = module_selectors.get(mod_path) {
+                                let visible = set.iter().any(|s| s.contains(target_trimmed));
+                                if !visible {
+                                    return Err(SassError::Eval(format!(
+                                        "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
+                                    )));
+                                }
+                            }
+                        }
+                        Ok(())
+                    }
+                    false => {
+                        // target 不在最终 CSS 中。
+                        // 如果它存在于某个模块但不可见 → scope 违规。
+                        // 如果根本不存在 → "not found" 错误。
+                        Err(SassError::Eval(format!(
+                            "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
+                        )))
+                    }
                 }
-                Ok(())
             })
     }
 
@@ -176,6 +214,16 @@ impl Evaluator {
         cache
             .iter()
             .map(|(k, v)| (k.clone(), v.selectors.clone()))
+            .collect()
+    }
+
+    /// 从模块缓存中收集所有 placeholder 选择器（跨模块并集）。
+    pub(crate) fn build_global_placeholders(
+        cache: &HashMap<PathBuf, ModuleExports>,
+    ) -> HashSet<String> {
+        cache
+            .values()
+            .flat_map(|v| v.placeholder_selectors.iter().cloned())
             .collect()
     }
 
