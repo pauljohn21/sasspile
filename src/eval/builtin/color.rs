@@ -117,8 +117,8 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
             )),
         },
         "adjust-color" => super::color_adjust::adjust_color(args, kw_args).map(Some),
-        "change-color" => super::color_adjust::change_color(args, kw_args).map(Some),
-        "scale-color" => super::color_adjust::scale_color(args, kw_args).map(Some),
+        "change-color" => super::color_change::change_color(args, kw_args).map(Some),
+        "scale-color" => super::color_scale::scale_color(args, kw_args).map(Some),
         // ── sass:color 模块函数（Level 4 颜色空间支持）──
         "is-powerless" | "is-missing" | "is-in-gamut" | "is-legacy" => {
             super::color_inspect::call(name, args, kw_args)
@@ -145,8 +145,12 @@ pub fn call(name: &str, args: &[Value], kw_args: &HashMap<String, Value>) -> Res
                 None => Err(SassError::Eval("Missing argument $color.".into())),
             }
         }
-        // HSL/HWB 函数转发到 color_hwb_hsl 模块
-        "hwb" | "whiteness" | "blackness" | "complement" | "hsl" | "hsla"
+        // HWB 函数转发到 color_hwb 模块
+        "hwb" => return super::color_hwb::call_hwb(args, kw_args),
+        "whiteness" => return super::color_hwb::call_whiteness(args, kw_args),
+        "blackness" => return super::color_hwb::call_blackness(args, kw_args),
+        // HSL/通道操作函数转发到 color_hwb_hsl 模块
+        "complement" | "hsl" | "hsla"
         | "adjust-hue" | "saturate" | "desaturate" | "transparentize" | "fade-out"
         | "opacify" | "fade-in" | "alpha" | "opacity" | "red" | "green" | "blue"
         | "hue" | "saturation" | "lightness" => super::color_hwb_hsl::call(name, args, kw_args),

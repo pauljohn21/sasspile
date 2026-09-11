@@ -8,13 +8,29 @@
     clippy::cast_precision_loss
 )]
 use super::*;
-use super::builtin::color_hwb_hsl::extract_none_num;
+use crate::eval::builtin::color_hwb_hsl;
 use crate::error::Result;
 use crate::parse::ast::{ColorOutput, ColorSpace};
 
 /// 线性插值：`a * (1 - t) + b * t`。
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a * (1.0 - t) + b * t
+}
+
+/// 归一化 RGB 通道值：百分比单位（`"%"`）转换为 0-255 范围。
+fn normalize_rgb_channel(val: f64, unit: Option<&str>) -> f64 {
+    match unit {
+        Some("%") => val * 255.0 / 100.0,
+        _ => val,
+    }
+}
+
+/// 归一化 alpha 值：百分比单位（`"%"`）转换为 0-1 范围。
+fn normalize_alpha(val: f64, unit: Option<&str>) -> f64 {
+    match unit {
+        Some("%") => val / 100.0,
+        _ => val,
+    }
 }
 
 impl Evaluator {
@@ -155,9 +171,8 @@ impl Evaluator {
             Some(Value::List(items, Separator::Space, false)) if is_space_sep => {
                 let mut flat = items.clone();
                 // alpha 参数追加到末尾
-                match args.len() > 1 {
-                    true => flat.extend(args[1..].iter().cloned()),
-                    false => {}
+                if args.len() > 1 {
+                    flat.extend(args[1..].iter().cloned());
                 }
                 flat
             }
@@ -171,9 +186,8 @@ impl Evaluator {
                     flat.extend(items[..items.len().saturating_sub(1)].iter().cloned());
                 }
                 // 最后一个元素是 alpha
-                match items.len() >= 2 {
-                    true => flat.push(items[items.len() - 1].clone()),
-                    false => {}
+                if items.len() >= 2 {
+                    flat.push(items[items.len() - 1].clone());
                 }
                 flat
             }
@@ -188,21 +202,9 @@ impl Evaluator {
                 Value::Number(b, bu),
             ] => {
                 // 百分比参数转换为 0-255
-                let r_val = if ru.as_deref() == Some("%") {
-                    r * 255.0 / 100.0
-                } else {
-                    *r
-                };
-                let g_val = if gu.as_deref() == Some("%") {
-                    g * 255.0 / 100.0
-                } else {
-                    *g
-                };
-                let b_val = if bu.as_deref() == Some("%") {
-                    b * 255.0 / 100.0
-                } else {
-                    *b
-                };
+                let r_val = normalize_rgb_channel(*r, ru.as_deref());
+                let g_val = normalize_rgb_channel(*g, gu.as_deref());
+                let b_val = normalize_rgb_channel(*b, bu.as_deref());
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
@@ -224,26 +226,10 @@ impl Evaluator {
                 Value::Number(b, bu),
                 Value::Number(a, ua),
             ] => {
-                let r_val = if ru.as_deref() == Some("%") {
-                    r * 255.0 / 100.0
-                } else {
-                    *r
-                };
-                let g_val = if gu.as_deref() == Some("%") {
-                    g * 255.0 / 100.0
-                } else {
-                    *g
-                };
-                let b_val = if bu.as_deref() == Some("%") {
-                    b * 255.0 / 100.0
-                } else {
-                    *b
-                };
-                let alpha = if ua.as_deref() == Some("%") {
-                    *a / 100.0
-                } else {
-                    *a
-                };
+                let r_val = normalize_rgb_channel(*r, ru.as_deref());
+                let g_val = normalize_rgb_channel(*g, gu.as_deref());
+                let b_val = normalize_rgb_channel(*b, bu.as_deref());
+                let alpha = normalize_alpha(*a, ua.as_deref());
                 crate::__tracing::debug!(
                     target: "sasspile::color",
                     fn = "rgba",
@@ -270,8 +256,8 @@ impl Evaluator {
             ))),
             // CSS Color 4 missing channels: rgb(none none none) → Color with NaN channels
             _ if args.iter().any(|a| matches!(a, Value::String(s, false) if s == "none")) => {
-                let channels: Vec<f64> = args[..3].iter().map(|v| extract_none_num(v).unwrap_or(f64::NAN)).collect();
-                let alpha = args.get(3).map_or(1.0, |v| extract_none_num(v).unwrap_or(f64::NAN));
+                let channels: Vec<f64> = args[..3].iter().map(|v| color_hwb_hsl::extract_none_num(v).unwrap_or(f64::NAN)).collect();
+                let alpha = args.get(3).map_or(1.0, |v| color_hwb_hsl::extract_none_num(v).unwrap_or(f64::NAN));
                 Ok(Value::Color(Color::with_rgb(channels[0], channels[1], channels[2], alpha, ColorSpace::Rgb, ColorOutput::Auto)))
             }
             // CSS 透传：参数包含 var()/calc() 等非数值时，原样输出字符串

@@ -6,7 +6,7 @@ use imbl::HashSet;
 
 impl Evaluator {
     /// 收集 CSS 中所有选择器文本（用于 extend target 匹配检查）。
-    fn collect_selectors(nodes: &[CssNode]) -> Vec<String> {
+    pub(crate) fn collect_selectors(nodes: &[CssNode]) -> Vec<String> {
         nodes
             .iter()
             .flat_map(|node| {
@@ -146,6 +146,7 @@ impl Evaluator {
         extends: &[(String, String, bool, Option<PathBuf>)],
         global_placeholders: &HashSet<String>,
         module_selectors: &HashMap<PathBuf, HashSet<String>>,
+        original_selectors: &[String],
     ) -> Result<()> {
         let span = crate::__tracing::debug_span!("check_extend_targets", n_extends = extends.len());
         let _enter = span.enter();
@@ -166,11 +167,12 @@ impl Evaluator {
                 // 占位符选择器：在最终 CSS 中不可见，但 extend 仍应成功。
                 // placeholder extend 的语义：将 extender 的 declarations 复制到 placeholder 位置，
                 // placeholder 本身不出现在最终输出。只要 placeholder 在某处定义即视为成功。
+                // 注意：apply_extends 会过滤掉 placeholder 规则，故检查 original_selectors（原始 CSS 收集）。
                 match target_trimmed.starts_with('%') {
                     true => {
                         let defined_elsewhere = global_placeholders.contains(target_trimmed);
-                        // 单文件（无 @use）场景下 placeholder 不被模块缓存收集——额外扫描 CSS
-                        let defined_in_css = all_selectors.iter().any(|s| s.contains(target_trimmed));
+                        // 使用 original_selectors：apply_extends 后 placeholder 规则可能已被过滤
+                        let defined_in_css = original_selectors.iter().any(|s| s.contains(target_trimmed));
                         match defined_elsewhere || defined_in_css {
                             true => return Ok(()),
                             false => return Err(SassError::Eval(format!(

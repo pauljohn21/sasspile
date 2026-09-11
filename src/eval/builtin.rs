@@ -12,10 +12,13 @@
 pub mod color;
 pub mod color_adjust;
 pub mod color_adjust_cie;
+pub mod color_change;
+pub mod color_scale;
 pub mod color_conv;
 pub mod color_conv_ops;
 pub mod color_conv_spaces;
 pub mod color_gamut;
+pub mod color_hwb;
 pub mod color_hwb_hsl;
 pub mod color_inspect;
 pub(crate) mod color_parse;
@@ -29,6 +32,9 @@ pub mod math_css;
 pub mod math_helpers;
 pub mod math_trig;
 pub mod selector;
+pub mod selector_append;
+pub mod selector_nest;
+pub mod selector_ops;
 pub mod string;
 
 use super::*;
@@ -143,6 +149,29 @@ pub(crate) fn parse_calc_name(s: &str) -> String {
     }
 }
 
+/// 顶层逗号分割字符串为切片（不解析内部括号）。
+///
+/// 括号内的逗号不计入分割。返回 `Vec<&str>` 纯切片，零分配新字符串。
+fn split_top_level<'a>(s: &'a str) -> Vec<&'a str> {
+    let mut result = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                let segment = &s[start..i];
+                result.push(segment);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    result.push(&s[start..]);
+    result
+}
+
 /// 从 `Value::Calc` 字符串中提取参数列表。
 ///
 /// `calc(var(--c))` → `[var(--c)]`
@@ -158,36 +187,12 @@ pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
         s
     };
 
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut current = String::new();
-    for ch in inner.chars() {
-        match ch {
-            '(' | '[' => {
-                depth += 1;
-                current.push(ch);
-            }
-            ')' | ']' => {
-                depth -= 1;
-                current.push(ch);
-            }
-            ',' if depth == 0 => {
-                let trimmed = current.trim();
-                match !trimmed.is_empty() {
-                    true => args.push(parse_calc_arg_value(trimmed)),
-                    false => {}
-                }
-                current.clear();
-            }
-            _ => current.push(ch),
-        }
-    }
-    let trimmed = current.trim();
-    match !trimmed.is_empty() {
-        true => args.push(parse_calc_arg_value(trimmed)),
-        false => {}
-    }
-    args
+    split_top_level(inner)
+        .into_iter()
+        .map(str::trim)
+        .filter(|seg| !seg.is_empty())
+        .map(parse_calc_arg_value)
+        .collect()
 }
 
 /// 将单个 calc 参数字符串解析为 `Value`。
@@ -202,49 +207,43 @@ pub(crate) fn parse_calc_args(s: &str) -> Vec<Value> {
 pub(crate) fn parse_calc_arg_value(s: &str) -> Value {
     let s = s.trim();
     // 嵌套 calc/min/max/clamp → Value::Calc（这些是 calculation 类型）
-    match s.starts_with("calc(")
+    if s.starts_with("calc(")
         || s.starts_with("min(")
         || s.starts_with("max(")
         || s.starts_with("clamp(")
     {
-        true => return Value::Calc(s.to_string()),
-        false => {}
+        return Value::Calc(s.to_string());
     }
     // 尝试解析为数字+单位（仅当整个字符串恰好是单一数字时，含可选单位）
-    match s.contains(' ') {
-        false => match parse_number_with_unit(s) {
-            Some(val) => return val,
-            None => {}
-        },
-        true => {}
+    if !s.contains(' ') {
+        if let Some(val) = parse_number_with_unit(s) {
+            return val;
+        }
     }
     // 默认：含空格（算术表达式）或无法解析的值均归为 string
     Value::String(s.to_string(), false)
 }
 
+/// 判断字符是否为数字的有效组成部分（数字、小数点、正负号、指数）。
+fn is_num_char(ch: char) -> bool {
+    ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '+' || ch == 'e' || ch == 'E'
+}
+
 /// 解析 `1%`、`2px`、`3` 等数字字符串为 `Value::Number`。
 fn parse_number_with_unit(s: &str) -> Option<Value> {
     let s = s.trim();
-    let mut split = s.len();
-    for (i, ch) in s.char_indices() {
-        match !ch.is_ascii_digit() && ch != '.' && ch != '-' && ch != '+' && ch != 'e' && ch != 'E' {
-            true => {
-                split = i;
-                break;
-            }
-            false => {}
-        }
-    }
+    let split = s
+        .char_indices()
+        .find(|(_, ch)| !is_num_char(*ch))
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
     let num_str = &s[..split];
     let unit = s[split..].trim();
     num_str.parse::<f64>().ok().map(|n| {
-        Value::Number(
-            n,
-            match unit.is_empty() {
-                true => None,
-                false => Some(unit.to_string()),
-            },
-        )
+        Value::Number(n, match unit.is_empty() {
+            true => None,
+            false => Some(unit.to_string()),
+        })
     })
 }
 
@@ -273,7 +272,7 @@ fn merge_params_impl(
     kw_args: &HashMap<String, Value>,
     param_names: &[&str],
 ) -> Vec<Value> {
-    let mut result: Vec<Value> = param_names
+    let base: Vec<Value> = param_names
         .iter()
         .enumerate()
         .filter_map(|(i, pname)| {
@@ -284,13 +283,8 @@ fn merge_params_impl(
                 .or_else(|| kw_args.get(&format!("${pname}")).cloned())
         })
         .collect();
-    match pos_args.len() > param_names.len() {
-        true => {
-            result.extend_from_slice(&pos_args[param_names.len()..]);
-        }
-        false => {}
-    }
-    result
+    let tail = pos_args[param_names.len().min(pos_args.len())..].iter().cloned();
+    base.into_iter().chain(tail).collect()
 }
 
 /// 将位置参数和命名参数合并为统一的位置参数列表。

@@ -38,9 +38,10 @@ impl Evaluator {
             true => css,
             false => {
                 let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
+                let original_selectors = Self::collect_selectors(&css);
                 let css = Self::apply_extends(css, &extends, &module_selectors);
                 let global_placeholders = Self::build_global_placeholders(final_env.get_module_cache());
-                Self::check_extend_targets(&css, &extends, &global_placeholders, &module_selectors)?;
+                Self::check_extend_targets(&css, &extends, &global_placeholders, &module_selectors, &original_selectors)?;
                 css
             }
         };
@@ -60,9 +61,10 @@ impl Evaluator {
             true => css,
             false => {
                 let module_selectors = Self::build_module_selectors(final_env.get_module_cache());
+                let original_selectors = Self::collect_selectors(&css);
                 let css = Self::apply_extends(css, &extends, &module_selectors);
                 let global_placeholders = Self::build_global_placeholders(final_env.get_module_cache());
-                Self::check_extend_targets(&css, &extends, &global_placeholders, &module_selectors)?;
+                Self::check_extend_targets(&css, &extends, &global_placeholders, &module_selectors, &original_selectors)?;
                 css
             }
         };
