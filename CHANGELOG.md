@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.9.12] — 2026-09-11
+
+### Fixed
+
+- **选择器简化（compound dedup + superselector 消除）**：`.a.a` → `.a`，消除被 superselector 覆盖的冗余选择器
+  - 新增 `selector_simplify.rs` 模块，集成到 CSS 序列化管线
+  - 影响：`directives/use/extend/diamond/merge` +1 case
+- **@extend placeholder 单文件作用域**：无 `@use` 模块上下文的 placeholder extend 不再报 "target not found"
+  - 影响：`check_extend_targets` 增加 CSS 内 placeholder 扫描
+  - 注：跨规则 placeholder extend 仍有限制（待后续修复 `test_compile_extend_placeholder`）
+
+### Changed
+
+- sass-spec 通过率：7698 → 7699（+1），63.4% → 63.4%
+
 ## [0.9.11] — 2026-09-11
 
 ### Fixed

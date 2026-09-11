@@ -17,6 +17,7 @@ pub mod selector_unify;
 pub mod selector_is_super;
 pub mod selector_extend;
 pub mod selector_parser;
+pub mod selector_simplify;
 
 pub use node::CssNode;
 
@@ -28,8 +29,9 @@ pub struct Serializer;
 impl Serializer {
     /// 序列化 `CssNode` 列表为 CSS 字符串。
     pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
-        let flattened = Self::flatten_nodes(nodes, 0);
+        let mut flattened = Self::flatten_nodes(nodes, 0);
         crate::__tracing::debug!(count = flattened.len(), items = ?flattened.iter().map(|(n, g)| (n.to_string(), *g)).collect::<Vec<_>>(), "flatten result");
+        crate::css::selector_simplify::simplify_rules(&mut flattened);
         let merged = Self::merge_at_rules(flattened);
         let css = match style {
             OutputStyle::Expanded => Self::serialize_expanded(&merged, 0),
