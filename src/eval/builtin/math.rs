@@ -347,8 +347,9 @@ pub fn call(
         "unit" => {
             validate_single_number(args)?;
             match &args[0] {
-                Value::Number(_, Some(u)) => Ok(Some(Value::String(u.clone(), false))),
-                Value::Number(_, None) => Ok(Some(Value::String(String::new(), false))),
+                // 返回带引号的字符串，如 "px"、"px*em" 等
+                Value::Number(_, Some(u)) => Ok(Some(Value::String(u.clone(), true))),
+                Value::Number(_, None) => Ok(Some(Value::String(String::new(), true))),
                 Value::Calc(_) => Err(SassError::Eval(
                     "$number: calc expressions can't be used to determine units.".into(),
                 )),
