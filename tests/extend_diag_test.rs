@@ -133,6 +133,33 @@ fn diag_extend_within_pseudo_module_two_files() {
 }
 
 #[test]
+fn diag_extend_placeholder_module() {
+    // Case from sass-spec/upstream/placeholder:
+    // input.scss: @use "other"; in-input {@extend %in-other}
+    // _other.scss: %in-other {x: y}
+    //
+    // Expected: in-input { x: y; } (placeholder replaced)
+    let tmp = std::env::temp_dir().join(format!("placeholder-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).expect("create tmp");
+
+    std::fs::write(tmp.join("input.scss"), "@use \"other\";\n\nin-input {@extend %in-other}\n").expect("write input");
+    std::fs::write(tmp.join("_other.scss"), "%in-other {x: y}\n").expect("write other");
+
+    let input = tmp.join("input.scss");
+    let result = sasspile::compile_file_with_load_paths(
+        &input,
+        sasspile::OutputStyle::Expanded,
+        vec![tmp.clone()],
+    );
+    let _ = result;
+    match &result {
+        Ok(css) => { std::fs::write("/tmp/placeholder_ok.css", css).ok(); }
+        Err(e) => { std::fs::write("/tmp/placeholder_err.txt", format!("{e}")).ok(); }
+    }
+}
+
+#[test]
 fn diag_extend_within_pseudo_module_three_files() {
     // Case from sass-spec/midstream_extend_within_pseudoselector.hrx (three_files/is)
     // input.scss:

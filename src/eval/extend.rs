@@ -163,14 +163,16 @@ impl Evaluator {
                                     false => {}
                                 }
                 let target_trimmed = target.trim();
-                // 占位符选择器：在最终 CSS 中不可见，但可能在某模块中定义。
+                // 占位符选择器：在最终 CSS 中不可见，但 extend 仍应成功。
+                // placeholder extend 的语义：将 extender 的 declarations 复制到 placeholder 位置，
+                // placeholder 本身不出现在最终输出。只要 placeholder 在某模块中定义即视为成功。
                 match target_trimmed.starts_with('%') {
                     true => {
                         match global_placeholders.contains(target_trimmed) {
-                            true => return Err(SassError::Eval(format!(
+                            true => return Ok(()), // placeholder extend 正常——apply_extends 已处理
+                            false => return Err(SassError::Eval(format!(
                                 "The target selector was not found.\nUse \"@extend {target_trimmed} !optional\" to avoid this error."
                             ))),
-                            false => return Ok(()),
                         }
                     }
                     false => {}
