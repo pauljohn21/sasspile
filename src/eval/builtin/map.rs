@@ -157,9 +157,8 @@ impl Evaluator {
                 // 嵌套键遍历：遇到非 Map 值时返回 null（Sass 规范 graceful fallback）
                 let mut current = args[0].clone();
                 for key in &args[1..] {
-                    let pairs = match Self::value_to_map(&current) {
-                        Ok(p) => p,
-                        Err(_) => return Ok(Some(Value::Null)),
+                    let Ok(pairs) = Self::value_to_map(&current) else {
+                        return Ok(Some(Value::Null))
                     };
                     match pairs
                         .iter()

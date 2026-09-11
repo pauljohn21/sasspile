@@ -49,21 +49,6 @@ fn extender_contains_not(extender: &Selector) -> bool {
     })
 }
 
-/// 伪类参数匹配：检查两个参数化伪类是否匹配。
-///
-/// 用于 `:nth-child()`, `:nth-last-child()` 等需要参数匹配的伪类。
-/// 对于这些伪类，必须参数完全一致才算匹配。
-fn pseudo_args_match(name: &str, arg1: Option<&String>, arg2: Option<&String>) -> bool {
-    match name {
-        "nth-child" | "nth-last-child" | "nth-of-type" | "nth-last-of-type" => {
-            // 这些伪类需要参数完全一致
-            arg1 == arg2
-        }
-        // 其他参数化伪类（如 :not, :is, :where, :matches）走默认匹配
-        _ => true,
-    }
-}
-
 #[tracing::instrument(level = "info", fields(extendee = %extendee, extender = %extender))]
 pub fn extend_selector(selector: &Selector, extendee: &Selector, extender: &Selector) -> Selector {
     extend_selector_with_mode(selector, extendee, extender, false)
@@ -208,10 +193,7 @@ fn is_more_specific_than(selector: &Selector, extender: &Selector, extendee: &Se
 fn is_is_where_matches_subselector(extender: &Selector, extendee: &Selector) -> bool {
     // extendee 必须是单个 simple 选择器
     let ee_simple = extendee.0.first().and_then(|c| c.compounds.first()).and_then(|(_, comp)| comp.0.first());
-    let ee_simple = match ee_simple {
-        Some(s) => s,
-        None => return false,
-    };
+    let Some(ee_simple) = ee_simple else { return false };
 
     // 检查 extender 的任何 compound 包含 :is/:where/:matches 且参数包含该 subselector
     extender.0.iter().any(|ext_c| {
@@ -259,10 +241,7 @@ fn extendee_is_is_where_matches_subselector(selector: &ComplexSelector, extendee
             })
         });
 
-    let ee_name = match ee_name {
-        Some(n) => n,
-        None => return false,
-    };
+    let Some(ee_name) = ee_name else { return false };
 
     selector.compounds.iter().any(|(_, comp)| {
         // compound 长度 > 1 且包含 :is/:where/:matches → 扩展 extendee 是 no-op
@@ -291,7 +270,7 @@ fn parse_single_simple_selector(input: &str) -> Option<SimpleSelector> {
         Some(SimpleSelector::Class(input[1..].to_string()))
     } else if input.starts_with('#') && !input[1..].contains('#') && !input[1..].contains(':') && !input[1..].contains(' ') {
         Some(SimpleSelector::Id(input[1..].to_string()))
-    } else if !input.starts_with(&['.', '#', ':', '[', '*']) && !input.contains(' ') {
+    } else if !input.starts_with(['.', '#', ':', '[', '*']) && !input.contains(' ') {
         Some(SimpleSelector::Type { namespace: Namespace::None, name: input.to_string() })
     } else {
         None
@@ -388,7 +367,7 @@ fn try_extend_is_where_matches_in_complex(
     let mut match_positions: Vec<(usize, usize)> = Vec::new();
     for (ci, (_, compound)) in selector.compounds.iter().enumerate() {
         for (si, simple) in compound.0.iter().enumerate() {
-            let (name, arg) = match simple {
+            let (_name, arg) = match simple {
                 SimpleSelector::PseudoClass { name, arg: Some(arg) }
                     if name == "is" || name == "where" || name == "matches" =>
                 {

@@ -58,8 +58,8 @@ impl Evaluator {
 
     /// 从 AST 中递归收集所有 placeholder 选择器名（以 % 开头的选择器）。
     fn collect_placeholder_selectors(nodes: &[crate::parse::ast::Node]) -> HashSet<String> {
-        fn collect<'a>(
-            nodes: &'a [crate::parse::ast::Node],
+        fn collect(
+            nodes: &[crate::parse::ast::Node],
             acc: &mut HashSet<String>,
         ) {
             for node in nodes {

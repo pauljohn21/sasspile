@@ -19,7 +19,7 @@ pub fn simplify_rules(nodes: &mut Vec<(CssNode, usize)>) {
 }
 
 /// 阶段 1：compound 内 simple 去重（`.a.a` → `.a`）。
-fn dedup_compound_simples(nodes: &mut Vec<(CssNode, usize)>) {
+fn dedup_compound_simples(nodes: &mut [(CssNode, usize)]) {
     nodes.iter_mut().for_each(|(node, _)| match node {
         CssNode::Rule { selector, .. } => {
             let simplified = simplify_selector_str(selector);

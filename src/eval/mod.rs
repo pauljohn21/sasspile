@@ -72,7 +72,7 @@ impl Evaluator {
 
     /// 将从 @use'd 模块累积的 CSS @import AtRule 添加到输出顶部。
     fn prepend_module_css_imports(
-        mut nodes: Vec<CssNode>,
+        nodes: Vec<CssNode>,
         imports: &[String],
     ) -> Vec<CssNode> {
         match imports.is_empty() {

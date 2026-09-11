@@ -6,11 +6,11 @@
 ## 2. lib clippy 自动清理 (Layer 1)
 
 - [x] 2.1 运行 `cargo clippy --fix --lib` 自动修复（21→9 warnings）
-- [ ] 2.2 手动清理剩余 unused imports（lib + test targets）
-- [ ] 2.3 删除/注释 unused functions 和 fields（`pseudo_args_match`, `css_round`, `css_imports` 等）
-- [ ] 2.4 手写 `let...else` 重写 clippy 建议的位置（3 处显式标注）
-- [ ] 2.5 修复 boolean-to-int conversion 为 `match` / `u32::from(bool)`
-- [ ] 2.6 验证 `cargo clippy --lib` 零 error
+- [x] 2.2 手动清理 unused code（`pseudo_args_match`/`css_round`/`clear_selector`/`add_css_imports` 已删除）
+- [x] 2.3 处理 `css_imports` field（添加 `#[allow(dead_code)]` + 注释说明）
+- [x] 2.4 手写 `let...else` 重写 3 处（selector_extend.rs ×2、map.rs ×1）
+- [x] 2.5 修复 `&mut Vec` → `&mut [_]` + `args.iter()` → `args` + 其他 clippy --fix 自动修复
+- [x] 2.6 验证 `cargo clippy --lib` 零 warning 零 error
 
 ## 3. 大文件拆分 (Layer 2) — selector_extend.rs
 

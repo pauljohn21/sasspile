@@ -33,6 +33,7 @@ pub(crate) struct ModuleExports {
     /// 实际调用应走 `call_builtin` 路径。
     pub(crate) is_builtin: bool,
     /// 模块 AST 中的 CSS @import URL 列表（用于提升到输出顶部）。
+    #[allow(dead_code)]
     pub(crate) css_imports: Vec<String>,
     /// 该模块定义的 placeholder 选择器名（如 "%foo"），用于 scope 违规检测。
     /// placeholder 不会出现在最终 CSS 中，所以 selectors 集合无法追踪它们。

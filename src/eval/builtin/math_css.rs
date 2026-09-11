@@ -1,74 +1,11 @@
-//! CSS round/mod/rem 函数 + 单位转换。
+//! CSS mod/rem 函数 + 单位转换。
 //!
-//! - `css_round(strategy, number, step)`: CSS `round()` 四种舍入策略
 //! - `css_mod(number, step)`: floored modulo
 //! - `css_rem(number, step)`: truncated modulo
 //! - `unit_conversion_factor`: 兼容单位间转换因子
 
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
-
-/// CSS round(strategy, number, step) 函数。
-///
-/// 根据 strategy 将 number 舍入到 step 的倍数：
-/// - nearest: 最接近的倍数（默认）
-/// - up: 向上舍入
-/// - down: 向下舍入
-/// - to-zero: 向零舍入
-#[allow(clippy::pedantic)]
-pub(crate) fn css_round(strategy: &str, number: &Value, step: &Value) -> Result<Option<Value>> {
-    let (n, n_unit) = match number {
-        Value::Number(n, u) => (*n, u.clone()),
-        _ => {
-            return Err(SassError::Eval(format!(
-                "$number: {number} is not a number."
-            )));
-        }
-    };
-    let (s, s_unit) = match step {
-        Value::Number(s, u) => (*s, u.clone()),
-        _ => return Err(SassError::Eval(format!("$step: {step} is not a number."))),
-    };
-    match s == 0.0 {
-        true => return Err(SassError::Eval("Round step cannot be zero.".into())),
-        false => {}
-    }
-    let compatible = crate::eval::value::units_compatible(n_unit.as_deref(), s_unit.as_deref());
-    match compatible {
-        false => {
-        let n_str = match &n_unit {
-            Some(u) => format!("{n}{u}"),
-            None => n.to_string(),
-        };
-        let s_str = match &s_unit {
-            Some(u) => format!("{s}{u}"),
-            None => s.to_string(),
-        };
-        return Ok(Some(Value::String(
-            format!("round({strategy}, {n_str}, {s_str})"),
-            false,
-        )));
-        }
-        true => {}
-    }
-    let (s_converted, out_unit) = match (&n_unit, &s_unit) {
-        (None, None) => (s, None),
-        (Some(u), None) => (s, Some(u.clone())),
-        (None, Some(u)) => (s, Some(u.clone())),
-        (Some(nu), Some(su)) if nu == su => (s, Some(nu.clone())),
-        (Some(nu), Some(su)) => (s * unit_conversion_factor(su, nu), Some(nu.clone())),
-    };
-    let ratio = n / s_converted;
-    let rounded = match strategy {
-        "nearest" => ratio.round(),
-        "up" => ratio.ceil(),
-        "down" => ratio.floor(),
-        "to-zero" => ratio.trunc(),
-        _ => return Err(SassError::Eval(format!("Unknown strategy: {strategy}"))),
-    };
-    let result = rounded * s_converted;
-    Ok(Some(Value::Number(result, out_unit)))
-}
 
 // 长度单位到 px 的转换因子
 const LENGTH_TO_PX: &[(&str, f64)] = &[

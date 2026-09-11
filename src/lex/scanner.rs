@@ -75,7 +75,7 @@ impl<'src> Lexer<'src> {
                                 self.next_char();
                             }
                         }
-                        Some(next) => {
+                        Some(_next) => {
                             // 非十六进制转义：消费转义字符本身（如 \$ → $）
                             self.next_char();
                         }

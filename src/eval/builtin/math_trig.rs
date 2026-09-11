@@ -355,7 +355,7 @@ fn call_hypot(args: &[Value]) -> Result<Option<Value>> {
         false => {}
     }
     let mut nums: Vec<(f64, Option<String>)> = Vec::new();
-    for (i, a) in args.iter().enumerate() {
+    for a in args {
         match a {
             Value::Number(n, u) => nums.push((*n, u.clone())),
             other => return Err(SassError::Eval(format!("{other} is not a number."))),

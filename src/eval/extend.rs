@@ -151,7 +151,7 @@ impl Evaluator {
         let _enter = span.enter();
         let all_selectors = Self::collect_selectors(css);
         // 全局 public 选择器集合（所有模块的 selectors 并集）
-        let global_selectors: HashSet<String> = module_selectors
+        let _global_selectors: HashSet<String> = module_selectors
             .values()
             .flat_map(|s| s.iter().cloned())
             .collect();

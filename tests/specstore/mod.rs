@@ -104,7 +104,7 @@ fn cmd_stats(conn: &mut rusqlite::Connection) {
     info!("=== spec_store: stats ===");
     let (stats, _id) = stats::latest_stats(conn);
     let md = stats::format_md(&stats, None);
-    println!("{md}");
+    info!("{md}");
 }
 
 fn cmd_trend(conn: &mut rusqlite::Connection) {
@@ -118,7 +118,7 @@ fn cmd_trend(conn: &mut rusqlite::Connection) {
     };
 
     let chart = trend::format_chart(&trend, &function);
-    println!("{chart}");
+    info!("{chart}");
 }
 
 fn cmd_link(conn: &mut rusqlite::Connection) {
@@ -128,7 +128,7 @@ fn cmd_link(conn: &mut rusqlite::Connection) {
     match link::link_function(conn, &function) {
         Some(result) => {
             let output = link::format_link(&result);
-            println!("{output}");
+            info!("{output}");
         }
         None => tracing::warn!(function, "no cases found"),
     }
@@ -171,7 +171,7 @@ fn cmd_diff(conn: &mut rusqlite::Connection) {
 
     let entries = bisect::diff_snapshots(conn, from_id, to_id);
     let output = bisect::format_diff(&entries);
-    println!("{output}");
+    info!("{output}");
 }
 
 fn cmd_snapshot(conn: &mut rusqlite::Connection) {

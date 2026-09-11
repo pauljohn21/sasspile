@@ -171,11 +171,6 @@ impl Env {
         self
     }
 
-    pub(crate) fn clear_selector(mut self) -> Self {
-        self.current_selector = None;
-        self
-    }
-
     pub fn get_selector(&self) -> Option<&str> {
         self.current_selector.as_deref()
     }
@@ -302,16 +297,6 @@ impl Env {
 
     pub(crate) fn get_css_imports(&self) -> &[String] {
         &self.css_imports
-    }
-
-    pub(crate) fn add_css_imports(mut self, urls: &[String]) -> Self {
-        for url in urls {
-            match self.css_imports.contains(url) {
-                true => {}
-                false => self.css_imports.push(url.clone()),
-            }
-        }
-        self
     }
 
     pub(crate) fn remove_star_imported(self) -> Self {

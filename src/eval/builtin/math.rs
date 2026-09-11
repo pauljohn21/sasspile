@@ -8,7 +8,7 @@
 //! 辅助函数（参数名映射、合并、验证）在 `math_helpers` 模块中。
 
 use super::super::Evaluator;
-use super::math_css::{css_mod, css_rem, css_round};
+use super::math_css::{css_mod, css_rem};
 use super::math_helpers::{merge_math_args, validate_single_number};
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
@@ -114,8 +114,7 @@ pub fn call(
             match args.is_empty() {
                 true => {
                     return Err(SassError::Eval(format!(
-                        "{} requires at least 1 argument",
-                        name
+                        "{name} requires at least 1 argument"
                     )))
                 }
                 false => {}
@@ -123,28 +122,26 @@ pub fn call(
             // 使用第一个参数的单位作为目标单位，将所有参数转换后比较
             let first_unit = match &args[0] {
                 Value::Number(_, u) => u.clone(),
-                _ => return Err(SassError::Eval(format!("{} requires number arguments", name))),
+                _ => return Err(SassError::Eval(format!("{name} requires number arguments"))),
             };
             let mut result = match &args[0] {
                 Value::Number(n, _) => *n,
                 _ => unreachable!(),
             };
-            let mut result_unit = first_unit.clone();
+            let result_unit = first_unit.clone();
             for arg in args.iter().skip(1) {
                 let (val, unit) = match arg {
                     Value::Number(n, u) => (*n, u.clone()),
                     _ => {
                         return Err(SassError::Eval(format!(
-                            "{} requires number arguments",
-                            name
+                            "{name} requires number arguments"
                         )))
                     }
                 };
                 // 检查单位兼容性
                 if !crate::eval::value::units_compatible(first_unit.as_deref(), unit.as_deref()) {
                     return Err(SassError::Eval(format!(
-                        "{} requires number arguments",
-                        name
+                        "{name} requires number arguments"
                     )));
                 }
                 // 转换到目标单位
