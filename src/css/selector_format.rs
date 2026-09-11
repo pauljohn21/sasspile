@@ -30,21 +30,48 @@ fn is_valid_selector_token(token: &str) -> bool {
 /// - `"a > b"` → `[["a", ">", "b"]]`
 /// - `"a + b ~ c"` → `[["a", "+", "b", "~", "c"]]`
 /// - `".a > .b"` → `[[".a", ">", ".b"]]`
+/// - `"[c]d"` → `[["[c]", "d"]]`
 pub fn string_to_selector_format(input: &str) -> Vec<Vec<String>> {
     input
         .split(',')
-        .map(|part| {
-            part.split_whitespace()
-                .filter(|s| !s.is_empty())
-                .map(|s| {
-                    // 处理开头是组合符的情况，比如 "> .b" 会 split成 [">", ".b"]，保留即可
-                    s.trim().to_string()
-                })
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-        })
+        .map(|part| split_selector_compounds(part))
         .filter(|v| !v.is_empty())
         .collect()
+}
+
+/// 将单个 complex selector 字符串拆分为 compound 标记列表。
+///
+/// 处理 `]` 后跟字母/数字的边界（如 `[c]d` → `["[c]", "d"]`）。
+/// 不处理 `.c.d` 这类情况（类选择器属于同一 compound）。
+fn split_selector_compounds(input: &str) -> Vec<String> {
+    let chars: Vec<char> = input.chars().collect();
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        // 检测 compound 边界：当前以 ] 结尾，后跟字母/数字
+        if current.ends_with(']') && c.is_alphanumeric() {
+            if !current.trim().is_empty() {
+                result.push(current.trim().to_string());
+            }
+            current = String::new();
+        }
+        // 检测 whitespace 边界（compound 分隔）
+        if c.is_whitespace() {
+            if !current.trim().is_empty() {
+                result.push(current.trim().to_string());
+            }
+            current = String::new();
+        } else {
+            current.push(c);
+        }
+        i += 1;
+    }
+    if !current.trim().is_empty() {
+        result.push(current.trim().to_string());
+    }
+    result
 }
 
 /// 解析选择器字符串为 Selector Format，带验证。
