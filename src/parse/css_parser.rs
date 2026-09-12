@@ -259,6 +259,7 @@ impl<'tok> Parser<'tok> {
     fn parse_at_rule_params(&mut self) -> Result<Option<String>> {
         let start = self.pos;
         let mut depth = 0u32;
+        // Safety: 每次迭代必须前进 pos，否则可能无限循环（Rust 无 GC，不抛 StackOverflow）
         while !self.at_end() {
             match self.peek() {
                 Some(Token::LBrace) | Some(Token::Semicolon) | None | Some(Token::Eof) => break,
@@ -266,10 +267,11 @@ impl<'tok> Parser<'tok> {
                     depth += 1;
                     self.advance();
                 }
-                Some(Token::RParen) => match depth > 0 {
-                    true => depth -= 1,
-                    false => {}
-                },
+                // depth==0 遇到 ')' 直接前进，避免 pos 停滞导致无限循环
+                Some(Token::RParen) => {
+                    if depth > 0 { depth -= 1; }
+                    self.advance();
+                }
                 _ => {
                     self.advance();
                 }
@@ -304,10 +306,11 @@ impl<'tok> Parser<'tok> {
                     depth += 1;
                     self.advance();
                 }
-                Some(Token::RParen) => match depth > 0 {
-                    true => depth -= 1,
-                    false => {}
-                },
+                // depth==0 遇到 ')' 直接前进，避免 pos 停滞导致无限循环
+                Some(Token::RParen) => {
+                    if depth > 0 { depth -= 1; }
+                    self.advance();
+                }
                 _ => {
                     self.advance();
                 }
