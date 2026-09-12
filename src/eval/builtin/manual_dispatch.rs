@@ -173,20 +173,74 @@ impl Evaluator {
                 }
                 _ => Ok(Value::Bool(false)),
             },
-            "global-variable-exists" => match pos_args {
-                [Value::String(name, _)] => {
-                    // Check local scope + all namespaces.
-                    let exists = env.has_var(name)
-                        || env.get_namespaces().values().any(|ns| {
-                            ns.all_vars().any(|(k, _)| k == name)
+            "global-variable-exists" => {
+                // 提取 $name 和 $module（支持命名参数形式）
+                let name_val = pos_args
+                    .first()
+                    .or_else(|| kw_args.get("name"))
+                    .or_else(|| kw_args.get("$name"));
+                let module_val = pos_args
+                    .get(1)
+                    .or_else(|| kw_args.get("module"))
+                    .or_else(|| kw_args.get("$module"));
+
+                match (name_val, module_val) {
+                    (Some(Value::String(fname, _)), Some(Value::String(ns, _))) => {
+                        // 2-arg form: check specific module's exports
+                        match env.get_namespace(ns) {
+                            Some(module) => {
+                                // 模块命名空间是 dash-sensitive（sass-spec 要求）
+                                let found = module.all_vars().any(|(k, _)| k == fname);
+                                Ok(Value::Bool(found))
+                            }
+                            None => Err(SassError::Eval(format!(
+                                "There is no module with namespace \"{ns}\"."
+                            ))),
+                        }
+                    }
+                    (Some(Value::String(fname, _)), None) => {
+                        // 1-arg form: check root scope + all namespaces
+                        let dash = fname.replace('-', "_");
+                        let underscore = fname.replace('_', "-");
+                        let in_root = env.has_global_var(fname)
+                            || env.has_global_var(&dash)
+                            || env.has_global_var(&underscore);
+                        let in_namespace = env.get_namespaces().values().any(|ns| {
+                            ns.all_vars().any(|(k, _)| {
+                                k == fname || k == &dash || k == &underscore
+                            })
                         });
-                    Ok(Value::Bool(exists))
+                        Ok(Value::Bool(in_root || in_namespace))
+                    }
+                    (Some(Value::String(_, _)), Some(v)) => Err(SassError::Eval(format!(
+                        "$module: {v} is not a string."
+                    ))),
+                    (Some(v), _) => Err(SassError::Eval(format!(
+                        "$name: {v} is not a string."
+                    ))),
+                    (None, _) => Err(SassError::Eval(format!(
+                        "Missing argument $name."
+                    ))),
                 }
-                _ => Ok(Value::Bool(false)),
-            },
+            }
             "variable-exists" => match pos_args {
-                [Value::String(name, _)] => Ok(Value::Bool(env.has_var(name))),
-                _ => Ok(Value::Bool(false)),
+                // 参数校验：恰好 1 个字符串参数
+                [Value::String(name, _)] => {
+                    // dash-insensitive 查找
+                    let dash = name.replace('-', "_");
+                    let underscore = name.replace('_', "-");
+                    let found = env.has_var(name)
+                        || env.has_var(&dash)
+                        || env.has_var(&underscore);
+                    Ok(Value::Bool(found))
+                }
+                [v] => Err(SassError::Eval(format!(
+                    "$name: {v} is not a string."
+                ))),
+                _ => Err(SassError::Eval(format!(
+                    "Only 1 argument allowed, but {} were passed.",
+                    pos_args.len()
+                ))),
             },
             "get-function" => {
                 // 提取 $name 和 $module（支持命名参数形式）

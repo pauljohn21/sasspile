@@ -51,6 +51,19 @@ impl Env {
         self.current.has_var(name)
     }
 
+    /// 检查变量是否在**根作用域**（模块级全局）中定义。
+    ///
+    /// 沿 parent 链上溯到 root scope，仅检查 root 的 local_vars + forwarded_vars。
+    /// 子作用域中的局部变量不计入。
+    pub fn has_global_var(&self, name: &str) -> bool {
+        let mut scope = &self.current;
+        // 上溯到 root scope
+        while let Some(ref parent) = scope.parent {
+            scope = parent;
+        }
+        scope.local_vars.contains_key(name) || scope.forwarded_vars.contains_key(name)
+    }
+
     pub(crate) fn define_mixin(self, name: String, def: MixinDef) -> Self {
         self.define_local_mixin(name, def)
     }
