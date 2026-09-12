@@ -10,6 +10,8 @@
 //! - 子模块：`at_rules`、`expr`、`nodes`、`params`
 
 pub mod ast;
+pub mod css_ast;
+pub mod scss_ast;
 mod ast_impl;
 pub mod at_rule_kinds;
 
@@ -17,6 +19,62 @@ use crate::__tracing::warn;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use ast::*;
+use css_ast::CssAst;
+use scss_ast::ScssAst;
+
+/// 解析产物——由文件扩展名决定具体类型。
+#[derive(Debug, Clone, PartialEq)]
+pub enum Parsed {
+    /// SCSS 源码——完整 Sass 特性。
+    Scss(ScssAst),
+    /// CSS 源码——仅原生 CSS + Nesting。
+    Css(CssAst),
+}
+
+impl Parsed {
+    /// 返回 SCSS variant（如果是 SCSS）。
+    pub fn into_scss(self) -> Option<ScssAst> {
+        match self {
+            Parsed::Scss(ast) => Some(ast),
+            Parsed::Css(_) => None,
+        }
+    }
+
+    /// 返回 CSS variant（如果是 CSS）。
+    pub fn into_css(self) -> Option<CssAst> {
+        match self {
+            Parsed::Css(ast) => Some(ast),
+            Parsed::Scss(_) => None,
+        }
+    }
+
+    pub fn is_scss(&self) -> bool {
+        matches!(self, Parsed::Scss(_))
+    }
+
+    pub fn is_css(&self) -> bool {
+        matches!(self, Parsed::Css(_))
+    }
+}
+
+use std::path::Path;
+
+/// 编译模式——由文件扩展名决定。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompileMode {
+    Scss,
+    Css,
+}
+
+impl CompileMode {
+    /// 从文件路径确定编译模式。
+    pub fn from_path(path: &Path) -> Self {
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("css") => CompileMode::Css,
+            _ => CompileMode::Scss,
+        }
+    }
+}
 
 /// 语法分析器。
 pub struct Parser<'tok> {
@@ -67,6 +125,23 @@ impl<'tok> Parser<'tok> {
             nodes.push(node);
         }
         Ok(Ast { nodes })
+    }
+
+    /// 分派解析——根据编译模式选择不同解析器。
+    ///
+    /// - `CompileMode::Scss` → 返回 `Parsed::Scss`
+    /// - `CompileMode::Css` → 返回 `Parsed::Css`（由 CssParser 处理）
+    pub fn parse_dispatch(tokens: &'tok [Token], mode: CompileMode) -> Result<Parsed> {
+        match mode {
+            CompileMode::Scss => {
+                let ast = Self::parse(tokens)?;
+                Ok(Parsed::Scss(ast))
+            }
+            CompileMode::Css => {
+                let css_ast = crate::parse::css_parser::Parser::parse(tokens)?;
+                Ok(Parsed::Css(css_ast))
+            }
+        }
     }
 
     // —— 基础操作 ——
@@ -143,6 +218,7 @@ impl<'tok> Parser<'tok> {
 mod at_rules;
 mod at_rules_flow;
 mod at_rules_modules;
+pub mod css_parser;
 mod expr;
 mod nodes;
 mod params;

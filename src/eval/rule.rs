@@ -247,79 +247,9 @@ impl Evaluator {
             false => {}
         }
 
-        // 检查当前规则是否是 top-level（无父选择器或父选择器是 @at-rule）
-        // 用于 plain CSS 模式判断 @media 是否提升
-        let is_top_level = env.get_selector().is_none_or(|s| s.starts_with('@'));
-
         // 进入子作用域——零 clone，parent 指向当前 scope
         let env = env.enter_scope().with_selector(selector.clone());
         let (css, new_env) = Self::eval_nodes(body, env)?;
-
-        // plain CSS 模式——不合并选择器，保留嵌套结构
-        match new_env.is_plain_css() {
-            true => {
-            let (declarations, children, root_nodes) = css.into_iter().fold(
-                (Vec::new(), Vec::new(), Vec::new()),
-                |(mut decls, mut kids, mut root), node| {
-                    match node {
-                        decl @ CssNode::Declaration { .. } => decls.push(decl),
-                        CssNode::AtRoot(nodes, _) => root.extend(nodes),
-                        CssNode::AtRule {
-                            name,
-                            params,
-                            children,
-                            has_body,
-                        } if is_top_level
-                            && !crate::parse::at_rule_kinds::CssAtRule::is_keyframes(&name) =>
-                        {
-                            // 提升 AtRule 到外层，将 children 包装在 Rule { selector } 中
-                            let wrapped = vec![CssNode::Rule {
-                                selector: selector.clone(),
-                                declarations: Vec::new(),
-                                children,
-                            }];
-                            root.push(CssNode::AtRule {
-                                name,
-                                params,
-                                children: wrapped,
-                                has_body,
-                            });
-                        }
-                        CssNode::AtRule {
-                            name,
-                            params,
-                            children,
-                            has_body: true,
-                        } if !crate::parse::at_rule_kinds::CssAtRule::is_keyframes(&name) => {
-                            // 非提升的 AtRule——plain CSS 中保持原始 children
-                            kids.push(CssNode::AtRule {
-                                name,
-                                params,
-                                children,
-                                has_body: true,
-                            });
-                        }
-                        other => kids.push(other),
-                    }
-                    (decls, kids, root)
-                },
-            );
-            let mut result = Vec::new();
-            match !declarations.is_empty() || !children.is_empty() {
-                true => {
-                    result.push(CssNode::Rule {
-                        selector: selector.clone(),
-                        declarations,
-                        children,
-                    });
-                }
-                false => {}
-            }
-            result.extend(root_nodes);
-            return Ok((result, new_env));
-            }
-            false => {}
-        }
 
         // 使用 RuleBuilder + fold 处理嵌套规则
         let result = css
@@ -375,7 +305,7 @@ impl Evaluator {
     /// 将父选择器传播到 `AtRule` children 内的 Rule 子节点。
     ///
     /// 用于 `a {@import "other"}` 场景——被导入文件中的规则需要嵌套在父选择器 `a` 下。
-    fn nest_rule_in_children(parent: &str, children: Vec<CssNode>) -> Vec<CssNode> {
+    pub(crate) fn nest_rule_in_children(parent: &str, children: Vec<CssNode>) -> Vec<CssNode> {
         let (result, current_decls) = children.into_iter().fold(
             (Vec::<CssNode>::new(), Vec::<CssNode>::new()),
             |(mut result, mut current_decls), child| match child {

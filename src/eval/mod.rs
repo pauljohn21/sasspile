@@ -17,6 +17,7 @@ use crate::parse::ast::*;
 use std::path::PathBuf;
 
 pub(crate) use env::{Env, FunctionDef, MixinDef, ModuleExports};
+pub use scss_evaluator::ScssEvaluator;
 // 子模块通过 `use super::*` 获取这些类型
 pub(crate) use imbl::{HashMap, HashSet};
 pub(crate) use std::rc::Rc;
@@ -123,23 +124,8 @@ impl Evaluator {
     /// 求值单个节点——纯函数分发，每个 arm 委托独立函数。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(node, env), fields(depth = env.get_depth())))]
     fn eval_node(node: &Node, env: Env) -> Result<(Vec<CssNode>, Env)> {
-        match env.is_plain_css()
-            && !matches!(
-                node,
-                Node::Use { .. } | Node::Forward { .. } | Node::Import { .. }
-            )
-        {
-            true => Self::check_plain_css_node(node)?,
-            false => {}
-        }
         match node {
-            Node::Rule { selector, body } => {
-                match env.is_plain_css() {
-                    true => Self::check_plain_css_selector(selector)?,
-                    false => {}
-                }
-                Self::eval_rule(selector, body, env)
-            }
+            Node::Rule { selector, body } => Self::eval_rule(selector, body, env),
             Node::Decl {
                 property,
                 value,
@@ -201,18 +187,6 @@ fn eval_decl(
     env: Env,
 ) -> Result<(Vec<CssNode>, Env)> {
     use crate::eval::Evaluator;
-    match env.is_plain_css() {
-        true => {
-            Evaluator::check_plain_css_value(value)?;
-            match property.contains("#{") {
-                true => return Err(SassError::Eval(
-                    "Interpolation isn't allowed in plain CSS.".into(),
-                )),
-                false => {}
-            }
-        }
-        false => {}
-    }
     // 顶层声明检测：不在样式规则内的裸声明是非法的
     match env.get_selector().is_none() {
         true => return Err(SassError::Eval(
@@ -221,8 +195,8 @@ fn eval_decl(
         false => {}
     }
     let val = Evaluator::eval_value(value, &env)?;
-    // plain CSS 模式保留 null 值（如 `x: null`）
-    match matches!(val, Value::Null) && !env.is_plain_css() {
+    // 过滤 null 值
+    match matches!(val, Value::Null) {
         true => return Ok((vec![], env)),
         false => {}
     }
@@ -371,6 +345,10 @@ fn eval_error_node(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 
 mod at_params;
 mod builtin;
+pub mod css_evaluator;
+pub mod scss_evaluator;
+
+pub use css_evaluator::CssEvaluator;
 mod color;
 mod color_names;
 mod control_flow;
@@ -386,7 +364,6 @@ mod meta_ops;
 mod mixin;
 mod module;
 mod module_helpers;
-mod plain_css;
 mod rule;
 mod scope;
 pub mod reactor;

@@ -87,18 +87,3 @@ pub fn err_expected_exactly(param: &str, val: &str, options: &[&str]) -> SassErr
         .join(" or ");
     SassError::Eval(format!("${param}: Expected {val} to be exactly {opts}."))
 }
-
-/// 生成 `This at-rule isn't allowed in plain CSS.` 错误。
-pub fn err_plain_css_at_rule() -> SassError {
-    SassError::Eval("This at-rule isn't allowed in plain CSS.".into())
-}
-
-/// 生成 `Silent comments aren't allowed in plain CSS.` 错误。
-pub fn err_plain_css_silent_comment() -> SassError {
-    SassError::Eval("Silent comments aren't allowed in plain CSS.".into())
-}
-
-/// 生成 `Sass variables aren't allowed in plain CSS.` 错误。
-pub fn err_plain_css_sass_var() -> SassError {
-    SassError::Eval("Sass variables aren't allowed in plain CSS.".into())
-}

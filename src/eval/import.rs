@@ -61,16 +61,28 @@ impl Evaluator {
         // @import 文件歧义检测
         Self::check_resolve_ambiguity(base, url, &load_paths)?;
         if let Some(path) = Self::resolve_file_import(base, url, &load_paths) {
-            return Self::load_import(&path, env);
+            // 保存父选择器状态（env 在 load_import 中被 move）
+            let parent_selector = env.get_selector().map(String::from);
+            // 仅对 CSS 文件应用选择器组合——SCSS 文件有自己的作用域语义
+            let is_css_file = path.extension().and_then(|e| e.to_str()) == Some("css");
+            let (css, env) = Self::load_import(&path, env)?;
+            // CSS 文件在规则体内被 @import 时，将导入规则的选择器与父选择器组合
+            return match (parent_selector, is_css_file) {
+                (Some(parent), true) => {
+                    let combined = Self::nest_rule_in_children(&parent, css);
+                    Ok((combined, env))
+                }
+                _ => Ok((css, env)),
+            };
         }
-        let is_plain_css = !(Path::new(url)
+        let is_unresolved_scss = !(Path::new(url)
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("css")))
             && !url.starts_with("http://")
             && !url.starts_with("https://")
             && !url.starts_with("url(")
             && modifier.is_empty();
-        match is_plain_css {
+        match is_unresolved_scss {
             true => {
                 return Err(SassError::Module(format!(
                     "Can't find stylesheet to import: {url}"

@@ -136,18 +136,33 @@ impl Evaluator {
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
-        let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
+        let is_css = path.extension().and_then(|e| e.to_str()) == Some("css");
 
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
+
+        // ─── Dual AST: CSS 文件走 CssParser + CssEvaluator ───
+        if is_css {
+            let css_ast = crate::parse::css_parser::Parser::parse(&tokens)?;
+            let css = crate::eval::css_evaluator::CssEvaluator::evaluate(&css_ast)?;
+            let css = vec![crate::css::node::CssNode::AtRoot(css, None)];
+            let mut loaded = (*caller_env.loaded_modules).clone();
+            loaded.insert(path.to_path_buf());
+            return Ok(ModuleExports {
+                css,
+                loaded_modules: Rc::new(loaded),
+                ..Default::default()
+            });
+        }
+
+        // ─── SCSS 文件：原有路径 ───
         let ast = crate::parse::Parser::parse(&tokens)?;
         let mut env = Env::default()
             .with_base_path(path.to_path_buf())
             .with_load_paths(caller_env.get_load_paths().to_vec())
             .with_module_cache((*caller_env.module_cache).clone())
-            .with_depth(caller_env.get_depth() + 1)
-            .with_plain_css(is_plain_css);
+            .with_depth(caller_env.get_depth() + 1);
         let mut loaded = (*caller_env.loaded_modules).clone();
         loaded.insert(path.to_path_buf());
         env = env.with_loaded_modules(loaded);
@@ -217,11 +232,6 @@ impl Evaluator {
         );
         // 收集 placeholder 选择器（不会出现在最终 CSS 中，需独立追踪）
         let placeholder_selectors = Self::collect_placeholder_selectors(&ast.nodes);
-        let css = if is_plain_css {
-            vec![crate::css::node::CssNode::AtRoot(module_css, None)]
-        } else {
-            module_css
-        };
         let (lv, lm, lf, fv, fm, ff) = final_env.take_scope_fields();
         let star_imported = final_env.get_star_imported().clone();
         // 过滤 local_* 中的 star_imported 成员：这些成员来自模块内部的 @use ... as *，
@@ -246,7 +256,7 @@ impl Evaluator {
             forwarded_vars: fv,
             forwarded_mixins: fm,
             forwarded_functions: ff,
-            css,
+            css: module_css,
             loaded_modules: final_env.get_loaded_modules_rc(),
             extends: final_env.get_extends_rc(),
             module_cache: final_env.get_module_cache_rc(),
@@ -293,19 +303,34 @@ impl Evaluator {
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
-        let is_plain_css = path.extension().and_then(|e| e.to_str()) == Some("css");
+        let is_css = path.extension().and_then(|e| e.to_str()) == Some("css");
 
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
+
+        // ─── Dual AST: CSS 文件走 CssParser + CssEvaluator ───
+        if is_css {
+            let css_ast = crate::parse::css_parser::Parser::parse(&tokens)?;
+            let css = crate::eval::css_evaluator::CssEvaluator::evaluate(&css_ast)?;
+            // CSS 在规则体内 @import 时不包装 AtRoot（由调用方组合选择器）
+            let in_rule_body = caller_env.get_selector().is_some();
+            let css = if in_rule_body {
+                css
+            } else {
+                vec![crate::css::node::CssNode::AtRoot(css, None)]
+            };
+            return Ok((css, caller_env));
+        }
+
+        // ─── SCSS 文件：原有路径 ───
         let ast = crate::parse::Parser::parse(&tokens)?;
         // 继承当前环境的所有成员
         let saved_base_path = caller_env.get_base_path().cloned();
         let saved_depth = caller_env.get_depth();
         let env = caller_env
             .with_base_path(path.to_path_buf())
-            .with_depth(saved_depth + 1)
-            .with_plain_css(is_plain_css);
+            .with_depth(saved_depth + 1);
         // 预扫描导入文件中的 !global 变量（确保未执行路径的变量也可见）
         let mut env = env;
         for global_var in Self::collect_global_vars(&ast.nodes) {
@@ -325,13 +350,7 @@ impl Evaluator {
         // @import 内联语义：forwarded 成员合并到 local
         let final_env = final_env.merge_forwarded_to_local();
         // @import 内联语义：移除通过 @use ... as * 引入的传递性成员
-        // 这些成员只在被导入文件内部可见，不应传递到导入文件
         let final_env = final_env.remove_star_imported();
-        let css = if is_plain_css {
-            vec![crate::css::node::CssNode::AtRoot(css, None)]
-        } else {
-            css
-        };
         Ok((css, final_env))
     }
 

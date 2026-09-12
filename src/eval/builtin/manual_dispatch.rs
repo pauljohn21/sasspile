@@ -22,12 +22,6 @@ impl Evaluator {
         match name {
             // ── sass-spec 测试辅助函数 ──
             "sass" => {
-                match env.is_plain_css() {
-                    true => return Err(SassError::Eval(
-                        "sass() conditions aren't allowed in plain CSS".into(),
-                    )),
-                    false => {}
-                }
                 match pos_args.is_empty() {
                     true => return Err(SassError::Eval(
                         "sass() requires at least 1 argument".into(),

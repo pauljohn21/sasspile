@@ -16,11 +16,18 @@ impl Evaluator {
     /// 同时处理 `#{...}` 插值和 `$var` 变量替换。
     pub(crate) fn eval_at_params(at_rule: &str, params: &str, env: &Env) -> String {
         // 快速路径：不含 #{} 或 $ 或 + 或 - 或数字的参数直接返回
+        // 但 @media/@supports 始终需要逻辑操作符空格规范化
         let needs_eval = params.contains("#{")
             || params.contains('$')
             || (matches!(at_rule, "supports" | "media") && Self::params_has_expr(params));
         match needs_eval {
-            false => return params.to_string(),
+            false => {
+                // 即使无表达式求值，@media/@supports 也需要空格规范化
+                return match matches!(at_rule, "supports" | "media") {
+                    true => Self::normalize_media_params(params.to_string()),
+                    false => params.to_string(),
+                };
+            }
             true => {}
         }
 
@@ -28,9 +35,106 @@ impl Evaluator {
         let after_interp = crate::eval::value::eval_interp_str(params, env);
 
         // 如果是 @supports 或 @media，再对括号内 declaration 做表达式求值
-        match matches!(at_rule, "supports" | "media") {
+        let evaluated = match matches!(at_rule, "supports" | "media") {
             true => Self::eval_expr_in_params(&after_interp, env),
             false => after_interp,
+        };
+
+        // 对 @media/@supports 参数做逻辑操作符空格规范化
+        match matches!(at_rule, "supports" | "media") {
+            true => Self::normalize_media_params(evaluated),
+            false => evaluated,
+        }
+    }
+
+    /// 规范化 @media/@supports 参数中逻辑操作符的空格。
+    ///
+    /// - `not(` → `not (` (not 后必须有空格)
+    /// - `and(` → `and (` (and 后必须有空格)
+    /// - `or(` → `or (` (or 后必须有空格)
+    /// - `)and` → `) and` (and/or 前必须是空格)
+    /// - `)or` → `) or` (and/or 前必须是空格)
+    fn normalize_media_params(params: String) -> String {
+        let chars: Vec<char> = params.chars().collect();
+        let mut result = String::with_capacity(params.len() + 4);
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            // 检查是否是 not/and/or 单词（独立单词，非其他标识符一部分）
+            let word = if c == 'n' || c == 'a' || c == 'o' {
+                let rest: String = chars[i..].iter().take(4).collect();
+                if rest.starts_with("not") && Self::is_word_boundary(chars.get(i + 3)) {
+                    Some("not")
+                } else if rest.starts_with("and") && Self::is_word_boundary(chars.get(i + 3)) {
+                    Some("and")
+                } else if rest.starts_with("or") && Self::is_word_boundary(chars.get(i + 2)) {
+                    Some("or")
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            match word {
+                Some(op) => {
+                    result.push_str(op);
+                    let op_len = op.len();
+                    // 跳过操作符后的已有空格，定位到下一个非空格字符
+                    let mut j = i + op_len;
+                    while j < chars.len() && chars[j] == ' ' {
+                        j += 1;
+                    }
+                    // 如果跳过了空格或下一个是 (，确保有且仅有一个空格
+                    let skipped_spaces = j > i + op_len;
+                    if skipped_spaces || (j < chars.len() && chars[j] == '(') {
+                        result.push(' ');
+                    }
+                    // 跳过所有已处理的字符（操作符 + 空格），下次从 j 继续
+                    i = j;
+                }
+                None => {
+                    // 检查 ) 后是否直接跟 and/or（需要插入空格）
+                    if c == ')' {
+                        result.push(')');
+                        // 跳过 ) 后的已有空格
+                        let mut j = i + 1;
+                        while j < chars.len() && chars[j] == ' ' {
+                            j += 1;
+                        }
+                        // 如果跳过了空格或下一个是 and/or，确保有且仅有一个空格
+                        let skipped_spaces = j > i + 1;
+                        let is_logical = j < chars.len()
+                            && if chars[j] == 'n' || chars[j] == 'a' {
+                                let rest: String = chars[j..].iter().take(4).collect();
+                                rest.starts_with("not") && Self::is_word_boundary(chars.get(j + 3))
+                                    || rest.starts_with("and") && Self::is_word_boundary(chars.get(j + 3))
+                            } else if chars[j] == 'o' {
+                                let rest: String = chars[j..].iter().take(3).collect();
+                                rest.starts_with("or") && Self::is_word_boundary(chars.get(j + 2))
+                            } else {
+                                false
+                            };
+                        if skipped_spaces || is_logical {
+                            result.push(' ');
+                        }
+                        // 跳过所有已处理的字符（) + 空格），下次从 j 继续
+                        i = j;
+                    } else {
+                        result.push(c);
+                        i += 1;
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// 检查给定位置的字符是否为单词边界（空格、括号、字符串结束等）。
+    fn is_word_boundary(c: Option<&char>) -> bool {
+        match c {
+            None => true,
+            Some(ch) => !ch.is_alphanumeric() && *ch != '-' && *ch != '_',
         }
     }
 

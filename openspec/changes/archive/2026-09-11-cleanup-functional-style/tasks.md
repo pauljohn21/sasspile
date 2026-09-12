@@ -40,6 +40,6 @@
 
 ## 7. 提交
 
-- [ ] 7.1 `git add` 所有变更文件
-- [ ] 7.2 `git commit -m "refactor: 清理过程式代码，统一函数式风格 — P0/P1/P2`
+- [x] 7.1 `git add` 所有变更文件 — 29 files staged
+- [x] 7.2 `git commit` — be46c78: "refactor: 清理过程式代码，统一函数式风格 — P0/P1/P2 — 202/202 核心测试通过"
 - [ ] 7.3 通知用户，等待确认后推送

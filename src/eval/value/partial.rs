@@ -233,26 +233,13 @@ impl Evaluator {
             }
             // sass() 函数——求值参数
             Value::Call(name, _args) if name == "sass" => {
-                match env.is_plain_css() {
-                    true => return Err(SassError::Eval(
-                        "sass() conditions aren't allowed in plain CSS".into(),
-                    )),
-                    false => {}
-                }
                 let val = Self::eval_value(condition, env)?;
                 match Self::is_truthy(&val) {
                     true => Ok(PartialCond::True),
                     false => Ok(PartialCond::False),
                 }
             }
-            // 插值——plain CSS 中不允许
             Value::Interp(segments) => {
-                match env.is_plain_css() {
-                    true => return Err(SassError::Eval(
-                        "Interpolation isn't allowed in plain CSS.".into(),
-                    )),
-                    false => {}
-                }
                 let val_str = eval_interp_segments(segments, env);
                 match val_str == "and"
                     || val_str == "or"

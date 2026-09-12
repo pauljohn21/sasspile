@@ -193,11 +193,6 @@ impl Env {
         self
     }
 
-    pub fn with_plain_css(mut self, plain_css: bool) -> Self {
-        self.plain_css = plain_css;
-        self
-    }
-
     pub(crate) fn with_depth(mut self, depth: usize) -> Self {
         self.depth = depth;
         self
@@ -251,10 +246,6 @@ impl Env {
 
     pub(crate) fn get_depth(&self) -> usize {
         self.depth
-    }
-
-    pub(crate) fn is_plain_css(&self) -> bool {
-        self.plain_css
     }
 
     pub(crate) fn get_namespaces(&self) -> &HashMap<String, Rc<ModuleExports>> {

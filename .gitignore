@@ -23,4 +23,7 @@ book/
 # Docs
 docs/superpowers/
 
-# Project-specific (not for version control)tests/spec-store.db
+# Project-specific (not for version control)
+tests/spec-store.db
+tests/spec-store.db-shm
+tests/spec-store.db-wal

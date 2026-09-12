@@ -1,6 +1,6 @@
 //! Sass @规则和 CSS @规则的枚举定义。
 //!
-//! 替代散布在 `at_rules.rs`、`plain_css.rs`、`rule.rs` 中的 &str 字面量比较。
+//! 替代散布在 `at_rules.rs`、`rule.rs` 中的 &str 字面量比较。
 
 /// Sass 内建 @规则种类。
 #[derive(Debug, Clone, PartialEq, Eq)]

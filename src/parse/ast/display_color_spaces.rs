@@ -82,10 +82,10 @@ fn fmt_color_fn(
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
     match alpha_is_opaque(c.a) {
-        true => write!(f, "{name} {} {} {}", format_num(r), format_num(g), format_num(b)),
+        true => write!(f, "{name} {} {} {})", format_num(r), format_num(g), format_num(b)),
         false => write!(
             f,
-            "{name} {} {} {} / {}",
+            "{name} {} {} {} / {})",
             format_num(r),
             format_num(g),
             format_num(b),

@@ -375,8 +375,10 @@ impl Evaluator {
                 let kw_parts: Vec<String> =
                     kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect();
                 parts.extend(kw_parts);
+                // CSS 函数名统一 lowercase（规范要求）
+                let css_name = name.to_lowercase();
                 Ok(Value::String(
-                    format!("{name}({})", parts.join(", ")),
+                    format!("{css_name}({})", parts.join(", ")),
                     false,
                 ))
             }
