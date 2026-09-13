@@ -242,13 +242,15 @@ pub(super) fn build_legacy_color(
 // 构造 HSL/HWB 修改后的 legacy 颜色：同构→保持, 异构+NaN→HSL推导, 异构+整→hex, 异构+分→percent
 pub(super) fn build_channel_modified_color(original: ColorSpace, r: f64, g: f64, b: f64, alpha: f64) -> Color {
     let rgb_int = [r.round(), g.round(), b.round()];
-    let frac = (r - rgb_int[0]).abs() > 1e-9 || (g - rgb_int[1]).abs() > 1e-9 || (b - rgb_int[2]).abs() > 1e-9;
+    let frac = (r - rgb_int[0]).abs() > 0.05 || (g - rgb_int[1]).abs() > 0.05 || (b - rgb_int[2]).abs() > 0.05;
+    tracing::debug!(?original, r, g, b, ?rgb_int, frac, "build_channel_modified_color");
     let nan = r.is_nan() || g.is_nan() || b.is_nan();
     match (original, nan, frac) {
         (ColorSpace::Hsl | ColorSpace::Hwb, _, _) => build_from_input_space(original, r, g, b, alpha, rgb_int),
         (_, true, _) => { let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b); Color::with_hsl(h, s, l, alpha, ColorOutput::Auto, rgb_int) }
         (_, false, false) => Color::with_rgb(rgb_int[0], rgb_int[1], rgb_int[2], alpha, ColorSpace::Rgb, ColorOutput::Auto),
-        (_, false, true) => { let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b); Color::with_space(ColorSpace::Hsl, [h, s, l], alpha, ColorOutput::RgbPercent, rgb_int) }
+        // 分数 RGB → HSL 空间 + RgbPercent 输出（legacy_rgb 保留原始分数值使 legacy_int=false → rgb% 格式）
+        (_, false, true) => { let (h, s, l) = Evaluator::rgb_to_hsl(r, g, b); Color::with_space(ColorSpace::Hsl, [h, s, l], alpha, ColorOutput::RgbPercent, [r, g, b]) }
     }
 }
 
@@ -278,14 +280,25 @@ fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             let h = apply_channel(h_init, kw_args, "hue", angle_deg, |v, d| {
                 (v + d).rem_euclid(360.0)
             });
-            let hw = apply_channel(hw_init, kw_args, "whiteness", percentage, |v, d| {
-                (v + d).clamp(0.0, 1.0)
-            });
-            let hb = apply_channel(hb_init, kw_args, "blackness", percentage, |v, d| {
-                (v + d).clamp(0.0, 1.0)
-            });
+            // 不 clamp——允许负值或 >1；hwb_to_rgb 内部对 W+BK > 1 自动归一化
+            let hw = apply_channel(hw_init, kw_args, "whiteness", percentage, |v, d| v + d);
+            let hb = apply_channel(hb_init, kw_args, "blackness", percentage, |v, d| v + d);
             let (nr, ng, nb, _) = hwb_to_rgb_channels(h, hw, hb, 1.0);
-            (nr, ng, nb)
+            // 溢出检测：hwb_to_rgb 结果超出 [0, 255]（如 W/BK 为负值导致 RGB 超范围）→ HSL 格式
+            let rgb_in_range = (0.0..=255.0).contains(&nr)
+                && (0.0..=255.0).contains(&ng)
+                && (0.0..=255.0).contains(&nb);
+            if !rgb_in_range {
+                // 溢出 → HWB 空间 + Auto（走 hwb_to_hsl_inline 路径，输出 HSL 格式如 hsl(0, 700%, 90%)）
+                return Ok(Value::Color(build_channel_modified_color(
+                    ColorSpace::Hwb, h, hw, hb, alpha,
+                )));
+            }
+            // in-range → RgbPercent 格式（自动处理 hex / percent / rgba alpha）
+            return Ok(Value::Color(Color::with_rgb(
+                nr, ng, nb, alpha,
+                ColorSpace::Rgb, ColorOutput::RgbPercent,
+            )));
         }
         ModifiedSpace::Hsl => {
             let (h_init, s_init, l_init) = match c.space == ColorSpace::Hsl {
@@ -297,21 +310,31 @@ fn adjust_legacy(c: &Color, kw_args: &HashMap<String, Value>) -> Result<Value> {
             let h = apply_channel(h_init, kw_args, "hue", angle_deg, |v, d| {
                 (v + d).rem_euclid(360.0)
             });
-            let s = apply_channel(s_init, kw_args, "saturation", percentage, |v, d| {
-                (v + d).clamp(0.0, 1.0)
-            });
-            let l = apply_channel(l_init, kw_args, "lightness", percentage, |v, d| {
-                (v + d).clamp(0.0, 1.0)
-            });
+            // 不 clamp——S/L 溢出（如 lightness > 100%）将输出 hsl(H%, S%, L%) 格式
+            let s = apply_channel(s_init, kw_args, "saturation", percentage, |v, d| v + d);
+            let l = apply_channel(l_init, kw_args, "lightness", percentage, |v, d| v + d);
             // 同构 HSL 输入 → 直接保持 HSL 输出
             if c.space == ColorSpace::Hsl {
                 return Ok(Value::Color(build_channel_modified_color(
                     c.space, h, s, l, alpha,
                 )));
             }
-            // 异构输入 → hsl→RGB 转换
-            let (nr, ng, nb) = hsl_to_rgb_channels(h, s, l);
-            (nr, ng, nb)
+            // 异构输入 + S > 1 或 L 超出 [0, 1] → 保留 HSL 格式
+            // S < 0 时 clamp 到 0，然后转 RGB（灰色）
+            let s_gt_one = s > 1.0;
+            let l_out_of_range = l < 0.0 || l > 1.0;
+            if c.space != ColorSpace::Hsl && (s_gt_one || l_out_of_range) {
+                return Ok(Value::Color(build_channel_modified_color(
+                    ColorSpace::Hsl, h, s, l, alpha,
+                )));
+            }
+            // 异构输入 + in-range（S < 0 时 clamp 到 0）→ hsl→RGB 转换，输出 RgbPercent
+            let s_clamped = s.max(0.0);
+            let (nr, ng, nb) = hsl_to_rgb_channels(h, s_clamped, l);
+            return Ok(Value::Color(Color::with_rgb(
+                nr, ng, nb, alpha,
+                ColorSpace::Rgb, ColorOutput::RgbPercent,
+            )));
         }
         ModifiedSpace::Rgb => (r, g, b),
     };

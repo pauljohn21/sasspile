@@ -22,6 +22,6 @@
 
 ## 4. Commit & Push
 
-- [ ] 4.1 `git add` 变更文件
-- [ ] 4.2 `git commit -m "feat: round() strategy + trig infinity support — 7837→~7965"`
-- [ ] 4.3 等待用户确认后 `git push origin main`
+- [x] 4.1 `git add` 变更文件
+- [x] 4.2 `git commit -m "feat: round() strategy + trig infinity support — 7837→7883 (+46 net)"`
+- [x] 4.3 等待用户确认后 `git push origin main`
