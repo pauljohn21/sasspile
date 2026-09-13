@@ -26,6 +26,11 @@ impl Evaluator {
             true => return Err(SassError::Eval("Built-in modules can't be configured.".into())),
             false => {}
         }
+        // @forward 不能加载 CSS 文件
+        match !url.starts_with("sass:") && super::module_helpers::is_css_url(url) {
+            true => return Err(SassError::Eval("CSS files can't be @forwarded.".into())),
+            false => {}
+        }
         // @forward 内建模块（sass:xxx）——注册内建模块命名空间
         match url.starts_with("sass:") {
             true => {

@@ -288,7 +288,7 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
     let vfs = Vfs::from_archive(&archive);
     let dirs = vfs.walk();
 
-    // 展平所有 .scss/.css/.sass 文件——加上 HRX 目录前缀
+    // 展平所有源文件——output.css 不写入 VFS（仅作对比目标）。
     let mut all_files: Vec<(String, String)> = dirs
         .iter()
         .flat_map(|(dir_path, files)| {
@@ -307,7 +307,10 @@ pub fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
                 (prefixed, c.clone())
             })
         })
-        .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
+        .filter(|(p, _)| {
+            (p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
+                && !p.ends_with("output.css")
+        })
         .collect();
 
     // 颜色相关目录自动注入 `_utils.scss` 共享模块
@@ -441,7 +444,7 @@ pub fn parse_hrx_legacy(content: &str) -> Vec<ParsedCase> {
     let vfs = Vfs::from_archive(&archive);
     let dirs = vfs.walk();
 
-    // 展平所有文件
+    // 展平所有文件（output.css 是期望输出，不写入 VFS）。
     let all_files: Vec<(String, String)> = dirs
         .iter()
         .flat_map(|(dir_path, files)| {
@@ -455,7 +458,10 @@ pub fn parse_hrx_legacy(content: &str) -> Vec<ParsedCase> {
                 (path, c.clone())
             })
         })
-        .filter(|(p, _)| p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
+        .filter(|(p, _)| {
+            (p.ends_with(".scss") || p.ends_with(".css") || p.ends_with(".sass"))
+                && !p.ends_with("output.css")
+        })
         .collect();
 
     let mut cases = Vec::new();

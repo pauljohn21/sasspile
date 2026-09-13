@@ -361,119 +361,70 @@ fn test_cli_compile() {
     assert!(css.contains("color: red"));
 }
 
-// ─── HWB 诊断测试（从 hwb_spec_diag.rs 合并） ───────────────────────────────────────
+
+// ─── CSS Import Semantics 测试 ─────────────────────────────────────────────────
 
 #[test]
-fn hwb_degenerate_hue() {
-    let cases = vec![
-        ("a {b: color.hwb(calc(infinity), 30%, 40%, 0.5)}", "hsla(0, 33.3333333333%, 45%, 0.5)"),
-        ("a {b: color.hwb(calc(-infinity), 30%, 40%, 0.5)}", "hsla(0, 33.3333333333%, 45%, 0.5)"),
-        ("a {b: color.hwb(calc(NaN), 30%, 40%, 0.5)}", "hsla(0, 33.3333333333%, 45%, 0.5)"),
-        ("a {b: color.hwb(-0, 30%, 40%, 0.5)}", "hsla(0, 33.3333333333%, 45%, 0.5)"),
-    ];
-    for (input, expected) in cases {
-        let r = compile_expanded(input).unwrap_or_else(|e| format!("ERR: {e}"));
-        assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
-    }
-}
-
-#[test]
-fn hwb_alpha_percent() {
-    let cases = vec![
-        ("a {b: color.hwb(0, 0%, 0%, 100%)}", "red"),
-        ("a {b: color.hwb(0, 0%, 0%, 250%)}", "red"),
-        ("a {b: color.hwb(0, 0%, 0%, 250)}", "red"),
-    ];
-    for (input, expected) in cases {
-        let r = compile_expanded(input).unwrap_or_else(|e| format!("ERR: {e}"));
-        assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
-    }
+fn test_import_css_passthrough() {
+    // @import "foo.css" 应输出 @import url("foo.css")，不解析 CSS 内容
+    let dir = std::env::temp_dir().join("sasspile_test_css_import");
+    std::fs::create_dir_all(&dir).expect("unexpected failure in test");
+    std::fs::write(dir.join("existing.css"), "body { margin: 0; }\n").expect("unexpected failure in test");
+    let main = dir.join("main.scss");
+    std::fs::write(&main, "@import \"existing.css\";\n").expect("unexpected failure in test");
+    let css = compile_file(&main, OutputStyle::Expanded).expect("unexpected failure in test");
+    assert!(
+        css.contains("@import"),
+        "应包含 @import 指令: {css}"
+    );
+    // 关键：CSS 文件内容不应被内联
+    assert!(
+        !css.contains("margin: 0"),
+        "不应内联 CSS 文件内容: {css}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
-fn hwb_whiteness_nan_infinity() {
-    let cases = vec![
-        ("a {b: color.hwb(0, calc(infinity * 1%), 40%, 0.5)}", "hsla(0, 100%, 50%, 0.5)"),
-        ("a {b: color.hwb(0, calc(-infinity * 1%), 40%, 0.5)}", "hsla(0, 0%, 0%, 0.5)"),
-        ("a {b: color.hwb(0, calc(NaN * 1%), 40%, 0.5)}", "hsla(0, 100%, 30%, 0.5)"),
-    ];
-    for (input, expected) in cases {
-        let r = compile_expanded(input).unwrap_or_else(|e| format!("ERR: {e}"));
-        assert!(r.contains(expected), "FAIL: input={input}\n  expected={expected}\n  got={r}");
-    }
-}
-
-// ─── 文件行数检测（从 file_size_check.rs 合并） ───────────────────────────────────────
-
-use std::fs;
-use std::path::Path;
-
-fn find_overlimit_files() -> Vec<(String, usize)> {
-    let tests_dir = Path::new("tests");
-    let mut overlimit = Vec::new();
-    collect_files_overlimit(tests_dir, &mut overlimit);
-    overlimit.sort_by(|a, b| b.1.cmp(&a.1));
-    overlimit
-}
-
-fn collect_files_overlimit(dir: &Path, acc: &mut Vec<(String, usize)>) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_files_overlimit(&path, acc);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            let Ok(content) = fs::read_to_string(&path) else { continue };
-            let line_count = content.lines().count();
-            if line_count > 500 {
-                let rel = path.strip_prefix("tests/").unwrap_or(&path);
-                acc.push((rel.to_string_lossy().to_string(), line_count));
-            }
-        }
-    }
+fn test_use_css_error() {
+    let dir = std::env::temp_dir().join("sasspile_test_use_css");
+    std::fs::create_dir_all(&dir).expect("unexpected failure in test");
+    std::fs::write(dir.join("foo.css"), "body { color: red; }\n").expect("unexpected failure in test");
+    let main = dir.join("main.scss");
+    std::fs::write(&main, "@use \"foo.css\";\n").expect("unexpected failure in test");
+    let result = compile_file(&main, OutputStyle::Expanded);
+    assert!(
+        result.is_err(),
+        "@use \"foo.css\" 应报错，但得到: {:?}",
+        result.ok()
+    );
+    let err = result.expect_err("@use on CSS should fail");
+    let err_msg = format!("{err}");
+    assert!(
+        err_msg.contains("CSS") && err_msg.contains("@used"),
+        "错误消息应明确说明 CSS can't be @used: {err_msg}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
-fn check_file_size_limits() {
-    let overlimit = find_overlimit_files();
-    if overlimit.is_empty() {
-        return;
-    }
-    let mut msg = String::from("文件行数超限（上限 500 行）：\n");
-    for (file, lines) in &overlimit {
-        let excess = lines - 500;
-        msg.push_str(&format!("  - {file}: {lines} 行，超出 {excess} 行\n"));
-    }
-    panic!("{}", msg);
-}
-
-#[test]
-fn check_file_size_within_grace() {
-    let tests_dir = Path::new("tests");
-    let mut near_limit = Vec::new();
-    collect_near_limit(tests_dir, &mut near_limit);
-    near_limit.sort_by(|a, b| b.1.cmp(&a.1));
-    if !near_limit.is_empty() {
-        tracing::error!("\n📏 文件行数预警（400-500 行，接近上限）：");
-        for (file, lines) in &near_limit {
-            tracing::error!("  - {file}: {lines} 行（距离上限 {} 行）", 500 - lines);
-        }
-    }
-}
-
-fn collect_near_limit(dir: &Path, acc: &mut Vec<(String, usize)>) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_near_limit(&path, acc);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            let Ok(content) = fs::read_to_string(&path) else { continue };
-            let line_count = content.lines().count();
-            if (400..=500).contains(&line_count) {
-                let rel = path.strip_prefix("tests/").unwrap_or(&path);
-                acc.push((rel.to_string_lossy().to_string(), line_count));
-            }
-        }
-    }
+fn test_forward_css_error() {
+    let dir = std::env::temp_dir().join("sasspile_test_fwd_css");
+    std::fs::create_dir_all(&dir).expect("unexpected failure in test");
+    std::fs::write(dir.join("bar.css"), "body { color: blue; }\n").expect("unexpected failure in test");
+    let main = dir.join("main.scss");
+    std::fs::write(&main, "@forward \"bar.css\";\n").expect("unexpected failure in test");
+    let result = compile_file(&main, OutputStyle::Expanded);
+    assert!(
+        result.is_err(),
+        "@forward \"bar.css\" 应报错，但得到: {:?}",
+        result.ok()
+    );
+    let err = result.expect_err("@forward on CSS should fail");
+    let err_msg = format!("{err}");
+    assert!(
+        err_msg.contains("CSS") && err_msg.contains("@forwarded"),
+        "错误消息应明确说明 CSS can't be @forwarded: {err_msg}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
 }

@@ -16,6 +16,13 @@ use std::path::Path;
 use crate::eval::env::FunctionDef;
 use crate::parse::ast::Param;
 
+/// 检查 URL 是否为 CSS 文件（用于 @use / @forward 拒绝逻辑）。
+pub(crate) fn is_css_url(url: &str) -> bool {
+    Path::new(url)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("css"))
+}
+
 /// Placeholder def for a builtin function (body empty — dispatched by Rust code).
 fn builtin_fn_def(name: &str) -> FunctionDef {
     FunctionDef {

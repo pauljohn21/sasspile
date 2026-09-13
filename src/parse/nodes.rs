@@ -1,7 +1,7 @@
 //! 节点解析——`ParseStream` 的 `&mut self` 方法。
 //!
 //! 所有解析方法消费 token 自然推进 pos。
-//! 与 `tokio_stream::Stream::poll_next(Pin<&mut Self>, _)` 同态。
+//! 通过 `Iterator::next(&mut self)` 驱动。
 
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;

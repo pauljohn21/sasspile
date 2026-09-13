@@ -68,9 +68,13 @@ pub struct Reactor<S = StateRaw> {
     tokens: Option<Vec<Token>>,
     ast: Option<Ast>,
     serialized: Option<String>,
-    env: Option<Env>,
+    imports_seen: Vec<PathBuf>,
+    css_nodes: Vec<CssNode>,
+    trace: ReactorTrace,
     _state: PhantomData<S>,
 }
+
+// IO 层: src/runtime.rs — 全局 tokio runtime + block_on 桥接
 
 // 状态标记（零大小类型）
 pub struct StateRaw;
@@ -99,24 +103,44 @@ sasspile/
 ├── src/
 │   ├── lib.rs                   ── 公共 API（管线入口）
 │   ├── main.rs                  ── CLI
+│   ├── runtime.rs               ── Tokio 全局运行时 + block_on 桥接
 │   │
 │   ├── lex/                     ── 词法分析
 │   │   ├── mod.rs               ── Lexer（迭代器实现）
 │   │   └── token.rs             ── Token 定义
 │   │
+│   ├── runtime.rs               ── Tokio 全局运行时 + block_on 桥接
+│   │
 │   ├── parse/                   ── 语法分析
-│   │   ├── mod.rs               ── Parser（递归下降）
-│   │   ├── ast.rs               ── AST 定义
-│   │   └── selector.rs          ── 选择器解析
+│   │   ├── mod.rs               ── Parser（Iterator 模式）
+│   │   ├── ast/                 ── AST + color_types + display
+│   │   ├── ast_impl.rs          ── AST 实现（to_scss 等）
+│   │   ├── at_rules.rs          ── @规则 解析
+│   │   ├── expr/                ── 表达式解析
+│   │   └── nodes.rs             ── 节点解析辅助
 │   │
 │   ├── eval/                    ── 求值 + 管线类型状态机
-│   │   ├── mod.rs               ── Evaluator + Reactor 公开入口
+│   │   ├── mod.rs               ── Evaluator + eval_nodes
 │   │   ├── reactor.rs           ── Reactor<S>（lex/parse/evaluate/serialize 管线）
-│   │   ├── env.rs               ── Env/Scope 类型定义
-│   │   ├── env_impl.rs          ── Env 方法实现
-│   │   ├── scope.rs             ── Scope 结构
-│   │   ├── builtin/             ── 内建函数 (color/string/list/map/math/...)
-│   │   └── value/               ── 值类型 (Value + calc)
+│   │   ├── env.rs               ── Env/Scope/ModuleExports 类型定义
+│   │   ├── env_impl.rs          ── Env 方法（链式 self -> Self）
+│   │   ├── scope.rs             ── Scope 结构 + HashMap 7 字段
+│   │   ├── module.rs            ── @use/@forward + load_module（tokio::fs 异步）
+│   │   ├── import.rs            ── @import + load_import
+│   │   ├── forward.rs           ── @forward 模块转发
+│   │   ├── rule.rs              ── Rule 求值
+│   │   ├── control_flow.rs      ── @if/@for/@each/@while
+│   │   ├── mixin.rs             ── @mixin/@include
+│   │   ├── extend.rs            ── @extend 后处理
+│   │   ├── at_params.rs         ── @media/@supports 参数
+│   │   ├── file_resolver.rs     ── 文件解析 + 冲突检测
+│   │   ├── module_helpers.rs    ── bind_exports + merge_module_cache
+│   │   ├── module_dispatch.rs   ── 内建函数注册 #[derive(BuiltinRegistry)]
+│   │   ├── plain_css.rs         ── plain CSS 模式检查
+│   │   ├── builtin.rs           ── call_builtin 分派入口
+│   │   ├── meta_ops.rs          ── meta.apply / meta.load-css
+│   │   ├── builtin/             ── 内建函数子模块
+│   │   └── value/               ── 值类型 (Value + ops + display)
 │   │
 │   ├── css/                     ── CSS 生成
 │   │   ├── mod.rs               ── Serializer
@@ -323,8 +347,9 @@ impl Reactor<StateRaw> {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Reactor {
             text: self.text, base_path: self.base_path, load_paths: self.load_paths,
-            tokens: Some(tokens), ast: None, serialized: None, env: None,
-            io: self.io, trace: self.trace, _state: PhantomData,
+            tokens: Some(tokens), ast: None, serialized: None,
+            imports_seen: vec![], css_nodes: vec![],
+            trace: self.trace, _state: PhantomData,
         })
     }
 }
@@ -376,8 +401,9 @@ impl Reactor<StateLexed> {
         let ast = Parser::new(self.tokens.unwrap_or_default()).parse()?;
         Ok(Reactor {
             text: self.text, base_path: self.base_path, load_paths: self.load_paths,
-            tokens: self.tokens, ast: Some(ast), serialized: None, env: None,
-            io: self.io, trace: self.trace, _state: PhantomData,
+            tokens: self.tokens, ast: Some(ast), serialized: None,
+            imports_seen: vec![], css_nodes: vec![],
+            trace: self.trace, _state: PhantomData,
         })
     }
 }
@@ -460,11 +486,12 @@ impl Evaluator {
 impl Reactor<StateParsed> {
     pub fn evaluate(self) -> Result<Reactor<StateEvaluated>> {
         let ast = self.ast.unwrap_or_default();
-        let nodes = Evaluator::evaluate_with_env(ast, self.env.unwrap_or_default())?;
+        let (nodes, env) = Evaluator::evaluate_with_env(ast)?;
         Ok(Reactor {
             text: self.text, base_path: self.base_path, load_paths: self.load_paths,
-            tokens: self.tokens, ast: self.ast, serialized: None, env: self.env,
-            io: self.io, trace: self.trace, _state: PhantomData,
+            tokens: self.tokens, ast: self.ast, serialized: None,
+            imports_seen: vec![], css_nodes: nodes,
+            trace: self.trace, _state: PhantomData,
         })
     }
 }
@@ -513,12 +540,12 @@ impl Serializer {
 // Reactor serialize: Reactor<StateEvaluated> → Reactor<StateSerialized>
 impl Reactor<StateEvaluated> {
     pub fn serialize(self, style: OutputStyle) -> Reactor<StateSerialized> {
-        let nodes = self.nodes_or_default();
-        let css = Serializer::new(style).serialize(&nodes);
+        let css = Serializer::new(style).serialize(&self.css_nodes);
         Reactor {
             text: self.text, base_path: self.base_path, load_paths: self.load_paths,
-            tokens: self.tokens, ast: self.ast, serialized: Some(css), env: self.env,
-            io: self.io, trace: self.trace, _state: PhantomData,
+            tokens: self.tokens, ast: self.ast, serialized: Some(css),
+            imports_seen: vec![], css_nodes: vec![],
+            trace: self.trace, _state: PhantomData,
         }
     }
 }
@@ -667,13 +694,24 @@ Milestone 6: 完整 sass-spec
 ```toml
 [package]
 name = "sasspile"
-version = "0.2.0"
+version = "0.9.8"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.85"
 
 [dependencies]
 thiserror = "2"
-im = "15"              # 不可变 HashMap
+tokio = { version = "1", features = ["rt-multi-thread", "fs"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-opentelemetry = { version = "0.28", optional = true }
+opentelemetry = { version = "0.28", optional = true }
+opentelemetry_sdk = { version = "0.28", features = ["trace"], optional = true }
+opentelemetry-stdout = { version = "0.28", features = ["trace"], optional = true }
+
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
+otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:tracing-opentelemetry"]
 
 [dev-dependencies]
 insta = "1"            # 快照测试

@@ -37,7 +37,7 @@
 //! ## 核心概念
 //! - `Reactor<S>` 通过泛型参数 S 编码管线阶段
 //! - 消费-返回 API 保证无隐式共享状态
-//! - IO 通过 `ReactorIO` trait 显式化
+//! - IO 通过全局 tokio runtime + block_on 异步化
 //!
 //! ## 管线流程
 //!

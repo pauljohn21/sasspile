@@ -2,9 +2,10 @@ use super::*;
 use crate::error::{Result, SassError};
 use crate::lex::Lexer;
 use crate::lex::token::Token;
+use crate::runtime::block_on;
 use std::path::Path;
 
-use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache};
+use super::module_helpers::{BindMode, FilterConfig, bind_exports, merge_module_cache, is_css_url};
 
 impl Evaluator {
     /// 递归收集 AST 中所有 !global 变量名
@@ -133,7 +134,7 @@ impl Evaluator {
             },
             false => {}
         }
-        let source = std::fs::read_to_string(path)
+        let source = block_on(tokio::fs::read_to_string(path))
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
         let tokens: Vec<Token> = Lexer::new(&source)
@@ -284,7 +285,7 @@ impl Evaluator {
             true => return Ok((vec![], caller_env)),
             false => {}
         }
-        let source = std::fs::read_to_string(path)
+        let source = block_on(tokio::fs::read_to_string(path))
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
         let tokens: Vec<Token> = Lexer::new(&source)
@@ -393,6 +394,11 @@ impl Evaluator {
                 "Can't find stylesheet to import: {url}"
             ))),
             _ => {}
+        }
+        // @use 不能加载 CSS 文件
+        match !url.starts_with("sass:") && is_css_url(url) {
+            true => return Err(SassError::Eval("CSS files can't be @used.".into())),
+            false => {}
         }
         match (!url.starts_with("sass:"), namespace.is_none(), !star) {
             (true, true, true) => {

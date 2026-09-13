@@ -139,11 +139,12 @@ pub mod error;
 pub mod eval;
 pub mod lex;
 pub mod parse;
+mod runtime;
 
 pub use error::{Result, SassError, Span};
 pub use eval::Evaluator;
 pub use eval::reactor as ReactorModule;
-pub use eval::reactor::{Reactor, ReactorIO, ReactorSnapshot, ReactorTrace, CompileStage};
+pub use eval::reactor::{Reactor, ReactorSnapshot, ReactorTrace, CompileStage};
 pub use lex::Lexer;
 pub use parse::{parse as parse_scss, ast::Ast};
 

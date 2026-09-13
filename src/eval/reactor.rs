@@ -1,10 +1,9 @@
-//! Reactor —— 编译世界的完整显式快照。
+//! Reactor —— 编译管线类型状态机。
 //!
 //! 消费-返回 API 保证:
 //! 1. 无隐式共享状态
-//! 2. IO 通过 `ReactorIO` trait 显式化
-//! 3. 单阶段 mock 可测试
-//! 4. 每个管线阶段自动创建 OTel span 形成链式追踪
+//! 2. 单阶段可测试
+//! 3. 每个管线阶段自动创建 OTel span 形成链式追踪
 //!
 //! # 管线流程
 //!
@@ -17,22 +16,21 @@ use crate::error::{Result, SassError};
 use crate::eval::env::Env;
 use crate::lex::token::Token;
 use crate::parse::ast::Ast;
+use crate::runtime::block_on;
 use crate::OutputStyle;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 pub use super::reactor_types::*;
 
 // ─── Reactor 类型 ───
 
-/// Reactor —— 编译世界的完整显式快照。
+/// Reactor —— 编译管线类型状态机。
 ///
 /// 通过泛型参数 `S` 编码管线阶段，保证编译顺序不可颠倒。
 #[derive(Clone)]
 pub struct Reactor<S = StateRaw> {
-    /// 原始源码文本。
+    /// 原始源码文本 (lex 后由 Some → None 释放)。
     text: String,
     /// 源文件路径 (用于 @use/@import)。
     base_path: Option<PathBuf>,
@@ -46,22 +44,10 @@ pub struct Reactor<S = StateRaw> {
     /// 序列化后的 CSS 字符串。
     serialized: Option<String>,
 
-    /// 求值环境 —— 持久化作用域链。
-    env: Option<Env>,
-    /// 已编译模块缓存。
-    modules: HashMap<PathBuf, ModuleCacheEntry>,
     /// 已访问文件（循环检测）。
     imports_seen: Vec<PathBuf>,
-    /// IO 审计日志 (调试用)。
-    io_log: Vec<IoRecord>,
-
     /// CSS 产物累积。
     pub css_nodes: Vec<CssNode>,
-    /// 编译警告。
-    pub warnings: Vec<Warning>,
-
-    /// IO 抽象 —— trait object, 可 mock。
-    io: Arc<dyn ReactorIO>,
 
     /// OTel 追踪上下文。
     trace: ReactorTrace,
@@ -105,13 +91,8 @@ impl Reactor<StateRaw> {
             tokens: None,
             ast: None,
             serialized: None,
-            env: None,
-            modules: HashMap::new(),
             imports_seen: vec![],
-            io_log: vec![],
             css_nodes: vec![],
-            warnings: vec![],
-            io: Arc::new(DefaultReactorIO::new(vec![])),
             trace: ReactorTrace::new(),
             _state: std::marker::PhantomData,
         }
@@ -122,7 +103,7 @@ impl Reactor<StateRaw> {
     /// # Errors
     /// 如果文件不存在或读取失败，返回 IO 错误。
     pub fn from_file(path: &PathBuf) -> Result<Self> {
-        let text = std::fs::read_to_string(path)?;
+        let text = block_on(tokio::fs::read_to_string(path))?;
         Ok(Self {
             text,
             base_path: Some(path.clone()),
@@ -130,21 +111,11 @@ impl Reactor<StateRaw> {
             tokens: None,
             ast: None,
             serialized: None,
-            env: None,
-            modules: HashMap::new(),
             imports_seen: vec![],
-            io_log: vec![],
             css_nodes: vec![],
-            warnings: vec![],
-            io: Arc::new(DefaultReactorIO::new(vec![])),
             trace: ReactorTrace::new(),
             _state: std::marker::PhantomData,
         })
-    }
-
-    /// 注入 IO 实现 —— 消费 self 返回新 Reactor (用于 mock 测试)。
-    pub fn with_io(self, io: Arc<dyn ReactorIO>) -> Self {
-        Self { io, ..self }
     }
 
     /// 设置加载路径。
@@ -191,13 +162,8 @@ impl Reactor<StateRaw> {
             tokens: Some(tokens),
             ast: None,
             serialized: None,
-            env: None,
-            modules: self.modules,
             imports_seen: self.imports_seen,
-            io_log: self.io_log,
             css_nodes: vec![],
-            warnings: vec![],
-            io: self.io,
             trace: self.trace.advance(CompileStage::Lex),
             _state: std::marker::PhantomData,
         })
@@ -233,13 +199,8 @@ impl Reactor<StateLexed> {
             tokens: None,
             ast: Some(ast),
             serialized: None,
-            env: None,
-            modules: self.modules,
             imports_seen: self.imports_seen,
-            io_log: self.io_log,
             css_nodes: vec![],
-            warnings: vec![],
-            io: self.io,
             trace: self.trace.advance(CompileStage::Parse),
             _state: std::marker::PhantomData,
         })
@@ -266,8 +227,7 @@ impl Reactor<StateParsed> {
             env = env.with_load_paths(self.load_paths.clone());
         }
 
-        let nodes =
-            crate::eval::scss_evaluator::ScssEvaluator::evaluate_with_env(&ast, env.clone())?;
+        let nodes = crate::eval::Evaluator::evaluate_with_env(&ast, env)?;
 
         #[cfg(feature = "tracing")]
         let n_nodes = nodes.len();
@@ -287,13 +247,8 @@ impl Reactor<StateParsed> {
             tokens: None,
             ast: None,
             serialized: None,
-            env: Some(Env::default()),
-            modules: self.modules,
             imports_seen: self.imports_seen,
-            io_log: self.io_log,
             css_nodes: nodes,
-            warnings: vec![],
-            io: self.io,
             trace: self.trace.advance(CompileStage::Evaluate),
             _state: std::marker::PhantomData,
         })
@@ -330,13 +285,8 @@ impl Reactor<StateEvaluated> {
             tokens: None,
             ast: None,
             serialized: Some(css),
-            env: self.env,
-            modules: self.modules,
             imports_seen: self.imports_seen,
-            io_log: self.io_log,
             css_nodes: self.css_nodes,
-            warnings: self.warnings,
-            io: self.io,
             trace: self.trace.advance(CompileStage::Serialize),
             _state: std::marker::PhantomData,
         }
@@ -383,19 +333,11 @@ impl<S> Reactor<S> {
         &self.trace
     }
 
-    /// 获取 IO 审计日志。
-    pub fn io_log(&self) -> &[IoRecord] {
-        &self.io_log
-    }
-
-    /// 滚动到 Reactor 内部状态快照 —— 测试用。
+    /// 返回 Reactor 状态快照 —— 测试用。
     pub fn snapshot(&self) -> ReactorSnapshot {
         ReactorSnapshot {
             stage: self.trace.stage,
             n_css_nodes: self.css_nodes.len(),
-            n_warnings: self.warnings.len(),
-            n_io_ops: self.io_log.len(),
-            n_modules_cached: self.modules.len(),
         }
     }
 }
@@ -405,12 +347,9 @@ impl<S> Reactor<S> {
 pub struct ReactorSnapshot {
     pub stage: CompileStage,
     pub n_css_nodes: usize,
-    pub n_warnings: usize,
-    pub n_io_ops: usize,
-    pub n_modules_cached: usize,
 }
 
-// ─── 便捷入口 (公开 API) ───
+// ─── 便捷入口 (内部 API, async) ───
 
 /// 通过 Reactor 管线编译 SCSS 源码为 CSS 字符串。
 ///
@@ -448,11 +387,3 @@ pub fn compile_file_with_load_paths(
         .serialize(style)
         .finish()
 }
-
-// ─── 模块导入 / 重新导出 ───
-
-pub use super::reactor_types::StateRaw as ReactorRaw;
-pub use super::reactor_types::StateLexed as ReactorLexed;
-pub use super::reactor_types::StateParsed as ReactorParsed;
-pub use super::reactor_types::StateEvaluated as ReactorEvaluated;
-pub use super::reactor_types::StateSerialized as ReactorSerialized;

@@ -61,19 +61,30 @@ impl Evaluator {
         // @import 文件歧义检测
         Self::check_resolve_ambiguity(base, url, &load_paths)?;
         if let Some(path) = Self::resolve_file_import(base, url, &load_paths) {
-            // 保存父选择器状态（env 在 load_import 中被 move）
-            let parent_selector = env.get_selector().map(String::from);
-            // 仅对 CSS 文件应用选择器组合——SCSS 文件有自己的作用域语义
-            let is_css_file = path.extension().and_then(|e| e.to_str()) == Some("css");
-            let (css, env) = Self::load_import(&path, env)?;
-            // CSS 文件在规则体内被 @import 时，将导入规则的选择器与父选择器组合
-            return match (parent_selector, is_css_file) {
-                (Some(parent), true) => {
-                    let combined = Self::nest_rule_in_children(&parent, css);
-                    Ok((combined, env))
+            // 路径解析后再次检查后缀：resolve 返回的 .css 文件不应走 SCSS 管线。
+            // 即使 URL 匹配了 is_css 检测，当 resolve 找到磁盘文件时仍需确认：
+            // @import "existing.css" 应生成 @import url(...) 节点，不调用 load_import。
+            let path_is_css = path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("css"));
+            match path_is_css {
+                true => {
+                    let params = format!("\"{}\"", path.display());
+                    return Ok((
+                        vec![CssNode::AtRule {
+                            name: "import".to_string(),
+                            params: Some(params),
+                            children: vec![],
+                            has_body: false,
+                        }],
+                        env,
+                    ));
                 }
-                _ => Ok((css, env)),
-            };
+                false => {}
+            }
+            // 保存父选择器状态（env 在 load_import 中被 move）
+            let (css, env) = Self::load_import(&path, env)?;
+            return Ok((css, env));
         }
         let is_unresolved_scss = !(Path::new(url)
             .extension()

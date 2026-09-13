@@ -1,20 +1,15 @@
 //! —— 语法分析器 ——
 //!
-//! ## tokio-stream 设计
-//!
-//! parse 模块使用 `tokio_stream::Stream<Item = Result<Node>>` trait。
-//! 每个 `poll_next(Pin<&mut Self>, _)` 消费一个 Node，内部 pos 自动推进。
+//! ParseStream 实现 `Iterator<Item = Result<Node>>`，消费 token 流产出 AST 节点。
 //!
 //! ```text
 //! ParseStream::new(tokens)
 //!     │
-//!     .poll_next()  →  Option<Result<Node>>
-//!     │                  ├── None = 流结束
-//!     │                  └── Some(Result<Node>)
-//!     │
-//! futures::executor::block_on_stream(stream)
-//!     │
-//!     .try_collect::<Vec<_>>()?
+//!     .next()  →  Option<Result<Node>>
+//!     │              ├── None = 流结束
+//!     │              └── Some(Result<Node>)
+//!
+//! .collect::<Result<Vec<_>>>()
 //!     │
 //!     Vec<Node> → Ast { nodes }
 //! ```
@@ -22,9 +17,6 @@
 pub mod ast;
 mod ast_impl;
 pub mod at_rule_kinds;
-
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 use crate::error::Result;
 use crate::lex::token::Token;
@@ -34,12 +26,12 @@ use ast::*;
 pub type Parsed = Ast;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ParseStream —— tokio_stream::Stream 实现
+// ParseStream —— Iterator 实现
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 节点流——消费 token 流产出 Node 的 Stream。
+/// 节点迭代器——消费 token 流产出 Node 的 Iterator。
 ///
-/// 内部位置推进自然发生，外部只需 `poll_next` 驱动。
+/// 内部位置推进自然发生，外部只需 `next()` 驱动。
 pub struct ParseStream<'tok> {
     tokens: &'tok [Token],
     pos: usize,
@@ -120,25 +112,18 @@ impl<'tok> ParseStream<'tok> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Stream trait 实现
+// Iterator trait 实现
 // ═══════════════════════════════════════════════════════════════════════════
 
-impl<'tok> tokio_stream::Stream for ParseStream<'tok> {
+impl<'tok> Iterator for ParseStream<'tok> {
     type Item = Result<Node>;
 
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = &mut *self.get_mut();
-        this.skip_ws();
-        if this.at_end() {
-            return Poll::Ready(None);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.skip_ws();
+        if self.at_end() {
+            return None;
         }
-        Poll::Ready(Some(this.parse_node()))
-    }
-}
-
-impl<'tok> futures::stream::FusedStream for ParseStream<'tok> {
-    fn is_terminated(&self) -> bool {
-        self.at_end()
+        Some(self.parse_node())
     }
 }
 
@@ -152,9 +137,8 @@ pub struct Parser;
 impl Parser {
     /// 解析入口——消费 token 流，产出 AST。
     pub fn parse(tokens: &[Token]) -> Result<Ast> {
-        let stream = ParseStream::new(tokens);
-        let iter = futures::executor::block_on_stream(stream);
-        iter.collect::<std::result::Result<Vec<_>, _>>()
+        ParseStream::new(tokens)
+            .collect::<std::result::Result<Vec<_>, _>>()
             .map(|nodes| Ast { nodes })
     }
 }

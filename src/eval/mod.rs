@@ -17,7 +17,6 @@ use crate::parse::ast::*;
 use std::path::PathBuf;
 
 pub(crate) use env::{Env, FunctionDef, MixinDef, ModuleExports};
-pub use scss_evaluator::ScssEvaluator;
 // 子模块通过 `use super::*` 获取这些类型
 pub(crate) use imbl::{HashMap, HashSet};
 pub(crate) use std::rc::Rc;
@@ -345,7 +344,6 @@ fn eval_error_node(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 
 mod at_params;
 mod builtin;
-pub mod scss_evaluator;
 mod color;
 mod color_names;
 mod control_flow;

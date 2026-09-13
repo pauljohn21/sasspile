@@ -439,14 +439,18 @@ Reactor<StateEvaluated>.serialize() → Reactor<StateSerialized>
 Reactor<StateSerialized>.finish()  → Result<String>
 ```
 
-**Reactor 内部字段**:
-- `text: String` — 原始源码
+**Reactor 内部字段** (9 个):
+- `text: String` — 原始源码 (lex 后清空)
 - `base_path: Option<PathBuf>` — 源文件路径
 - `load_paths: Vec<PathBuf>` — 模块搜索路径
-- `tokens: Option<Vec<Token>>` — 词法产物（lex 后填充）
-- `ast: Option<Ast>` — 语法产物（parse 后填充）
-- `serialized: Option<String>` — CSS 字符串（serialize 后填充）
-- `env: Option<Env>` — 求值环境（evaluate 后填充）
+- `tokens: Option<Vec<Token>>` — 词法产物
+- `ast: Option<Ast>` — 语法产物
+- `serialized: Option<String>` — CSS 字符串
+- `imports_seen: Vec<PathBuf>` — 循环检测
+- `css_nodes: Vec<CssNode>` — CSS 累积产物
+- `trace: ReactorTrace` — OTel 追踪上下文
+
+**IO 层**: 全局 tokio runtime (`src/runtime.rs`), `block_on` 桥接异步文件读 (`tokio::fs`)
 
 每个管线方法直接调用底层组件（`Lexer` / `Parser` / `Evaluator::evaluate_with_env` / `Serializer`），不再通过中间 stage 类型委托。
 
@@ -468,14 +472,14 @@ Reactor<StateSerialized>.finish()  → Result<String>
 ## 验证清单（修复后必跑）
 
 ```bash
-cargo test --test compile_test    # 57 个（含 14 个 CSS Color Level 4 色彩空间测试）
-cargo test --test stage_test      # 10 个
+cargo test --test compile_test    # 46 个
+cargo test --test reactor_test    # 14 个
+cargo test --test stage_test      # 8 个
 cargo test --test ast_test        # 8 个
 cargo test --test common_test     # 5 个
 cargo test --test interp_test     # 15 个
 cargo test --test bs_spec -- --nocapture    # 15 个
-cargo test --test ep_full -- --nocapture    # 121 个（约 38 秒）
-cargo test --test default_config_test -- --test-threads=1  # 9 个
+cargo test --test ep_full -- --nocapture    # 121 个
 
 # sass-spec 全量统计（约 4 分钟）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
@@ -487,8 +491,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 ```
 
-**通过标准**：48/48 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 243/243
-**sass-spec 基线**：7444/11869 = 62.7%（含 color 目录，跳过 libsass 不支持目录）
+**通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
+**sass-spec 基线**：7592/12133 = 62%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -528,6 +532,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **tokio-internal-async**（2026-09-13）：对内异步对外同步架构 — 引入 tokio runtime (block_on 桥接) + 清理 Reactor 死字段 (14→9) + 删除 6 死类型 (ReactorIO/Warning/IoRecord/ModuleCacheEntry/DefaultReactorIO/MockReactorIO) + Parser 回归 Iterator — sass-spec 7444→7592 (+148)
 - **spec-store**（2026-09-10）：sass-spec SQLite 数据管理工具 — 取代 `failures_json.rs` + `sass_spec_stats.rs`，用 SQLite WAL 存储 case 结果/快照/Delta，集成统计/趋势/桥接/回归定位，12131 个 case 入库
 - **tests-cleanup**（2026-09-10）：测试架构清理合 — 15 个诊断文件合并为 `diag_helper.rs` + `diagnostic_runner.rs` + `diag_color.rs`，单文件 ≤ 500 行合规
 - **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON、format! 内联变量、let...else 重写、items_after_statements 修复 — cargo clippy 零错误，核心测试全通过

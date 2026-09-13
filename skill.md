@@ -32,6 +32,14 @@ Reactor::new(input)       → Reactor<StateRaw>       (源码包装)
 
 `Reactor<S>` 通过泛型参数 `S` 编码管线阶段，保证编译顺序不可颠倒。内部字段 `tokens`/`ast`/`serialized` 均为 `Option<T>`，在对应管线阶段填充。每个管线方法直接调用底层组件（`Lexer` / `Parser` / `Evaluator::evaluate_with_env` / `Serializer`）。
 
+### Tokio 运行时 (`src/runtime.rs`)
+
+- `RUNTIME: OnceLock<Runtime>` — 全局 multi-thread runtime，lazy 初始化
+- `block_on<F: Future>(future: F) -> F::Output` — 桥接异步 IO 到同步 API
+- feature: `tokio = { version = "1", features = ["rt-multi-thread", "fs"] }`
+- `load_module` / `load_import` 使用 `tokio::fs::read_to_string` 异步读文件
+- 公开 API (`compile` / `compile_file`) 保持同步签名，内部 `block_on` 驱动
+
 ### 入口函数 (`src/lib.rs`)
 
 | 函数 | 输入 | 输出 | 用途 |
@@ -143,7 +151,7 @@ src/eval/
 ├── mixin.rs            # @mixin/@include + exec_mixin（pub(crate)）
 ├── extend.rs           # @extend 后处理
 ├── at_params.rs        # @media/@supports 参数插值和表达式求值
-├── module.rs           # @use/@forward + call_module_function + load_module（module_cache 缓存 + pending_config + extends 传播）+ load_import（forwarded→local 合并）
+├── module.rs           # @use/@forward + call_module_function + load_module（tokio::fs 异步读 + module_cache 缓存 + pending_config + extends 传播）+ load_import
 ├── file_resolver.rs    # resolve_file + try_resolve_dir + check_resolve_ambiguity（partial/extension/index/import-only 四种冲突检测）
 ├── module_helpers.rs   # bind_exports（BindMode Use/Forward + show/hide 过滤 + values_eq + Display 后备）+ merge_module_cache + builtin_module_exports + BindMode + FilterConfig
 ├── module_dispatch.rs # 内建函数注册结构体 + #[derive(BuiltinRegistry)] 宏单一数据源

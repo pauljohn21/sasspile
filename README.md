@@ -9,7 +9,7 @@
 
 纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
 
-> **v0.9.8** — clippy-cleanup 全量清理（unwrap→expect, eprintln→tracing, float_cmp, format! 内联）+ cf-noncolor-boost（list/math/meta 修复）— sass-spec 基线 7365/12131 (62%), ep_full 121/121 (100%).
+> **v0.9.8** — tokio-internal-async (对内异步对外同步) + 死代码清理 (Reactor 14→9 字段, 删 6 死类型) + Parser 回归 Iterator — sass-spec 基线 7592/12133 (62%), ep_full 121/121 (100%).
 
 sasspile 是一个从零实现的 SCSS 编译器，采用 Rust 所有权管线。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 move 语义实现零 clone 的数据流。
 
@@ -26,7 +26,7 @@ Reactor::from_file(&path)?
 ## 特性
 
 - **类型状态机管线**: `Reactor<StateRaw> → StateLexed → StateParsed → StateEvaluated → StateSerialized`
-- **Reactor 架构**: 单类型 + 泛型状态参数编码管线阶段 + ReactorIO trait (测试可模拟) + ReactorTrace OTel 集成
+- **Reactor 架构**: 单类型 + 泛型状态参数编码管线阶段 + ReactorTrace OTel 集成 + tokio runtime (IO 层异步)
 - **纯函数式风格**: Iterator + fold + 不可变数据
 - **零依赖核心**: 纯 Rust 实现，无外部 C 库（color crate 仅用于参考）
 - **sass-spec 兼容**: 7365/12131 (62%) 全量通过（内联 hrx_support 模块，非隔离模式 + 路径前缀），core_functions/color 已跳过（需 `--ignored` 手动触发）
@@ -170,12 +170,12 @@ Level 4：`is-powerless`/`is-in-gamut`/`is-legacy`/`to-space`/`to-gamut`/`channe
 
 ```bash
 # 核心测试
-cargo test --test compile_test      # 48 个
-cargo test --test compile_color_test # 14 个（CSS Color Level 4 色彩空间）
-cargo test --test stage_test        # 8 个
-cargo test --test ast_test          # 8 个
-cargo test --test common_test       # 5 个
-cargo test --test interp_test       # 15 个
+cargo test --test compile_test    # 46 个
+cargo test --test reactor_test    # 14 个
+cargo test --test stage_test      # 8 个
+cargo test --test ast_test        # 8 个
+cargo test --test common_test     # 5 个
+cargo test --test interp_test     # 15 个
 cargo test --test default_config_test -- --test-threads=1  # 9 个
 
 # 兼容性测试
@@ -189,7 +189,7 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full --
 RUST_LOG=info cargo test --features otel --test sass_spec_full -- --nocapture
 ```
 
-全部通过：**compile 48/48 + color 14/14 + stage 8/8 + ast 8/8 + common 5/5 + interp 15/15 + BS 15/15 + EP 121/121 + default 9/9 + sass-spec 7444/11869 (62.7%)**
+全部通过：**compile 46/46 + reactor 14/14 + stage 8/8 + ast 8/8 + common 5/5 + interp 15/15 + BS 15/15 + EP 121/121 + default 9/9 + sass-spec 7592/12133 (62%)**
 
 > 详见根目录 `skill.md` 获取完整开发指南。
 

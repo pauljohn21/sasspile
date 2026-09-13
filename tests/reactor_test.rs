@@ -2,12 +2,8 @@
 //!
 //! 验证消费-返回 API + 类型状态机 + OTel 链式追踪。
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::collections::HashMap;
-
 use sasspile::eval::reactor::{
-    Reactor, CompileStage, MockReactorIO,
+    Reactor, CompileStage,
 };
 use sasspile::OutputStyle;
 
@@ -139,12 +135,8 @@ fn test_reactor_nesting() {
 // ─── IO Mock 测试 ────────────────────────────────────────────────────────────
 
 #[test]
-fn test_mocked_io_basic() {
-    let mut files = HashMap::new();
-    files.insert(PathBuf::from("main.scss"), "a { color: red; }".to_string());
-
+fn test_pipeline_result() {
     let css = Reactor::new("a { color: red; }")
-        .with_io(Arc::new(MockReactorIO::new(files)))
         .lex()
         .expect("unexpected failure in test")
         .parse()
