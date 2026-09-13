@@ -1,9 +1,9 @@
-use super::super::Parser;
+use super::super::ParseStream;
 use super::super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl Parser<'_> {
+impl<'tok> ParseStream<'tok> {
     pub(crate) fn parse_prefix(&mut self) -> Result<Value> {
         self.skip_ws();
         match self.peek() {

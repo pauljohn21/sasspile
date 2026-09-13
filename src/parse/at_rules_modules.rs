@@ -8,12 +8,12 @@
 //! - `@import "url"` 传统导入解析
 //! - 配置参数（`with ($key: value)`）处理
 
-use super::Parser;
+use super::ParseStream;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl Parser<'_> {
+impl<'tok> ParseStream<'tok> {
     pub(crate) fn parse_use(&mut self) -> Result<Node> {
         match (self.in_body, self.saw_other_rule) {
             (true, _) => return Err(SassError::Eval("This at-rule is not allowed here.".into())),

@@ -17,8 +17,6 @@ use crate::error::{Result, SassError};
 use crate::eval::env::Env;
 use crate::lex::token::Token;
 use crate::parse::ast::Ast;
-use crate::parse::css_ast::CssAst;
-use crate::parse::CompileMode;
 use crate::OutputStyle;
 
 use std::collections::HashMap;
@@ -45,11 +43,6 @@ pub struct Reactor<S = StateRaw> {
     tokens: Option<Vec<Token>>,
     /// 语法分析产物 (AST)。
     ast: Option<Ast>,
-    /// CSS 模式下的语法分析产物。
-    #[allow(dead_code)] // Phase C.5 使用
-    css_ast: Option<CssAst>,
-    /// 编译模式——由文件扩展名决定。
-    mode: CompileMode,
     /// 序列化后的 CSS 字符串。
     serialized: Option<String>,
 
@@ -111,8 +104,6 @@ impl Reactor<StateRaw> {
             load_paths: vec![],
             tokens: None,
             ast: None,
-            css_ast: None,
-            mode: CompileMode::Scss,
             serialized: None,
             env: None,
             modules: HashMap::new(),
@@ -138,8 +129,6 @@ impl Reactor<StateRaw> {
             load_paths: vec![],
             tokens: None,
             ast: None,
-            css_ast: None,
-            mode: CompileMode::from_path(path),
             serialized: None,
             env: None,
             modules: HashMap::new(),
@@ -201,8 +190,6 @@ impl Reactor<StateRaw> {
             load_paths: self.load_paths,
             tokens: Some(tokens),
             ast: None,
-            css_ast: None,
-            mode: self.mode,
             serialized: None,
             env: None,
             modules: self.modules,
@@ -220,10 +207,8 @@ impl Reactor<StateRaw> {
 // ─── StateLexed: parse ───
 
 impl Reactor<StateLexed> {
-    /// 语法分析 —— Lexed → Parsed。
-    ///
-    /// 根据 `self.mode` 分派到 SCSS 或 CSS 解析器。
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "parse", mode = ?self.mode)))]
+    /// 语法分析 —— Lexed → Parsed（统一 SCSS 管线）。
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "parse", n_tokens = self.tokens.as_ref().map_or(0, Vec::len))))]
     pub fn parse(self) -> Result<Reactor<StateParsed>> {
         let start = std::time::Instant::now();
 
@@ -231,106 +216,58 @@ impl Reactor<StateLexed> {
             SassError::Internal("Reactor<StateLexed> without tokens — this is a bug.".into())
         })?;
 
-        let result = crate::parse::Parser::parse_dispatch(&tokens, self.mode)?;
+        let ast = crate::parse::Parser::parse(&tokens)?;
 
         #[cfg(feature = "tracing")]
-        let _elapsed = start.elapsed();
+        crate::__tracing::debug!(
+            stage = "parse",
+            elapsed_us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX),
+            n_nodes = ast.nodes.len(),
+            "parse complete"
+        );
 
-        match result {
-            crate::parse::Parsed::Scss(ast) => {
-                #[cfg(feature = "tracing")]
-                crate::__tracing::debug!(
-                    stage = "parse",
-                    elapsed_us = u64::try_from(_elapsed.as_micros()).unwrap_or(u64::MAX),
-                    mode = "scss",
-                    "parse complete"
-                );
-                Ok(Reactor {
-                    text: self.text,
-                    base_path: self.base_path,
-                    load_paths: self.load_paths,
-                    tokens: None,
-                    ast: Some(ast),
-                    css_ast: None,
-                    mode: self.mode,
-                    serialized: None,
-                    env: None,
-                    modules: self.modules,
-                    imports_seen: self.imports_seen,
-                    io_log: self.io_log,
-                    css_nodes: vec![],
-                    warnings: vec![],
-                    io: self.io,
-                    trace: self.trace.advance(CompileStage::Parse),
-                    _state: std::marker::PhantomData,
-                })
-            }
-            crate::parse::Parsed::Css(css_ast) => {
-                #[cfg(feature = "tracing")]
-                crate::__tracing::debug!(
-                    stage = "parse",
-                    elapsed_us = u64::try_from(_elapsed.as_micros()).unwrap_or(u64::MAX),
-                    mode = "css",
-                    "parse complete"
-                );
-                Ok(Reactor {
-                    text: self.text,
-                    base_path: self.base_path,
-                    load_paths: self.load_paths,
-                    tokens: None,
-                    ast: None,
-                    css_ast: Some(css_ast),
-                    mode: self.mode,
-                    serialized: None,
-                    env: None,
-                    modules: self.modules,
-                    imports_seen: self.imports_seen,
-                    io_log: self.io_log,
-                    css_nodes: vec![],
-                    warnings: vec![],
-                    io: self.io,
-                    trace: self.trace.advance(CompileStage::Parse),
-                    _state: std::marker::PhantomData,
-                })
-            }
-        }
+        Ok(Reactor {
+            text: self.text,
+            base_path: self.base_path,
+            load_paths: self.load_paths,
+            tokens: None,
+            ast: Some(ast),
+            serialized: None,
+            env: None,
+            modules: self.modules,
+            imports_seen: self.imports_seen,
+            io_log: self.io_log,
+            css_nodes: vec![],
+            warnings: vec![],
+            io: self.io,
+            trace: self.trace.advance(CompileStage::Parse),
+            _state: std::marker::PhantomData,
+        })
     }
 }
 
 // ─── StateParsed: evaluate ───
 
 impl Reactor<StateParsed> {
-    /// 求值 —— Parsed → Evaluated。
-    ///
-    /// 根据 `self.mode` 分派到 SCSS 或 CSS evaluator。
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "evaluate", mode = ?self.mode)))]
+    /// 求值 —— Parsed → Evaluated（统一 SCSS 求值器）。
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "evaluate", n_nodes = self.ast.as_ref().map_or(0, |a| a.nodes.len()))))]
     pub fn evaluate(self) -> Result<Reactor<StateEvaluated>> {
         let start = std::time::Instant::now();
 
-        let nodes = match self.mode {
-            CompileMode::Scss => {
-                let ast = self.ast.ok_or_else(|| {
-                    SassError::Internal("Reactor<StateParsed> without AST for SCSS mode — this is a bug.".into())
-                })?;
+        let ast = self.ast.ok_or_else(|| {
+            SassError::Internal("Reactor<StateParsed> without AST — this is a bug.".into())
+        })?;
 
-                let mut env = Env::default();
-                if let Some(ref path) = self.base_path {
-                    env = env.with_base_path(path.clone());
-                }
-                if !self.load_paths.is_empty() {
-                    env = env.with_load_paths(self.load_paths.clone());
-                }
+        let mut env = Env::default();
+        if let Some(ref path) = self.base_path {
+            env = env.with_base_path(path.clone());
+        }
+        if !self.load_paths.is_empty() {
+            env = env.with_load_paths(self.load_paths.clone());
+        }
 
-                crate::eval::scss_evaluator::ScssEvaluator::evaluate_with_env(&ast, env.clone())?
-            }
-            CompileMode::Css => {
-                let css_ast = self.css_ast.ok_or_else(|| {
-                    SassError::Internal("Reactor<StateParsed> without CssAst for CSS mode — this is a bug.".into())
-                })?;
-
-                crate::eval::css_evaluator::CssEvaluator::evaluate(&css_ast)?
-            }
-        };
+        let nodes =
+            crate::eval::scss_evaluator::ScssEvaluator::evaluate_with_env(&ast, env.clone())?;
 
         #[cfg(feature = "tracing")]
         let n_nodes = nodes.len();
@@ -349,8 +286,6 @@ impl Reactor<StateParsed> {
             load_paths: self.load_paths,
             tokens: None,
             ast: None,
-            css_ast: None,
-            mode: self.mode,
             serialized: None,
             env: Some(Env::default()),
             modules: self.modules,
@@ -394,8 +329,6 @@ impl Reactor<StateEvaluated> {
             load_paths: self.load_paths,
             tokens: None,
             ast: None,
-            css_ast: None,
-            mode: self.mode,
             serialized: Some(css),
             env: self.env,
             modules: self.modules,

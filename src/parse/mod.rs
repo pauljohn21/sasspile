@@ -1,93 +1,56 @@
 //! —— 语法分析器 ——
 //!
-//! 概要：SCSS 语法分析器，递归下降 + Pratt 表达式解析。
+//! ## tokio-stream 设计
 //!
-//! ## 核心概念
-//! - `Parser` 结构体持有 Token 流和位置状态
-//! - 顶层 `parse_top` 分派到各节点解析
-//! - `parse_rule`、`parse_decl`、`parse_variable` 等语句解析
-//! - Pratt 解析处理表达式优先级
-//! - 子模块：`at_rules`、`expr`、`nodes`、`params`
+//! parse 模块使用 `tokio_stream::Stream<Item = Result<Node>>` trait。
+//! 每个 `poll_next(Pin<&mut Self>, _)` 消费一个 Node，内部 pos 自动推进。
+//!
+//! ```text
+//! ParseStream::new(tokens)
+//!     │
+//!     .poll_next()  →  Option<Result<Node>>
+//!     │                  ├── None = 流结束
+//!     │                  └── Some(Result<Node>)
+//!     │
+//! futures::executor::block_on_stream(stream)
+//!     │
+//!     .try_collect::<Vec<_>>()?
+//!     │
+//!     Vec<Node> → Ast { nodes }
+//! ```
 
 pub mod ast;
-pub mod css_ast;
-pub mod scss_ast;
 mod ast_impl;
 pub mod at_rule_kinds;
 
-use crate::__tracing::warn;
-use crate::error::{Result, SassError};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use crate::error::Result;
 use crate::lex::token::Token;
 use ast::*;
-use css_ast::CssAst;
-use scss_ast::ScssAst;
 
-/// 解析产物——由文件扩展名决定具体类型。
-#[derive(Debug, Clone, PartialEq)]
-pub enum Parsed {
-    /// SCSS 源码——完整 Sass 特性。
-    Scss(ScssAst),
-    /// CSS 源码——仅原生 CSS + Nesting。
-    Css(CssAst),
-}
+/// 解析产物——统一 SCSS。
+pub type Parsed = Ast;
 
-impl Parsed {
-    /// 返回 SCSS variant（如果是 SCSS）。
-    pub fn into_scss(self) -> Option<ScssAst> {
-        match self {
-            Parsed::Scss(ast) => Some(ast),
-            Parsed::Css(_) => None,
-        }
-    }
+// ═══════════════════════════════════════════════════════════════════════════
+// ParseStream —— tokio_stream::Stream 实现
+// ═══════════════════════════════════════════════════════════════════════════
 
-    /// 返回 CSS variant（如果是 CSS）。
-    pub fn into_css(self) -> Option<CssAst> {
-        match self {
-            Parsed::Css(ast) => Some(ast),
-            Parsed::Scss(_) => None,
-        }
-    }
-
-    pub fn is_scss(&self) -> bool {
-        matches!(self, Parsed::Scss(_))
-    }
-
-    pub fn is_css(&self) -> bool {
-        matches!(self, Parsed::Css(_))
-    }
-}
-
-use std::path::Path;
-
-/// 编译模式——由文件扩展名决定。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CompileMode {
-    Scss,
-    Css,
-}
-
-impl CompileMode {
-    /// 从文件路径确定编译模式。
-    pub fn from_path(path: &Path) -> Self {
-        match path.extension().and_then(|e| e.to_str()) {
-            Some("css") => CompileMode::Css,
-            _ => CompileMode::Scss,
-        }
-    }
-}
-
-/// 语法分析器。
-pub struct Parser<'tok> {
+/// 节点流——消费 token 流产出 Node 的 Stream。
+///
+/// 内部位置推进自然发生，外部只需 `poll_next` 驱动。
+pub struct ParseStream<'tok> {
     tokens: &'tok [Token],
     pos: usize,
-    /// `是否在规则体（mixin/function/style_rule）内——用于` @forward 上下文验证。
+    /// 是否在规则体内（用于 @forward/@use 验证）。
     in_body: bool,
-    /// 是否已解析过非模块规则（非 @forward/@use/@import）。
+    /// 是否已解析过非模块规则。
     saw_other_rule: bool,
 }
 
-impl<'tok> Parser<'tok> {
-    /// 创建新的 Parser。
+impl<'tok> ParseStream<'tok> {
+    /// 创建新的 ParseStream。
     pub fn new(tokens: &'tok [Token]) -> Self {
         Self {
             tokens,
@@ -97,69 +60,28 @@ impl<'tok> Parser<'tok> {
         }
     }
 
-    /// 解析入口。
-    ///
-    /// # Errors
-    ///
-    /// 返回 [`SassError`] 如果遇到语法错误。
-    pub fn parse(tokens: &'tok [Token]) -> Result<Ast> {
-        let mut p = Self::new(tokens);
-        let mut nodes = Vec::new();
-        while !p.at_end() {
-            p.skip_ws();
-        match p.at_end() {
-            true => break,
-            false => {}
-        }
-            let node = p.parse_node()?;
-            // 跟踪非模块规则——@forward 必须在这些规则之前
-            // 变量声明和注释不触发 saw_other_rule（Sass 允许它们在 @forward 前）
-            match &node {
-                Node::Forward { .. }
-                | Node::Use { .. }
-                | Node::Import { .. }
-                | Node::Variable { .. }
-                | Node::Comment(_, _) => {}
-                _ => p.saw_other_rule = true,
-            }
-            nodes.push(node);
-        }
-        Ok(Ast { nodes })
-    }
+    // ── 基础流操作 ──────────────────────────────────────────────────────
 
-    /// 分派解析——根据编译模式选择不同解析器。
-    ///
-    /// - `CompileMode::Scss` → 返回 `Parsed::Scss`
-    /// - `CompileMode::Css` → 返回 `Parsed::Css`（由 CssParser 处理）
-    pub fn parse_dispatch(tokens: &'tok [Token], mode: CompileMode) -> Result<Parsed> {
-        match mode {
-            CompileMode::Scss => {
-                let ast = Self::parse(tokens)?;
-                Ok(Parsed::Scss(ast))
-            }
-            CompileMode::Css => {
-                let css_ast = crate::parse::css_parser::Parser::parse(tokens)?;
-                Ok(Parsed::Css(css_ast))
-            }
-        }
-    }
-
-    // —— 基础操作 ——
+    /// 查看当前 token（不消费）。
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
     }
-    #[allow(dead_code)]
+
+    /// 查看第 n 个后续 token（不消费）。
     fn peek_n(&self, n: usize) -> Option<&Token> {
         self.tokens.get(self.pos + n)
     }
+
+    /// 消费当前 token，pos 推进。
     fn advance(&mut self) -> Option<&Token> {
         let t = self.tokens.get(self.pos);
-        match t {
-            Some(Token::Eof) | None => {}
-            _ => self.pos += 1,
+        if !matches!(t, Some(Token::Eof) | None) {
+            self.pos += 1;
         }
         t
     }
+
+    /// 是否在末尾（跳过 whitespace 后检查）。
     fn at_end(&self) -> bool {
         let mut i = self.pos;
         while matches!(self.tokens.get(i), Some(Token::Whitespace)) {
@@ -167,58 +89,88 @@ impl<'tok> Parser<'tok> {
         }
         matches!(self.tokens.get(i), None | Some(Token::Eof))
     }
+
+    /// 跳过 whitespace 和行内注释。
     fn skip_ws(&mut self) {
-        while let Some(tok) = self.peek() {
-            match tok {
-                Token::Whitespace => self.pos += 1,
-                // 静默注释 (//) 在 skip_ws 中跳过；块注释 (/* */) 保留由 parse_node 处理
-                Token::Comment(_, true) => self.pos += 1,
-                _ => break,
-            }
+        while matches!(self.peek(), Some(Token::Whitespace) | Some(Token::Comment(_, true))) {
+            self.pos += 1;
         }
     }
 
-    /// 跳过所有空白和注释（含块注释）。
+    /// 跳过所有 whitespace 和注释。
     fn skip_ws_and_comments(&mut self) {
-        while let Some(tok) = self.peek() {
-            match tok {
-                Token::Whitespace | Token::Comment(_, _) => self.pos += 1,
-                _ => break,
-            }
+        while matches!(self.peek(), Some(Token::Whitespace) | Some(Token::Comment(_, _))) {
+            self.pos += 1;
         }
     }
 
+    /// 消费期望 token。
     fn expect(&mut self, tok: &Token) -> Result<()> {
         self.skip_ws();
-        match self.peek() == Some(tok) {
-            true => {
-                self.advance();
-                Ok(())
-            }
-            false => {
-            let found = self
-                .peek()
-                .map_or("EOF".into(), std::string::ToString::to_string);
-            let ctx_start = self.pos.saturating_sub(5);
-            let ctx_end = (self.pos + 5).min(self.tokens.len());
-            let context: Vec<String> = self.tokens[ctx_start..ctx_end]
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect();
-            warn!(expected = %tok, found = %found, pos = self.pos, context = ?context, "expect failed");
-                Err(SassError::Parse {
-                    expected: tok.to_string(),
-                    found,
-                })
-            }
+        if self.peek() == Some(tok) {
+            self.advance();
+            Ok(())
+        } else {
+            Err(crate::error::SassError::Parse {
+                expected: tok.to_string(),
+                found: self.peek().map_or("EOF".into(), |t| t.to_string()),
+            })
         }
     }
 }
 
-mod at_rules;
-mod at_rules_flow;
-mod at_rules_modules;
-pub mod css_parser;
-mod expr;
-mod nodes;
-mod params;
+// ═══════════════════════════════════════════════════════════════════════════
+// Stream trait 实现
+// ═══════════════════════════════════════════════════════════════════════════
+
+impl<'tok> tokio_stream::Stream for ParseStream<'tok> {
+    type Item = Result<Node>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = &mut *self.get_mut();
+        this.skip_ws();
+        if this.at_end() {
+            return Poll::Ready(None);
+        }
+        Poll::Ready(Some(this.parse_node()))
+    }
+}
+
+impl<'tok> futures::stream::FusedStream for ParseStream<'tok> {
+    fn is_terminated(&self) -> bool {
+        self.at_end()
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 公开入口
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// 语法分析器命名空间。
+pub struct Parser;
+
+impl Parser {
+    /// 解析入口——消费 token 流，产出 AST。
+    pub fn parse(tokens: &[Token]) -> Result<Ast> {
+        let stream = ParseStream::new(tokens);
+        let iter = futures::executor::block_on_stream(stream);
+        iter.collect::<std::result::Result<Vec<_>, _>>()
+            .map(|nodes| Ast { nodes })
+    }
+}
+
+/// 顶层 parse 函数。
+pub fn parse(tokens: &[Token]) -> Result<Ast> {
+    Parser::parse(tokens)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 模块声明
+// ═══════════════════════════════════════════════════════════════════════════
+
+pub(crate) mod at_rules;
+pub(crate) mod at_rules_flow;
+pub(crate) mod at_rules_modules;
+pub(crate) mod expr;
+pub(crate) mod nodes;
+pub(crate) mod params;

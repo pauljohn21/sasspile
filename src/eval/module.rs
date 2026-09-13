@@ -136,28 +136,12 @@ impl Evaluator {
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
-        let is_css = path.extension().and_then(|e| e.to_str()) == Some("css");
-
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
 
-        // ─── Dual AST: CSS 文件走 CssParser + CssEvaluator ───
-        if is_css {
-            let css_ast = crate::parse::css_parser::Parser::parse(&tokens)?;
-            let css = crate::eval::css_evaluator::CssEvaluator::evaluate(&css_ast)?;
-            let css = vec![crate::css::node::CssNode::AtRoot(css, None)];
-            let mut loaded = (*caller_env.loaded_modules).clone();
-            loaded.insert(path.to_path_buf());
-            return Ok(ModuleExports {
-                css,
-                loaded_modules: Rc::new(loaded),
-                ..Default::default()
-            });
-        }
-
-        // ─── SCSS 文件：原有路径 ───
-        let ast = crate::parse::Parser::parse(&tokens)?;
+        // ─── 统一 SCSS 管线（不再区分 CSS / SCSS 模块） ───
+        let ast = crate::parse::parse(&tokens)?;
         let mut env = Env::default()
             .with_base_path(path.to_path_buf())
             .with_load_paths(caller_env.get_load_paths().to_vec())
@@ -303,28 +287,12 @@ impl Evaluator {
         let source = std::fs::read_to_string(path)
             .map_err(|e| SassError::Module(format!("Cannot read {}: {e}", path.display())))?;
 
-        let is_css = path.extension().and_then(|e| e.to_str()) == Some("css");
-
         let tokens: Vec<Token> = Lexer::new(&source)
             .filter(|t| !matches!(t.as_ref(), Ok(Token::Eof)))
             .collect::<Result<Vec<_>>>()?;
 
-        // ─── Dual AST: CSS 文件走 CssParser + CssEvaluator ───
-        if is_css {
-            let css_ast = crate::parse::css_parser::Parser::parse(&tokens)?;
-            let css = crate::eval::css_evaluator::CssEvaluator::evaluate(&css_ast)?;
-            // CSS 在规则体内 @import 时不包装 AtRoot（由调用方组合选择器）
-            let in_rule_body = caller_env.get_selector().is_some();
-            let css = if in_rule_body {
-                css
-            } else {
-                vec![crate::css::node::CssNode::AtRoot(css, None)]
-            };
-            return Ok((css, caller_env));
-        }
-
-        // ─── SCSS 文件：原有路径 ───
-        let ast = crate::parse::Parser::parse(&tokens)?;
+        // ─── 统一 SCSS 管线 ───
+        let ast = crate::parse::parse(&tokens)?;
         // 继承当前环境的所有成员
         let saved_base_path = caller_env.get_base_path().cloned();
         let saved_depth = caller_env.get_depth();

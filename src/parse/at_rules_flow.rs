@@ -2,12 +2,12 @@
 //!
 //! 从 `at_rules.rs` 拆分，包含所有流控制相关解析方法。
 
-use super::Parser;
+use super::ParseStream;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl Parser<'_> {
+impl<'tok> ParseStream<'tok> {
     pub(crate) fn parse_if(&mut self) -> Result<Node> {
         self.skip_ws();
         let cond = self.parse_value()?;

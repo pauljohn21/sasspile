@@ -1,23 +1,28 @@
-//! 节点解析 + 参数解析。
+//! 节点解析——`ParseStream` 的 `&mut self` 方法。
 //!
-//! 包含 `parse_node/parse_rule/parse_decl/parse_variable` 等节点级解析，
-//! 以及 `parse_params/parse_args/parse_config` 等参数解析和辅助方法。
+//! 所有解析方法消费 token 自然推进 pos。
+//! 与 `tokio_stream::Stream::poll_next(Pin<&mut Self>, _)` 同态。
 
-use super::Parser;
-use super::ast::*;
-use crate::__tracing::{trace, warn};
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl Parser<'_> {
-    // —— 节点解析 ——
+use super::ast::*;
+use super::ParseStream;
+
+impl<'tok> ParseStream<'tok> {
+    // ═══════════════════════════════════════════════════════════════════════
+    // 节点解析
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// 根据首个 token 分派到具体解析器。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(pos = self.pos)))]
     pub(crate) fn parse_node(&mut self) -> Result<Node> {
         self.skip_ws();
         let peek_str = self
             .peek()
             .map_or_else(|| "EOF".into(), std::string::ToString::to_string);
-        trace!(peek = %peek_str, "parse_node");
+        #[cfg(feature = "tracing")]
+        tracing::trace!(peek = %peek_str, "parse_node");
         match self.peek() {
             Some(Token::AtRule(name)) => self.parse_at_rule(name.clone()),
             Some(Token::Dollar(_)) => self.parse_variable(),
@@ -27,13 +32,11 @@ impl Parser<'_> {
                 Ok(node)
             }
             Some(Token::Semicolon) => {
-                // 顶层孤立的 ; — 跳过（如 `downstream {...};` 中的尾部分号）
                 self.advance();
                 self.skip_ws();
                 match self.peek() {
                     None | Some(Token::Eof | Token::RBrace) => {
-                        // 文件末尾或 body 末尾的孤立 ; — 返回空注释节点
-                        return Ok(Node::Comment(String::new(), true));
+                        Ok(Node::Comment(String::new(), true))
                     }
                     _ => self.parse_node(),
                 }
@@ -42,14 +45,10 @@ impl Parser<'_> {
                 self.advance();
                 self.parse_node()
             }
-            _ => {
-                // 检测命名空间变量赋值：Ident . Dollar → namespace.$var: value
-                match self.is_namespace_var() {
-                    true => return self.parse_namespace_var(),
-                    false => {}
-                }
-                self.parse_rule_or_decl()
-            }
+            _ => match self.is_namespace_var() {
+                true => self.parse_namespace_var(),
+                false => self.parse_rule_or_decl(),
+            },
         }
     }
 
@@ -61,7 +60,6 @@ impl Parser<'_> {
                 Token::LBrace => return true,
                 Token::Semicolon | Token::RBrace => return false,
                 Token::LParen => {
-                    // 跳过括号内容
                     let mut depth = 1;
                     i += 1;
                     while i < self.tokens.len() && depth > 0 {
@@ -84,16 +82,15 @@ impl Parser<'_> {
         true
     }
 
-    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(pos = self.pos)))]
+    /// 根据 is_rule 决定走 parse_rule 还是 parse_decl。
     pub(crate) fn parse_rule_or_decl(&mut self) -> Result<Node> {
-        let is_r = self.is_rule();
-        trace!(is_rule = is_r, "parse_rule_or_decl");
-        match is_r {
+        match self.is_rule() {
             true => self.parse_rule(),
             false => self.parse_decl(),
         }
     }
 
+    /// 解析 CSS 规则——`selector { body }`。
     pub(crate) fn parse_rule(&mut self) -> Result<Node> {
         let selector = self.parse_selector()?;
         self.skip_ws();
@@ -102,11 +99,17 @@ impl Parser<'_> {
         Ok(Node::Rule { selector, body })
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 选择器解析
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// 解析选择器到 `{`。
     pub(crate) fn parse_selector(&mut self) -> Result<String> {
         let mut s = String::new();
         let mut bracket_depth = 0i32;
         while let Some(t) = self.peek() {
-            crate::__tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
+            #[cfg(feature = "tracing")]
+            tracing::trace!(token = ?t, accumulated = %s, "parse_selector token");
             match t {
                 Token::LBrace => break,
                 Token::LBracket => {
@@ -120,9 +123,7 @@ impl Parser<'_> {
                     self.advance();
                 }
                 Token::Whitespace => {
-                    match bracket_depth > 0 {
-                        true => {
-                        // 向前跳过所有连续空白，找到下一个非空白 token
+                    if bracket_depth > 0 {
                         let mut look = 1;
                         while matches!(self.peek_n(look), Some(Token::Whitespace)) {
                             look += 1;
@@ -133,36 +134,26 @@ impl Parser<'_> {
                         let s_has_eq = s.contains('=');
                         match (s_ends_bracket || s_ends_eq, next_non_ws, s_has_eq) {
                             (true, _, _) => {
-                                // [ 或 = 后的空白跳过
                                 self.advance();
                             }
                             (false, Some(Token::RBracket | Token::Assign | Token::Tilde | Token::Pipe | Token::Caret | Token::Star), _) => {
-                                // ] 前或属性操作符（= ~= |= ^= *=）前的空白跳过
                                 self.advance();
                             }
                             (false, _, true) => {
-                                // 属性值后的空白 — 检查是否是合法 modifier（任意单字符标识符，前向兼容）
                                 match next_non_ws {
                                     Some(Token::Ident(id))
                                         if id.len() == 1
-                                            && id
-                                                .chars()
-                                                .next()
-                                                .is_some_and(|c| c.is_ascii_alphabetic()) =>
+                                            && id.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) =>
                                     {
                                         let mod_id = id.clone();
-                                        // 检查 modifier 后面是否是 ]
                                         let after_mod = self.peek_n(look + 1);
                                         match matches!(after_mod, Some(Token::RBracket)) {
                                             true => {
-                                                // 跳过空白
                                                 for _ in 0..look {
                                                     self.advance();
                                                 }
-                                                // 消费 modifier 字符
-                                                match !s.ends_with(' ') {
-                                                    true => { s.push(' '); }
-                                                    false => {}
+                                                if !s.ends_with(' ') {
+                                                    s.push(' ');
                                                 }
                                                 s.push_str(&mod_id);
                                                 self.advance();
@@ -184,23 +175,20 @@ impl Parser<'_> {
                                 }
                             }
                             (false, _, false) => {
-                                // 属性名后空白后不是操作符 → 非法
                                 return Err(SassError::Parse {
                                     expected: "]".into(),
                                     found: "modifier".into(),
                                 });
                             }
                         }
-                    }
-                        false => {
-                            s.push(' ');
-                            self.advance();
-                        }
+                    } else {
+                        s.push(' ');
+                        self.advance();
                     }
                 }
                 Token::Comment(_, _) => {
                     self.advance();
-                } // 跳过注释
+                }
                 _ => {
                     s.push_str(&t.to_string());
                     self.advance();
@@ -210,18 +198,21 @@ impl Parser<'_> {
         Ok(s.trim().to_string())
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 声明解析
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// 解析声明——`property: value;`。
     pub(crate) fn parse_decl(&mut self) -> Result<Node> {
         let property = self.parse_property()?;
         self.skip_ws_and_comments();
         self.expect(&Token::Colon)?;
         self.skip_ws_and_comments();
-        // 声明值中使用斜杠分隔符语义——`1/2` 保留为 `1/2` 而非计算除法
         let value = self.parse_decl_value()?;
         let important = self.check_important()?;
         self.skip_ws_and_comments();
-        match self.peek() {
-            Some(Token::Semicolon) => { self.advance(); }
-            _ => {}
+        if matches!(self.peek(), Some(Token::Semicolon)) {
+            self.advance();
         }
         Ok(Node::Decl {
             property,
@@ -230,14 +221,15 @@ impl Parser<'_> {
         })
     }
 
-    pub(crate) fn parse_property(&mut self) -> Result<String> {
+    /// 解析属性名。
+    fn parse_property(&mut self) -> Result<String> {
         let mut s = String::new();
         while let Some(t) = self.peek() {
             match t {
                 Token::Colon | Token::Whitespace | Token::RBrace | Token::Semicolon => break,
                 Token::Comment(_, _) => {
                     self.advance();
-                } // 跳过注释
+                }
                 _ => {
                     s.push_str(&t.to_string());
                     self.advance();
@@ -247,25 +239,25 @@ impl Parser<'_> {
         Ok(s)
     }
 
+    /// 检查并消费 `!important`。
     pub(crate) fn check_important(&mut self) -> Result<bool> {
         self.skip_ws_and_comments();
-        match self.peek() {
-            Some(Token::Bang) => {
+        if matches!(self.peek(), Some(Token::Bang)) {
+            self.advance();
+            self.skip_ws_and_comments();
+            if matches!(self.peek(), Some(Token::Ident(s)) if s == "important") {
                 self.advance();
-                self.skip_ws_and_comments();
-                match self.peek() {
-                    Some(Token::Ident(s)) if s == "important" => {
-                        self.advance();
-                        return Ok(true);
-                    }
-                    _ => {}
-                }
+                return Ok(true);
             }
-            _ => {}
         }
         Ok(false)
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 变量解析
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// 解析变量赋值——`$var: value;`。
     pub(crate) fn parse_variable(&mut self) -> Result<Node> {
         let name = match self.peek() {
             Some(Token::Dollar(n)) => {
@@ -286,41 +278,33 @@ impl Parser<'_> {
         let value = self.parse_value()?;
         let flags = self.parse_var_flags()?;
         self.skip_ws_and_comments();
-        match self.peek() {
-            Some(Token::Semicolon) => { self.advance(); }
-            _ => {}
+        if matches!(self.peek(), Some(Token::Semicolon)) {
+            self.advance();
         }
-        // 消耗行尾注释，避免被顶层解析为独立 Comment 节点产生 CSS 输出
         self.skip_ws_and_comments();
         Ok(Node::Variable { name, value, flags })
     }
 
-    /// 检测是否为命名空间变量赋值（Ident . Dollar 模式）。
+    /// 检测是否为命名空间变量赋值。
     fn is_namespace_var(&self) -> bool {
         let mut i = self.pos;
-        // 跳过 Whitespace
         while i < self.tokens.len() && matches!(self.tokens[i], Token::Whitespace) {
             i += 1;
         }
-        // Ident
-        match i >= self.tokens.len() || !matches!(self.tokens[i], Token::Ident(_)) {
-            true => return false,
-            false => {}
+        if i >= self.tokens.len() || !matches!(self.tokens[i], Token::Ident(_)) {
+            return false;
         }
         i += 1;
         while i < self.tokens.len() && matches!(self.tokens[i], Token::Whitespace) {
             i += 1;
         }
-        // .
-        match i >= self.tokens.len() || !matches!(self.tokens[i], Token::Dot) {
-            true => return false,
-            false => {}
+        if i >= self.tokens.len() || !matches!(self.tokens[i], Token::Dot) {
+            return false;
         }
         i += 1;
         while i < self.tokens.len() && matches!(self.tokens[i], Token::Whitespace) {
             i += 1;
         }
-        // Dollar
         i < self.tokens.len() && matches!(self.tokens[i], Token::Dollar(_))
     }
 
@@ -334,11 +318,9 @@ impl Parser<'_> {
             }
             _ => unreachable!(),
         };
-        // 消费 .
         self.skip_ws();
         self.expect(&Token::Dot)?;
         self.skip_ws();
-        // 消费 $var
         let var_name = match self.peek() {
             Some(Token::Dollar(n)) => {
                 let n = n.clone();
@@ -353,27 +335,23 @@ impl Parser<'_> {
         self.skip_ws();
         let value = self.parse_value()?;
         let flags = self.parse_var_flags()?;
-        // 命名空间变量赋值不允许 !global
-        match flags.global {
-            true => {
-                return Err(SassError::Eval(
-                    "!global isn't allowed for variables in other modules.".into(),
-                ));
-            }
-            false => {}
+        if flags.global {
+            return Err(SassError::Eval(
+                "!global isn't allowed for variables in other modules.".into(),
+            ));
         }
         self.skip_ws();
-        match self.peek() {
-            Some(Token::Semicolon) => { self.advance(); }
-            _ => {}
+        if matches!(self.peek(), Some(Token::Semicolon)) {
+            self.advance();
         }
         Ok(Node::Variable { name, value, flags })
     }
 
+    /// 解析变量标志 `!default` `!global`。
     pub(crate) fn parse_var_flags(&mut self) -> Result<VarFlags> {
         let mut flags = VarFlags::default();
         self.skip_ws();
-        while self.peek() == Some(&Token::Bang) {
+        while matches!(self.peek(), Some(Token::Bang)) {
             self.advance();
             self.skip_ws();
             if let Some(Token::Ident(s)) = self.peek() {
@@ -389,9 +367,13 @@ impl Parser<'_> {
         Ok(flags)
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 规则体解析
+    // ═══════════════════════════════════════════════════════════════════════
+
     pub(crate) fn parse_body(&mut self) -> Result<Vec<Node>> {
         let mut nodes = Vec::new();
-        let prev = self.in_body;
+        let prev_in_body = self.in_body;
         self.in_body = true;
         loop {
             self.skip_ws();
@@ -401,15 +383,18 @@ impl Parser<'_> {
             }
         }
         self.skip_ws();
-        match self.peek() {
-            Some(Token::RBrace) => { self.advance(); }
-            _ => {}
+        if matches!(self.peek(), Some(Token::RBrace)) {
+            self.advance();
         }
-        self.in_body = prev;
+        self.in_body = prev_in_body;
         Ok(nodes)
     }
 
-    // —— 辅助方法 ——
+    // ═══════════════════════════════════════════════════════════════════════
+    // 辅助方法
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// 解析标识符名称。
     pub(crate) fn parse_ident_name(&mut self) -> Result<String> {
         self.skip_ws();
         match self.peek() {
@@ -425,6 +410,7 @@ impl Parser<'_> {
         }
     }
 
+    /// 解析字符串值。
     pub(crate) fn parse_string_value(&mut self) -> Result<String> {
         self.skip_ws();
         match self.peek() {
@@ -445,20 +431,21 @@ impl Parser<'_> {
         }
     }
 
+    /// 检查当前 token 是否匹配关键字。
     pub(crate) fn peek_keyword(&self, kw: &str) -> bool {
         matches!(self.peek(), Some(Token::Ident(s)) if s == kw)
     }
 
+    /// 消费期望的关键字。
     pub(crate) fn expect_keyword(&mut self, kw: &str) -> Result<()> {
-        match self.peek_keyword(kw) {
-            true => {
-                self.advance();
-                Ok(())
-            }
-            false => Err(SassError::Parse {
+        if self.peek_keyword(kw) {
+            self.advance();
+            Ok(())
+        } else {
+            Err(SassError::Parse {
                 expected: kw.into(),
                 found: "other".into(),
-            }),
+            })
         }
     }
 }

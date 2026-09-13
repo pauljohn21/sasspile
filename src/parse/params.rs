@@ -2,12 +2,12 @@
 //!
 //! `parse_params` / `parse_args` / `parse_config` / `parse_member_list`。
 
-use super::Parser;
+use super::ParseStream;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl Parser<'_> {
+impl<'tok> ParseStream<'tok> {
     pub(crate) fn parse_params(&mut self) -> Result<Vec<Param>> {
         self.expect(&Token::LParen)?;
         let mut params = Vec::new();

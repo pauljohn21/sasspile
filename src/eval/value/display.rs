@@ -329,7 +329,7 @@ pub(crate) fn eval_simple_expr(expr: &str, env: &Env) -> crate::error::Result<Va
             )
         })
         .collect::<crate::error::Result<Vec<_>>>()?;
-    let mut parser = crate::parse::Parser::new(&tokens);
-    let v = parser.parse_value()?;
+    let mut stream = crate::parse::ParseStream::new(&tokens);
+    let v = stream.parse_value()?;
     super::Evaluator::eval_value(&v, env)
 }

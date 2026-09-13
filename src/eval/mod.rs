@@ -345,10 +345,7 @@ fn eval_error_node(v: &Value, env: Env) -> Result<(Vec<CssNode>, Env)> {
 
 mod at_params;
 mod builtin;
-pub mod css_evaluator;
 pub mod scss_evaluator;
-
-pub use css_evaluator::CssEvaluator;
 mod color;
 mod color_names;
 mod control_flow;

@@ -2,13 +2,13 @@
 //!
 //! `parse_literal` 处理简单值 token，`parse_prefix` 保留控制流（Minus/Not/LParen 等）。
 
-use super::super::Parser;
+use super::super::ParseStream;
 use super::super::ast::*;
 use super::{parse_hash_color, parse_number};
 use crate::error::Result;
 use crate::lex::token::Token;
 
-impl Parser<'_> {
+impl<'tok> ParseStream<'tok> {
     /// 解析字面量值——Number/String/Hash/Dollar/Ident/True/False/Null/Interp 等。
     ///
     /// 返回 `Some(Value)` 当当前 token 是字面量，`None` 当不是（由 `parse_prefix` 处理控制流）。

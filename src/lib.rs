@@ -145,7 +145,7 @@ pub use eval::Evaluator;
 pub use eval::reactor as ReactorModule;
 pub use eval::reactor::{Reactor, ReactorIO, ReactorSnapshot, ReactorTrace, CompileStage};
 pub use lex::Lexer;
-pub use parse::{Parser, ast::Ast};
+pub use parse::{parse as parse_scss, ast::Ast};
 
 use std::path::PathBuf;
 

@@ -3,13 +3,13 @@
 //! 包含 `parse_at_rule/parse_mixin_def/parse_include/parse_function_def/parse_return` 等 @ 规则解析方法。
 //! 流控制相关（`@if/@for/@each/@while`）已拆分到 `at_rules_flow.rs`。
 
-use super::Parser;
+use super::ParseStream;
 use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use crate::parse::at_rule_kinds::AtRuleKind;
 
-impl Parser<'_> {
+impl<'tok> ParseStream<'tok> {
     // —— @规则解析 ——
     pub(crate) fn parse_at_rule(&mut self, name: String) -> Result<Node> {
         self.advance(); // 消费 @rule
