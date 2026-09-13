@@ -492,7 +492,7 @@ SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 ```
 
 **通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
-**sass-spec 基线**：7837/12133 = 64%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：7883/12133 = 65%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
@@ -532,6 +532,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **calc-round-infinity-fix**（2026-09-13）：CSS round() 策略取整（up/down/nearest/to-zero + step）+ 三角函数 infinity/NaN 输入支持 + validate_single_number 特殊值字符串接受 — 7837→7883 (+46 net)
 - **tokio-internal-async**（2026-09-13）：对内异步对外同步架构 — 引入 tokio runtime (block_on 桥接) + 清理 Reactor 死字段 (14→9) + 删除 6 死类型 (ReactorIO/Warning/IoRecord/ModuleCacheEntry/DefaultReactorIO/MockReactorIO) + Parser 回归 Iterator — sass-spec 7444→7592 (+148)
 - **spec-store**（2026-09-10）：sass-spec SQLite 数据管理工具 — 取代 `failures_json.rs` + `sass_spec_stats.rs`，用 SQLite WAL 存储 case 结果/快照/Delta，集成统计/趋势/桥接/回归定位，12131 个 case 入库
 - **tests-cleanup**（2026-09-10）：测试架构清理合 — 15 个诊断文件合并为 `diag_helper.rs` + `diagnostic_runner.rs` + `diag_color.rs`，单文件 ≤ 500 行合规

@@ -2,6 +2,27 @@
 
 # Changelog
 
+## [0.9.13] — 2026-09-13
+
+### Added
+
+- **CSS round() strategy 策略取整**：`round(strategy, number, step?)` 2-3 参数形式
+  - 支持策略：`up`（ceil）、`down`（floor）、`nearest`（round）、`to-zero`（trunc）
+  - 支持 `step` 参数：结果对齐到 step 的倍数
+  - 单位兼容性校验：number/step 必须兼容，step=0 报错
+  - 完全向后兼容 `round(x)` 1 参数和 `round($number: x)` 命名参数形式
+
+### Fixed
+
+- **validate_single_number 接受特殊值字符串**：`"infinity"`、`"-infinity"`、`"nan"`、`"NaN"` 被视为合法数字
+- **三角函数 infinity/NaN 输入**：`sin/cos/tan(infinity)` → `NaN`，`asin/acos/atan(infinity)` → `NaN deg`
+- **round 命名参数兼容性**：`round($number: 5.7)` 正确求值为 `6`（修复回归）
+
+### Changed
+
+- sass-spec 通过率：7837 → 7883（+46 net），64% → 65%
+- values/calculation：+46 passes（cos/sin/tan/asin/acos/atan infinity/NaN 全量修复）
+
 ## [0.9.12] — 2026-09-11
 
 ### Fixed
