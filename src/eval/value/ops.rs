@@ -96,6 +96,22 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             new_items.extend(items);
             Ok(Value::List(new_items, sep, false))
         }
+        // Map + Map 合并（后值覆盖同名键）
+        (Value::Map(mut a), Value::Map(b)) => {
+            for (k, v) in b {
+                match a.iter().position(|(ak, _)| values_eq(ak, &k)) {
+                    Some(pos) => a[pos] = (k, v),
+                    None => a.push((k, v)),
+                }
+            }
+            Ok(Value::Map(a))
+        }
+        // Map + Null / Null + Map → identity
+        (Value::Map(m), Value::Null) | (Value::Null, Value::Map(m)) => Ok(Value::Map(m)),
+        // Bool + Bool → 字符串拼接
+        (Value::Bool(a), Value::Bool(b)) => Ok(Value::String(format!("{a}{b}"), false)),
+        // Null + Null → Null
+        (Value::Null, Value::Null) => Ok(Value::Null),
         _ => Err(SassError::Eval("Unsupported + operation".into())),
     }
 }

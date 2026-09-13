@@ -221,7 +221,17 @@ fn call_pow(args: &[Value]) -> Result<Option<Value>> {
     }
     let a = extract_unitless(&args[0], "base")?;
     let b = extract_unitless(&args[1], "exponent")?;
-    Ok(Some(Value::Number(a.powf(b), None)))
+    let result = a.powf(b);
+    // pow() 特殊值：负底数+分数指数 → NaN，溢出 → Infinity
+    // 保持 calc() 包装以保留 semantic 信息（CSS 规范）
+    if result.is_nan() {
+        return Ok(Some(Value::Calc("calc(NaN)".to_string())));
+    }
+    if result.is_infinite() {
+        let sign = if result.is_sign_negative() { "-" } else { "" };
+        return Ok(Some(Value::Calc(format!("calc({sign}infinity)"))));
+    }
+    Ok(Some(Value::Number(result, None)))
 }
 
 /// atan2(y, x)——返回 deg 单位，Calc 透传。

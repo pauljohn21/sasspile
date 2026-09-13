@@ -122,8 +122,15 @@ fn test_simplify_nested() {
 
 #[test]
 fn test_simplify_incompatible_units() {
+    // simplify_calc_node 执行 partial-simplification，不兼容单位保留 Op 节点。
+    // 顶层纯二元不兼容单位错误检测在 simplify_calc 入口的 pre-check 阶段执行。
     let result = simplify("1px + 1deg");
-    assert!(result.is_err());
+    assert!(result.is_ok());
+    // 结果是保留 Op 结构（因为无法简化为 Number）
+    match result {
+        Ok(CalcNode::Op { .. }) => {} // 正确：保留了 Add 操作符节点
+        other => panic!("Expected Op node for incompatible units, got: {other:?}"),
+    }
 }
 
 #[test]
