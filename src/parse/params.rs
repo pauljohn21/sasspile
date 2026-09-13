@@ -7,7 +7,7 @@ use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     pub(crate) fn parse_params(&mut self) -> Result<Vec<Param>> {
         self.expect(&Token::LParen)?;
         let mut params = Vec::new();

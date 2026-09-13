@@ -13,7 +13,7 @@ use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     pub(crate) fn parse_use(&mut self) -> Result<Node> {
         match (self.in_body, self.saw_other_rule) {
             (true, _) => return Err(SassError::Eval("This at-rule is not allowed here.".into())),

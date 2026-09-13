@@ -8,7 +8,7 @@ use super::{parse_hash_color, parse_number};
 use crate::error::Result;
 use crate::lex::token::Token;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     /// 解析字面量值——Number/String/Hash/Dollar/Ident/True/False/Null/Interp 等。
     ///
     /// 返回 `Some(Value)` 当当前 token 是字面量，`None` 当不是（由 `parse_prefix` 处理控制流）。

@@ -115,7 +115,7 @@ impl<'tok> ParseStream<'tok> {
 // Iterator trait 实现
 // ═══════════════════════════════════════════════════════════════════════════
 
-impl<'tok> Iterator for ParseStream<'tok> {
+impl Iterator for ParseStream<'_> {
     type Item = Result<Node>;
 
     fn next(&mut self) -> Option<Self::Item> {

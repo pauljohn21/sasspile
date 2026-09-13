@@ -6,13 +6,14 @@ use crate::parse::ast::BinOpKind;
 
 mod calc;
 pub mod calc_ast;
+mod calc_pure;
 pub mod calc_simplify;
 pub mod calc_units;
 mod display;
 mod ops;
 mod partial;
 
-pub(crate) use calc::is_pure_calc_expr;
+pub(crate) use calc_pure::is_pure_calc_expr;
 pub(crate) use display::{
     eval_interp_segments, eval_interp_str, eval_property_name, eval_simple_expr, inspect_value,
 };

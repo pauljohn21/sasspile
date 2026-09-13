@@ -79,7 +79,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             });
         // 注入 @content 块
         let mixin_env = if let Some(content_nodes) = content {
-            mixin_env.set_content(content_nodes.clone(), content_env.clone())
+            mixin_env.set_content(content_nodes.clone(), &content_env)
         } else {
             mixin_env
         };
@@ -185,20 +185,21 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         }
         // 用户函数
         if let Some(func) = env.get_function(name) {
-            return Self::call_user_function(func, pos_args, kw_args, env.clone());
+            return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // 在命名空间模块中查找同名函数（跳过内建模块 — 其 FunctionDef 条目仅用于 meta 内省）。
-        for exports in env.get_namespaces().values() {
-            if exports.is_builtin {
-                continue;
-            }
-            if let Some(func) = exports
-                .all_functions()
-                .find(|(k, _)| *k == name)
-                .map(|(_, f)| f)
-            {
-                return Self::call_user_function(func, pos_args, kw_args, env.clone());
-            }
+        let ns_func = env
+            .get_namespaces()
+            .values()
+            .filter(|exports| !exports.is_builtin)
+            .find_map(|exports| {
+                exports
+                    .all_functions()
+                    .find(|(k, _)| *k == name)
+                    .map(|(_, f)| f.clone())
+            });
+        if let Some(func) = ns_func {
+            return Self::call_user_function(&func, pos_args, kw_args, env);
         }
         // 模块限定函数 (math.abs, map.get, etc.)
         match name.contains('.') {
@@ -229,14 +230,14 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             body: func.body.clone(),
             captured_namespaces: captured,
         };
-        Self::call_user_function(&fdef, pos_args, kw_args, env.clone())
+        Self::call_user_function(&fdef, pos_args, kw_args, env)
     }
 
     pub(crate) fn call_user_function(
         func: &FunctionDef,
         pos_args: &[Value],
         kw_args: &HashMap<String, Value>,
-        env: Env,
+        env: &Env,
     ) -> Result<Value> {
         let span = crate::__tracing::info_span!(
             "call_user_function",
@@ -244,7 +245,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             n_args = pos_args.len()
         );
         let _enter = span.enter();
-        let mut func_env = env.incr_depth().enter_scope();
+        let mut func_env = env.clone().incr_depth().enter_scope();
         // 合并函数定义时捕获的命名空间
         func_env = func
             .captured_namespaces

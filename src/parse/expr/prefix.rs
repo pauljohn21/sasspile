@@ -3,7 +3,7 @@ use super::super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     pub(crate) fn parse_prefix(&mut self) -> Result<Value> {
         self.skip_ws();
         match self.peek() {

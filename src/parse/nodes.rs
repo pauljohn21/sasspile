@@ -9,7 +9,7 @@ use crate::lex::token::Token;
 use super::ast::*;
 use super::ParseStream;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     // ═══════════════════════════════════════════════════════════════════════
     // 节点解析
     // ═══════════════════════════════════════════════════════════════════════

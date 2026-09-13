@@ -152,7 +152,7 @@ pub(crate) fn parse_calc_name(s: &str) -> String {
 /// 顶层逗号分割字符串为切片（不解析内部括号）。
 ///
 /// 括号内的逗号不计入分割。返回 `Vec<&str>` 纯切片，零分配新字符串。
-fn split_top_level<'a>(s: &'a str) -> Vec<&'a str> {
+fn split_top_level(s: &str) -> Vec<&str> {
     let mut result = Vec::new();
     let mut depth = 0i32;
     let mut start = 0usize;

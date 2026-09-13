@@ -218,9 +218,7 @@ impl Evaluator {
                     (Some(v), _) => Err(SassError::Eval(format!(
                         "$name: {v} is not a string."
                     ))),
-                    (None, _) => Err(SassError::Eval(format!(
-                        "Missing argument $name."
-                    ))),
+                    (None, _) => Err(SassError::Eval("Missing argument $name.".to_string())),
                 }
             }
             "variable-exists" => match pos_args {

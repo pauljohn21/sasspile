@@ -9,6 +9,7 @@
 
 pub mod node;
 mod serialize;
+mod serialize_write;
 pub mod selector_ast;
 mod selector;
 pub mod selector_format;

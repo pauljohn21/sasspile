@@ -7,7 +7,7 @@ use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     pub(crate) fn parse_if(&mut self) -> Result<Node> {
         self.skip_ws();
         let cond = self.parse_value()?;

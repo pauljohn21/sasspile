@@ -17,15 +17,15 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 impl Env {
-    /// 获取 scope `的可变所有权——try_unwrap` 零 clone，fallback clone。
-    fn mutate_scope(mut self) -> (Scope, Self) {
+    /// 获取 scope 的可变所有权——try_unwrap 零 clone，fallback clone。
+    pub(super) fn mutate_scope(mut self) -> (Scope, Self) {
         let current = std::mem::take(&mut self.current);
         let scope = Rc::try_unwrap(current).unwrap_or_else(|rc| (*rc).clone());
         (scope, self)
     }
 
     /// 从 scope 和 self 重建 Env。
-    fn with_scope(self, scope: Scope) -> Self {
+    pub(super) fn with_scope(self, scope: Scope) -> Self {
         Self {
             current: Rc::new(scope),
             ..self
@@ -121,9 +121,9 @@ impl Env {
         self.current.get_function(name)
     }
 
-    pub fn set_content(mut self, content: Vec<Node>, content_env: Env) -> Self {
+    pub fn set_content(mut self, content: Vec<Node>, content_env: &Env) -> Self {
         self.content = Some(Rc::new(content));
-        self.content_env = Some(Rc::new(content_env));
+        self.content_env = Some(Rc::new(content_env.clone()));
         self
     }
 
@@ -263,74 +263,6 @@ impl Env {
 
     pub(crate) fn get_namespaces(&self) -> &HashMap<String, Rc<ModuleExports>> {
         &self.namespaces
-    }
-
-    // --- star_members / star_imported 方法 ---
-
-    pub(crate) fn add_star_members(mut self, module_name: &str, names: &[&str]) -> Self {
-        for name in names {
-            self.star_members
-                .entry((*name).to_string())
-                .or_default()
-                .push(module_name.to_string());
-        }
-        self
-    }
-
-    pub(crate) fn star_conflict(&self, name: &str) -> Option<&[String]> {
-        self.star_members
-            .get(name)
-            .filter(|v| v.len() > 1)
-            .map(Vec::as_slice)
-    }
-
-    pub(crate) fn star_module_loaded(&self, module_name: &str) -> bool {
-        self.star_members
-            .values()
-            .any(|mods| mods.iter().any(|m| m == module_name))
-    }
-
-    pub(crate) fn get_star_imported(&self) -> &HashSet<String> {
-        &self.star_imported
-    }
-
-    pub(crate) fn add_star_imported(mut self, name: String) -> Self {
-        self.star_imported.insert(name);
-        self
-    }
-
-    pub(crate) fn get_css_imports(&self) -> &[String] {
-        &self.css_imports
-    }
-
-    pub(crate) fn remove_star_imported(self) -> Self {
-        let (mut scope, env) = self.mutate_scope();
-        for name in &env.star_imported {
-            scope.local_vars.remove(name);
-            scope.local_mixins.remove(name);
-            scope.local_functions.remove(name);
-        }
-        let mut env = env;
-        env.star_imported.clear();
-        env.with_scope(scope)
-    }
-
-    // --- 模块/extends Rc getter ---
-
-    pub(crate) fn get_loaded_modules(&self) -> &HashSet<PathBuf> {
-        &self.loaded_modules
-    }
-
-    pub(crate) fn get_module_cache_rc(&self) -> Rc<HashMap<PathBuf, ModuleExports>> {
-        self.module_cache.clone()
-    }
-
-    pub(crate) fn get_loaded_modules_rc(&self) -> Rc<HashSet<PathBuf>> {
-        self.loaded_modules.clone()
-    }
-
-    pub(crate) fn get_extends_rc(&self) -> Rc<Vec<(String, String, bool, Option<PathBuf>)>> {
-        self.extends.clone()
     }
 
     // --- Scope 操作 ---

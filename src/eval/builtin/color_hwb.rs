@@ -29,17 +29,14 @@ pub fn call_hwb(args: &[Value], kw_args: &HashMap<String, Value>) -> Result<Opti
 
     // 用 ? 传播管道：每个步骤失败时透传原始字符串，成功时 ? 取值
     let passthrough = || format_hwb_passthrough(&flat);
-    let (h_parsed, h_unit, h_is_none_kw) = match extract_hue(&flat[0])? {
-        Some(tuple) => tuple,
-        None => return Ok(Some(Value::String(passthrough(), false))),
+    let Some((h_parsed, h_unit, h_is_none_kw)) = extract_hue(&flat[0])? else {
+        return Ok(Some(Value::String(passthrough(), false)));
     };
-    let w_parsed = match extract_channel(&flat[1])? {
-        Some(c) => c,
-        None => return Ok(Some(Value::String(passthrough(), false))),
+    let Some(w_parsed) = extract_channel(&flat[1])? else {
+        return Ok(Some(Value::String(passthrough(), false)));
     };
-    let bk_parsed = match extract_channel(&flat[2])? {
-        Some(c) => c,
-        None => return Ok(Some(Value::String(passthrough(), false))),
+    let Some(bk_parsed) = extract_channel(&flat[2])? else {
+        return Ok(Some(Value::String(passthrough(), false)));
     };
 
     // alpha 透传：有 4 参数且不可解析时透传

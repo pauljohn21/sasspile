@@ -14,7 +14,7 @@ use super::ast::*;
 use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     // —— Pratt 表达式解析 ——
     /// 解析值表达式（顶层，到 ; 或 } 停止）。
     /// 用于变量赋值、函数参数等需要求值的上下文——`/` 做除法。

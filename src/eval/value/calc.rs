@@ -9,73 +9,6 @@
 
 use super::*;
 
-/// 检查内容是否仅包含纯数字、单位字面量、常量（pi/e）和基础算术运算（+-*/）。
-/// 任何变量引用（$）、插值痕迹（#{}）、非数字函数调用都会使此返回 false。
-/// 用于决定 eval_value 中是否可对 `calc(...)` 内容做数值简化——
-/// 仅纯表达式可简化，含插值/变量时须保留 Calc 类型供 meta.calc-args 等内省。
-pub(crate) fn is_pure_calc_expr(s: &str) -> bool {
-    let s = s.trim();
-    match s.is_empty() {
-        true => return false,
-        false => {}
-    }
-    // 纯数字+单位 — 允许简化。calc(1px) → Number(1px) 是合法的数值简化。
-    // 注意：这使得 meta.calc-args(calc(1px)) 接收 Number 而非 Calc，
-    // 需要 calc-args/calc-name 内做一个 从 Number → 单元素列表 的转换。
-    if Evaluator::parse_simple_number(s).is_some() {
-        return true;
-    }
-    // 嵌套 calc/min/max/clamp 调用 —— 递归检查参数
-    for prefix in &["calc(", "min(", "max(", "clamp("] {
-        if let Some(rest) = s.strip_prefix(prefix) {
-            let Some(inner) = rest.strip_suffix(")") else {
-                return false;
-            };
-            let mut depth = 0i32;
-            let mut arg_start = 0;
-            for (i, c) in inner.char_indices() {
-                match c {
-                    '(' | '[' => depth += 1,
-                    ')' | ']' => depth -= 1,
-                    ',' if depth == 0 => {
-                        if !is_pure_calc_expr(&inner[arg_start..i]) {
-                            return false;
-                        }
-                        arg_start = i + 1;
-                    }
-                    _ => {}
-                }
-            }
-            return is_pure_calc_expr(&inner[arg_start..]);
-        }
-    }
-    // 括号包裹的纯表达式
-    if let Some(inner) = s.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
-        return is_pure_calc_expr(inner);
-    }
-    // 算术运算（+-*/）：分割运算符，递归验证两边
-    let mut depth = 0i32;
-    for (i, c) in s.char_indices() {
-        match c {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth -= 1,
-            ' ' if depth == 0 => {
-                let rest = &s[i..];
-                if rest.starts_with(" + ")
-                    || rest.starts_with(" - ")
-                    || rest.starts_with(" * ")
-                    || rest.starts_with(" / ")
-                {
-                    return is_pure_calc_expr(&s[..i]) && is_pure_calc_expr(&s[i + 3..]);
-                }
-            }
-            _ => {}
-        }
-    }
-    // 存在变量/插值/其他非数字字符 → 不纯
-    !s.contains('$') && !s.contains('#')
-}
-
 impl Evaluator {
     /// 检查顶层 AST 是否为纯二元 Add/Sub 不兼容单位运算。
     ///
@@ -95,7 +28,7 @@ impl Evaluator {
                     let g1 = super::calc_units::unit_group(u1);
                     let g2 = super::calc_units::unit_group(u2);
                     match (g1, g2) {
-                        (Some(_g1), Some(_g2)) if _g1 != _g2 => {
+                        (Some(g1), Some(g2)) if g1 != g2 => {
                             tracing::event!(
                                 tracing::Level::DEBUG,
                                 unit1 = %u1,
@@ -206,7 +139,7 @@ impl Evaluator {
         };
         // 去除多余括号：((1px)) → (1px) → 1px
         let inner = Self::strip_parens(inner);
-        match Self::parse_simple_number(inner) {
+        match super::calc_pure::parse_simple_number(inner) {
             Some(v) => return v,
             None => {}
         }
@@ -222,7 +155,7 @@ impl Evaluator {
         let substituted = Self::replace_calc_constants(inner);
         match substituted != inner {
             true => {
-                match Self::parse_simple_number(&substituted) {
+                match super::calc_pure::parse_simple_number(&substituted) {
                     Some(v) => return v,
                     None => {}
                 }
@@ -251,9 +184,9 @@ impl Evaluator {
             true => return None,
             false => {}
         }
-        let min = Self::parse_simple_number(parts[0])?;
-        let val = Self::parse_simple_number(parts[1])?;
-        let max = Self::parse_simple_number(parts[2])?;
+        let min = super::calc_pure::parse_simple_number(parts[0])?;
+        let val = super::calc_pure::parse_simple_number(parts[1])?;
+        let max = super::calc_pure::parse_simple_number(parts[2])?;
         match (&min, &val, &max) {
             (Value::Number(mn, mu), Value::Number(v, vu), Value::Number(mx, xu))
                 if mu == vu && vu == xu =>
@@ -280,7 +213,7 @@ impl Evaluator {
         }
         let nums: Vec<Value> = parts
             .iter()
-            .map(|p| Self::parse_simple_number(p))
+            .map(|p| super::calc_pure::parse_simple_number(p))
             .collect::<Option<Vec<_>>>()?;
         let all_same_unit = nums.windows(2).all(|w| match (&w[0], &w[1]) {
             (Value::Number(_, u1), Value::Number(_, u2)) => u1 == u2,
@@ -318,8 +251,8 @@ impl Evaluator {
         let op_str: &str = s[op_idx..op_idx + 3].trim();
         let left = s[..op_idx].trim();
         let right = s[op_idx + 3..].trim();
-        let left_val = Self::parse_simple_number(left)?;
-        let right_val = Self::parse_simple_number(right)?;
+        let left_val = super::calc_pure::parse_simple_number(left)?;
+        let right_val = super::calc_pure::parse_simple_number(right)?;
         match (&left_val, &right_val) {
             // 乘法：数字 * 无单位数字
             (Value::Number(a, ua), Value::Number(b, None)) if op_str == "*" => {
@@ -393,7 +326,7 @@ impl Evaluator {
                 match (ok, depth == 0) {
                     (true, true) => {
                         let inner_trimmed = inner.trim();
-                        match Self::parse_simple_number(inner_trimmed).is_some() {
+                        match super::calc_pure::parse_simple_number(inner_trimmed).is_some() {
                             true => return inner_trimmed,
                             false => {}
                         }
@@ -521,37 +454,5 @@ impl Evaluator {
             }
         }
         found
-    }
-
-    /// 尝试将字符串解析为纯数字（含单位）。
-    pub(crate) fn parse_simple_number(s: &str) -> Option<Value> {
-        let s = s.trim();
-        match s {
-            "pi" => return Some(Value::Number(std::f64::consts::PI, None)),
-            "e" => return Some(Value::Number(std::f64::consts::E, None)),
-            _ => {}
-        }
-        let s = s.strip_prefix('+').unwrap_or(s);
-        let split = s.find(|c: char| {
-            !c.is_ascii_digit() && c != '.' && c != '-' && c != 'e' && c != 'E' && c != '+'
-        });
-        match split {
-            None => s.parse::<f64>().ok().map(|n| Value::Number(n, None)),
-            Some(idx) if idx > 0 => {
-                let (num_str, unit) = s.split_at(idx);
-                let n = num_str.parse::<f64>().ok()?;
-                let unit = unit.trim();
-                match unit.is_empty() {
-                    true => return Some(Value::Number(n, None)),
-                    false => {}
-                }
-                match !unit.chars().all(|c| c.is_ascii_alphabetic()) {
-                    true => return None,
-                    false => {}
-                }
-                Some(Value::Number(n, Some(unit.to_string())))
-            }
-            _ => None,
-        }
     }
 }

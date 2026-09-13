@@ -9,7 +9,7 @@ use crate::error::{Result, SassError};
 use crate::lex::token::Token;
 use crate::parse::at_rule_kinds::AtRuleKind;
 
-impl<'tok> ParseStream<'tok> {
+impl ParseStream<'_> {
     // —— @规则解析 ——
     pub(crate) fn parse_at_rule(&mut self, name: String) -> Result<Node> {
         self.advance(); // 消费 @rule
