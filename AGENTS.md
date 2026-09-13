@@ -492,7 +492,7 @@ SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 ```
 
 **通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
-**sass-spec 基线**：7658/12133 = 63%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：7837/12133 = 64%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 

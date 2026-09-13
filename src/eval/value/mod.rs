@@ -135,7 +135,7 @@ impl Evaluator {
                     .or_else(|| s.strip_prefix("max("))
                     .or_else(|| s.strip_prefix("clamp("));
                 match inner.and_then(|i| i.strip_suffix(")")) {
-                    Some(inner) if is_pure_calc_expr(inner) => Ok(Self::simplify_calc(s)),
+                    Some(inner) if is_pure_calc_expr(inner) => Self::simplify_calc(s),
                     _ => Ok(Value::Calc(s.clone())),
                 }
             }

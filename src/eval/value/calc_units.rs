@@ -21,7 +21,7 @@ pub fn units_compatible(a: &str, b: &str) -> bool {
 }
 
 /// 获取单位所属的兼容组。
-fn unit_group(unit: &str) -> Option<UnitGroup> {
+pub(crate) fn unit_group(unit: &str) -> Option<UnitGroup> {
     match unit.to_lowercase().as_str() {
         "px" | "em" | "rem" | "cm" | "mm" | "in" | "pt" | "pc" | "q" | "vw" | "vh"
         | "vmin" | "vmax" => Some(UnitGroup::Length),
@@ -34,7 +34,7 @@ fn unit_group(unit: &str) -> Option<UnitGroup> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UnitGroup {
+pub(crate) enum UnitGroup {
     Length,
     Angle,
     Time,

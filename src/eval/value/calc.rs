@@ -77,15 +77,67 @@ pub(crate) fn is_pure_calc_expr(s: &str) -> bool {
 }
 
 impl Evaluator {
+    /// 检查顶层 AST 是否为纯二元 Add/Sub 不兼容单位运算。
+    ///
+    /// 匹配 `calc(1u1 ± 1u2)` 且 u1、u2 属于不同物理量组（length/angle/time/frequency/resolution）
+    /// 时返回 Some(错误消息)。% 单位（unit_group 返回 None）被自然排除。
+    fn check_top_level_incompat(node: &super::calc_ast::CalcNode) -> Option<String> {
+        match node {
+            super::calc_ast::CalcNode::Op {
+                op: super::calc_ast::CalcOp::Add | super::calc_ast::CalcOp::Sub,
+                left,
+                right,
+            } => match (left.as_ref(), right.as_ref()) {
+                (
+                    super::calc_ast::CalcNode::Number(v1, Some(u1)),
+                    super::calc_ast::CalcNode::Number(v2, Some(u2)),
+                ) => {
+                    let g1 = super::calc_units::unit_group(u1);
+                    let g2 = super::calc_units::unit_group(u2);
+                    match (g1, g2) {
+                        (Some(_g1), Some(_g2)) if _g1 != _g2 => {
+                            tracing::event!(
+                                tracing::Level::DEBUG,
+                                unit1 = %u1,
+                                unit2 = %u2,
+                                "top-level binary incompatible units detected"
+                            );
+                            Some(format!("{v1}{u1} and {v2}{u2} are incompatible."))
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// 简化 `calc()` 表达式——纯数字时去掉 `calc()` 包装。
     ///
     /// `calc(1px)` → `Value::Number(1, "px")`
     /// `calc(1px + 2px)` → `Value::Number(3, "px")`（同单位简化）
     /// `calc(1px + 2%)` → `Value::Calc("calc(1px + 2%)")`（不同单位保留）
-    pub(crate) fn simplify_calc(s: &str) -> Value {
+    /// `calc(1px + 1deg)` → `Err(...)`（顶层二元不兼容单位报错）
+    pub(crate) fn simplify_calc(s: &str) -> Result<Value> {
+        // Pre-check: 顶层二元不兼容单位检测
+        // 提取 calc(...) 内部表达式，解析 AST，检查是否为纯二元 Add/Sub 不兼容单位
+        let inner = if s.len() >= 6
+            && s.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("calc("))
+            && s.ends_with(')')
+        {
+            &s[5..s.len() - 1]
+        } else {
+            s
+        };
+        if let Some(node) = super::calc_ast::parse_calc_expr(inner) {
+            if let Some(msg) = Self::check_top_level_incompat(&node) {
+                return Err(SassError::Eval(msg));
+            }
+        }
         match Self::try_ast_simplify(s) {
-            Some(result) => result,
-            None => Self::simplify_calc_str(s),
+            Some(result) => Ok(result),
+            None => Ok(Self::simplify_calc_str(s)),
         }
     }
 
