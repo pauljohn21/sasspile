@@ -38,6 +38,8 @@ pub(crate) const MATH_NAMES: &[(&str, &str)] = &[
     ("math.comparable", "comparable"),
     ("math.mod", "mod"),
     ("math.rem", "rem"),
+    ("math.exp", "exp"),
+    ("math.sign", "sign"),
 ];
 
 pub(crate) const STRING_NAMES: &[(&str, &str)] = &[

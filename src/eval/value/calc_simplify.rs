@@ -46,7 +46,21 @@ fn simplify_recursive(node: CalcNode) -> Result<CalcNode, CalcError> {
 }
 
 /// 简化运算节点——消费 left 和 right（move 语义）。
+///
+/// 部分简化策略：当同层单位不兼容时，保留 Op 节点但子表达式已简化。
+/// 符号反转：`Sub(a, -b)` → `Add(a, b)`，`Add(a, -b)` → `Sub(a, b)`。
 fn simplify_op(op: CalcOp, left: CalcNode, right: CalcNode) -> Result<CalcNode, CalcError> {
+    // 符号反转检测：右子为负数时翻转运算符
+    // （calc AST 中负数编码为 Number(-v, u)）
+    match (&op, &right) {
+        (CalcOp::Sub, CalcNode::Number(b, ub)) if *b < 0.0 && !b.is_nan() => {
+            return simplify_op(CalcOp::Add, left, CalcNode::Number(-*b, ub.clone()));
+        }
+        (CalcOp::Add, CalcNode::Number(b, ub)) if *b < 0.0 && !b.is_nan() => {
+            return simplify_op(CalcOp::Sub, left, CalcNode::Number(-*b, ub.clone()));
+        }
+        _ => {}
+    }
     // 两个都是纯数字
     if let (CalcNode::Number(a, ua), CalcNode::Number(b, ub)) = (&left, &right) {
         // 除法：除数有单位且与左侧不抵消 → 保留 BinaryOp
@@ -64,9 +78,19 @@ fn simplify_op(op: CalcOp, left: CalcNode, right: CalcNode) -> Result<CalcNode, 
                 }
             }
         }
-        return simplify_number_op(op, *a, ua, *b, ub);
+        // 数值运算：若单位不兼容（仅 Add/Sub 可能），保留 Op 节点但带简化子节点
+        match simplify_number_op(op, *a, ua, *b, ub) {
+            Ok(node) => return Ok(node),
+            Err(_) => {
+                return Ok(CalcNode::Op {
+                    op,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                });
+            }
+        }
     }
-    // 无法简化——保留原样
+    // 无法简化——保留原样（子节点已经过 simplify_recursive 简化）
     Ok(CalcNode::Op {
         op,
         left: Box::new(left),
@@ -265,10 +289,13 @@ fn simplify_abs(args: Vec<CalcNode>) -> Result<CalcNode, CalcError> {
     }
 }
 
-/// 简化 sign(x)。
+/// 简化 sign(x)。注意：f64::signum(0.0) = 1.0，但 CSS 规范要求 sign(0) = 0。
 fn simplify_sign(args: Vec<CalcNode>) -> Result<CalcNode, CalcError> {
     match args.as_slice() {
-        [CalcNode::Number(v, _)] => Ok(CalcNode::Number(v.signum(), None)),
+        [CalcNode::Number(v, _)] => {
+            let sign = if *v == 0.0 { 0.0 } else { v.signum() };
+            Ok(CalcNode::Number(sign, None))
+        }
         _ => preserve_func("sign", args),
     }
 }

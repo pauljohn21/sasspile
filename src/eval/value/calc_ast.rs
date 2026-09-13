@@ -246,6 +246,17 @@ impl Parser {
                     true => return self.parse_ident_or_func(),
                     false => {}
                 }
+                // 负号后跟标识符：解析标识符并将数字常量取负（如 -infinity、-nan）
+                match c2.is_some_and(|c| c.is_ascii_alphabetic()) {
+                    true => {
+                        self.advance(); // 消费 '-'
+                        return self.parse_ident_or_func().map(|n| match n {
+                            CalcNode::Number(v, u) => CalcNode::Number(-v, u),
+                            other => other,
+                        });
+                    }
+                    false => {}
+                }
             }
             false => {}
         }

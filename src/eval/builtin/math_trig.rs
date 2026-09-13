@@ -171,7 +171,7 @@ fn extract_unitless(v: &Value, param: &str) -> Result<f64> {
     }
 }
 
-/// Math 三角/pow/log/hypot 函数分派。
+/// Math 三角/pow/log/hypot/exp/sign 函数分派。
 pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
     match name {
         "sqrt" => unitless_unary_func(args, "sqrt", f64::sqrt),
@@ -185,6 +185,8 @@ pub fn call(name: &str, args: &[Value]) -> Result<Option<Value>> {
         "atan2" => call_atan2(args),
         "log" => call_log(args),
         "hypot" => call_hypot(args),
+        "exp" => call_exp(args),
+        "sign" => call_sign(args),
         _ => Ok(None),
     }
 }
@@ -334,6 +336,62 @@ fn call_log(args: &[Value]) -> Result<Option<Value>> {
         false => {}
     }
     Ok(Some(Value::Number(n.ln(), None)))
+}
+
+/// exp(x)——e^x，溢出时输出 calc(infinity)，NaN 输出 calc(NaN)。
+fn call_exp(args: &[Value]) -> Result<Option<Value>> {
+    validate_single_number(args)?;
+    match &args[0] {
+        Value::Number(n, unit) => {
+            let result = n.exp();
+            // 特殊浮点值（infinity / NaN）保留 calc() 包装
+            if result.is_infinite() || result.is_nan() {
+                return Ok(Some(Value::Calc(format!(
+                    "calc({})",
+                    crate::eval::value::calc_ast::format_number_static(result, unit.as_deref())
+                ))));
+            }
+            Ok(Some(Value::Number(result, unit.clone())))
+        }
+        Value::Calc(c) => {
+            let inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
+            Ok(Some(Value::String(format!("exp({inner})"), false)))
+        }
+        _ => Err(SassError::Eval("$number is not a number.".into())),
+    }
+}
+
+/// sign(x)——返回 -1/0/+1，保留单位；NaN 输出 calc(NaN)。
+/// 注意：f64::signum(0.0) = 1.0，但 CSS 规范要求 sign(0) = 0。
+fn sign_value(n: f64) -> f64 {
+    if n == 0.0 {
+        0.0
+    } else {
+        n.signum()
+    }
+}
+
+fn call_sign(args: &[Value]) -> Result<Option<Value>> {
+    validate_single_number(args)?;
+    match &args[0] {
+        Value::Number(n, unit) => {
+            if n.is_nan() {
+                return Ok(Some(Value::Calc("calc(NaN)".to_string())));
+            }
+            Ok(Some(Value::Number(sign_value(*n), unit.clone())))
+        }
+        Value::Calc(c) => {
+            let inner = c
+                .strip_prefix("calc(")
+                .and_then(|s| s.strip_suffix(")"))
+                .unwrap_or(c.as_str());
+            Ok(Some(Value::String(format!("sign({inner})"), false)))
+        }
+        _ => Err(SassError::Eval("$number is not a number.".into())),
+    }
 }
 
 /// hypot(numbers...)——向量的欧几里得范数。

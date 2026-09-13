@@ -119,45 +119,42 @@ pub fn call(
                 }
                 false => {}
             }
-            // 使用第一个参数的单位作为目标单位，将所有参数转换后比较
-            let first_unit = match &args[0] {
-                Value::Number(_, u) => u.clone(),
-                _ => return Err(SassError::Eval(format!("{name} requires number arguments"))),
-            };
-            let mut result = match &args[0] {
-                Value::Number(n, _) => *n,
-                _ => unreachable!(),
-            };
-            let result_unit = first_unit.clone();
-            for arg in args.iter().skip(1) {
-                let (val, unit) = match arg {
-                    Value::Number(n, u) => (*n, u.clone()),
-                    _ => {
-                        return Err(SassError::Eval(format!(
-                            "{name} requires number arguments"
-                        )))
+            // 提取所有数字参数
+            let numbers: Vec<(f64, Option<String>)> = args
+                .iter()
+                .map(|arg| match arg {
+                    Value::Number(n, u) => Ok((*n, u.clone())),
+                    _ => Err(SassError::Eval(format!("{name} requires number arguments"))),
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // 找到最值参数：比较数值，兼容单位转换后比，不兼容时直接比数值
+            // 返回获胜者的（原始值，原始单位）
+            let (winner_val, winner_unit) = numbers.iter().skip(1).fold(
+                (numbers[0].0, numbers[0].1.clone()),
+                |(best_val, best_unit), (val, unit)| {
+                    let compatible = crate::eval::value::units_compatible(
+                        best_unit.as_deref(),
+                        unit.as_deref(),
+                    );
+                    // 将 val 转换到 best_unit 单位以便比较（兼容时），否则直接比数值
+                    let val_for_compare: f64 = match (&best_unit, unit.as_deref()) {
+                        (Some(bu), Some(u)) if compatible && bu != u => {
+                            val * crate::eval::builtin::math_css::unit_conversion_factor(u, bu)
+                        }
+                        _ => *val,
+                    };
+                    let should_replace = if is_min {
+                        val_for_compare < best_val
+                    } else {
+                        val_for_compare > best_val
+                    };
+                    match should_replace {
+                        true => (*val, unit.clone()),
+                        false => (best_val, best_unit),
                     }
-                };
-                // 检查单位兼容性
-                if !crate::eval::value::units_compatible(first_unit.as_deref(), unit.as_deref()) {
-                    return Err(SassError::Eval(format!(
-                        "{name} requires number arguments"
-                    )));
-                }
-                // 转换到目标单位
-                let converted = match (first_unit.as_deref(), unit.as_deref()) {
-                    (None, None) => val,
-                    (Some(fu), Some(u)) => {
-                        val * crate::eval::builtin::math_css::unit_conversion_factor(u, fu)
-                    }
-                    _ => val, // unitless + unit 保持原值
-                };
-                result = match is_min {
-                    true => result.min(converted),
-                    false => result.max(converted),
-                };
-            }
-            Ok(Some(Value::Number(result, result_unit)))
+                },
+            );
+            Ok(Some(Value::Number(winner_val, winner_unit)))
         }
         "percentage" => {
             validate_single_number(args)?;
@@ -269,7 +266,7 @@ pub fn call(
             }
         }
         "pow" | "sqrt" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2" | "log"
-        | "hypot" => super::math_trig::call(name, args),
+        | "hypot" | "exp" | "sign" => super::math_trig::call(name, args),
         "random" => {
             match args.len() > 1 {
                 true => return Err(SassError::Eval(format!(
