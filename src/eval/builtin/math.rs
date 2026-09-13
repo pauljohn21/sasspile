@@ -21,6 +21,7 @@ pub fn call(
     pos_args: &[Value],
     kw_args: &HashMap<String, Value>,
 ) -> Result<Option<Value>> {
+    let raw_args = pos_args; // 保留原始 pos_args 用于策略检测
     let args = merge_math_args(pos_args, kw_args, name);
     let args = args.as_slice();
 
@@ -68,27 +69,40 @@ pub fn call(
             }
         }
         "round" => {
-            // math.round() 仅接受 1 个参数（传统 Sass 行为）
-            validate_single_number(args)?;
-            match args.len() {
-                1 => {}
-                n => {
-                    return Err(SassError::Eval(format!(
-                        "Only 1 argument allowed, but {n} {} passed.",
-                        match n == 1 { true => "was", false => "were" }
-                    )))
+            // CSS round(strategy, number, step?) — 检测策略取整形式
+            // 注意：args 是 merge_math_args 结果（命名的 $number 会映射到 args[0]）
+            // 策略取整只在原始 pos_args 上检测（命名参数形式不可能有策略字符串）
+            match raw_args {
+                [Value::String(s, _), ..] if is_round_strategy(s) => {
+                    // round(strategy, number, step?) — 使用原始 pos_args 分派
+                    match raw_args.len() {
+                        2 | 3 => round_strategy(raw_args),
+                        n => Err(SassError::Eval(format!(
+                            "round() strategy form expects 2 or 3 arguments, got {n}."
+                        ))),
+                    }
                 }
-            }
-            match &args[0] {
-                Value::Number(n, u) => Ok(Some(Value::Number(n.round(), u.clone()))),
-                Value::Calc(c) => {
-                    let inner = c
-                        .strip_prefix("calc(")
-                        .and_then(|s| s.strip_suffix(")"))
-                        .unwrap_or(c.as_str());
-                    Ok(Some(Value::String(format!("round({inner})"), false)))
+                _ => {
+                    // 传统 1 参数 round(x) 或 round($number: x)
+                    match args.len() {
+                        0 => Err(SassError::Eval("Missing argument $number.".into())),
+                        1 => match &args[0] {
+                            Value::Number(n, u) => Ok(Some(Value::Number(n.round(), u.clone()))),
+                            Value::Calc(c) => {
+                                let inner = c
+                                    .strip_prefix("calc(")
+                                    .and_then(|s| s.strip_suffix(")"))
+                                    .unwrap_or(c.as_str());
+                                Ok(Some(Value::String(format!("round({inner})"), false)))
+                            }
+                            _ => Err(SassError::Eval("$number is not a number.".into())),
+                        },
+                        n => Err(SassError::Eval(format!(
+                            "Only 1 argument allowed, but {n} {} passed.",
+                            match n == 1 { true => "was", false => "were" }
+                        ))),
+                    }
                 }
-                _ => Err(SassError::Eval("$number is not a number.".into())),
             }
         }
         "mod" => {
@@ -398,5 +412,99 @@ pub fn call(
             ))))
         }
         _ => Ok(None),
+    }
+}
+
+/// CSS round(strategy, number, step?) 策略取整。
+/// strategy: "up" | "down" | "nearest" | "to-zero"
+/// 带 step: result = step * round(strategy, number / step)
+fn round_strategy(args: &[Value]) -> Result<Option<Value>> {
+    // 解析 strategy（第一参数必须为策略字符串）
+    let strategy = match &args[0] {
+        Value::String(s, _) => s.trim().to_string(),
+        other => {
+            return Err(SassError::Eval(format!(
+                "$strategy: {other} is not a valid rounding strategy."
+            )))
+        }
+    };
+
+    // 解析 number（第二参数必须为数字）
+    let (number, num_unit) = match &args[1] {
+        Value::Number(n, u) => (*n, u.clone()),
+        other => {
+            return Err(SassError::Eval(format!(
+                "$number: {other} is not a number."
+            )))
+        }
+    };
+
+    // 可选 step（第三参数）— 校验单位兼容性
+    let step = match args.len() {
+        3 => match &args[2] {
+            Value::Number(s, u) => {
+                // 单位兼容性校验
+                match (num_unit.as_deref(), u.as_deref()) {
+                    (Some(nu), Some(su)) if nu != su => {
+                        return Err(SassError::Eval(format!(
+                            "$step: {s}{su} and $number: {number}{nu} have incompatible units."
+                        )));
+                    }
+                    _ => {}
+                }
+                // step != 0 校验
+                if *s == 0.0 {
+                    return Err(SassError::Eval(
+                        "$step: cannot be zero.".into(),
+                    ));
+                }
+                Some((*s, u.clone()))
+            }
+            other => {
+                return Err(SassError::Eval(format!(
+                    "$step: {other} is not a number."
+                )))
+            }
+        },
+        _ => None,
+    };
+
+    // 处理 infinity/NaN 特殊值
+    if number.is_nan() {
+        return Ok(Some(Value::Number(f64::NAN, num_unit)));
+    }
+    if number.is_infinite() {
+        return Ok(Some(Value::Number(number, num_unit)));
+    }
+
+    // 策略分派
+    let result = match step {
+        Some((step_val, _step_unit)) => {
+            let scaled = number / step_val;
+            let rounded = apply_single_strategy(&strategy, scaled)?;
+            rounded * step_val
+        }
+        None => apply_single_strategy(&strategy, number)?,
+    };
+
+    Ok(Some(Value::Number(result, num_unit)))
+}
+
+/// 判断字符串是否为合法的 round 策略名。
+fn is_round_strategy(s: &str) -> bool {
+    let t = s.trim();
+    t == "up" || t == "down" || t == "nearest" || t == "to-zero"
+}
+
+/// 对单个数字应用取整策略。
+fn apply_single_strategy(strategy: &str, n: f64) -> Result<f64> {
+    match strategy {
+        "up" => Ok(n.ceil()),
+        "down" => Ok(n.floor()),
+        "nearest" => Ok(n.round()),
+        "to-zero" => Ok(n.trunc()),
+        _ => Err(SassError::Eval(format!(
+            "$strategy: {strategy} is not a valid rounding strategy. Expected up, down, nearest, or to-zero."
+        ))),
     }
 }

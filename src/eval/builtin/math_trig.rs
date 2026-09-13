@@ -39,6 +39,15 @@ fn trig_func(
             let rad = angle_to_radians(*n, unit.as_ref(), "number")?;
             Ok(Some(Value::Number(f(rad), None)))
         }
+        Value::String(s, _) => match s.trim() {
+            "infinity" | "-infinity" | "nan" | "NaN" => {
+                // sin/cos/tan(infinity/NaN) = NaN (CSS 规范)
+                Ok(Some(Value::Number(f64::NAN, None)))
+            }
+            _ => Err(SassError::Eval(format!(
+                "$number: {s} is not a number."
+            ))),
+        },
         Value::Calc(c) => {
             let inner = c
                 .strip_prefix("calc(")
@@ -86,7 +95,7 @@ fn inverse_trig_func(
     }
     let n = extract_unitless(&args[0], "number")?;
     match &args[0] {
-        Value::Number(_, _) => {
+        Value::Number(_, _) | Value::String(_, _) => {
             let result = f(n).to_degrees();
             Ok(Some(Value::Number(result, Some("deg".to_string()))))
         }

@@ -75,6 +75,12 @@ pub(crate) fn validate_single_number(args: &[Value]) -> Result<()> {
     }
     match &args[0] {
         Value::Number(..) | Value::Calc(..) => Ok(()),
+        Value::String(s, _) => match s.trim() {
+            "infinity" | "-infinity" | "nan" | "NaN" => Ok(()),
+            other => Err(SassError::Eval(format!(
+                "$number: {other} is not a number."
+            ))),
+        },
         other => Err(SassError::Eval(format!(
             "$number: {other} is not a number."
         ))),
