@@ -83,9 +83,10 @@ impl Evaluator {
         };
         let step: i64 = if start <= end { 1 } else { -1 };
         // inclusive: 正向 stop=end+1（不含 end+1，含 end），反向 stop=end（含 end）
+        // exclusive: 正向 stop=end（不含 end），反向 stop=end+1（不含 end）
         let stop = match inclusive {
             true => match step > 0 { true => end + step, false => end },
-            false => end,
+            false => match step > 0 { true => end, false => end + 1 },
         };
         // 构建迭代范围：正向 (start..stop)，反向 (stop+1..=start).rev()
         let count = 0i64;

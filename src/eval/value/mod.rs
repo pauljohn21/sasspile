@@ -29,6 +29,7 @@ impl Evaluator {
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
         // 命名空间变量赋值（namespace.$var）——更新模块变量
+        // dash/underscore 归一化：SCSS 中 - 和 _ 等价
         match name.contains('.') {
             true => {
                 let val = Self::eval_value(value, &env)?;
@@ -37,11 +38,15 @@ impl Evaluator {
                     true => {
                         let ns = parts[0];
                         let var_name = parts[1];
+                        let var_name_norm = var_name.replace('-', "_");
                         match env.get_namespace(ns).cloned() {
                             Some(module) => {
-                                match module.all_vars().any(|(k, _)| k == var_name) {
+                                let found = module
+                                    .all_vars()
+                                    .any(|(k, _)| k.replace('-', "_") == var_name_norm);
+                                match found {
                                     true => {
-                                        let env = env.with_namespace_var(ns, var_name, val);
+                                        let env = env.with_namespace_var(ns, &var_name_norm, val);
                                         return Ok((vec![], env));
                                     }
                                     false => return Err(SassError::Eval(format!("Undefined variable: ${name}"))),
@@ -126,16 +131,21 @@ impl Evaluator {
             | Value::FunctionRef(..)
             | Value::ArgList(..) => Ok(value.clone()),
             Value::Calc(s) => {
-                // 仅当内容是纯数字/单位字面量和基础算术（+-*/）时才简化。
-                // 其他情况（插值结果、变量引用、混合单位运算）保留 calc() 包装，
-                // 这样 meta.calc-args 等反射函数能看到 Calc 类型。
-                // 支持 calc(…) / min(…) / max(…) / clamp(…) 四种前缀。
+                // 空 calc()/clamp()/min()/max() — 检查是否有用户定义的函数覆盖
                 let inner = s
                     .strip_prefix("calc(")
                     .or_else(|| s.strip_prefix("min("))
                     .or_else(|| s.strip_prefix("max("))
                     .or_else(|| s.strip_prefix("clamp("));
                 match inner.and_then(|i| i.strip_suffix(")")) {
+                    Some("") => {
+                        // 空参数——提取函数名检查用户定义覆盖
+                        let func_name = s.split('(').next().unwrap_or("").to_lowercase();
+                        match env.get_function(&func_name) {
+                            Some(func) => Self::call_user_function(func, &[], &HashMap::new(), env).map(|v| v),
+                            None => Ok(Value::Calc(s.clone())),
+                        }
+                    }
                     Some(inner) if is_pure_calc_expr(inner) => Self::simplify_calc(s),
                     _ => Ok(Value::Calc(s.clone())),
                 }
@@ -156,10 +166,11 @@ impl Evaluator {
                 if let Some(dot) = name.find('.') {
                     let ns = &name[..dot];
                     let var_name = &name[dot + 1..];
+                    let var_name_norm = var_name.replace('-', "_");
                     if let Some(module) = env.get_namespace(ns) {
                             if let Some(val) = module
                                 .all_vars()
-                                .find(|(k, _)| *k == var_name)
+                                .find(|(k, _)| k.replace('-', "_") == var_name_norm)
                                 .map(|(_, v)| v)
                             {
                                 return Ok(val.clone());

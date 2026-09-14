@@ -22,6 +22,15 @@ impl ParseStream<'_> {
             AtRuleKind::Include => self.parse_include(),
             AtRuleKind::Content => {
                 self.skip_ws();
+                // 消费可选括号：@content() 或 @content
+                if matches!(self.peek(), Some(Token::LParen)) {
+                    self.advance();
+                    self.skip_ws();
+                    if matches!(self.peek(), Some(Token::RParen)) {
+                        self.advance();
+                    }
+                }
+                self.skip_ws();
                 match self.peek() {
                     Some(Token::Semicolon) => { self.advance(); }
                     _ => {}
@@ -43,7 +52,7 @@ impl ParseStream<'_> {
     }
 
     pub(crate) fn parse_mixin_def(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let name = self.parse_ident_name()?;
         // @mixin 不允许命名空间限定名（如 namespace.member）
         match self.peek() {
@@ -55,19 +64,19 @@ impl ParseStream<'_> {
             }
             _ => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let params = match self.peek() {
             Some(Token::LParen) => self.parse_params()?,
             _ => Vec::new(),
         };
-        self.skip_ws();
+        self.skip_ws_and_comments();
         self.expect(&Token::LBrace)?;
         let body = self.parse_body()?;
         Ok(Node::MixinDef { name, params, body })
     }
 
     pub(crate) fn parse_include(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let name = self.parse_ident_name()?;
         // 命名空间限定 mixin（如 midstream.b-a）
         let name = match self.peek() {
@@ -87,14 +96,14 @@ impl ParseStream<'_> {
             }
             _ => name,
         };
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let args = match self.peek() {
             Some(Token::LParen) => self.parse_args()?,
             _ => Vec::new(),
         };
         // 检查 @content 块
         let mut content = None;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(&Token::LBrace) => {
                 self.advance();
@@ -113,7 +122,7 @@ impl ParseStream<'_> {
     }
 
     pub(crate) fn parse_function_def(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let name = self.parse_ident_name()?;
         // @function 不允许命名空间限定名（如 namespace.member）
         match self.peek() {
@@ -146,11 +155,12 @@ impl ParseStream<'_> {
             false => {}
         }
 
-        // 全小写保留名检测
+        // 全小写保留名检测（CSS 原生函数名不可定义）
+        // 注意：and/or/not 是 Sass 关键字但可作为函数名（如 @function AND() {}）
         match name == name.to_ascii_lowercase() {
             true => {
             match name.as_str() {
-                "url" | "expression" | "element" | "and" | "or" | "not" => {
+                "url" | "expression" | "element" => {
                     return Err(SassError::Eval("Invalid function name.".into()));
                 }
                 _ => {}
@@ -168,7 +178,7 @@ impl ParseStream<'_> {
             }
             false => {}
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let params = match self.peek() {
             Some(Token::LParen) => self.parse_params()?,
             _ => {
@@ -178,16 +188,16 @@ impl ParseStream<'_> {
                 });
             }
         };
-        self.skip_ws();
+        self.skip_ws_and_comments();
         self.expect(&Token::LBrace)?;
         let body = self.parse_body()?;
         Ok(Node::FunctionDef { name, params, body })
     }
 
     pub(crate) fn parse_return(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let value = self.parse_value()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::Semicolon) => { self.advance(); }
             _ => {}
@@ -196,7 +206,7 @@ impl ParseStream<'_> {
     }
 
     pub(crate) fn parse_extend(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let mut selector = String::new();
         let mut optional = false;
         while let Some(t) = self.peek() {
@@ -204,7 +214,7 @@ impl ParseStream<'_> {
                 Token::Semicolon | Token::RBrace => break,
                 Token::Bang => {
                     self.advance();
-                    self.skip_ws();
+                    self.skip_ws_and_comments();
                     if let Some(Token::Ident(s)) = self.peek()
                         && s == "optional"
                     {
@@ -237,7 +247,7 @@ impl ParseStream<'_> {
     }
 
     pub(crate) fn parse_at_root(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let query = match self.peek() {
             Some(Token::LParen) => {
                 self.advance();
@@ -259,7 +269,7 @@ impl ParseStream<'_> {
             _ => None,
         };
         // 可能有选择器前缀
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::LBrace) => {}
             _ => {
@@ -268,16 +278,16 @@ impl ParseStream<'_> {
             let _ = sel; // 简化：忽略 at-root 选择器前缀
             }
         }
-        self.skip_ws();
+        self.skip_ws_and_comments();
         self.expect(&Token::LBrace)?;
         let body = self.parse_body()?;
         Ok(Node::AtRoot { query, body })
     }
 
     pub(crate) fn parse_warn(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let v = self.parse_value()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::Semicolon) => { self.advance(); }
             _ => {}
@@ -285,9 +295,9 @@ impl ParseStream<'_> {
         Ok(Node::Warn(v))
     }
     pub(crate) fn parse_debug(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let v = self.parse_value()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::Semicolon) => { self.advance(); }
             _ => {}
@@ -295,9 +305,9 @@ impl ParseStream<'_> {
         Ok(Node::Debug(v))
     }
     pub(crate) fn parse_error(&mut self) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let v = self.parse_value()?;
-        self.skip_ws();
+        self.skip_ws_and_comments();
         match self.peek() {
             Some(Token::Semicolon) => { self.advance(); }
             _ => {}
@@ -306,13 +316,13 @@ impl ParseStream<'_> {
     }
 
     pub(crate) fn parse_generic_at_rule(&mut self, name: String) -> Result<Node> {
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let params = if matches!(self.peek(), Some(Token::LBrace | Token::Semicolon) | None) {
             None
         } else {
             Some(self.parse_at_params()?)
         };
-        self.skip_ws();
+        self.skip_ws_and_comments();
         let body = match self.peek() {
             Some(Token::LBrace) => {
                 self.advance();

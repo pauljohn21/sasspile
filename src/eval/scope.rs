@@ -71,6 +71,20 @@ impl Scope {
         }
     }
 
+    /// 沿 parent 链向上查找 function（大小写不敏感）。
+    pub(crate) fn get_function_ci(&self, name: &str) -> Option<&FunctionDef> {
+        let name_lower = name.to_ascii_lowercase();
+        let mut scope: &Scope = self;
+        loop {
+            for (k, f) in &scope.local_functions {
+                if k.eq_ignore_ascii_case(&name_lower) {
+                    return Some(f);
+                }
+            }
+            scope = scope.parent.as_deref()?;
+        }
+    }
+
     /// 检查变量是否在当前或父作用域中定义。
     pub(crate) fn has_var(&self, name: &str) -> bool {
         self.lookup(name).is_some()

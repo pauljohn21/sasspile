@@ -89,7 +89,7 @@ pub(crate) fn normalize_css_ident(raw: &str) -> String {
 }
 
     /// 解码 CSS 转义序列（`\XX` 或 `\XX ` 格式）为实际字符。
-    fn decode_css_escapes(s: &str) -> String {
+    pub(crate) fn decode_css_escapes(s: &str) -> String {
         let chars: Vec<char> = s.chars().collect();
         let mut result = String::new();
         let mut i = 0;

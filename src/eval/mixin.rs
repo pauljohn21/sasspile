@@ -20,13 +20,15 @@ impl Evaluator {
             false => {}
         }
         // 命名空间限定 mixin（如 midstream.b-a）
+        // dash/underscore 归一化：SCSS 中 - 和 _ 等价
         if let Some(dot) = name.find('.') {
             let ns = &name[..dot];
             let mixin_name = &name[dot + 1..];
+            let mixin_name_norm = mixin_name.replace('-', "_");
             let ns_mixin = env.get_namespace(ns).and_then(|module| {
                 module
                     .all_mixins()
-                    .find(|(k, _)| *k == mixin_name)
+                    .find(|(k, _)| k.replace('-', "_") == mixin_name_norm)
                     .map(|(_, m)| m.clone())
             });
             if let Some(mixin) = ns_mixin {
@@ -183,9 +185,55 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             )),
             false => {}
         }
-        // 用户函数
+        // CSS 严格保留函数名（url/element/expression 及其大小写变体）—— 始终走内建
+        // 即使 @function URL() 定义成功，调用 URL() 仍视为 CSS 原生 url()
+        let name_lower = name.to_ascii_lowercase();
+        if !name.contains('.')
+            && super::builtin::dispatch::is_css_reserved_function(&name_lower)
+        {
+            // Vendor-prefixed 变体（如 -a-element、-A-EXPRESSION、-a-url）
+            if name_lower.starts_with('-') {
+                // url() 特殊：去掉 vendor 前缀规范化为 url()
+                if name_lower
+                    .strip_prefix('-')
+                    .is_some_and(|rest| rest.rsplit_once('-').is_some_and(|(_, b)| b == "url"))
+                {
+                    let arg_str = pos_args
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Ok(crate::parse::ast::Value::String(
+                        format!("url({arg_str})"),
+                        false,
+                    ));
+                }
+                // 其他（element/expression）—— 原样 CSS 透传（小写化）
+                let arg_str = pos_args
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Ok(crate::parse::ast::Value::String(
+                    format!("{name_lower}({arg_str})"),
+                    false,
+                ));
+            }
+            return Self::call_builtin(name, pos_args, kw_args, env);
+        }
+        // 用户函数（精确匹配优先）—— 用户定义可覆盖 calc/clamp 等
         if let Some(func) = env.get_function(name) {
             return Self::call_user_function(func, pos_args, kw_args, env);
+        }
+        // 用户函数（大小写不敏感匹配）
+        if let Some(func) = env.get_function_ci(name) {
+            return Self::call_user_function(func, pos_args, kw_args, env);
+        }
+        // CSS 原生函数名（attr/css/calc/clamp 等）—— 仅在无用户定义时走内建
+        if !name.contains('.')
+            && super::builtin::dispatch::is_css_native_function(&name_lower)
+        {
+            return Self::call_builtin(name, pos_args, kw_args, env);
         }
         // 在命名空间模块中查找同名函数（跳过内建模块 — 其 FunctionDef 条目仅用于 meta 内省）。
         let ns_func = env
@@ -195,7 +243,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             .find_map(|exports| {
                 exports
                     .all_functions()
-                    .find(|(k, _)| *k == name)
+                    .find(|(k, _)| k.eq_ignore_ascii_case(name))
                     .map(|(_, f)| f.clone())
             });
         if let Some(func) = ns_func {

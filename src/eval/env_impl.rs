@@ -121,6 +121,10 @@ impl Env {
         self.current.get_function(name)
     }
 
+    pub(crate) fn get_function_ci(&self, name: &str) -> Option<&FunctionDef> {
+        self.current.get_function_ci(name)
+    }
+
     pub fn set_content(mut self, content: Vec<Node>, content_env: &Env) -> Self {
         self.content = Some(Rc::new(content));
         self.content_env = Some(Rc::new(content_env.clone()));

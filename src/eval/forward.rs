@@ -92,12 +92,11 @@ impl Evaluator {
                             .map(|(k, v)| (strip_prefix(k), v.clone()))
                             .collect(),
                         false => {
-                            let mut configured_names: std::collections::HashSet<String> =
-                                std::collections::HashSet::new();
+                            let configured_names: std::collections::HashSet<String> =
+                                config.iter().map(|c| strip_prefix(&c.name)).collect();
                             let from_config: Vec<(String, Value)> =
                                 config.iter().try_fold(Vec::new(), |mut acc, cfg| {
                                     let name = strip_prefix(&cfg.name);
-                                    configured_names.insert(name.clone());
                                     let val = Evaluator::eval_value(&cfg.value, &env)?;
                                     let pending_val = env.get_pending_config().get(&name).or_else(|| {
                                         env.get_pending_config().get(&cfg.name.replace('-', "_"))
@@ -123,6 +122,7 @@ impl Evaluator {
                                     Ok::<_, SassError>(acc)
                                 })?;
                             let mut result = from_config;
+                            // 同时继承外层 pending_config 中未在当前 with 声明的配置（传播语义）
                             let extra: Vec<(String, Value)> = env
                                 .get_pending_config()
                                 .iter()
@@ -166,6 +166,54 @@ impl Evaluator {
                         .unwrap_or_default(),
                     false => Self::load_module(&path, &config_pairs, &env, false)?,
                 };
+                // @forward 自带 with(...) 时：仅验证实际有值的声明配置名
+                // 通过检查 exports.consumed_config 判断目标模块是否声明了 !default
+                match !config.is_empty() {
+                    true => {
+                        let prefix_str = prefix.as_deref();
+                        let strip_p = |k: &str| -> String {
+                            match prefix_str {
+                                Some(p) => {
+                                    let pfx = p.replace('-', "_");
+                                    let k_norm = k.replace('-', "_");
+                                    match k_norm.starts_with(&pfx) {
+                                        true => k_norm[pfx.len()..].to_string(),
+                                        false => k_norm,
+                                    }
+                                }
+                                None => k.replace('-', "_"),
+                            }
+                        };
+                        let is_null = |v: &Value| matches!(v, Value::Null);
+                        let declared_names: std::collections::HashSet<String> = config
+                            .iter()
+                            .filter_map(|c| {
+                                let name = strip_p(&c.name);
+                                let val = Evaluator::eval_value(&c.value, &env).ok()?;
+                                let has_value = match c.is_default {
+                                    true => env.get_pending_config().get(&name).is_some()
+                                        || !is_null(&val),
+                                    false => !is_null(&val),
+                                };
+                                match has_value {
+                                    true => Some(name),
+                                    false => None,
+                                }
+                            })
+                            .collect();
+                        for name in &declared_names {
+                            match !exports.consumed_config.contains(name) {
+                                true => {
+                                    return Err(SassError::Eval(
+                                        "This variable was not declared with !default in the @used module.".into(),
+                                    ));
+                                }
+                                false => {}
+                            }
+                        }
+                    }
+                    false => {}
+                }
                 let css = match already_loaded {
                     true => vec![],
                     false => {

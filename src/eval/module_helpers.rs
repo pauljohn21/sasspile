@@ -308,11 +308,15 @@ let fmt_key =
                 }
                 let key = fmt_key(k);
                 let var_key = format!("${key}");
-                match !filter.show.is_empty() && !filter.show.contains(&var_key) {
+                let var_key_norm = var_key.replace('-', "_");
+                // show/hide 过滤器 dash/underscore 归一化
+                match !filter.show.is_empty()
+                    && !filter.show.iter().any(|s| s.replace('-', "_") == var_key_norm)
+                {
                     true => continue,
                     false => {}
                 }
-                match filter.hide.contains(&var_key) {
+                match filter.hide.iter().any(|s| s.replace('-', "_") == var_key_norm) {
                     true => continue,
                     false => {}
                 }
@@ -337,11 +341,15 @@ let fmt_key =
                     false => {}
                 }
                 let key = fmt_key(k);
-                match !filter.show.is_empty() && !filter.show.contains(&key) {
+                let key_norm = key.replace('-', "_");
+                // show/hide 过滤器 dash/underscore 归一化
+                match !filter.show.is_empty()
+                    && !filter.show.iter().any(|s| s.replace('-', "_") == key_norm)
+                {
                     true => continue,
                     false => {}
                 }
-                match filter.hide.contains(&key) {
+                match filter.hide.iter().any(|s| s.replace('-', "_") == key_norm) {
                     true => continue,
                     false => {}
                 }
@@ -364,11 +372,15 @@ let fmt_key =
                     false => {}
                 }
                 let key = fmt_key(k);
-                match !filter.show.is_empty() && !filter.show.contains(&key) {
+                let key_norm = key.replace('-', "_");
+                // show/hide 过滤器 dash/underscore 归一化
+                match !filter.show.is_empty()
+                    && !filter.show.iter().any(|s| s.replace('-', "_") == key_norm)
+                {
                     true => continue,
                     false => {}
                 }
-                match filter.hide.contains(&key) {
+                match filter.hide.iter().any(|s| s.replace('-', "_") == key_norm) {
                     true => continue,
                     false => {}
                 }

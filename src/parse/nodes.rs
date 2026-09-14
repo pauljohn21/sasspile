@@ -394,21 +394,35 @@ impl ParseStream<'_> {
     // 辅助方法
     // ═══════════════════════════════════════════════════════════════════════
 
-    /// 解析标识符名称。
-    pub(crate) fn parse_ident_name(&mut self) -> Result<String> {
-        self.skip_ws();
-        match self.peek() {
-            Some(Token::Ident(s)) => {
-                let s = s.clone();
-                self.advance();
-                Ok(s)
-            }
-            _ => Err(SassError::Parse {
-                expected: "identifier".into(),
-                found: "other".into(),
-            }),
+/// 解析标识符名称。
+/// 接受 Ident 以及 Sass 关键字 and/or/not（它们可作为函数名）。
+/// CSS 转义序列（如 `\6F` → `o`）在返回前归一化。
+pub(crate) fn parse_ident_name(&mut self) -> Result<String> {
+    self.skip_ws();
+    match self.peek() {
+        Some(Token::Ident(s)) => {
+            let s = s.clone();
+            self.advance();
+            Ok(crate::parse::ast::Value::decode_css_escapes(&s))
         }
+        Some(Token::And) => {
+            self.advance();
+            Ok("and".to_string())
+        }
+        Some(Token::Or) => {
+            self.advance();
+            Ok("or".to_string())
+        }
+        Some(Token::Not) => {
+            self.advance();
+            Ok("not".to_string())
+        }
+        _ => Err(SassError::Parse {
+            expected: "identifier".into(),
+            found: "other".into(),
+        }),
     }
+}
 
     /// 解析字符串值。
     pub(crate) fn parse_string_value(&mut self) -> Result<String> {

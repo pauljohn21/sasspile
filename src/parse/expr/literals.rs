@@ -35,7 +35,7 @@ impl ParseStream<'_> {
                 Ok(Some(v))
             }
             Some(Token::Ident(s)) => {
-                let name = s.clone();
+                let name = crate::parse::ast::Value::decode_css_escapes(s);
                 self.advance();
                 Ok(Some(self.parse_ident_followup(name)?))
             }
@@ -55,6 +55,30 @@ impl ParseStream<'_> {
             Some(Token::Null) => {
                 self.advance();
                 Ok(Some(Value::Null))
+            }
+            // and/or/not 关键字可作为函数调用（如 AND()）
+            Some(Token::And | Token::Or | Token::Not) => {
+                let kw = self.peek().cloned();
+                let name = match kw {
+                    Some(Token::And) => "and",
+                    Some(Token::Or) => "or",
+                    Some(Token::Not) => "not",
+                    _ => unreachable!(),
+                }
+                .to_string();
+                self.advance();
+                // 如果后跟 (，解析为函数调用
+                self.skip_ws();
+                match self.peek() {
+                    Some(Token::LParen) => {
+                        let args = self.parse_args()?;
+                        Ok(Some(Value::Call(name, args)))
+                    }
+                    _ => {
+                        // 裸关键字作为字符串值（如 CSS 中 and 作为普通值）
+                        Ok(Some(Value::String(name, false)))
+                    }
+                }
             }
             Some(Token::Amp) => {
                 let v = Value::String("&".to_string(), false);

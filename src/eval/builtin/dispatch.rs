@@ -159,6 +159,108 @@ pub(crate) const META_NAMES: &[(&str, &str)] = &[
 /// CSS 通用函数名（无模块前缀变体）。
 const CSS_FUNC_NAMES: &[&str] = &["calc", "env", "var"];
 
+/// CSS 严格保留函数名（始终走 CSS 原生，不可被用户函数覆盖）。
+/// 即使 @function URL() 定义成功，调用 URL() 仍视为 CSS 原生 url()。
+/// 支持 vendor-prefixed 变体（如 -a-element、-A-EXPRESSION、-webkit-url）。
+pub(crate) fn is_css_reserved_function(name: &str) -> bool {
+    // 去掉 vendor 前缀（-xxx- 形式，必须以 '-' 开头）后检查基础名
+    let base = match name.strip_prefix('-') {
+        Some(rest) => match rest.rsplit_once('-') {
+            Some((_vendor, base)) => base,
+            None => name, // 没有 vendor 分隔符（如 -url），不视为 vendor-prefixed
+        },
+        None => name, // 不以 '-' 开头，不是 vendor-prefixed
+    };
+    matches!(base, "url" | "element" | "expression")
+}
+
+/// CSS 原生函数名（不可被用户函数覆盖）。
+/// 这些函数名即使被 `@function` 定义，也保留 CSS 原生行为。
+pub(crate) fn is_css_native_function(name: &str) -> bool {
+    matches!(
+        name,
+        "url"
+            | "element"
+            | "expression"
+            | "attr"
+            | "css"
+            | "calc"
+            | "env"
+            | "var"
+            | "clamp"
+            | "content"
+            | "counter"
+            | "counters"
+            | "symbols"
+            | "image"
+            | "cross-fade"
+            | "linear-gradient"
+            | "radial-gradient"
+            | "conic-gradient"
+            | "repeating-linear-gradient"
+            | "repeating-radial-gradient"
+            | "repeating-conic-gradient"
+            | "cubic-bezier"
+            | "steps"
+            | "frames"
+            | "path"
+            | "paint"
+            | "repeat"
+            | "minmax"
+            | "fit-content"
+            | "min-content"
+            | "max-content"
+            | "hsl"
+            | "hsla"
+            | "rgb"
+            | "rgba"
+            | "lab"
+            | "lch"
+            | "oklab"
+            | "oklch"
+            | "color"
+            | "color-mix"
+            | "color-contrast"
+            | "gradient"
+            | "icrgb"
+            | "device-cmyk"
+            | "grayscale"
+            | "hue-rotate"
+            | "invert"
+            | "opacity"
+            | "saturate"
+            | "sepia"
+            | "circle"
+            | "ellipse"
+            | "inset"
+            | "polygon"
+            | "rect"
+            | "xywh"
+            | "ray"
+            | "matrix"
+            | "matrix3d"
+            | "perspective"
+            | "rotate"
+            | "rotate3d"
+            | "rotatex"
+            | "rotatey"
+            | "rotatez"
+            | "scale"
+            | "scale3d"
+            | "scalex"
+            | "scaley"
+            | "scalez"
+            | "skew"
+            | "skewx"
+            | "skewy"
+            | "translate"
+            | "translate3d"
+            | "translatex"
+            | "translatey"
+            | "translatez"
+    )
+}
+
 // ─── math ─────────────────────────────────────────────────
 
 pub(crate) fn math_builtin_name(name: &str) -> Option<&'static str> {

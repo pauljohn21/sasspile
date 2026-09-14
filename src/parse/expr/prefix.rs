@@ -55,6 +55,9 @@ impl ParseStream<'_> {
                 | Token::True
                 | Token::False
                 | Token::Null
+                | Token::And
+                | Token::Or
+                | Token::Not
                 | Token::Amp
                 | Token::Star,
             ) => {
