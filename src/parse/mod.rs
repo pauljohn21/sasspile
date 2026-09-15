@@ -52,6 +52,16 @@ impl<'tok> ParseStream<'tok> {
         }
     }
 
+    /// 创建带有上下文状态的 ParseStream（用于流式解析）。
+    pub(crate) fn with_context(tokens: &'tok [Token], in_body: bool, saw_other_rule: bool) -> Self {
+        Self {
+            tokens,
+            pos: 0,
+            in_body,
+            saw_other_rule,
+        }
+    }
+
     // ── 基础流操作 ──────────────────────────────────────────────────────
 
     /// 查看当前 token（不消费）。
@@ -71,6 +81,11 @@ impl<'tok> ParseStream<'tok> {
             self.pos += 1;
         }
         t
+    }
+
+    /// 返回当前已消费的 token 数量（用于 scan 流式解析）。
+    pub(crate) fn consumed_count(&self) -> usize {
+        self.pos
     }
 
     /// 是否在末尾（跳过 whitespace 后检查）。
@@ -158,3 +173,4 @@ pub(crate) mod at_rules_modules;
 pub(crate) mod expr;
 pub(crate) mod nodes;
 pub(crate) mod params;
+pub mod stream;
