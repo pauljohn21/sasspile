@@ -22,7 +22,7 @@
 
 use rxrust::prelude::*;
 use std::convert::Infallible;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::ast::{CssNode, Node};
 use crate::error::CompileError;
@@ -219,12 +219,19 @@ fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
 fn evaluate_import(ctx: &CompilerContext, path: &str) -> Result<Vec<CssNode>, CompileError> {
     let _span = tracing::info_span!("evaluate.import", path).entered();
 
-    // Resolve path relative to ctx.path_stack.last() if available.
+    // 跳过 sass 内置模块 (sass:meta, sass:string, sass:math, sass:color 等)
+    // 这些不是真实文件路径,而是内建函数库的命名空间
+    if path.starts_with("sass:") {
+        tracing::debug!(path, "skipping sass built-in module import");
+        return Ok(vec![]);
+    }
+
+    // Resolve path relative to ctx.path_stack.last() — already a directory (not a file path).
+    // pipeline.rs 推送的 bp = entry.path.parent() = 正确的 base 目录
     let base_dir = ctx
         .path_stack
         .last()
-        .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
+        .cloned()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     let file_path = resolve_scss_path(&base_dir, path);
@@ -243,11 +250,14 @@ fn evaluate_import(ctx: &CompilerContext, path: &str) -> Result<Vec<CssNode>, Co
         }
     })?;
 
-    // Recursive compile. Imported modules are independent compilation
-    // environments per sass-spec.
-    let css = crate::compile(&content).map_err(|e| CompileError::ModuleLoadFailure {
-        path: path.to_string(),
-        reason: e.to_string(),
+    // Recursive compile — 使用 file_path.parent() 作为 base_dir,
+    // 确保嵌套 @import/@use 能正确从被导入模块的目录开始解析
+    let nested_base = file_path.parent().unwrap_or_else(|| Path::new("."));
+    let css = crate::compile_at(&content, nested_base).map_err(|e| {
+        CompileError::ModuleLoadFailure {
+            path: path.to_string(),
+            reason: e.to_string(),
+        }
     })?;
 
     parse_compiled_css(&css).map_err(|e| CompileError::ModuleLoadFailure {
@@ -257,14 +267,30 @@ fn evaluate_import(ctx: &CompilerContext, path: &str) -> Result<Vec<CssNode>, Co
 }
 
 fn resolve_scss_path(base: &PathBuf, raw: &str) -> PathBuf {
+    // 拆分 raw 的目录和文件名部分,前缀 _ 只加在文件名前
+    let raw_path = Path::new(raw);
+    let file_name = raw_path.file_name().and_then(|n| n.to_str()).unwrap_or(raw);
+    let dir_part = raw_path.parent().filter(|p| !p.as_os_str().is_empty()).map(|p| p.as_os_str());
+    let build = |name: &str| -> PathBuf {
+        match dir_part {
+            Some(d) => base.join(d).join(name),
+            None => base.join(name),
+        }
+    };
     let candidates = [
         base.join(raw),
-        base.join(format!("{raw}.scss")),
-        base.join(format!("{raw}.sass")),
-        base.join(format!("_{raw}.scss")),
-        base.join(format!("_{raw}.sass")),
-        base.join(raw).join("index.scss"),
-        base.join(raw).join("_index.scss"),
+        build(&format!("{file_name}.scss")),
+        build(&format!("{file_name}.sass")),
+        build(&format!("_{file_name}.scss")),
+        build(&format!("_{file_name}.sass")),
+        match dir_part {
+            Some(d) => base.join(d).join(file_name).join("index.scss"),
+            None => base.join(file_name).join("index.scss"),
+        },
+        match dir_part {
+            Some(d) => base.join(d).join(file_name).join("_index.scss"),
+            None => base.join(file_name).join("_index.scss"),
+        },
     ];
     for c in &candidates {
         if c.exists() {
