@@ -1,0 +1,10 @@
+[submodule "sass-spec"]
+	path = sass-spec
+	url = git@github.com:sass/sass-spec.git
+[submodule "bootstrap"]
+	path = bootstrap
+	url = git@github.com:twbs/bootstrap.git
+[submodule "element-plus"]
+	path = element-plus
+	url = git@github.com:element-plus/element-plus.git
+
