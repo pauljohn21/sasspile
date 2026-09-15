@@ -293,14 +293,15 @@ fn evaluate_mixin_call(
     tracing::info!(params = ?def.params, args = ?args, body_len = def.body.len(), "mixin found, expanding");
 
     // 建立参数映射: param_name → arg_value
-    // 规则支持 $param: value 默认值，此处取 bindings 中对应参数名 → arg，若无则保持原样
+    // substitute_vars 查找时用不带 $ 的 ident (如 color),所以 locals key 也必须不带 $
     let mut local_vars = Vec::new();
     for (i, param) in def.params.iter().enumerate() {
         if let Some(arg) = args.get(i) {
-            local_vars.push((param.clone(), arg.clone()));
+            let key = param.trim_start_matches('$').to_string();
+            local_vars.push((key, arg.clone()));
         } else if let Some((name, default)) = param.split_once(':') {
-            // 如果参数字符串包含 `:default` 形式，split off default value
-            local_vars.push((name.trim().to_string(), default.trim().to_string()));
+            let key = name.trim().trim_start_matches('$').to_string();
+            local_vars.push((key, default.trim().to_string()));
         }
     }
 

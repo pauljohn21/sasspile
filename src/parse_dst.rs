@@ -190,7 +190,7 @@ impl AstBuilder {
 
         let rbrace_rel = tokens.iter().rposition(|t| *t == Token::RBrace)?;
         let body_tokens = &tokens[lbrace_rel + 1..rbrace_rel];
-        let body = Self::parse_declarations(body_tokens);
+        let body = Self::parse_block(body_tokens);
 
         Some(Node::If {
             condition,
@@ -250,7 +250,7 @@ impl AstBuilder {
 
         let rbrace_rel = tokens.iter().rposition(|t| *t == Token::RBrace)?;
         let body_tokens = &tokens[lbrace_rel + 1..rbrace_rel];
-        let body = Self::parse_declarations(body_tokens);
+        let body = Self::parse_block(body_tokens);
 
         Some(Node::For { var, from, to, body })
     }
@@ -364,10 +364,16 @@ impl AstBuilder {
             Vec::new()
         };
 
+        // 找到 LBrace/RBrace 在 all_tokens 中的实际位置,提取 body 并解析
+        let lbrace_idx = all_tokens.iter().position(|t| *t == Token::LBrace)?;
+        let rbrace_idx = all_tokens.iter().rposition(|t| *t == Token::RBrace)?;
+        let body_tokens = &all_tokens[lbrace_idx + 1..rbrace_idx];
+        let body = Self::parse_block(body_tokens);
+
         Some(Node::MixinDef {
             name,
             params,
-            body: Vec::new(),
+            body,
         })
     }
 
@@ -731,6 +737,108 @@ impl AstBuilder {
             }
         }
         decls
+    }
+
+    /// 解析 block 内容 ( Declaration | Rule 混合)
+    ///
+    /// 用于 @mixin body / @for body / @if body 这些既包含简单声明又包含嵌套规则的场景。
+    /// 识别规则:从当前位置扫描到 LBrace → selector;然后找匹配的 RBrace → 递归 parse 内部 declarations。
+    fn parse_block(tokens: &[Token]) -> Vec<Node> {
+        let mut out = Vec::new();
+        let mut i = 0;
+
+        while i < tokens.len() {
+            // 1. 检测是否是 selector: 从当前位置扫描直到 LBrace 或 Colon 或 Semicolon
+            let mut selector_parts = Vec::new();
+            let mut scan = i;
+            let mut found_lbrace = false;
+            let mut lbrace_pos = 0;
+            while scan < tokens.len() {
+                match &tokens[scan] {
+                    Token::LBrace => {
+                        found_lbrace = true;
+                        lbrace_pos = scan;
+                        break;
+                    }
+                    Token::Colon | Token::Semicolon | Token::Newline if selector_parts.is_empty() => {
+                        // 还没积累 selector 就遇到 Colon/Semicolon,这是 Declaration 模式
+                        break;
+                    }
+                    Token::Ident(s) => selector_parts.push(s.clone()),
+                    Token::Dot => selector_parts.push(".".to_string()),
+                    Token::Hash => selector_parts.push("#".to_string()),
+                    Token::Dollar => selector_parts.push("$".to_string()),
+                    Token::Interpolation(s) => selector_parts.push(s.clone()),
+                    Token::Number(s) => selector_parts.push(s.clone()),
+                    _ => break,
+                }
+                scan += 1;
+            }
+
+            if found_lbrace && !selector_parts.is_empty() {
+                // Rule 模式: selector { body }
+                // 找匹配的 RBrace
+                let mut depth = 1i32;
+                let mut rb = lbrace_pos + 1;
+                while rb < tokens.len() && depth > 0 {
+                    match &tokens[rb] {
+                        Token::LBrace => depth += 1,
+                        Token::RBrace => depth -= 1,
+                        _ => {}
+                    }
+                    rb += 1;
+                }
+                let body_tokens = &tokens[lbrace_pos + 1..rb - 1];
+                let body = Self::parse_block(body_tokens);
+                let selector = selector_parts.join("");
+                out.push(Node::Rule { selector, body });
+                i = rb;
+            } else {
+                // Declaration 模式或直接跳过
+                // 声明: prop : value ;
+                let mut prop_parts = Vec::new();
+                while i < tokens.len() {
+                    match &tokens[i] {
+                        Token::Ident(s) => prop_parts.push(s.clone()),
+                        Token::Dollar => prop_parts.push("$".to_string()),
+                        Token::Interpolation(s) => prop_parts.push(s.clone()),
+                        Token::String(s) => prop_parts.push(s.clone()),
+                        _ => break,
+                    }
+                    i += 1;
+                }
+                let prop = prop_parts.join("");
+                if prop.is_empty() {
+                    i += 1;
+                    continue;
+                }
+                if i >= tokens.len() || !matches!(tokens[i], Token::Colon) {
+                    i += 1;
+                    continue;
+                }
+                i += 1; // Colon
+                let mut value_parts = Vec::new();
+                while i < tokens.len() {
+                    match &tokens[i] {
+                        Token::Semicolon | Token::Newline => break,
+                        Token::Ident(s) => value_parts.push(s.clone()),
+                        Token::Number(s) => value_parts.push(s.clone()),
+                        Token::String(s) => value_parts.push(s.clone()),
+                        Token::Dollar => value_parts.push("$".to_string()),
+                        Token::Interpolation(s) => value_parts.push(s.clone()),
+                        Token::Whitespace => {}
+                        _ => {}
+                    }
+                    i += 1;
+                }
+                let value = value_parts.join("");
+                out.push(Node::Declaration { prop, value });
+                if i < tokens.len() && !matches!(tokens[i], Token::Newline) {
+                    i += 1;
+                }
+            }
+        }
+        out
     }
 }
 
