@@ -52,6 +52,10 @@ impl EvaluatedModule {
     }
 }
 
+/// 局部作用域栈 — mixin 参数、@for 变量等局部绑定
+/// 越靠后的元素优先级越高 (栈顶最后插入/最先弹出)
+pub type LocalScope = HashMap<String, String>;
+
 /// 编译器上下文 — 在 scan 闭包间传播
 #[derive(Debug, Clone)]
 pub struct CompilerContext {
@@ -63,6 +67,8 @@ pub struct CompilerContext {
     pub path_stack: Vec<PathBuf>,
     /// mixin 注册表
     pub mixins: Rc<RefCell<HashMap<String, MixinDef>>>,
+    /// 局部作用域栈 — mixin 参数展开时 push/pop
+    pub local_scopes: Rc<RefCell<Vec<LocalScope>>>,
 }
 
 impl CompilerContext {
@@ -72,7 +78,32 @@ impl CompilerContext {
             global_variables: Rc::new(RefCell::new(HashMap::new())),
             path_stack: Vec::new(),
             mixins: Rc::new(RefCell::new(HashMap::new())),
+            local_scopes: Rc::new(RefCell::new(Vec::new())),
         }
+    }
+
+    /// 向局部作用域栈压入一层
+    pub fn push_scope(&self, bindings: &[(String, String)]) {
+        let mut scope = LocalScope::new();
+        for (name, value) in bindings {
+            scope.insert(name.clone(), value.clone());
+        }
+        self.local_scopes.borrow_mut().push(scope);
+    }
+
+    /// 弹出局部作用域栈顶层
+    pub fn pop_scope(&self) {
+        self.local_scopes.borrow_mut().pop();
+    }
+
+    /// 在局部作用域链中查找变量名 (栈顶→栈底, 未命中返回 None)
+    pub fn lookup_local(&self, ident: &str) -> Option<String> {
+        for scope in self.local_scopes.borrow().iter().rev() {
+            if let Some(v) = scope.get(ident) {
+                return Some(v.clone());
+            }
+        }
+        None
     }
 
     /// 尝试从缓存获取模块

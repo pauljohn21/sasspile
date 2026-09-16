@@ -100,3 +100,63 @@ fn builtin_abs() {
     let css = compile(src).expect("abs 编译应成功");
     assert!(css.contains("5px"));
 }
+
+#[test]
+fn mixin_include_single_arg() {
+    let src = r#"
+@mixin pad($x) {
+  padding: $x;
+}
+.a { @include pad(10px); }
+"#;
+    let css = compile(src).expect("mixin 单参数编译应成功");
+    assert!(css.contains("padding"), "应输出 padding 属性: {css}");
+    assert!(css.contains("10px"), "值应为 10px: {css}");
+}
+
+#[test]
+fn mixin_include_multi_args() {
+    let src = r#"
+@mixin dual($a, $b) {
+  margin: $a $b;
+}
+.b { @include dual(5px 10px); }
+"#;
+    let css = compile(src).expect("mixin 多参数编译应成功");
+    assert!(css.contains("margin"), "应输出 margin 属性: {css}");
+    assert!(css.contains("10px"), "第二参数 10px 应生效: {css}");
+}
+
+#[test]
+fn mixin_nested_isolation() {
+    let src = r#"
+@mixin a($x) { width: $x; }
+@mixin b($x) { @include a($x); height: $x; }
+.box { @include b(10px); }
+"#;
+    let css = compile(src).expect("嵌套 mixin 编译应成功");
+    assert!(css.contains("width"), "应展开内层 mixin: {css}");
+    assert!(css.contains("height"), "外层 mixin body 应展开: {css}");
+    assert!(css.contains("10px"), "参数应透传: {css}");
+}
+
+#[test]
+fn mixin_scope_does_not_leak() {
+    let src = r#"
+$x: global;
+@mixin m($x) { content: $x; }
+.box { @include m(local); }
+"#;
+    let css = compile(src).expect("mixin 作用域不应泄漏");
+    assert!(css.contains("local"), "mixin 内应看到 local: {css}");
+}
+
+#[test]
+fn mixin_default_value() {
+    let src = r#"
+@mixin m($x: default) { val: $x; }
+.box { @include m; }
+"#;
+    let css = compile(src).expect("mixin 默认值编译应成功");
+    assert!(css.contains("default"), "应使用默认值: {css}");
+}

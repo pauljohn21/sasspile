@@ -118,24 +118,33 @@ impl ScannerState {
         }
 
         if ch.is_alphabetic() || ch == '-' || ch == '_' {
+            // 如已有累积的数字缓冲区（如 "10px" 时 num_buf="10"），先 flush 数字
+            if let Some(tok) = self.flush_num() {
+                out.push(tok);
+            }
             self.ident_buf.push(ch);
             self.last_was_hash = false;
             return out;
         }
 
-        // 已累积 identifier 或数字,先 flushed
+        self.last_was_hash = false;
+
+        // 数字累积 — 直接追加到 num_buf（保证 "10" 不被拆为 "1","0"）
+        // 但需先 flush ident_buf（如 "-5px" 中 "-" 在 num "5" 之前）
+        if ch.is_ascii_digit() {
+            if let Some(tok) = self.flush_ident() {
+                out.push(tok);
+            }
+            self.num_buf.push(ch);
+            return out;
+        }
+
+        // 非字母/非数字字符：flush 已累积的 ident/num
         if let Some(tok) = self.flush_ident() {
             out.push(tok);
         }
         if let Some(tok) = self.flush_num() {
             out.push(tok);
-        }
-        self.last_was_hash = false;
-
-        // 数字累积
-        if ch.is_ascii_digit() {
-            self.num_buf.push(ch);
-            return out;
         }
 
         match ch {

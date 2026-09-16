@@ -195,38 +195,15 @@ pub(super) fn evaluate_mixin_call(
 }
 
 /// Evaluate a Node under local parameter bindings — implements mixin parameter passing
+/// 通过 push_scope / pop_scope 实现局部作用域, 不修改 global_variables
 pub(super) fn evaluate_node_with_locals(
     ctx: &CompilerContext,
     node: &Node,
     locals: &[(String, String)],
 ) -> Result<Vec<CssNode>, CompileError> {
-    let saved: Vec<(String, Option<String>)> = locals
-        .iter()
-        .map(|(name, _)| {
-            let prev = ctx.global_variables.borrow().get(name).cloned();
-            (name.clone(), prev)
-        })
-        .collect();
-
-    {
-        let mut vars = ctx.global_variables.borrow_mut();
-        for (name, value) in locals {
-            vars.insert(name.clone(), value.clone());
-        }
-    }
-
+    ctx.push_scope(locals);
     let result = evaluate_node(ctx, node);
-
-    {
-        let mut vars = ctx.global_variables.borrow_mut();
-        for (name, prev) in &saved {
-            match prev {
-                Some(v) => vars.insert(name.clone(), v.clone()),
-                None => vars.remove(name),
-            };
-        }
-    }
-
+    ctx.pop_scope();
     result
 }
 

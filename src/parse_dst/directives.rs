@@ -4,7 +4,7 @@ use crate::ast::{Node, Token};
 use crate::parse_dst::{parse_block, parse_declarations};
 
 /// 从 buffer 起始尝试解析顶层指令 (跳过前导空白找到 At)。成功时 drain 已消耗的 tokens。
-pub(super) fn try_flush_directive(buffer: &mut Vec<Token>) -> Option<Node> {
+pub(crate) fn try_flush_directive(buffer: &mut Vec<Token>) -> Option<Node> {
     // 跳过前导 Whitespace / Newline 找到第一个有效 token
     let start = buffer
         .iter()
@@ -229,7 +229,7 @@ fn build_for(tokens: &[Token]) -> Option<Node> {
 }
 
 /// 构建行内指令节点 (include / if / for / each)
-pub(super) fn build_inline_node(tokens: &[Token], instr: &str) -> Option<Node> {
+pub(crate) fn build_inline_node(tokens: &[Token], instr: &str) -> Option<Node> {
     match instr {
         "include" => parse_include_tokens(tokens),
         "if" => parse_inline_if_body(tokens),
@@ -380,7 +380,7 @@ pub(super) fn parse_arg_list_at(tokens: &[Token], mut pos: usize) -> Vec<String>
                 }
                 break;
             }
-            Token::Comma if depth == 0 => {
+            Token::Comma | Token::Whitespace if depth == 0 => {
                 let c = current.trim().to_string();
                 if !c.is_empty() {
                     args.push(c);
@@ -389,7 +389,8 @@ pub(super) fn parse_arg_list_at(tokens: &[Token], mut pos: usize) -> Vec<String>
             }
             Token::Ident(s) => current.push_str(s),
             Token::Number(s) => {
-                if !current.is_empty() {
+                // 如当前 buffer 以 "-" 结尾（负号）,不插入空格
+                if !current.is_empty() && !current.ends_with('-') {
                     current.push(' ');
                 }
                 current.push_str(s);
@@ -407,7 +408,8 @@ pub(super) fn parse_arg_list_at(tokens: &[Token], mut pos: usize) -> Vec<String>
     args
 }
 
-/// 解析参数列表 (位于 LParen ... RParen 之间) -> name 序列
+/// 解析参数列表 (位于 LParen ... RParen 之间) -> name序列 (可能含 ":default")
+/// 返回形如 ["$x", "$y:default"] 的参数签名
 fn parse_param_list(tokens: &[Token]) -> Vec<String> {
     let mut params = Vec::new();
     let mut i = 1; // skip LParen
@@ -415,8 +417,44 @@ fn parse_param_list(tokens: &[Token]) -> Vec<String> {
         match &tokens[i] {
             Token::Dollar => {
                 if let Token::Ident(name) = &tokens.get(i + 1).unwrap_or(&Token::Semicolon) {
-                    params.push(format!("${name}"));
-                    i += 2;
+                    let mut param = format!("${name}");
+                    let mut j = i + 2;
+                    // 跳过 Whitespace,检查是否含 :default
+                    while matches!(tokens.get(j), Some(Token::Whitespace)) {
+                        j += 1;
+                    }
+                    if matches!(tokens.get(j), Some(Token::Colon)) {
+                        // 收集 : 后的默认值
+                        j += 1;
+                        while matches!(tokens.get(j), Some(Token::Whitespace)) {
+                            j += 1;
+                        }
+                        let mut default = String::new();
+                        while let Some(tok) = tokens.get(j) {
+                            match tok {
+                                Token::RParen | Token::Comma => break,
+                                Token::Whitespace => {
+                                    if !default.is_empty() {
+                                        default.push(' ');
+                                    }
+                                }
+                                Token::Ident(s) => default.push_str(s),
+                                Token::Number(s) => {
+                                    if !default.is_empty() {
+                                        default.push(' ');
+                                    }
+                                    default.push_str(s);
+                                }
+                                Token::Dollar => default.push('$'),
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                        param.push(':');
+                        param.push_str(default.trim());
+                    }
+                    params.push(param);
+                    i = i + 2;
                     continue;
                 }
             }
@@ -446,7 +484,7 @@ pub(super) fn parse_arg_list(tokens: &[Token], start: usize) -> Vec<String> {
                 }
                 break;
             }
-            Token::Comma if depth == 0 => {
+            Token::Comma | Token::Whitespace if depth == 0 => {
                 let c = current.trim().to_string();
                 if !c.is_empty() {
                     args.push(c);
@@ -455,7 +493,8 @@ pub(super) fn parse_arg_list(tokens: &[Token], start: usize) -> Vec<String> {
             }
             Token::Ident(s) => current.push_str(s),
             Token::Number(s) => {
-                if !current.is_empty() {
+                // 如当前 buffer 以 "-" 结尾（负号）,不插入空格
+                if !current.is_empty() && !current.ends_with('-') {
                     current.push(' ');
                 }
                 current.push_str(s);

@@ -1,6 +1,7 @@
 //! 声明 / 规则块解析: parse_declarations / parse_block / flush_rule / try_flush_variable.
 
 use crate::ast::{Node, Token};
+use crate::parse_dst::directives;
 use tracing;
 
 /// flush_rule — 从缓冲中取出 tokens,拆分成 selector + body 解析为 Rule 节点
@@ -301,11 +302,13 @@ pub fn parse_block(tokens: &[Token]) -> Vec<Node> {
             break;
         }
 
-        // 检测模式: selector { ... } 还是 prop:value; (声明)
+        // 检测模式: selector { ... } vs prop:value; (声明) vs @directive ;
         // 关键:在 selector 扫描阶段先找到最近的 LBrace / Colon / Semicolon 来判断结构
         let mut j = i;
         let mut found_colon = false;
         let mut found_lbrace = false;
+        // At 指令边界: 遇到下一个 At 或 RBrace 时停止当前段
+        let at_directive_start = tokens.get(i) == Some(&Token::At);
         while j < tokens.len() {
             match tokens[j] {
                 Token::LBrace if !found_colon => {
@@ -318,6 +321,10 @@ pub fn parse_block(tokens: &[Token]) -> Vec<Node> {
                 }
                 Token::Semicolon | Token::Newline | Token::RBrace if found_colon => break,
                 Token::RBrace if !found_colon && !found_lbrace => break,
+                // 对于 @directive, 遇到 Semicolon 即结束当前指令
+                Token::Semicolon if at_directive_start && !found_colon => break,
+                // 遇到新的 At 指令，结束当前段
+                Token::At if j > i => break,
                 _ => {}
             }
             j += 1;
@@ -357,6 +364,18 @@ pub fn parse_block(tokens: &[Token]) -> Vec<Node> {
                 out.push(Node::Rule { selector, body });
             }
             j = rbrace_abs + 1;
+        } else if at_directive_start {
+            // 内联指令 (@include / @if / @for / @each): 提取指令名称并用 directives 模块解析
+            let instr = match tokens.get(i + 1) {
+                Some(Token::Ident(s)) => s.clone(),
+                _ => {
+                    i = j;
+                    continue;
+                }
+            };
+            if let Some(node) = directives::build_inline_node(&tokens[i..j], &instr) {
+                out.push(node);
+            }
         } else if found_colon {
             // 声明块: 把到 Semicolon/Newline 为止的整段交给 parse_declarations
             let decls = parse_declarations(&tokens[i..j]);

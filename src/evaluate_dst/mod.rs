@@ -173,7 +173,6 @@ fn evaluate_rule(
 /// 同时处理内置函数调用 `fn-name(args)` — 解析参数并在 builtin 注册表中查找求值,
 /// 把整个 `fn-name(args)` 替换为返回值。支持点分模块名 (`map.get`, `list.nth`)。
 pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
-    let vars = ctx.global_variables.borrow();
     let mut out = String::with_capacity(s.len());
     let chars_vec: Vec<char> = s.chars().collect();
     let mut i = 0;
@@ -182,7 +181,7 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
         let ch = chars_vec[i];
 
         if ch == '$' {
-            // 变量替换
+            // 变量替换 — 先在局部作用域链查找, 未命中再查全局
             i += 1;
             let mut ident = String::new();
             while i < chars_vec.len() {
@@ -198,15 +197,21 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
                 out.push('$');
                 continue;
             }
-            if let Some(value) = vars.get(&ident) {
-                out.push_str(value);
+            // 优先: 局部作用域栈 (mixin 参数等)
+            if let Some(value) = ctx.lookup_local(&ident) {
+                out.push_str(&value);
+                continue;
+            }
+            // 其次: 全局变量 (clone 后立即释放 borrow)
+            if let Some(value) = ctx.global_variables.borrow().get(ident.as_str()).cloned() {
+                out.push_str(&value);
             } else if ident.contains('-') {
                 let mut matched = false;
                 for (j, c) in ident.char_indices() {
                     if c == '-' {
                         let (head, tail) = ident.split_at(j);
-                        if let Some(value) = vars.get(head) {
-                            out.push_str(value);
+                        if let Some(value) = ctx.global_variables.borrow().get(head).cloned() {
+                            out.push_str(&value);
                             out.push_str(tail);
                             matched = true;
                             break;
