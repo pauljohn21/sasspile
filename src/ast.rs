@@ -118,11 +118,33 @@ pub enum CssNode {
 
 impl CssNode {
     /// 将 CssNode 渲染为 CSS 字符串片段
+    ///
+    /// Rule 输出为多行格式 (dart-sass / sass-spec 兼容):
+    /// ```text
+    /// selector {
+    ///   prop: value;
+    /// }
+    /// ```
     pub fn render(&self) -> String {
         match self {
             Self::Rule { selector, body } => {
-                let inner = body.iter().map(Self::render).collect::<Vec<_>>().join("");
-                format!("{selector} {{{inner}}}")
+                let inner = body
+                    .iter()
+                    .map(|n| {
+                        let s = n.render();
+                        // 2-space indent for each body line
+                        s.lines()
+                            .map(|line| format!("  {line}"))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if inner.is_empty() {
+                    format!("{selector} {{\n}}")
+                } else {
+                    format!("{selector} {{\n{inner}\n}}")
+                }
             }
             Self::Declaration { prop, value } => format!("{prop}: {value};"),
             Self::Comment(c) => format!("/* {c} */"),

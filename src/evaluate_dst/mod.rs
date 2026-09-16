@@ -174,18 +174,19 @@ fn evaluate_rule(
 /// 把整个 `fn-name(args)` 替换为返回值。支持点分模块名 (`map.get`, `list.nth`)。
 pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
     let mut out = String::with_capacity(s.len());
-    let chars_vec: Vec<char> = s.chars().collect();
+    // Track byte positions alongside char indices for safe string slicing
+    let chars_vec: Vec<(usize, char)> = s.char_indices().collect();
     let mut i = 0;
 
     while i < chars_vec.len() {
-        let ch = chars_vec[i];
+        let (_byte_pos, ch) = chars_vec[i];
 
         if ch == '$' {
             // 变量替换 — 先在局部作用域链查找, 未命中再查全局
             i += 1;
             let mut ident = String::new();
             while i < chars_vec.len() {
-                let c = chars_vec[i];
+                let (_, c) = chars_vec[i];
                 if c.is_alphanumeric() || c == '_' || c == '-' {
                     ident.push(c);
                     i += 1;
@@ -230,13 +231,13 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
             // 可能是函数调用: ident(args) 或 module.fn(args)
             let mut ident = String::new();
             while i < chars_vec.len() {
-                let c = chars_vec[i];
+                let (_, c) = chars_vec[i];
                 if c.is_alphanumeric() || c == '_' || c == '-' {
                     ident.push(c);
                     i += 1;
                 } else if c == '.'
                     && i + 1 < chars_vec.len()
-                    && (chars_vec[i + 1].is_alphanumeric() || chars_vec[i + 1] == '_')
+                    && (chars_vec[i + 1].1.is_alphanumeric() || chars_vec[i + 1].1 == '_')
                 {
                     // 点分模块路径: math.abs / color.alpha / map.get …
                     ident.push(c);
@@ -246,15 +247,15 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
                 }
             }
             // 检查是否是函数调用 (允许点分模块名)
-            if i < chars_vec.len() && chars_vec[i] == '(' {
+            if i < chars_vec.len() && chars_vec[i].1 == '(' {
                 // 跳过可选的 module. 前缀,提取纯函数名
                 let fn_name = ident.rsplitn(2, '.').next().unwrap().to_string();
-                // 解析匹配的 (...) 参数
+                // 解析匹配的 (...) 参数 — use byte positions for safe slicing
                 i += 1; // skip '('
-                let args_start = i;
+                let (args_start_byte, _) = chars_vec[i];
                 let mut depth = 1u32;
                 while i < chars_vec.len() && depth > 0 {
-                    match chars_vec[i] {
+                    match chars_vec[i].1 {
                         '(' => depth += 1,
                         ')' => depth -= 1,
                         _ => {}
@@ -263,8 +264,13 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
                         i += 1;
                     }
                 }
-                let args_str = &s[args_start..i];
-                // i 现在指向 ')'
+                // i 现在指向匹配的 ')'; use its byte position for slicing
+                let args_end_byte = if i < chars_vec.len() {
+                    chars_vec[i].0
+                } else {
+                    s.len()
+                };
+                let args_str = &s[args_start_byte..args_end_byte];
                 if i < chars_vec.len() {
                     i += 1; // skip ')'
                 }
@@ -278,6 +284,7 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
                 out.push_str(&ident);
             }
         } else {
+            // 普通字符,直接输出; 处理多字节字符
             out.push(ch);
             i += 1;
         }
