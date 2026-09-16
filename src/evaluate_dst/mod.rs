@@ -234,6 +234,13 @@ pub(crate) fn substitute_vars(ctx: &CompilerContext, s: &str) -> String {
                 if c.is_alphanumeric() || c == '_' || c == '-' {
                     ident.push(c);
                     i += 1;
+                } else if c == '.'
+                    && i + 1 < chars_vec.len()
+                    && (chars_vec[i + 1].is_alphanumeric() || chars_vec[i + 1] == '_')
+                {
+                    // 点分模块路径: math.abs / color.alpha / map.get …
+                    ident.push(c);
+                    i += 1;
                 } else {
                     break;
                 }
