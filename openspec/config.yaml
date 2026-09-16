@@ -1,0 +1,40 @@
+schema: spec-driven
+
+# Project context — shown to AI when creating artifacts.
+#
+#  *** ENTERPRISE BASELINE IS THE #1 VERIFICATION TARGET ***
+#  sass-spec is secondary (锦上添花). Bootstrap + Element Plus full compilation
+#  is the primary acceptance gate before any sass-spec case expansion.
+context: |
+  Tech stack: Rust edition 2024, toolchain 1.97, rxrust 1.0.0-rc.5, tracing.
+  Paradigm: rxrust-first reactive programming. NO dart-sass reference.
+  Behavior spec: sass-spec HRX — syntax reference, NOT primary gate.
+  *** PRIMARY GATE: Bootstrap + Element Plus 100% full-compile ***
+    — bootstrap/scss/bootstrap.scss (@import global sharing)
+    — element-plus/packages/theme-chalk/src/index.scss (@use as * + !global)
+  SCSS submodules: sass-spec, bootstrap, element-plus (--depth 1 each).
+  Testing (priority order):
+    1. tracker `enterprise` command (Bootstrap + Element Plus end-to-end)
+    2. tracker `snapshot` command (sass-spec pass rate — supplementary)
+    3. cargo test (unit + integration — must never regress)
+  Dev tool: src/bin/sasspile_tracker.rs (snapshot + enterprise modes).
+
+# Per-artifact rules (enforced on AI artifacts).
+rules:
+  proposal:
+    - rxrust-first: every design MUST derive from Observable/Observer/Operator/Subscription primitives
+    - NO dart-sass reference: sass-spec HRX is the ONLY behavior source
+    - ≤ 600 words, include "Non-goals" section
+    - MUST specify which rxrust operator classes (Creation/Transformation/Filtering/Combination/Utility/Aggregation/Connectable) are used
+  tasks:
+    - Break tasks into chunks of ~2 hours
+    - Task description MUST specify rxrust operator(s) involved
+    - Each task MUST reference at least one spec file
+  specs:
+    - One capability per spec file in format `specs/<name>/spec.md`
+    - Use Gherkin-style scenarios (WHEN/THEN) for behaviors
+    - MUST reference specific sass-spec HRX paths
+  design.md:
+    - Include ASCII art of the rxrust pipeline
+    - List every design decision with rxrust philosphical justification
+    - File structure diagram with line limits (≤ 500 LOC/file)

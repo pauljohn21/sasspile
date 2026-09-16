@@ -50,6 +50,15 @@ impl ScannerState {
     pub fn feed(&mut self, ch: char) -> Vec<Token> {
         let mut out = Vec::new();
 
+        // 行注释: // ... 直到换行
+        if self.in_comment {
+            if ch == '\n' {
+                self.in_comment = false;
+                out.push(Token::Newline);
+            }
+            return out;
+        }
+
         if self.in_interpolation {
             if ch == '}' {
                 self.in_interpolation = false;
