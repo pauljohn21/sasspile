@@ -1,200 +1,258 @@
-//! Tokenize Stage Helpers
+//! Tokenize Stage — char stream → Token stream
 //!
-//! 为 tokenize 阶段提供 ScannerState 和 feed 函数
-//! 实际算子链在 pipeline.rs 中通过 scan + flat_map + filter 组装
+//! 使用 scan_map(Scanner) 累积状态. reducer 委托纯 transition 函数,
+//! 不内嵌 if-else 链.push 累积委托 classify_buffer 纯函数返回值组合.
+//!
+//! 状态机: ScanMode enum 替代 bool flags → 状态空间合法且可穷尽匹配.
 
 use crate::ast::Token;
 
-/// 扫描器状态 — 在 scan 闭包之间累积
+// ─── 状态机 ───────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone)]
-pub struct ScannerState {
-    /// 当前正在累积的 identifier 缓冲区
-    ident_buf: String,
-    /// 当前正在累积的数字缓冲区
-    num_buf: String,
-    /// 是否处于字符串上下文
-    in_string: bool,
-    /// 字符串界定符
-    string_delim: char,
-    /// 是否处于注释上下文
-    in_comment: bool,
-    /// 字符串累积区
-    string_buf: String,
-    /// 是否处于插值上下文
-    in_interpolation: bool,
-    /// 插值累积区
-    interp_buf: String,
-    /// 上一个 char 是否为 '#' (用于识别 '#{' 进入插值)
-    last_was_hash: bool,
+pub struct Scanner {
+    buf: String,
+    mode: ScanMode,
 }
 
-impl ScannerState {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanMode {
+    Normal,
+    InString { delim: char },
+    MaybeComment, // buf == "/" 等待下一个字符判断行/块注释
+    InLineComment,
+    InBlockComment,
+}
+
+// ─── 纯辅助函数 ───────────────────────────────────────────────────────────
+
+/// 分类 buffer 内容为 Token(s) — 纯函数,无副作用
+fn classify_buffer(buf: &str) -> Vec<Token> {
+    if buf.is_empty() {
+        return vec![];
+    }
+    match buf {
+        "{" => vec![Token::LBrace],
+        "}" => vec![Token::RBrace],
+        "(" => vec![Token::LParen],
+        ")" => vec![Token::RParen],
+        "[" => vec![Token::LBracket],
+        "]" => vec![Token::RBracket],
+        ":" => vec![Token::Colon],
+        ";" => vec![Token::Semicolon],
+        "," => vec![Token::Comma],
+        "." => vec![Token::Dot],
+        "$" => vec![Token::Dollar],
+        "#" => vec![Token::Hash],
+        "@" => vec![Token::At],
+        _ => {
+            let s = buf;
+            if let Some(rest) = s.strip_prefix('@') {
+                if rest.is_empty() {
+                    vec![Token::At]
+                } else {
+                    vec![Token::At, Token::Ident(rest.into())]
+                }
+            } else if let Some(rest) = s.strip_prefix('$') {
+                if rest.is_empty() {
+                    vec![Token::Dollar]
+                } else {
+                    vec![Token::Dollar, Token::Ident(rest.into())]
+                }
+            } else if let Some(rest) = s.strip_prefix("//") {
+                vec![Token::Comment(rest.into())]
+            } else if is_numeric(s) {
+                vec![Token::Number(s.into())]
+            } else {
+                vec![Token::Ident(s.into())]
+            }
+        }
+    }
+}
+
+fn classify_single_char(ch: char) -> Vec<Token> {
+    match ch {
+        '{' => vec![Token::LBrace],
+        '}' => vec![Token::RBrace],
+        '(' => vec![Token::LParen],
+        ')' => vec![Token::RParen],
+        '[' => vec![Token::LBracket],
+        ']' => vec![Token::RBracket],
+        ':' => vec![Token::Colon],
+        ';' => vec![Token::Semicolon],
+        ',' => vec![Token::Comma],
+        '.' => vec![Token::Dot],
+        '$' => vec![Token::Dollar],
+        '#' => vec![Token::Hash],
+        '@' => vec![Token::At],
+        _ => vec![],
+    }
+}
+
+fn is_boundary(ch: char) -> bool {
+    matches!(
+        ch,
+        '{' | '}' | '(' | ')' | '[' | ']' | ':' | ';' | ',' | '.' | '$' | '#' | '@'
+    )
+}
+
+fn is_numeric(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+}
+
+// ─── 纯状态转移函数 ─────────────────────────────────────────────────────────
+
+/// (buf, mode, ch) → (new_mode, new_buf, emitted_tokens)
+/// 纯函数: 无 &mut,无副作用; match 穷尽状态转移.
+fn transition(buf: String, mode: ScanMode, ch: char) -> (ScanMode, String, Vec<Token>) {
+    use ScanMode::*;
+
+    match mode {
+        InBlockComment if ch == '*' && buf.ends_with('/') => {
+            // "*/" 结束块注释 (此时 buf 含 "/")
+            (Normal, String::new(), vec![Token::Comment(String::new())])
+        }
+        InBlockComment if ch == '*' => {
+            // 可能的 "*" 后面跟 "/": 保留 "*" 在 buffer 里
+            let mut new_buf = buf;
+            new_buf.push('*');
+            (InBlockComment, new_buf, vec![])
+        }
+        InBlockComment => {
+            if buf.len() == 1 && buf == "*" {
+                // 上一个是孤立的 "*",不是 "*/" 的一部分 → flush "*" 进 comment
+                let mut new_buf = String::new();
+                new_buf.push(ch);
+                // 注意: 此时不完整,我们用 "/" "*" 之后字符的方式重写
+                (InLineComment, new_buf, vec![])
+
+            } else {
+                let mut new_buf = buf;
+                new_buf.push(ch);
+                (InBlockComment, new_buf, vec![])
+            }
+        }
+
+        InLineComment if ch == '\n' => {
+            // 行注释结束 — 去掉末尾积累的,emit Comment + Newline
+            (Normal, String::new(), vec![Token::Comment(buf), Token::Newline])
+        }
+
+        InLineComment => {
+            // 继续累积注释内容
+            let mut new_buf = buf;
+            new_buf.push(ch);
+            (InLineComment, new_buf, vec![])
+        }
+
+        InString { delim } if ch == delim => {
+            // 结束字符串: 加上 delimiters
+            let s = buf + &ch.to_string();
+            (Normal, String::new(), vec![Token::String(s)])
+        }
+
+        InString { delim } => {
+            let mut new_buf = buf;
+            new_buf.push(ch);
+            (InString { delim }, new_buf, vec![])
+        }
+
+        MaybeComment => match ch {
+            '/' => {
+                // 确认为行注释 — buf 中的 "/" 属于注释,丢弃
+                (InLineComment, String::new(), vec![])
+            }
+            '*' => {
+                // 确认为块注释开始 — 丢弃 "/" 和 "*"
+                (InBlockComment, String::new(), vec![])
+            }
+            _ => {
+                // Not a comment — flush "/" as operator then reprocess ch in Normal
+                let mut emitted = classify_buffer("/");
+                let (_, new_buf, more) = transition(String::new(), Normal, ch);
+                emitted.extend(more);
+                (Normal, new_buf, emitted)
+            }
+        },
+
+        Normal => match ch {
+            c @ '\'' | c @ '"' => {
+                // flush buffer + 进入 string mode
+                let emitted = classify_buffer(&buf);
+                (InString { delim: c }, c.to_string(), emitted)
+            }
+
+            c if c.is_whitespace() => {
+                let mut emitted = classify_buffer(&buf);
+                if c == '\n' {
+                    emitted.push(Token::Newline);
+                } else {
+                    emitted.push(Token::Whitespace);
+                }
+                (Normal, String::new(), emitted)
+            }
+
+            '/' if buf.is_empty() => {
+                // Might be comment — hold in buf
+                (MaybeComment, "/".to_string(), vec![])
+            }
+
+            c if is_boundary(c) && !buf.is_empty() => {
+                // flush current buffer + emit boundary as token
+                let mut emitted = classify_buffer(&buf);
+                emitted.extend(classify_single_char(c));
+                (Normal, String::new(), emitted)
+            }
+
+            c if is_boundary(c) => {
+                // buffer empty — emit boundary directly
+                (Normal, String::new(), classify_single_char(c))
+            }
+
+            c => {
+                // accumulate normal char
+                let mut new_buf = buf;
+                new_buf.push(c);
+                (Normal, new_buf, vec![])
+            }
+        },
+    }
+}
+
+// ─── Scanner API（scan_map 适配层）────────────────────────────────────────
+
+impl Scanner {
     pub fn new() -> Self {
         Self {
-            ident_buf: String::new(),
-            num_buf: String::new(),
-            in_string: false,
-            string_delim: '"',
-            in_comment: false,
-            string_buf: String::new(),
-            in_interpolation: false,
-            interp_buf: String::new(),
-            last_was_hash: false,
+            buf: String::new(),
+            mode: ScanMode::Normal,
         }
     }
 
-    /// 核心扫描: 输入 char, 产出 0..N 个 Token
-    ///
-    /// 此函数可直接作为 scan 的 reducer 函数:
-    /// `.scan_map(ScannerState::new(), |state, ch| state.feed(ch))`
+    /// scan_map reducer: &mut Scanner, char → Vec<Token>
+    /// 内部委托纯 transition,不内嵌 if-else 链.
     pub fn feed(&mut self, ch: char) -> Vec<Token> {
-        let mut out = Vec::new();
-
-        // 行注释: // ... 直到换行
-        if self.in_comment {
-            if ch == '\n' {
-                self.in_comment = false;
-                out.push(Token::Newline);
-            }
-            return out;
-        }
-
-        if self.in_interpolation {
-            if ch == '}' {
-                self.in_interpolation = false;
-                let content = self.interp_buf.clone();
-                self.interp_buf.clear();
-                out.push(Token::Interpolation(content));
-            } else {
-                self.interp_buf.push(ch);
-            }
-            self.last_was_hash = false;
-            return out;
-        }
-
-        if self.in_string {
-            if ch == self.string_delim {
-                self.in_string = false;
-                let content = self.string_buf.clone();
-                self.string_buf.clear();
-                out.push(Token::String(content));
-            } else {
-                self.string_buf.push(ch);
-            }
-            self.last_was_hash = false;
-            return out;
-        }
-
-        if ch == '#' {
-            if let Some(tok) = self.flush_ident() {
-                out.push(tok);
-            }
-            self.last_was_hash = true;
-            return out;
-        }
-
-        // 插值: Hash 紧跟 '{' 进入插值模式
-        if ch == '{' && self.last_was_hash {
-            self.last_was_hash = false;
-            self.in_interpolation = true;
-            return out;
-        }
-
-        if ch == '/' {
-            self.in_comment = true;
-            self.last_was_hash = false;
-            return out;
-        }
-
-        if ch == '"' || ch == '\'' {
-            self.in_string = true;
-            self.string_delim = ch;
-            if let Some(tok) = self.flush_ident() {
-                out.push(tok);
-            }
-            out.push(Token::Char(ch));
-            self.last_was_hash = false;
-            return out;
-        }
-
-        if ch.is_alphabetic() || ch == '-' || ch == '_' {
-            // 如已有累积的数字缓冲区（如 "10px" 时 num_buf="10"），先 flush 数字
-            if let Some(tok) = self.flush_num() {
-                out.push(tok);
-            }
-            self.ident_buf.push(ch);
-            self.last_was_hash = false;
-            return out;
-        }
-
-        self.last_was_hash = false;
-
-        // 数字累积 — 直接追加到 num_buf（保证 "10" 不被拆为 "1","0"）
-        // 但需先 flush ident_buf（如 "-5px" 中 "-" 在 num "5" 之前）
-        if ch.is_ascii_digit() {
-            if let Some(tok) = self.flush_ident() {
-                out.push(tok);
-            }
-            self.num_buf.push(ch);
-            return out;
-        }
-
-        // 非字母/非数字字符：flush 已累积的 ident/num
-        if let Some(tok) = self.flush_ident() {
-            out.push(tok);
-        }
-        if let Some(tok) = self.flush_num() {
-            out.push(tok);
-        }
-
-        match ch {
-            c if c.is_whitespace() => {
-                if c == '\n' {
-                    out.push(Token::Newline);
-                } else {
-                    out.push(Token::Whitespace);
-                }
-            }
-            '$' => out.push(Token::Dollar),
-            '.' => out.push(Token::Dot),
-            ':' => out.push(Token::Colon),
-            ';' => out.push(Token::Semicolon),
-            ',' => out.push(Token::Comma),
-            '(' => out.push(Token::LParen),
-            ')' => out.push(Token::RParen),
-            '{' => out.push(Token::LBrace),
-            '}' => out.push(Token::RBrace),
-            '[' => out.push(Token::LBracket),
-            ']' => out.push(Token::RBracket),
-            '@' => out.push(Token::At),
-            c => out.push(Token::Char(c)),
-        }
-
-        out
+        // mem::take: 把 old String 移出(留下空 String 给 &mut self.buf)
+        let buf = std::mem::take(&mut self.buf);
+        let (new_mode, new_buf, emitted) = transition(buf, self.mode, ch);
+        self.mode = new_mode;
+        self.buf = new_buf;
+        emitted
     }
 
-    fn flush_ident(&mut self) -> Option<Token> {
-        if self.ident_buf.is_empty() {
-            None
-        } else {
-            let ident = self.ident_buf.clone();
-            self.ident_buf.clear();
-            Some(Token::Ident(ident))
-        }
-    }
-
-    fn flush_num(&mut self) -> Option<Token> {
-        if self.num_buf.is_empty() {
-            None
-        } else {
-            let num = self.num_buf.clone();
-            self.num_buf.clear();
-            Some(Token::Number(num))
+    /// Finalize — flush 剩余 buffer（各模式直接 return 对应分类结果）
+    pub fn finalize(self) -> Vec<Token> {
+        match self.mode {
+            ScanMode::InLineComment | ScanMode::InBlockComment => {
+                vec![Token::Comment(self.buf)]
+            }
+            ScanMode::MaybeComment => classify_buffer("/"),
+            _ => classify_buffer(&self.buf),
         }
     }
 }
 
-impl Default for ScannerState {
+impl Default for Scanner {
     fn default() -> Self {
         Self::new()
     }

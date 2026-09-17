@@ -1,61 +1,26 @@
-//! Serialize Stage (Stage 4)
+//! Serialize Stage — CssNode stream → char stream
 //!
-//! `Observable<Result<CssNode, CompileError>, Infallible>`
-//!     → `Observable<char, Infallible>`
-//!
-//! Pipeline fragment:
-//!   .map(render_or_error_banner)
-//!   .flat_map(chars_of)
-//!   .finalize(trace elapsed)
-//!
-//! Side-effects (tracing elapsed_us) are isolated in `.finalize()` —
-//! this is the ONLY side-effect site in this stage.
-
-use rxrust::prelude::*;
-use std::convert::Infallible;
-use std::time::Instant;
+//! scan_map(Serializer) 累积,每个 CssNode 展开为 char 序列,flat_map 进流.
 
 use crate::ast::CssNode;
-use crate::error::CompileError;
+use rxrust::prelude::*;
 
-/// Type alias for the input to this stage: Result-wrapped CssNode per Item.
-pub type EvalItem = Result<CssNode, CompileError>;
+/// 序列化器 — scan_map 的 Accumulator + emit char 流
+#[derive(Debug, Clone, Default)]
+pub struct Serializer;
 
-/// Build the serialize stage closure — returns a function that attaches the
-/// serialize operators to an upstream `Observable<EvalItem, Infallible>`.
-///
-/// This is the rxrust "stage adapter" pattern: each stage is a function that
-/// takes an upstream Observable + a tick (Instant for finalize tracing) and
-/// returns a downstream Observable, with `.box_it()` at the boundary.
-pub fn attach(
-    upstream: LocalBoxedObservable<'static, EvalItem, Infallible>,
-    start: Instant,
-) -> LocalBoxedObservable<'static, char, Infallible> {
-    let _span = tracing::info_span!("serialize.attach").entered();
+impl Serializer {
+    pub fn new() -> Self {
+        Self
+    }
 
-    upstream
-        .map(render_item)
-        .flat_map(chars_of)
-        .finalize(move || {
-            tracing::info!(elapsed_us = start.elapsed().as_micros() as u64, "serialize finalize")
-        })
-        .tap(|ch| tracing::trace!(?ch, stage = "serialize", "char out"))
-        .box_it()
-}
-
-/// Map a `Result<CssNode, CompileError>` to a String.
-/// - `Ok(css_node)` → rendered CSS fragment
-/// - `Err(err)`     → `/* COMPILE ERROR: ... */` banner (error-as-value)
-#[inline]
-fn render_item(item: EvalItem) -> String {
-    match item {
-        Ok(css_node) => css_node.render(),
-        Err(err) => format!("/* COMPILE ERROR: {err} */"),
+    /// 将单个 CssNode 渲染为 owned String,由 flat_map 展开
+    pub fn render_one(&self, node: CssNode) -> Vec<char> {
+        node.render().chars().collect()
     }
 }
 
-/// Convert a String into a char-stream Observable.
-#[inline]
-fn chars_of(s: String) -> LocalBoxedObservable<'static, char, Infallible> {
-    Local::from_iter(s.chars().collect::<Vec<_>>()).box_it()
+/// 便捷函数: CssNode → char Vec（纯函数,用于 flat_map）
+pub fn render_node_to_chars(node: CssNode) -> Vec<char> {
+    node.render().chars().collect()
 }

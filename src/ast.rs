@@ -99,6 +99,8 @@ pub enum Node {
     },
     /// 原始文本片段（verbatim）
     Text(String),
+    /// 注释节点
+    Comment(String),
 }
 
 /// 最终渲染节点：从 Node 流通过 flat_map(evaluate) 展开得到

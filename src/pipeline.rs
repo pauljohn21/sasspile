@@ -1,92 +1,53 @@
-//! Pipeline — internal only, no pub items.
+//! Pipeline 组装 — char stream → Token → Node → CssNode → char stream
 //!
-//! rxrust 4-stage chain:
-//! - tokenize   : scan_map + flat_map + filter
-//! - parse      : scan_map + flat_map
-//! - evaluate   : scan + flat_map — see evaluate_dst.rs
-//! - serialize  : map + flat_map + finalize — see serialize_dst.rs
+//! build 是一个完整的 chain: 从 from_iter(chars) 经过 scan_map / flat_map
+//! 串联四个阶段,最后 box_it 一次做 type erasure，得到
+//! LocalBoxedObservable<char, Infallible>。
 //!
-//! Exposed to the crate root via `pub(super) fn build`.
-//!
-//! Each stage's logic has been moved to its own module:
-//!   - `tokenize_dst.rs` — ScannerState (char → Token)
-//!   - `parse_dst.rs`    — AstBuilder (Token → Node)
-//!   - `evaluate_dst.rs` — Evaluator (Node → Result<Vec<CssNode>, _>)
-//!   - `serialize_dst.rs` — Serializer (Result<CssNode, _> → char)
-//!
-//! Pipeline.rs now only ORCHESTRATES the stage adapters with `.pipe()` + `.box_it()`.
+//! 不拆分中间变量、不做中间 box_it，所有权随链转移，最终由 collect/last 消费。
+
+use std::convert::Infallible;
 
 use rxrust::prelude::*;
-use std::convert::Infallible;
-use std::time::Instant;
 
-use std::path::Path;
-
-use crate::ast::CssNode;
-use crate::ast::Node;
-use crate::error::CompileError;
+use crate::evaluate_dst;
 use crate::parse_dst::AstBuilder;
-use crate::tokenize_dst::ScannerState;
+use crate::serialize_dst;
+use crate::tokenize_dst::Scanner;
 
-/// Build the internal char-stream Observable (crate-private entry).
-pub(super) fn build(input: &str) -> LocalBoxedObservable<'static, char, Infallible> {
-    build_with_base(input, None)
-}
-
-/// Build with a base directory for resolving relative @import/@use paths.
-pub(super) fn build_with_base(
-    input: &str,
-    base_path: Option<&Path>,
-) -> LocalBoxedObservable<'static, char, Infallible> {
-    let start = Instant::now();
+/// 构建完整编译 pipeline: &str → LocalBoxedObservable<char, Infallible>
+pub fn build(input: &str) -> LocalBoxedObservable<'static, char, Infallible> {
     let chars: Vec<char> = input.chars().collect();
 
-    // Stage 1: tokenize — char → Token
-    let tokens = Local::from_iter(chars)
-        .box_it()
-        .scan_map(ScannerState::new(), |state, ch| state.feed(ch))
+    // Stage 1: char → token
+    //   scan_map(Scanner):   char → Vec<Token>
+    //   flat_map(from_iter): Vec<Token> → Token (逐个)
+    // Stage 2: token → node
+    //   scan_map(AstBuilder): Token → Vec<Node>
+    //   flat_map(from_iter):  Vec<Node> → Node
+    // Stage 3: node → CssNode (flat_map eval 展开)
+    // Stage 4: CssNode → char (flat_map render 展开)
+    // Final: box_it 做 type erasure,得到 LocalBoxedObservable<char>
+    Local::from_iter(chars)
+        .scan_map(Scanner::new(), |state, ch| state.feed(ch))
         .flat_map(|toks| Local::from_iter(toks))
-        .tap(|tok| tracing::debug!(?tok, stage = "tokenize", "token out"))
-        .box_it();
-
-    // Stage 2: parse — Token → Node
-    let nodes = tokens
-        .scan_map(AstBuilder::new(), |builder, token| builder.feed(token))
-        .flat_map(|ns| Local::from_iter(ns))
-        .tap(|node| tracing::info!(?node, stage = "parse", "node out"))
-        .box_it();
-
-    // Stage 3: evaluate — Node → Result<Vec<CssNode>, CompileError>
-    //
-    // Operator mapping:
-    //   - scan      : thread CompilerContext state across items → variable scope
-    //   - flat_map  : 1 Node expands to 0..N CssNode's (@for, @include, @import)
-    //   - distinct_until_changed : suppress duplicate errors
-    let mut initial_ctx = crate::shared::context::CompilerContext::new();
-    if let Some(bp) = base_path {
-        initial_ctx.path_stack.push(bp.to_path_buf());
-    }
-    let evaluated = crate::evaluate_dst::attach_with_ctx(nodes, initial_ctx);
-
-    // Stage 4: serialize — flattens inner Vec<CssNode> and emits char stream.
-    //
-    // Adapter:  fn(map(|outcome| → Vec<Result<CssNode, _>>))
-    //           .flat_map(each Item to stream)
-    //           .pipe(serialize_dst::attach)
-    type SerItem = Result<CssNode, CompileError>;
-
-    let ser_input = evaluated
-        .tap(|outcome| tracing::info!(?outcome, stage = "evaluate", "item out"))
-        .flat_map(|outcome| {
-            let items: Vec<SerItem> = match outcome {
-                Ok(nodes) => nodes.into_iter().map(Ok).collect(),
-                Err(e) => vec![Err(e)],
-            };
-            Local::from_iter(items)
+        .tap(|tok| tracing::trace!(?tok, stage = "tokenize"))
+        .scan_map(AstBuilder::new(), |builder, tok| builder.feed(tok))
+        .flat_map(|node_vec| Local::from_iter(node_vec))
+        .tap(|node| tracing::trace!(?node, stage = "parse"))
+        .flat_map(|node| Local::from_iter(evaluate_dst::eval_node_vec(node)))
+        .tap(|css| tracing::trace!(?css, stage = "evaluate"))
+        .flat_map(|css_node| {
+            Local::from_iter(serialize_dst::render_node_to_chars(css_node))
         })
-        .tap(|item| tracing::info!(?item, stage = "serialize", "ser input"))
-        .box_it();
+        .tap(|ch| tracing::trace!(char = %ch, stage = "serialize"))
+        .box_it()
+}
 
-    // Stage 4: serialize — SerItem → char
-    crate::serialize_dst::attach(ser_input, start)
+/// 带 base_path 的 pipeline（用于 @import 解析,TODO: 实现完整的 base_path 传递）
+pub fn build_with_base(
+    input: &str,
+    _base_path: Option<&std::path::Path>,
+) -> LocalBoxedObservable<'static, char, Infallible> {
+    build(input)
 }

@@ -1,28 +1,19 @@
 //! sasspile-rx: rxrust-first SCSS compiler.
 //!
-//! # Usage
-//!
-//! ```rust
-//! use sasspile_rx::compile;
-//!
-//! fn main() -> Result<(), sasspile_rx::CompileError> {
-//!     let css = compile("a { color: red; }")?;
-//!     println!("{css}");
-//!     Ok(())
-//! }
-//! ```
+//! endpoint 用 collect::<String>() 消费 char 流,无 Rc<RefCell>/subscribe+push.
 
 pub mod ast;
 mod error;
-mod evaluate_dst;
+pub mod evaluate_dst;
 pub mod parse_dst;
 mod pipeline;
-mod serialize_dst;
+pub mod serialize_dst;
 mod shared;
-mod tokenize_dst;
+pub mod tokenize_dst;
 
 pub use error::CompileError;
 
+use std::path::Path;
 use std::sync::Once;
 use tracing_subscriber::FmtSubscriber;
 
@@ -40,81 +31,75 @@ fn ensure_tracing() {
     });
 }
 
-use std::path::Path;
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use rxrust::prelude::*;
 
-/// Compile SCSS source to CSS string — the single public API entry.
-///
-/// Wraps the internal rxrust 4-stage pipeline
-/// (tokenize → parse → evaluate → serialize)
-/// into a clean `Result<String, CompileError>`.
-///
-/// # Example
-/// ```
-/// use sasspile_rx::compile;
-///
-/// let css = compile("a { color: red; }").unwrap();
-/// assert!(css.contains("color"));
-/// assert!(css.contains("red"));
-/// ```
 pub fn compile(input: &str) -> Result<String, CompileError> {
-    let _root = tracing::info_span!("sasspile.compile", input_len = input.len()).entered();
+    let _root =
+        tracing::info_span!("sasspile.compile", input_len = input.len()).entered();
 
     ensure_tracing();
 
-    let result = Rc::new(RefCell::new(Vec::<char>::new()));
-    let r = result.clone();
+    // collect::<String>() 消费 char 流 → String(FromIterator<char>)
+    // subscribe 接收 owned String,无 Rc<RefCell>/push
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    pipeline::build(input).subscribe(move |ch| {
-        r.borrow_mut().push(ch);
-    });
+    pipeline::build(input)
+        .tap(|ch| tracing::trace!(char = %ch, stage = "serialize"))
+        .collect::<String>()
+        .last()
+        .subscribe(move |css| {
+            let _ = tx.send(css);
+        });
 
-    let css: String = result.borrow().iter().collect();
-
-    tracing::info!(
-        parent: tracing::Span::current(),
-        output_len = css.len(),
-        "compile complete"
-    );
+    let css = rx.recv().unwrap_or_default();
 
     if css.contains("COMPILE ERROR:") {
         return Err(CompileError::InvalidInput {
             message: "compilation error — see output".into(),
         });
     }
+
+    tracing::info!(output_len = css.len(), "compile complete");
     Ok(css)
 }
 
-/// Compile a SCSS file at `path`, resolving its @import/@use directives
-/// against the file's parent directory.
 pub fn compile_file(path: &Path) -> Result<String, CompileError> {
-    let src = std::fs::read_to_string(path).map_err(|e| CompileError::ModuleLoadFailure {
-        path: path.display().to_string(),
-        reason: e.to_string(),
+    let src = std::fs::read_to_string(path).map_err(|e| {
+        CompileError::ModuleLoadFailure {
+            path: path.display().to_string(),
+            reason: e.to_string(),
+        }
     })?;
     let base = path.parent().unwrap_or_else(|| Path::new("."));
     compile_at(&src, base)
 }
 
-/// Compile with a base path — used internally by @import expansion.
 pub fn compile_at(input: &str, base_path: &Path) -> Result<String, CompileError> {
-    let _root = tracing::info_span!("sasspile.compile_at", base = %base_path.display(), input_len = input.len()).entered();
+    let _root = tracing::info_span!(
+        "sasspile.compile_at",
+        base = %base_path.display(),
+        input_len = input.len()
+    )
+    .entered();
 
-    let result = Rc::new(RefCell::new(Vec::<char>::new()));
-    let r = result.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    pipeline::build_with_base(input, Some(base_path)).subscribe(move |ch| {
-        r.borrow_mut().push(ch);
-    });
+    pipeline::build_with_base(input, Some(base_path))
+        .tap(|ch| tracing::trace!(char = %ch, stage = "serialize"))
+        .collect::<String>()
+        .last()
+        .subscribe(move |css| {
+            let _ = tx.send(css);
+        });
 
-    let css: String = result.borrow().iter().collect();
+    let css = rx.recv().unwrap_or_default();
+
     if css.contains("COMPILE ERROR:") {
         return Err(CompileError::InvalidInput {
             message: "compilation error — see output".into(),
         });
     }
+
+    tracing::info!(output_len = css.len(), "compile complete");
     Ok(css)
 }

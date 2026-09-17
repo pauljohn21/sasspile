@@ -1,5 +1,8 @@
 {
     "cSpell.words": [
+        "accum",
+        "asoperators",
+        "chrono",
         "clippy",
         "codegraph",
         "cssn",
@@ -9,13 +12,19 @@
         "fenter",
         "infalletible",
         "libsass",
+        "mpsc",
+        "nothrow",
         "openspec",
         "peekable",
         "pipable",
         "rposition",
+        "rsplitn",
         "rxrust",
         "sasspec",
+        "segs",
+        "toks",
         "twbs",
+        "Unsub",
         "vtable"
     ]
 }
