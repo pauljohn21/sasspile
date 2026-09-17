@@ -3,6 +3,7 @@
 use crate::ast::Token;
 
 /// 查找第一个 Ident token 作为 @指令名 — 迭代器 find_map
+#[allow(dead_code)]
 pub fn parse_at_rule_name(tokens: &[Token]) -> Option<String> {
     tokens.iter().find_map(|t| match t {
         Token::Ident(s) => Some(s.clone()),
@@ -11,6 +12,7 @@ pub fn parse_at_rule_name(tokens: &[Token]) -> Option<String> {
 }
 
 /// 拼接 args 为空格分隔字符串 — 迭代器 filter_map + join
+#[allow(dead_code)]
 pub fn parse_at_rule_args(tokens: &[Token]) -> String {
     tokens
         .iter()
@@ -29,6 +31,7 @@ pub fn parse_at_rule_args(tokens: &[Token]) -> String {
 }
 
 /// 顶层分割 tokens — scan 追踪 depth,结果为 owned Vec<Vec<Token>>
+#[allow(dead_code)]
 pub fn split_top_level_tokens(tokens: &[Token], delimiter: Token) -> Vec<Vec<Token>> {
     #[derive(Clone)]
     struct SplitState {

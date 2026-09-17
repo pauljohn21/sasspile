@@ -40,6 +40,7 @@ struct EnterpriseTarget {
     name: String,
     entry: String,
     paradigm: String,
+    #[allow(dead_code)]
     exists: bool,
     compiled: bool,
     output_len: usize,

@@ -3,7 +3,6 @@
 //! scan_map(Serializer) 累积,每个 CssNode 展开为 char 序列,flat_map 进流.
 
 use crate::ast::CssNode;
-use rxrust::prelude::*;
 
 /// 序列化器 — scan_map 的 Accumulator + emit char 流
 #[derive(Debug, Clone, Default)]

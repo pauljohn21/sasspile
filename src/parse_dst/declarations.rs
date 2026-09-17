@@ -2,6 +2,7 @@
 
 use crate::ast::Token;
 
+#[allow(dead_code)]
 pub fn parse_declaration_prop(tokens: &[Token]) -> Option<String> {
     tokens
         .iter()
@@ -12,6 +13,7 @@ pub fn parse_declaration_prop(tokens: &[Token]) -> Option<String> {
         .reduce(|a, b| format!("{a}-{b}"))
 }
 
+#[allow(dead_code)]
 pub fn parse_declaration_value(tokens: &[Token]) -> String {
     tokens
         .iter()

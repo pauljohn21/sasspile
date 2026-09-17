@@ -3,10 +3,12 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone)]
+#[allow(dead_code)]
 pub struct ModuleCache {
     entries: HashMap<String, String>,
 }
 
+#[allow(dead_code)]
 impl ModuleCache {
     pub fn new() -> Self {
         Self {

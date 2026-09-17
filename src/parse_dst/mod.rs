@@ -24,7 +24,7 @@ pub struct AstBuilder {
     selector: Option<String>,
     property: Option<String>,
     value_buf: Vec<Token>,
-    pending_body: Vec<Node>,
+    _pending_body: Vec<Node>,
 }
 
 // ─── 纯辅助函数 ───────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ impl AstBuilder {
             selector: None,
             property: None,
             value_buf: Vec::new(),
-            pending_body: Vec::new(),
+            _pending_body: Vec::new(),
         }
     }
 
