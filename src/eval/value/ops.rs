@@ -112,7 +112,7 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
         (Value::Bool(a), Value::Bool(b)) => Ok(Value::String(format!("{a}{b}"), false)),
         // Null + Null → Null
         (Value::Null, Value::Null) => Ok(Value::Null),
-        _ => Err(SassError::Eval("Unsupported + operation".into())),
+        (ref l, ref r) => Err(SassError::Eval(format!("Cannot add {l:?} and {r:?}"))),
     }
 }
 

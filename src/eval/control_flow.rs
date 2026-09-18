@@ -145,7 +145,9 @@ impl Evaluator {
                     )]
                 })
                 .collect(),
-            Value::List(es, _, _) => es.iter().map(|e| vec![e.clone()]).collect(),
+            Value::List(es, _, _) | Value::ArgList(es, _, _) => {
+                es.iter().map(|e| vec![e.clone()]).collect()
+            }
             Value::Map(pairs) => pairs
                 .iter()
                 .flat_map(|(k, v)| vec![vec![k.clone()], vec![v.clone()]])

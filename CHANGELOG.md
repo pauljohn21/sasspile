@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.14] — 2026-09-18
+
+### Fixed
+
+- **@each 支持 ArgList 迭代**：`$args...` 剩余参数作为集合在 `@each` 中正确展开
+  - 根因：`eval_each` 仅匹配 `List` 变体，遗漏 `ArgList`
+  - 影响：element-plus 编译失败修复，ep_full 121/21 100% 通过
+- **@extend 插值占位符过滤**：跳过 `#{...}` 内部空格校验，避免误判为 complex selector
+  - 目标：`@extend #{'%shared-' + $name}` 等含插值的 extend 不再触发错误
+- **`+` 算子增强诊断**：`Cannot add L and R` 错误信息便于追踪类型不匹配
+- sass-spec 通过率：7939/12131 (65.5%)
+- element-plus 全量测试：121/21 100%
+
 ## [0.9.13] — 2026-09-13
 
 ### Added

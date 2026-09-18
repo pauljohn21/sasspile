@@ -305,8 +305,12 @@ fn eval_extend_node(selector: &str, optional: bool, env: Env) -> Result<(Vec<Css
                 .into_iter()
                 .filter(|s| !s.is_empty())
                 .try_fold(env, |env, target| {
-                    // 复杂选择器校验：包含空格（多 compound）→ 报错
-                    if target.chars().any(|c| c.is_whitespace()) {
+                    // 复杂选择器校验：跳过插值 #{...} 内部的空格（未插值占位符）
+                    let scrubbed: String = target
+                        .split_inclusive('}')
+                        .filter(|chunk| !chunk.starts_with("#{"))
+                        .collect();
+                    if scrubbed.chars().any(|c| c.is_whitespace()) {
                         return Err(SassError::Eval(
                             "complex selectors may not be extended.".into(),
                         ));
