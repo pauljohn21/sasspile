@@ -5,12 +5,35 @@ allowed-tools: Read, Write, Edit, MultiEdit, ListDir
 license: MIT
 metadata:
   author: sasspile-rx
-  version: "4.1"
+  version: "4.5"
 ---
 
 # v4.1 全量内化版：基于 rxrust 1.0.0-rc.5 完整源码阅读后编写
 
 本 SKILL 来自对 rxrust 1.0.0-rc.5 **全量核心源码**的精确阅读。写代码时**只查本 SKILL**，绝不回头查源码。
+
+## ⚠️ 核心铁律:chain 是一条完整管道,不要拆分中间变量
+
+### 零范式(最高优先级):三阶段反应式范式
+
+**每一段数据处理,必须且只能是以下三段:**
+
+```
+1. 入口流      from_iter(source)           把集合变成 Observable
+2. 内部迭代器  scan_map(Acc::new(), reducer)  消费旧状态 → 产出新状态 + emit 值
+                 内部用迭代器原语: map / filter / fold / flat_map / collect
+                 ❌ 禁止 &mut 外部累加器 + for 循环 push
+3.     合并收集  flat_map(from_iter) → collect/last   展开子 Vec,消费整条流
+```
+
+**口诀: 流进来,迭代器中间过,合并收集输出。**
+
+- scan_map reducer 内部是**唯一合法的命令化窗口** `FnMut(&mut Acc, Item)`,里面可以改 Acc
+- helper 函数离开这个窗口后**必须纯** — 参数 `&Scope`/引用,返回 owned 值,不构造 Observable
+- 如果某个步骤需要「遍历一个产出多个」,那不是 for + push,是 `flat_map(from_iter)`
+- 如果某个步骤需要「把多个合成一个」,那不是 `let mut v = vec![]; for x in items { v.push(x) }`,是 `collect()` 或 `scan_map + last()`
+
+---
 
 ## ⚠️ 核心铁律:chain 是一条完整管道,不要拆分中间变量
 
@@ -334,6 +357,103 @@ pub fn build(input: &str) -> LocalBoxedObservable<'static, char, Infallible> {
 > **类型多大都无所谓**: `Local<FlatMap<ScanMap<FromIter<char>, ...>, ...>>` 会是很长的 combinator 类型,
 > 但只在出口 `.box_it()` 一次 — 擦成 `LocalBoxedObservable<char, Infallible>`。
 > 中间链不需要手动标注类型,编译器会自动推断。
+
+---
+
+## 4.5 自定义指令算子模式 (sasspile-rx 独有)
+
+当内置算子 (map/filter_map/scan_map/flat_map) 不足以表达独立指令逻辑时,自定义算子:
+
+### 四件套模板 (以 `src/directive/use_.rs` 为例)
+
+```rust
+// 1. 指令标记
+pub struct Use;
+
+// 2. 算子壳子
+pub struct UseOp<S> {
+    pub source: S,
+    pub _instruction: PhantomData<fn() -> Use>,
+}
+
+// 3. Observer 包装 — 业务逻辑写在 next() 里
+pub struct UseObserver<O> {
+    pub observer: O,
+    pub _instruction: PhantomData<fn() -> Use>,
+}
+impl<O, Item, Err> Observer<Item, Err> for UseObserver<O>
+where O: Observer<Item, Err> {
+    fn next(&mut self, value: Item) {
+        // @use 指令逻辑
+        self.observer.next(value);
+    }
+    fn error(self, err: Err) { self.observer.error(err); }
+    fn complete(self) { self.observer.complete(); }
+    fn is_closed(&self) -> bool { self.observer.is_closed() }
+}
+
+// 4. CoreObservable — 订阅时包装下游 Observer
+impl<S, C> CoreObservable<C> for UseOp<S>
+where C: Context,
+      S: CoreObservable<C::With<UseObserver<C::Inner>>> {
+    type Unsub = S::Unsub;
+    fn subscribe(self, context: C) -> Self::Unsub {
+        let wrapped = context.transform(|observer| UseObserver {
+            observer, _instruction: PhantomData
+        });
+        self.source.subscribe(wrapped)
+    }
+}
+```
+
+### DirectiveOps 扩展 trait (src/directive/mod.rs)
+
+```rust
+pub trait DirectiveOps: Observable
+where Self::Inner: ObservableType {
+    fn use_(self) -> Self::With<UseOp<Self::Inner>> {
+        self.transform(|source| UseOp { source, _instruction: PhantomData })
+    }
+    // ... mixin / include / if_ / for_ / each 同理
+}
+impl<T> DirectiveOps for T where T: Observable, T::Inner: ObservableType {}
+```
+
+### ObservableType impl (每个自定义算子都必须)
+
+```rust
+impl<S> ObservableType for UseOp<S>
+where S: ObservableType {
+    type Item<'a> = S::Item<'a> where Self: 'a;
+    type Err = S::Err;
+}
+```
+
+### 命名惯例
+
+- 文件: `src/directive/use_.rs`, `src/directive/if_.rs`, `src/directive/for_.rs` (`if` 是关键字,加 `_` 后缀)
+- 标记 struct: `Use`, `Mixin`, `Include`, `If`, `For`, `Each`
+- 算子 struct: `UseOp<S>`, `MixinOp<S>`, ...
+- Observer struct: `UseObserver<O>`, `MixinObserver<O>`, ...
+
+### 链式调用 (lib.rs)
+
+```rust
+Local::from_iter(input.chars().collect::<Vec<_>>())
+    .filter_map(|ch| if ch.is_whitespace() { None } else { Some(ch) })
+    .scan_map(String::new(), |buf, ch| { /* tokenize */ })
+    .flat_map(|tokens| Local::from_iter(tokens))
+    .use_()        // 自定义算子
+    .mixin()       // 自定义算子
+    .include()     // 自定义算子
+    .if_()         // 自定义算子
+    .for_()        // 自定义算子
+    .each()        // 自定义算子
+    .map(|token| token + "\n")
+    .collect::<String>()
+    .last()
+    .subscribe(|s| { let _ = tx.send(s); });
+```
 
 ---
 
