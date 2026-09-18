@@ -88,7 +88,7 @@
   - rxrust: span!(level="info", "directive", op="use")
   - est: 0.5h
 
-- [ ] **T6.2** Archive change, promote capability to main `openspec/specs/`
+- [x] **T6.2** Archive change, promote capability to main `openspec/specs/`
   - est: 0.5h
 
 ## Summary
@@ -96,10 +96,10 @@
 | Phase | Status | Est |
 |---|---|---|
 | 0 算子骨架 | ✅ done | 2.5h |
-| 1 @use | ⬜ todo | 4.5h |
-| 2 @mixin/@include | ⬜ todo | 3.5h |
-| 3 @if | ⬜ todo | 1.5h |
-| 4 @for/@each | ⬜ todo | 3h |
-| 5 Validation | ⬜ todo | 4h |
-| 6 Polish | ⬜ todo | 1h |
-| **Total remaining** | | **18h** |
+| 1 @use | ✅ done | 4.5h |
+| 2 @mixin/@include | ✅ done | 3.5h |
+| 3 @if | ✅ done | 1.5h |
+| 4 @for/@each | ✅ done | 3h |
+| 5 Validation | ⏳ blocked | 4h |
+| 6 Polish | ✅ done | 1h |
+| **Total remaining** | | **4h** (Phase 5 blocked) |
