@@ -24,48 +24,48 @@
 
 ## Phase 1 — @use 指令实现
 
-- [ ] **T1.1** 在 `UseObserver::next` 中实现 @use 路径解析 (模块加载)
+- [x] **T1.1** 在 `UseObserver::next` 中实现 @use 路径解析 (模块加载)
   - rxrust: UseOp 内部 flat_map(load_module(chars))
   - spec: use-forward-resolution
   - est: 2h
 
-- [ ] **T1.2** 实现 @forward — 转发上游模块的 members
+- [x] **T1.2** 实现 @forward — 转发上游模块的 members
   - rxrust: ForwardOp 或复用 UseOp 内部逻辑
   - spec: use-forward-resolution
   - est: 1.5h
 
-- [ ] **T1.3** 实现 `with` 参数覆盖 (config)
+- [x] **T1.3** 实现 `with` 参数覆盖 (config)
   - rxrust: scan_map 捕获 config map
   - spec: use-forward-resolution
   - est: 1h
 
 ## Phase 2 — @mixin / @include 指令
 
-- [ ] **T2.1** 在 `MixinObserver::next` 中实现 @mixin 定义捕获
+- [x] **T2.1** 在 `MixinObserver::next` 中实现 @mixin 定义捕获
   - rxrust: next 检测到 @mixin 时注册到内部 HashMap
   - spec: mixin-include-apply
   - est: 1.5h
 
-- [ ] **T2.2** 在 `IncludeObserver::next` 中实现 @include 调用展开 (BEM b/e/m)
+- [x] **T2.2** 在 `IncludeObserver::next` 中实现 @include 调用展开 (BEM b/e/m)
   - rxrust: next 查找 mixin 定义, flat_map 展开参数绑定后的 body
   - spec: mixin-include-apply
   - est: 2h
 
 ## Phase 3 — @if 条件分支
 
-- [ ] **T3.1** 在 `IfObserver::next` 中实现 @if predicate 求值
+- [x] **T3.1** 在 `IfObserver::next` 中实现 @if predicate 求值
   - rxrust: next 走 then-branch 或 else-branch (filter_map)
   - spec: each-for-control
   - est: 1.5h
 
 ## Phase 4 — @for / @each 循环展开
 
-- [ ] **T4.1** 在 `ForObserver::next` 中实现 @for 数值循环展开
+- [x] **T4.1** 在 `ForObserver::next` 中实现 @for 数值循环展开
   - rxrust: next 展开 body N 次 (flat_map(from_iter(range)))
   - spec: each-for-control
   - est: 1.5h
 
-- [ ] **T4.2** 在 `EachObserver::next` 中实现 @each 列表/Map 遍历
+- [x] **T4.2** 在 `EachObserver::next` 中实现 @each 列表/Map 遍历
   - rxrust: next 展开 body per item (flat_map(from_iter(list)))
   - spec: each-for-control
   - est: 1.5h
@@ -84,7 +84,7 @@
 
 ## Phase 6 — Polish
 
-- [ ] **T6.1** 为每个算子的 `next` 添加 `tracing::info_span!` 上下文
+- [x] **T6.1** 为每个算子的 `next` 添加 `tracing::info_span!` 上下文
   - rxrust: span!(level="info", "directive", op="use")
   - est: 0.5h
 
