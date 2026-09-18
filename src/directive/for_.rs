@@ -1,18 +1,13 @@
-use std::marker::PhantomData;
-
 use rxrust::prelude::*;
 
-/// 指令标记: @for (数值循环展开)
-pub struct For;
-
+#[derive(Clone)]
 pub struct ForOp<S> {
     pub source: S,
-    pub _instruction: PhantomData<fn() -> For>,
 }
 
+#[derive(Clone)]
 pub struct ForObserver<O> {
-    pub observer: O,
-    _instruction: PhantomData<fn() -> For>,
+    observer: O,
 }
 
 impl<S> ObservableType for ForOp<S>
@@ -28,7 +23,7 @@ where
 
 impl<O, Item, Err> Observer<Item, Err> for ForObserver<O>
 where
-    O: Observer<Item, Err>,
+    O: Observer<Item, Err> + Send,
 {
     fn next(&mut self, value: Item) {
         // TODO: @for 循环展开逻辑
@@ -52,12 +47,12 @@ impl<S, C> CoreObservable<C> for ForOp<S>
 where
     C: Context,
     S: CoreObservable<C::With<ForObserver<C::Inner>>>,
+    C::Inner: Send,
 {
     type Unsub = S::Unsub;
 
     fn subscribe(self, context: C) -> Self::Unsub {
-        let wrapped =
-            context.transform(|observer| ForObserver { observer, _instruction: PhantomData });
+        let wrapped = context.transform(|observer| ForObserver { observer });
         self.source.subscribe(wrapped)
     }
 }

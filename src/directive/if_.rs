@@ -1,18 +1,13 @@
-use std::marker::PhantomData;
-
 use rxrust::prelude::*;
 
-/// 指令标记: @if (条件分支求值)
-pub struct If;
-
+#[derive(Clone)]
 pub struct IfOp<S> {
     pub source: S,
-    pub _instruction: PhantomData<fn() -> If>,
 }
 
+#[derive(Clone)]
 pub struct IfObserver<O> {
-    pub observer: O,
-    _instruction: PhantomData<fn() -> If>,
+    observer: O,
 }
 
 impl<S> ObservableType for IfOp<S>
@@ -28,7 +23,7 @@ where
 
 impl<O, Item, Err> Observer<Item, Err> for IfObserver<O>
 where
-    O: Observer<Item, Err>,
+    O: Observer<Item, Err> + Send,
 {
     fn next(&mut self, value: Item) {
         // TODO: @if 条件求值逻辑
@@ -52,12 +47,12 @@ impl<S, C> CoreObservable<C> for IfOp<S>
 where
     C: Context,
     S: CoreObservable<C::With<IfObserver<C::Inner>>>,
+    C::Inner: Send,
 {
     type Unsub = S::Unsub;
 
     fn subscribe(self, context: C) -> Self::Unsub {
-        let wrapped =
-            context.transform(|observer| IfObserver { observer, _instruction: PhantomData });
+        let wrapped = context.transform(|observer| IfObserver { observer });
         self.source.subscribe(wrapped)
     }
 }

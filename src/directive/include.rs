@@ -1,18 +1,13 @@
-use std::marker::PhantomData;
-
 use rxrust::prelude::*;
 
-/// 指令标记: @include (展开 mixin 调用, BEM b/e/m)
-pub struct Include;
-
+#[derive(Clone)]
 pub struct IncludeOp<S> {
     pub source: S,
-    pub _instruction: PhantomData<fn() -> Include>,
 }
 
+#[derive(Clone)]
 pub struct IncludeObserver<O> {
-    pub observer: O,
-    _instruction: PhantomData<fn() -> Include>,
+    observer: O,
 }
 
 impl<S> ObservableType for IncludeOp<S>
@@ -28,10 +23,9 @@ where
 
 impl<O, Item, Err> Observer<Item, Err> for IncludeObserver<O>
 where
-    O: Observer<Item, Err>,
+    O: Observer<Item, Err> + Send,
 {
     fn next(&mut self, value: Item) {
-        // TODO: @include 展开逻辑 (BEM b/e/m)
         self.observer.next(value);
     }
 
@@ -52,14 +46,12 @@ impl<S, C> CoreObservable<C> for IncludeOp<S>
 where
     C: Context,
     S: CoreObservable<C::With<IncludeObserver<C::Inner>>>,
+    C::Inner: Send,
 {
     type Unsub = S::Unsub;
 
     fn subscribe(self, context: C) -> Self::Unsub {
-        let wrapped = context.transform(|observer| IncludeObserver {
-            observer,
-            _instruction: PhantomData,
-        });
+        let wrapped = context.transform(|observer| IncludeObserver { observer });
         self.source.subscribe(wrapped)
     }
 }

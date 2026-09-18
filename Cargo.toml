@@ -5,12 +5,11 @@ edition = "2024"
 rust-version = "1.97"
 
 [dependencies]
-rxrust = { path = "../rx" }
+rxrust = "1.0.0-rc.5"
+tokio = { version = "1", features = ["rt-multi-thread", "rt", "macros"] }
+futures = "0.3"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-
-[patch.crates-io]
-rxrust = { path = "../rx" }
 
 [lints.rust]
 unsafe_code = "warn"

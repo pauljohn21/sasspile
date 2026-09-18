@@ -1,18 +1,13 @@
-use std::marker::PhantomData;
-
 use rxrust::prelude::*;
 
-/// 指令标记: @each (列表/Map 遍历展开)
-pub struct Each;
-
+#[derive(Clone)]
 pub struct EachOp<S> {
     pub source: S,
-    pub _instruction: PhantomData<fn() -> Each>,
 }
 
+#[derive(Clone)]
 pub struct EachObserver<O> {
-    pub observer: O,
-    _instruction: PhantomData<fn() -> Each>,
+    observer: O,
 }
 
 impl<S> ObservableType for EachOp<S>
@@ -28,7 +23,7 @@ where
 
 impl<O, Item, Err> Observer<Item, Err> for EachObserver<O>
 where
-    O: Observer<Item, Err>,
+    O: Observer<Item, Err> + Send,
 {
     fn next(&mut self, value: Item) {
         // TODO: @each 遍历展开逻辑
@@ -52,12 +47,12 @@ impl<S, C> CoreObservable<C> for EachOp<S>
 where
     C: Context,
     S: CoreObservable<C::With<EachObserver<C::Inner>>>,
+    C::Inner: Send,
 {
     type Unsub = S::Unsub;
 
     fn subscribe(self, context: C) -> Self::Unsub {
-        let wrapped =
-            context.transform(|observer| EachObserver { observer, _instruction: PhantomData });
+        let wrapped = context.transform(|observer| EachObserver { observer });
         self.source.subscribe(wrapped)
     }
 }

@@ -30,27 +30,27 @@ where
     Self::Inner: ObservableType,
 {
     fn use_(self) -> Self::With<UseOp<Self::Inner>> {
-        self.transform(|source| UseOp { source, _instruction: PhantomData })
+        self.transform(|source| UseOp { source })
     }
 
     fn mixin(self) -> Self::With<MixinOp<Self::Inner>> {
-        self.transform(|source| MixinOp { source, _instruction: PhantomData })
+        self.transform(|source| MixinOp { source })
     }
 
     fn include(self) -> Self::With<IncludeOp<Self::Inner>> {
-        self.transform(|source| IncludeOp { source, _instruction: PhantomData })
+        self.transform(|source| IncludeOp { source })
     }
 
     fn if_(self) -> Self::With<IfOp<Self::Inner>> {
-        self.transform(|source| IfOp { source, _instruction: PhantomData })
+        self.transform(|source| IfOp { source })
     }
 
     fn for_(self) -> Self::With<ForOp<Self::Inner>> {
-        self.transform(|source| ForOp { source, _instruction: PhantomData })
+        self.transform(|source| ForOp { source })
     }
 
     fn each(self) -> Self::With<EachOp<Self::Inner>> {
-        self.transform(|source| EachOp { source, _instruction: PhantomData })
+        self.transform(|source| EachOp { source })
     }
 }
 
@@ -60,5 +60,3 @@ where
     T::Inner: ObservableType,
 {
 }
-
-use std::marker::PhantomData;
