@@ -21,6 +21,7 @@ pub(crate) use color_fmt::{
     format_alpha, format_hue, format_pct, format_pct_val, hsl_to_rgb_percent, hwb_to_hsl_inline,
 };
 pub use color_types::{ChannelSet, Color, ColorOutput, ColorSpace};
+pub(crate) use display::format_large_int_e;
 
 /// 变量标志——`!default`、`!global`。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

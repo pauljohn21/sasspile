@@ -88,9 +88,11 @@ pub(crate) fn builtin_module_exports(module_name: &str) -> Option<ModuleExports>
                 Value::Number(-9_007_199_254_740_991.0, None),
             );
             vars.insert("max-number".to_string(), Value::Number(f64::MAX, None));
+            // min-number 是最小正 subnormal f64 = 5e-324 = f64::from_bits(1)
+            // Dart Sass 和 CSS 规范要求最小值是 subnormal，不是 MIN_POSITIVE (2.2e-308)
             vars.insert(
                 "min-number".to_string(),
-                Value::Number(f64::MIN_POSITIVE, None),
+                Value::Number(f64::from_bits(1), None),
             );
             Some(ModuleExports {
                 local_vars: vars,

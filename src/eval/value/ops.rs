@@ -358,7 +358,10 @@ pub(crate) fn units_compatible(u1: Option<&str>, u2: Option<&str>) -> bool {
 }
 
 /// 格式化数字+单位为字符串（如 `1px`, `2.5`, `0`）。
+/// 负零规范化为正零（IEEE 754 产生 -0.0，SCSS 规范要求显示 0）。
 fn format_number_with_unit(n: f64, unit: Option<&str>) -> String {
+    // 负零规范化：-0.0 == 0.0 为 true，赋值为 0.0 跳过负号
+    let n = match n == 0.0 { true => 0.0, false => n };
     let n_str = match n.fract() == 0.0 && n.abs() < 1e15 {
         true => format!("{n:.0}"),
         false => format!("{n}"),

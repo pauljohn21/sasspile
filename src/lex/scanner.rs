@@ -121,6 +121,41 @@ impl<'src> Lexer<'src> {
             }
             false => {}
         }
+        // 科学计数法：e/E + 可选 +/- + 数字（必须在单位扫描前处理，否则 'e' 会被当 unit）。
+        // 仅通过 peek/peek2 预检，确认有效后再消费——避免 next_char 与迭代器不同步。
+        let exp_match = match self.peek() {
+            Some('e') | Some('E') => {
+                // peek2: 跳 1 字符；peek3: 跳 2 字符
+                let after_e = {
+                    let rem = &self.source[self.pos..];
+                    let mut it = rem.chars();
+                    it.next(); // skip e/E
+                    it.next()
+                };
+                match after_e {
+                    Some('+') | Some('-') => {
+                        // 跳过 e/E 和符号后必须是数字
+                        let rem = &self.source[self.pos..];
+                        let mut it = rem.chars();
+                        it.next();
+                        it.next();
+                        it.next().is_some_and(|c| c.is_ascii_digit())
+                    }
+                    Some(c) => c.is_ascii_digit(),
+                    None => false,
+                }
+            }
+            _ => false,
+        };
+        if exp_match {
+            self.next_char(); // consume e/E
+            if self.peek() == Some('+') || self.peek() == Some('-') {
+                self.next_char(); // consume sign
+            }
+            while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                self.next_char(); // consume exponent digits
+            }
+        }
         match self.source[start..self.pos].bytes().any(|b| b.is_ascii_digit()) {
             true => {
                 while let Some(c) = self.peek() {

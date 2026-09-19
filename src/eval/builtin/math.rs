@@ -282,6 +282,12 @@ pub fn call(
         "pow" | "sqrt" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2" | "log"
         | "hypot" | "exp" | "sign" => super::math_trig::call(name, args),
         "random" => {
+            let _span = tracing::info_span!("math_random", limit = ?args.first()).entered();
+            // SCSS spec: null argument ≡ no argument → returns [0, 1)
+            let args: Vec<&Value> = args
+                .iter()
+                .filter(|v| !matches!(v, Value::Null))
+                .collect();
             match args.len() > 1 {
                 true => return Err(SassError::Eval(format!(
                     "Only 1 argument allowed, but {} {} passed.",
@@ -290,7 +296,7 @@ pub fn call(
                 ))),
                 false => {}
             }
-            match args {
+            match args.as_slice() {
                 [] => Ok(Some(Value::Number(Evaluator::simple_random(), None))),
                 [Value::Number(n, _)] => {
                     match *n <= 0.0 {
@@ -299,12 +305,16 @@ pub fn call(
                         ))),
                         false => {}
                     }
-                    match n.fract() != 0.0 {
-                        true => return Err(SassError::Eval(format!("$limit: {n} is not an int."))),
+                    // Epsilon tolerance: values within 1e-9 of an integer are treated as that integer
+                    let rounded = n.round();
+                    match (n - rounded).abs() > 1e-9 {
+                        true => return Err(SassError::Eval(format!(
+                            "$limit: {n} is not an int."
+                        ))),
                         false => {}
                     }
                     Ok(Some(Value::Number(
-                        (Evaluator::simple_random() * n).floor() + 1.0,
+                        (Evaluator::simple_random() * rounded).floor() + 1.0,
                         None,
                     )))
                 }

@@ -50,6 +50,7 @@ fn fmt_pct_with_01(v: f64) -> String {
 
 /// 格式化浮点数——截断到 10 位小数（与 SCSS 规范一致）。
 /// NaN → "none"，±inf → "calc(±infinity)"（Sass 语法）。
+/// 负零规范化为正零（IEEE 754 产生 -0.0，SCSS 规范要求显示 0）。
 fn format_num(n: f64) -> String {
     match (n.is_nan(), n.is_infinite()) {
         (true, _) => "none".to_string(),
@@ -59,6 +60,8 @@ fn format_num(n: f64) -> String {
         },
         _ => {
             let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
+            // 负零规范化：round() 保留符号，截断后可能产生 -0.0，需规范化为 0.0
+            let n = if n == 0.0 { 0.0 } else { n };
             match n.fract() == 0.0 {
                 true => format!("{n:.0}"),
                 false => format!("{n}"),

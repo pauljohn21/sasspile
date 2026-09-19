@@ -184,26 +184,6 @@ impl ParseStream<'_> {
                     }
                 }
             }
-            Some(Token::Not) => {
-                // 检查 not 后面是否紧跟 ( 无空格
-                self.advance();
-                let next_is_paren_no_ws = matches!(self.peek(), Some(Token::LParen))
-                    && !matches!(
-                        self.tokens.get(self.pos.saturating_sub(1)),
-                        Some(Token::Whitespace)
-                    );
-                match next_is_paren_no_ws {
-                    true => Err(SassError::Parse {
-                        expected: "whitespace between \"not\" and \"(\"".into(),
-                        found: "(".into(),
-                    }),
-                    false => {
-                        self.skip_ws();
-                        let v = self.parse_prefix()?;
-                        Ok(Value::UnaryOp(UnaryOp::Not, Box::new(v)))
-                    }
-                }
-            }
             Some(Token::LBracket) => {
                 // bracketed list
                 self.advance();
@@ -362,18 +342,71 @@ impl ParseStream<'_> {
 }
 
 /// 解析数字字符串为 `Value::Number`。
+///
+/// 支持科学计数法 `1e15`、`2.5E-10`，单位跟随其后如 `1px`、`3em`。
+/// 策略：先整体尝试 f64 parse（覆盖纯数字含指数）；失败则按字符扫描分离数值和单位。
 pub(crate) fn parse_number(s: &str) -> Result<Value> {
-    let (num_part, unit) = match s.find(|c: char| c.is_ascii_alphabetic() || c == '%') {
-        Some(idx) => (&s[..idx], Some(s[idx..].to_string())),
-        None => (s, None),
-    };
-    match num_part.parse::<f64>() {
-        Ok(n) => Ok(Value::Number(n, unit)),
+    // 快速路径：整个字符串作为 f64 解析（处理 1e15、2.5E-10 等科学计数法）
+    if let Ok(n) = s.parse::<f64>() {
+        return Ok(Value::Number(n, None));
+    }
+    // 扫描数值部分（含指数 e/E），unit 从第一个非数值字符开始
+    let num_end = find_number_end(s);
+    let num_str = &s[..num_end];
+    let unit = &s[num_end..];
+    match num_str.parse::<f64>() {
+        Ok(n) => Ok(Value::Number(n, match unit.is_empty() {
+            true => None,
+            false => Some(unit.to_string()),
+        })),
         Err(_) => Err(SassError::Parse {
             expected: "number".into(),
             found: s.to_string(),
         }),
     }
+}
+
+/// 找到数值部分的结束位置（含小数点、+/- 号、科学计数法 e/E）。
+fn find_number_end(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if c.is_ascii_digit() || c == '.' || c == '-' || c == '+' {
+            i += 1;
+        } else if c == 'e' || c == 'E' {
+            // 科学计数法：e/E 后应跟可选 +/- 和至少一位数字
+            let next_non_sign = if i + 1 < bytes.len()
+                && (bytes[i + 1] == b'+' || bytes[i + 1] == b'-')
+            {
+                i + 2
+            } else {
+                i + 1
+            };
+            if next_non_sign <= bytes.len() {
+                // 确认 e 后确实有数字才算指数
+                if next_non_sign < bytes.len()
+                    && (bytes[next_non_sign] as char).is_ascii_digit()
+                {
+                    i = next_non_sign + 1;
+                    while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
+                        i += 1;
+                    }
+                } else {
+                    // 'e' 后没有数字，属于单位前缀
+                    break;
+                }
+            } else {
+                break;
+            }
+        } else if c == '%' {
+            // % 既是数值后缀标记也是单位标记，若紧邻数字后则停止扫描
+            break;
+        } else {
+            break;
+        }
+    }
+    i
 }
 
 /// 解析 #hash 字符串为 Color。

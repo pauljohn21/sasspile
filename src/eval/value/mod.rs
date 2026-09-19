@@ -39,13 +39,20 @@ impl Evaluator {
                         let ns = parts[0];
                         let var_name = parts[1];
                         let var_name_norm = var_name.replace('-', "_");
-                        match env.get_namespace(ns).cloned() {
+match env.get_namespace(ns).cloned() {
                             Some(module) => {
                                 let found = module
                                     .all_vars()
                                     .any(|(k, _)| k.replace('-', "_") == var_name_norm);
                                 match found {
                                     true => {
+                                        // 内建模块（sass:*）的常量不可修改（CSS 规范）
+                                        match module.is_builtin {
+                                            true => return Err(SassError::Eval(
+                                                "Cannot modify built-in variable.".into(),
+                                            )),
+                                            false => {}
+                                        }
                                         let env = env.with_namespace_var(ns, &var_name_norm, val);
                                         return Ok((vec![], env));
                                     }
@@ -142,7 +149,7 @@ impl Evaluator {
                         // 空参数——提取函数名检查用户定义覆盖
                         let func_name = s.split('(').next().unwrap_or("").to_lowercase();
                         match env.get_function(&func_name) {
-                            Some(func) => Self::call_user_function(func, &[], &HashMap::new(), env).map(|v| v),
+                            Some(func) => Self::call_user_function(func, &[], &HashMap::new(), env),
                             None => Ok(Value::Calc(s.clone())),
                         }
                     }

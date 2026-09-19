@@ -8,17 +8,50 @@
 use super::*;
 use crate::consts::FLOAT_PRECISION_INV;
 
+/// 大整数格式化——使用 17 位有效数字科学记数法展开。
+/// SCSS 规范要求大数（|n| >= 1e15 且为整数）用 Dart Sass 风格展开：
+/// 例如 f64::MAX `1.7976931348623157e308` 展开为 `17976931348623157` + 292 个零。
+pub(crate) fn format_large_int_e(n: f64) -> String {
+    // {:e} 输出最短往返格式（17 位有效数字），如 "1.7976931348623157e308"
+    let s = format!("{:e}", n);
+    let (sign, s) = match s.starts_with('-') {
+        true => ("-", &s[1..]),
+        false => ("", s.as_str()),
+    };
+    let (mantissa, exp_part) = s.split_once('e').unwrap_or((s, "0"));
+    let exp: usize = exp_part.parse().unwrap_or(0);
+    // 去掉小数点取数字序列："1.7976931348623157" → "17976931348623157"
+    let digits: String = mantissa.chars().filter(|c| c.is_ascii_digit()).collect();
+    // 尾数有 17 位，附加零的个数 = exp - (digits.len() - 1)
+    let trailing_zeros = exp.saturating_sub(digits.len().saturating_sub(1));
+    format!("{sign}{digits}{}", "0".repeat(trailing_zeros))
+}
+
 /// 格式化浮点数——截断到 10 位小数（与 SCSS 规范一致）。
 /// NaN 输出为 `none`（CSS Color 4 missing 通道）。
+///
+/// 注意：|n| >= 1e15 时跳过精度截断，此时 `n * 1e10` 超出 u54 精度会引入整数值漂移。
 fn format_num(n: f64) -> String {
     match n.is_nan() {
         true => return "none".to_string(),
         false => {}
     }
-    let n = (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV;
-    match n.fract() == 0.0 {
-        true => format!("{n:.0}"),
-        false => format!("{n}"),
+    // 仅在安全范围内做精度截断，大数值直接格式化（整数用 {:e} 17 位有效数字展开）
+    let truncated = if n.abs() < 1e15 {
+        (n * FLOAT_PRECISION_INV).round() / FLOAT_PRECISION_INV
+    } else {
+        n
+    };
+    // 负零规范化：IEEE 754 round() 保留符号，截断后可能产生新的 -0.0，需规范化为 0.0
+    // 例如 tan(-0.00000000001) 截断得 -0.0，规范化后正确显示 0
+    let truncated = if truncated == 0.0 { 0.0 } else { truncated };
+    // 大整数用 Dart Sass 风格展开（17 位有效数字科学记数法）
+    if truncated.abs() >= 1e15 && truncated.fract() == 0.0 {
+        return format_large_int_e(truncated);
+    }
+    match truncated.fract() == 0.0 {
+        true => format!("{truncated:.0}"),
+        false => format!("{truncated}"),
     }
 }
 

@@ -83,6 +83,7 @@ impl fmt::Display for CalcNode {
 
 /// 格式化数字——特殊常量映射 + 常规数字格式化。
 /// infinity → "infinity", -infinity → "-infinity", NaN → "NaN"。
+/// 负零规范化为正零（IEEE 754 产生 -0.0，SCSS 规范要求显示 0）。
 pub(crate) fn format_number_static(n: f64, unit: Option<&str>) -> String {
     if n.is_infinite() {
         return match n > 0.0 {
@@ -93,11 +94,19 @@ pub(crate) fn format_number_static(n: f64, unit: Option<&str>) -> String {
     if n.is_nan() {
         return "NaN".to_string();
     }
-    // 整数格式化：在 f64 精确表示范围内使用 {:.0}，避免科学计数法
-    let num_str = if n.fract() == 0.0 && n.abs() <= 9_007_199_254_740_991.0 {
+    // 负零规范化：-0.0 == 0.0 为 true，赋值为 0.0 跳过负号
+    let n = match n == 0.0 {
+        true => 0.0,
+        false => n,
+    };
+    // 整数格式化：小整数用 {:.0}；大整数用 Dart Sass 风格（17 位有效数字展开）
+    let num_str = if n.fract() != 0.0 {
+        format!("{n}")
+    } else if n.abs() <= 9_007_199_254_740_991.0 {
         format!("{n:.0}")
     } else {
-        format!("{n}")
+        // |n| > 2^53 且为整数：用最短往返格式（17 位有效数字）展开
+        crate::parse::ast::format_large_int_e(n)
     };
     match unit {
         Some(u) => format!("{num_str}{u}"),
