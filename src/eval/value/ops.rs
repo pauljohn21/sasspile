@@ -233,7 +233,18 @@ pub(crate) fn div(l: &Value, r: &Value) -> Result<Value> {
                     );
                     Ok(Value::Calc(calc))
                 }
-                false => Ok(Value::Number(a / b, u1.clone())),
+                false => {
+                    // 单位相除时结果单位是分子单位"除以"分母单位
+                    // 当分子无单位、分母有时，结果单位是分母的倒数 1/{u2}
+                    let result_unit = match (&u1, &u2) {
+                        (None, Some(u2_str)) => {
+                            // 1/px 之类的倒数单位
+                            Some(format!("1/{u2_str}"))
+                        }
+                        _ => u1.clone(),
+                    };
+                    Ok(Value::Number(a / b, result_unit))
+                }
             }
         }
         // Calc / Number — 拼接 calc 表达式（含除零处理）

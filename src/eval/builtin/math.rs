@@ -8,7 +8,7 @@
 //! 辅助函数（参数名映射、合并、验证）在 `math_helpers` 模块中。
 
 use super::super::Evaluator;
-use super::math_css::{css_mod, css_rem};
+use super::math_css::{css_mod, css_rem, unit_conversion_factor};
 use super::math_helpers::{merge_math_args, validate_single_number};
 use crate::error::{Result, SassError};
 use crate::parse::ast::*;
@@ -141,7 +141,30 @@ pub fn call(
                     _ => Err(SassError::Eval(format!("{name} requires number arguments"))),
                 })
                 .collect::<Result<Vec<_>>>()?;
-            // 找到最值参数：比较数值，兼容单位转换后比，不兼容时直接比数值
+            // 检查所有参数的单位互相兼容；任何一对不兼容即报错
+            {
+                let units: Vec<Option<&str>> = numbers.iter().map(|(_, u)| u.as_deref()).collect();
+                for i in 0..units.len() {
+                    for j in (i + 1)..units.len() {
+                        let a = units[i];
+                        let b = units[j];
+                        // unitless 可以混用；有单位且严格相同也 OK；不同但兼容组也 OK
+                        let pair_compatible = match (a, b) {
+                            (None, _) | (_, None) => true,
+                            (Some(ua), Some(ub)) if ua == ub => true,
+                            (Some(ua), Some(ub)) => crate::eval::value::units_compatible(Some(ua), Some(ub)),
+                        };
+                        if !pair_compatible {
+                            let a_str = a.map(|u| format!("1{u}")).unwrap_or_else(|| "1".to_string());
+                            let b_str = b.map(|u| format!("1{u}")).unwrap_or_else(|| "1".to_string());
+                            return Err(SassError::Eval(format!(
+                                "Incompatible units {a_str} and {b_str}."
+                            )));
+                        }
+                    }
+                }
+            }
+            // 找到最值参数：比较数值，兼容单位转换后比数值
             // 返回获胜者的（原始值，原始单位）
             let (winner_val, winner_unit) = numbers.iter().skip(1).fold(
                 (numbers[0].0, numbers[0].1.clone()),
@@ -150,7 +173,6 @@ pub fn call(
                         best_unit.as_deref(),
                         unit.as_deref(),
                     );
-                    // 将 val 转换到 best_unit 单位以便比较（兼容时），否则直接比数值
                     let val_for_compare: f64 = match (&best_unit, unit.as_deref()) {
                         (Some(bu), Some(u)) if compatible && bu != u => {
                             val * crate::eval::builtin::math_css::unit_conversion_factor(u, bu)
@@ -327,39 +349,10 @@ pub fn call(
                 0 => return Err(SassError::Eval("Missing argument $min.".into())),
                 1 => return Err(SassError::Eval("Missing argument $number.".into())),
                 2 => return Err(SassError::Eval("Missing argument $max.".into())),
-                3 => {}
-                n => return Err(SassError::Eval(format!(
+                3 => call_clamp(&args[0], &args[1], &args[2]),
+                n => Err(SassError::Eval(format!(
                     "Only 3 arguments allowed, but {n} were passed."
                 ))),
-            }
-            match (&args[0], &args[1], &args[2]) {
-                (Value::Number(min, u_min), Value::Number(val, u_val), Value::Number(max, u_max)) => {
-                    // 检查：所有参数必须同为 unitless 或同为有单位（不可混用）
-                    let min_has_unit = u_min.is_some();
-                    let val_has_unit = u_val.is_some();
-                    let max_has_unit = u_max.is_some();
-                    if min_has_unit != val_has_unit || val_has_unit != max_has_unit {
-                        return Err(SassError::Eval("Incompatible units.".to_string()));
-                    }
-                    // 校验所有参数的单位兼容
-                    if !crate::eval::value::units_compatible(u_min.as_deref(), u_val.as_deref()) {
-                        return Err(SassError::Eval("Incompatible units.".to_string()));
-                    }
-                    if !crate::eval::value::units_compatible(u_val.as_deref(), u_max.as_deref()) {
-                        return Err(SassError::Eval("Incompatible units.".to_string()));
-                    }
-                    // clamp: 先限制下限，再限制上限
-                    Ok(Some(Value::Number(val.max(*min).min(*max), u_val.clone())))
-                }
-                (non_num, _, _) if !matches!(non_num, Value::Number(..)) => {
-                    Err(SassError::Eval(format!("$min: {non_num} is not a number.")))
-                }
-                (_, non_num, _) if !matches!(non_num, Value::Number(..)) => Err(SassError::Eval(
-                    format!("$number: {non_num} is not a number."),
-                )),
-                (_, _, non_num) => {
-                    Err(SassError::Eval(format!("$max: {non_num} is not a number.")))
-                }
             }
         }
         "unit" => {
@@ -423,6 +416,78 @@ pub fn call(
         }
         _ => Ok(None),
     }
+}
+
+/// 内部辅助：clamp(MIN, VAL, MAX)——CSS Values Level 4 兼容实现。
+///
+/// 核心规则：
+/// 1. 三参数单位必须兼容（同为 unitless 或同类兼容单位）
+/// 2. min > max 时 CSS spec 自动 clamp 等于 min
+/// 3. VAL 先转换到 MIN 单位域，clamp 后按胜出区段决定输出单位：
+///    - VAL 被 MIN 夹住 → 保留 MIN 单位
+///    - VAL 被 MAX 夹住 → 保留 MAX 单位
+///    - VAL 在区间内 → 保留 VAL 原单位
+#[tracing::instrument(skip(min, val, max), fields(result = tracing::field::Empty, reason = tracing::field::Empty))]
+fn call_clamp(min: &Value, val: &Value, max: &Value) -> Result<Option<Value>> {
+    let (min_n, u_min) = match min {
+        Value::Number(n, u) => (*n, u.clone()),
+        non_num => return Err(SassError::Eval(format!("$min: {non_num} is not a number."))),
+    };
+    let (val_n, u_val) = match val {
+        Value::Number(n, u) => (*n, u.clone()),
+        non_num => return Err(SassError::Eval(format!("$number: {non_num} is not a number."))),
+    };
+    let (max_n, u_max) = match max {
+        Value::Number(n, u) => (*n, u.clone()),
+        non_num => return Err(SassError::Eval(format!("$max: {non_num} is not a number."))),
+    };
+
+    // 类型一致性检查（unitless 与有单位不可混用）
+    let min_unitless = u_min.is_none();
+    let val_unitless = u_val.is_none();
+    let max_unitless = u_max.is_none();
+    if min_unitless != val_unitless || val_unitless != max_unitless {
+        return Err(SassError::Eval("Incompatible units.".to_string()));
+    }
+
+    // 有单位时校验兼容组
+    if !min_unitless {
+        if !crate::eval::value::units_compatible(u_min.as_deref(), u_val.as_deref())
+            || !crate::eval::value::units_compatible(u_val.as_deref(), u_max.as_deref())
+        {
+            return Err(SassError::Eval("Incompatible units.".to_string()));
+        }
+    }
+
+    // 转换 VAL 和 MAX 到 MIN 单位域（以便在同一基准比较）
+    let val_in_min_unit = match (&u_val, &u_min) {
+        (Some(uv), Some(um)) if uv != um => val_n * unit_conversion_factor(uv, um),
+        _ => val_n,
+    };
+    let max_in_min_unit = match (&u_max, &u_min) {
+        (Some(ux), Some(um)) if ux != um => max_n * unit_conversion_factor(ux, um),
+        _ => max_n,
+    };
+
+    // CSS clamp(MIN, VAL, MAX) = max(MIN, min(VAL, MAX))
+    // MIN > MAX 时，CSS spec 规定 clamp 回退等于 MIN
+    // 比较时先判断区段，按胜出者保留对应值和原始单位（避免 float == 比较）
+    let (result_n, result_u, reason) = if val_in_min_unit <= min_n || min_n > max_in_min_unit {
+        // VAL 低于下限（或 min > max）：胜出 = MIN
+        (min_n, u_min, "clamped-to-min")
+    } else if val_in_min_unit >= max_in_min_unit {
+        // VAL 高于上限：胜出 = MAX
+        (max_n, u_max, "clamped-to-max")
+    } else {
+        // VAL 在区间内：保留原值原单位
+        (val_n, u_val, "within-range")
+    };
+
+    let result_str = format!("{result_n}{}", result_u.as_deref().unwrap_or(""));
+    tracing::Span::current().record("result", &result_str);
+    tracing::Span::current().record("reason", reason);
+
+    Ok(Some(Value::Number(result_n, result_u)))
 }
 
 /// CSS round(strategy, number, step?) 策略取整。
