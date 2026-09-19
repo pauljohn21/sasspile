@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [Unreleased] — 2026-09-19
+
+### Fixed
+
+- **math clamp 单位转换 + min > max 回退**：新增 `call_clamp` 辅助函数，CSS Values Level 4 兼容实现
+  - VAL/MAX 转 MIN 单位域比较，胜出区段决定输出单位（MIN/VAL/MAX）
+  - min > max 时回退到 min：`clamp(1, 2, 0)` = `1`
+  - preserves_units/{min,number,max} + min_greater_than_max 全部通过
+- **max/min 单位兼容性前置检查**：参数对单位不兼容时报错 `Incompatible units 1px and 1s.`
+  - max/error/incompatible_units、min/error/incompatible_units 通过
+- **comparable 倒数单位支持**：`ops.rs::div` 处理 `1/1px` → 单位 `1/px`
+  - comparable/unit/to_inverse 通过（`compatible(px, 1/px)` = false）
+- sass-spec math 模块：466/482 → 472/482 (+6 net, 97% → 98%)
+- sass-spec 通过率：~8003/12133 (66.0%)
+
 ## [0.9.14] — 2026-09-18
 
 ### Fixed
