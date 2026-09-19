@@ -1,5 +1,13 @@
 //! spec-store: sass-spec 数据管理工具（模块根）。
 
+#[allow(
+    clippy::used_underscore_binding,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::trivially_copy_pass_by_ref,
+    dead_code
+)]
 pub mod bisect;
 pub mod db;
 pub mod hrx_loader;

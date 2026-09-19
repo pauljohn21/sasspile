@@ -1,4 +1,4 @@
-//! 回归定位 + 两 commit 间 diff。
+//! 回归定位 + 两 commit 间 diff.
 
 use rusqlite::Connection;
 use std::collections::BTreeMap;
@@ -7,6 +7,7 @@ use tracing::info_span;
 #[derive(Debug)]
 pub struct DiffEntry {
     pub case_id: String,
+    #[allow(dead_code)]
     pub function: Option<String>,
     pub dir: String,
     pub prev_status: String,
@@ -18,18 +19,17 @@ pub fn diff_snapshots(conn: &mut Connection, snap1_id: i64, snap2_id: i64) -> Ve
     let _span = info_span!("diff_snapshots", snap1_id, snap2_id);
     let _enter = _span.enter();
 
-    let mut stmt = match conn.prepare(
-        "SELECT r1.case_id, c.function, c.dir, r1.status, r2.status
-         FROM case_results r1
-         JOIN case_results r2 ON r1.case_id = r2.case_id
-         JOIN spec_cases c ON r1.case_id = c.case_id
-         WHERE r1.snapshot_id = ?1 AND r2.snapshot_id = ?2
-           AND r1.status != r2.status
-         ORDER BY c.dir, c.function"
-    ) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
-    };
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT r1.case_id, c.function, c.dir, r1.status, r2.status
+             FROM case_results r1
+             JOIN case_results r2 ON r1.case_id = r2.case_id
+             JOIN spec_cases c ON r1.case_id = c.case_id
+             WHERE r1.snapshot_id = ?1 AND r2.snapshot_id = ?2
+               AND r1.status != r2.status
+             ORDER BY c.dir, c.function"
+        ) else {
+            return Vec::new();
+        };
 
     stmt.query_map([snap1_id, snap2_id], |row| {
         Ok(DiffEntry {
@@ -46,7 +46,7 @@ pub fn diff_snapshots(conn: &mut Connection, snap1_id: i64, snap2_id: i64) -> Ve
 }
 
 /// 获取 snapshot 的 commit_sha（短格式）。
-pub fn snapshot_commit(conn: &mut Connection, snapshot_id: i64) -> Option<String> {
+    pub fn snapshot_commit(conn: &mut Connection, snapshot_id: i64) -> Option<String> {
     conn.query_row(
         "SELECT commit_sha FROM snapshots WHERE id = ?1",
         [snapshot_id],
@@ -57,7 +57,7 @@ pub fn snapshot_commit(conn: &mut Connection, snapshot_id: i64) -> Option<String
 }
 
 /// 通过 commit_sha 前缀反查 snapshot_id。
-pub fn find_snapshot_by_commit(conn: &rusqlite::Connection, commit_prefix: &str) -> Option<i64> {
+    pub fn find_snapshot_by_commit(conn: &rusqlite::Connection, commit_prefix: &str) -> Option<i64> {
     let pattern = format!("{commit_prefix}%");
     conn.query_row(
         "SELECT id FROM snapshots WHERE commit_sha LIKE ?1 ORDER BY timestamp DESC LIMIT 1",
@@ -77,20 +77,19 @@ pub fn bisect_function(
     let _span = info_span!("bisect_function", function, good_id, bad_id);
     let _enter = _span.enter();
 
-    let mut stmt = match conn.prepare(
-        "SELECT s.id, s.commit_sha,
-                SUM(CASE WHEN r.status = 'PASS' THEN 1 ELSE 0 END),
-                SUM(CASE WHEN r.status = 'FAIL' THEN 1 ELSE 0 END)
-         FROM snapshots s
-         JOIN case_results r ON r.snapshot_id = s.id
-         JOIN spec_cases c ON r.case_id = c.case_id
-         WHERE c.function = ?1 AND s.id BETWEEN ?2 AND ?3
-         GROUP BY s.id
-         ORDER BY s.id ASC"
-    ) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
-    };
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT s.id, s.commit_sha,
+                    SUM(CASE WHEN r.status = 'PASS' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN r.status = 'FAIL' THEN 1 ELSE 0 END)
+             FROM snapshots s
+             JOIN case_results r ON r.snapshot_id = s.id
+             JOIN spec_cases c ON r.case_id = c.case_id
+             WHERE c.function = ?1 AND s.id BETWEEN ?2 AND ?3
+             GROUP BY s.id
+             ORDER BY s.id ASC"
+        ) else {
+            return Vec::new();
+        };
 
     stmt.query_map([function, &good_id.to_string(), &bad_id.to_string()], |row| {
         Ok((

@@ -42,9 +42,9 @@ fn format_num(n: f64) -> String {
     } else {
         n
     };
-    // 负零规范化：IEEE 754 round() 保留符号，截断后可能产生新的 -0.0，需规范化为 0.0
-    // 例如 tan(-0.00000000001) 截断得 -0.0，规范化后正确显示 0
-    let truncated = if truncated == 0.0 { 0.0 } else { truncated };
+    // 条件负零规范化：仅当输入 n 非零（fuzzy 情况）且截断后恰好为 0 时，消除负号
+    // 保留精确 -0.0 输入的符号（IEEE 754 意义下的 sin(-0.0) = -0.0）
+    let truncated = if truncated == 0.0 && n != 0.0 { 0.0 } else { truncated };
     // 大整数用 Dart Sass 风格展开（17 位有效数字科学记数法）
     if truncated.abs() >= 1e15 && truncated.fract() == 0.0 {
         return format_large_int_e(truncated);

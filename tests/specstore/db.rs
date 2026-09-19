@@ -4,6 +4,7 @@ use tracing::{info, info_span};
 
 const SCHEMA_VERSION: u32 = 2;
 
+#[allow(clippy::needless_raw_string_hashes)]
 const SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS spec_cases (
     case_id       TEXT PRIMARY KEY,

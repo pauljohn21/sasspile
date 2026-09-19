@@ -3,7 +3,7 @@
 use rusqlite::Connection;
 use tracing::{info, info_span};
 
-use crate::specstore::runner::{run_case, CaseResult};
+use crate::specstore::runner::CaseResult;
 
 /// 创建新 snapshot，存储所有 case 结果，计算 deltas。
 pub fn create_snapshot(

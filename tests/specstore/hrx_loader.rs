@@ -158,6 +158,7 @@ fn parse_hrx_to_cases(content: &str, hrx_rel_path: &str) -> Vec<HrxCase> {
 
 /// 扫描 spec 目录，将所有 HRX case 存入数据库。
 pub fn index_all(spec_root: &std::path::Path, db_path: &std::path::Path) -> Result<usize, String> {
+    #[allow(clippy::used_underscore_binding)]
     let _span = info_span!("spec_store_index", spec_root = %spec_root.display());
     let _enter = _span.enter();
 
@@ -206,7 +207,7 @@ fn index_one(
                 dir,
                 get_input_content(&case.files, &case.input_path),
                 case.expected_output,
-                if case.expect_error { 1 } else { 0 },
+                i32::from(case.expect_error),
             ],
         )
         .map_err(|e| format!("insert case {}: {e}", case.input_path))?;

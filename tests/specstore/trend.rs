@@ -19,7 +19,7 @@ pub fn trend_by_function(conn: &mut Connection, function: &str) -> Vec<TrendPoin
     let _span = info_span!("trend_by_function", function);
     let _enter = _span.enter();
 
-    let mut stmt = match conn.prepare(
+    let Ok(mut stmt) = conn.prepare(
         "SELECT s.id, s.commit_sha, s.timestamp,
                 SUM(CASE WHEN r.status = 'PASS' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN r.status = 'FAIL' THEN 1 ELSE 0 END),
@@ -30,9 +30,8 @@ pub fn trend_by_function(conn: &mut Connection, function: &str) -> Vec<TrendPoin
          WHERE c.function = ?1
          GROUP BY s.id
          ORDER BY s.timestamp ASC"
-    ) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
+    ) else {
+        return Vec::new();
     };
 
     stmt.query_map([function], |row| {
@@ -59,7 +58,7 @@ pub fn trend_by_dir(conn: &mut Connection, dir_prefix: &str) -> Vec<TrendPoint> 
     let _enter = _span.enter();
 
     let pattern = format!("{dir_prefix}%");
-    let mut stmt = match conn.prepare(
+    let Ok(mut stmt) = conn.prepare(
         "SELECT s.id, s.commit_sha, s.timestamp,
                 SUM(CASE WHEN r.status = 'PASS' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN r.status = 'FAIL' THEN 1 ELSE 0 END),
@@ -70,9 +69,8 @@ pub fn trend_by_dir(conn: &mut Connection, dir_prefix: &str) -> Vec<TrendPoint> 
          WHERE c.dir LIKE ?1
          GROUP BY s.id
          ORDER BY s.timestamp ASC"
-    ) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
+    ) else {
+        return Vec::new();
     };
 
     stmt.query_map([pattern], |row| {

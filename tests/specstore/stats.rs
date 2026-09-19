@@ -16,10 +16,11 @@ pub struct DirStat {
 
 /// 从指定 snapshot 生成目录统计。
 pub fn stats_by_dir(conn: &mut Connection, snapshot_id: i64) -> Vec<DirStat> {
+    #[allow(clippy::used_underscore_binding)]
     let _span = info_span!("stats_by_dir", snapshot_id);
     let _enter = _span.enter();
 
-    let mut stmt = match conn.prepare(
+    let Ok(mut stmt) = conn.prepare(
         "SELECT c.dir,
                 SUM(CASE WHEN r.status = 'PASS' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN r.status = 'FAIL' THEN 1 ELSE 0 END),
@@ -30,9 +31,8 @@ pub fn stats_by_dir(conn: &mut Connection, snapshot_id: i64) -> Vec<DirStat> {
          WHERE r.snapshot_id = ?1
          GROUP BY c.dir
          ORDER BY (SUM(CASE WHEN r.status = 'PASS' THEN 1 ELSE 0 END) * 100 / COUNT(*)) DESC"
-    ) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
+    ) else {
+        return Vec::new();
     };
 
     let rows = stmt
@@ -104,7 +104,7 @@ pub fn format_md(stats: &[DirStat], baseline: Option<&[DirStat]>) -> String {
             .iter()
             .filter_map(|s| {
                 let bl_pass = bl_map.get(s.dir.as_str()).copied().unwrap_or(0);
-                (s.pass < bl_pass).then_some((&s.dir, bl_pass, s.pass, s.pass as i64 - bl_pass as i64))
+                (s.pass < bl_pass).then_some((&s.dir, bl_pass, s.pass, i64::from(s.pass) - i64::from(bl_pass)))
             })
             .collect();
 

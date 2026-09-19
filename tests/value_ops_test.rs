@@ -27,9 +27,8 @@ fn test_map_add_map_merge() {
     match &result {
         Ok(_) => {} // 成功
         err => debug_assert!(
-            err.as_ref().err().map_or(true, |e| e.contains("is not a number")),
-            "Map + Map failed with unexpected error: {:?}",
-            result
+            err.as_ref().err().is_none_or(|e| e.contains("is not a number")),
+            "Map + Map failed with unexpected error: {result:?}"
         ),
     }
 }
@@ -37,10 +36,10 @@ fn test_map_add_map_merge() {
 #[test]
 fn test_map_add_null_identity() {
     // Map + Null → Map
-    let scss = r#"
+    let scss = "
         $m: (a: 1);
         @if ($m + null) == $m { .result { merged: true; } }
-    "#;
+    ";
     let result = compile_scss(scss);
     // This may fail due to Map == comparison, but shouldn't error on the + operation
     match &result {
@@ -52,24 +51,23 @@ fn test_map_add_null_identity() {
 #[test]
 fn test_null_add_null() {
     // Null + Null → Null
-    let scss = r#"
+    let scss = "
         @if (null + null) == null { .result { merged: true; } }
-    "#;
+    ";
     let result = compile_scss(scss);
     debug_assert!(
         result.is_ok(),
-        "Null + Null should return null, got: {:?}",
-        result
+        "Null + Null should return null, got: {result:?}"
     );
 }
 
 #[test]
 fn test_bool_add_bool() {
     // Bool + Bool → string concatenation (truefalse)
-    let scss = r#"
+    let scss = "
         $result: true + false;
-        @if $result == "truefalse" { .result { merged: true; } }
-    "#;
+        @if $result == \"truefalse\" { .result { merged: true; } }
+    ";
     let _result = compile_scss(scss);
     // Whether this passes depends on Bool-Bool concatenation implementation
     // At minimum, it should not error
@@ -82,19 +80,18 @@ fn test_number_add_calc() {
     let result = compile_scss(scss);
     debug_assert!(
         result.is_ok(),
-        "Number + Calc should produce calc expression, got: {:?}",
-        result
+        "Number + Calc should produce calc expression, got: {result:?}"
     );
 }
 
 #[test]
 fn test_list_add_list() {
     // List + List → concatenated list
-    let scss = r#"
+    let scss = "
         $a: 1 2 3;
         $b: 4 5 6;
         @if length($a + $b) == 6 { .result { merged: true; } }
-    "#;
+    ";
     let _result = compile_scss(scss);
     // List concatenation should work (already implemented)
 }
@@ -102,29 +99,27 @@ fn test_list_add_list() {
 #[test]
 fn test_string_add_number() {
     // String + Number → string concatenation
-    let scss = r#"
-        $result: "hello" + 42;
-        @if $result == "hello42" { .result { merged: true; } }
-    "#;
+    let scss = "
+        $result: \"hello\" + 42;
+        @if $result == \"hello42\" { .result { merged: true; } }
+    ";
     let result = compile_scss(scss);
     debug_assert!(
         result.is_ok(),
-        "String + Number should concatenate, got: {:?}",
-        result
+        "String + Number should concatenate, got: {result:?}"
     );
 }
 
 #[test]
 fn test_null_add_string() {
     // Null + String → String
-    let scss = r#"
-        $result: null + "world";
-        @if $result == "world" { .result { merged: true; } }
-    "#;
+    let scss = "
+        $result: null + \"world\";
+        @if $result == \"world\" { .result { merged: true; } }
+    ";
     let result = compile_scss(scss);
     debug_assert!(
         result.is_ok(),
-        "Null + String should return string, got: {:?}",
-        result
+        "Null + String should return string, got: {result:?}"
     );
 }

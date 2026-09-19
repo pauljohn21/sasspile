@@ -1,0 +1,4 @@
+name: arglist-each-iteration
+title: 修复 @each 无法迭代 ArgList
+version: 0.1.0
+summary: "{{summary}}"  # 由 apply-change 时填充

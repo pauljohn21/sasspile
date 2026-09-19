@@ -94,11 +94,8 @@ pub(crate) fn format_number_static(n: f64, unit: Option<&str>) -> String {
     if n.is_nan() {
         return "NaN".to_string();
     }
-    // 负零规范化：-0.0 == 0.0 为 true，赋值为 0.0 跳过负号
-    let n = match n == 0.0 {
-        true => 0.0,
-        false => n,
-    };
+    // 负零规范化：Calc 上下文（非纯量路径）总是规范化 -0.0 → 0.0
+    let n = if n == 0.0 { 0.0 } else { n };
     // 整数格式化：小整数用 {:.0}；大整数用 Dart Sass 风格（17 位有效数字展开）
     let num_str = if n.fract() != 0.0 {
         format!("{n}")
