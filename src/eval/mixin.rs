@@ -19,6 +19,11 @@ impl Evaluator {
             true => return Self::eval_meta_load_css(args, env),
             false => {}
         }
+        // load-css 裸名分派——@use 'sass:meta' 后以裸名调用
+        match name == "load-css" {
+            true => return Self::eval_meta_load_css(args, env),
+            false => {}
+        }
         // 命名空间限定 mixin（如 midstream.b-a）
         // dash/underscore 归一化：SCSS 中 - 和 _ 等价
         if let Some(dot) = name.find('.') {

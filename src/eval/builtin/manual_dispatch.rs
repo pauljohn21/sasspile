@@ -306,9 +306,32 @@ impl Evaluator {
                                 "There is no module with namespace \"{ns_name}\"."
                             )));
                         }
-                        // 全局查找（local_functions / namespaces）
+                        // 全局查找（local_functions）
                         for variant in &lookup_variants {
                             if let Some(func) = env.get_function(variant) {
+                                return Ok(Value::FunctionRef(std::rc::Rc::new(
+                                    crate::parse::ast::FunctionRefData {
+                                        name: fname.clone(),
+                                        module: None,
+                                        params: func.params.clone(),
+                                        body: func.body.clone(),
+                                        captured_ns_keys: func
+                                            .captured_namespaces
+                                            .keys()
+                                            .cloned()
+                                            .collect(),
+                                    },
+                                )));
+                            }
+                        }
+                        // namespace 模块查找 fallback（与 function-exists 对齐）
+                        for variant in &lookup_variants {
+                            if let Some(func) = env.get_namespaces().values().find_map(|exports| {
+                                exports
+                                    .all_functions()
+                                    .find(|(k, _)| *k == variant)
+                                    .map(|(_, f)| f.clone())
+                            }) {
                                 return Ok(Value::FunctionRef(std::rc::Rc::new(
                                     crate::parse::ast::FunctionRefData {
                                         name: fname.clone(),

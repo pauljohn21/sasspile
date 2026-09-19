@@ -39,6 +39,11 @@ impl Evaluator {
         // 收集剩余参数
         let remaining_args = &args[1..];
 
+        // 空 body 标记内置 mixin（load-css）——转分派到 eval_meta_load_css
+        if mixin_ref.body.is_empty() && mixin_ref.name == "load-css" {
+            return Self::eval_meta_load_css(remaining_args, env);
+        }
+
         // 从 MixinRefData 构造 MixinDef 并执行
         let mixin_def = MixinDef {
             params: mixin_ref.params.clone(),
@@ -206,6 +211,16 @@ impl Evaluator {
                     captured_ns_keys: ns_keys,
                 })));
             }
+        }
+        // 特殊处理：sass:meta 的内置 mixin load-css
+        if name == "load-css" && module_ns.as_deref() == Some("meta") {
+            return Ok(Value::MixinRef(std::rc::Rc::new(MixinRefData {
+                name: "load-css".to_string(),
+                module: module_ns.clone(),
+                params: vec![],
+                body: vec![], // 空 body 标记内置 mixin
+                captured_ns_keys: vec![],
+            })));
         }
         Err(err_no_mixin(&name))
     }
