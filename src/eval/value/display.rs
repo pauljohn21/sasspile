@@ -120,6 +120,17 @@ pub(crate) fn inspect_value(v: &Value) -> String {
     }
 }
 
+/// 插值上下文中将值转为字符串——字符串去引号，其他类型用 Display。
+///
+/// 插值中 `#{...}` 的结果若为字符串值应剥掉引号：
+/// `$s: "color"; .x { #{$s}: red; }` → `color: red;`（非 `"color": red;`）
+fn val_to_interp_string(val: &crate::parse::ast::Value) -> String {
+    match val {
+        crate::parse::ast::Value::String(s, _) => s.clone(),
+        _ => val.to_string(),
+    }
+}
+
 /// 求值属性名——支持 $var 和 #{...} 插值。
 ///
 /// 例如 `$prop: color; .foo { $prop: red; }` → `.foo { color: red; }`
@@ -157,7 +168,8 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
                     }
                 }
                 match super::eval_simple_expr(&expr, env) {
-                    Ok(val) => result.push_str(&val.to_string()),
+                    // 插值上下文中字符串去引号 — #{...} 用于属性名时剥掉引号
+                    Ok(val) => result.push_str(&val_to_interp_string(&val)),
                     Err(_) => result.push_str(&expr),
                 }
             }
@@ -174,7 +186,8 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
                     }
                 }
                 match env.lookup(&var_name) {
-                    Some(val) => result.push_str(&val.to_string()),
+                    // 变量替换到属性名时也要去引号
+                    Some(val) => result.push_str(&val_to_interp_string(&val)),
                     None => { let _ = write!(result, "${var_name}"); }
                 }
             }
