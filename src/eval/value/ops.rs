@@ -34,29 +34,36 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
             format!("{a}{}{}", n, u.as_deref().unwrap_or("")),
             qa,
         )),
-        (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
-            format!(
-                "{a}#{:02x}{:02x}{:02x}",
-                c.legacy_rgb[0].round() as u8,
-                c.legacy_rgb[1].round() as u8,
-                c.legacy_rgb[2].round() as u8
-            ),
-            qa,
-        )),
+        (Value::String(a, qa), Value::Color(c)) => {
+            // 优先使用命名色关键字（如 transparent）而非 hex——保持 CSS 语义正确
+            let color_str = match crate::eval::Evaluator::reverse_lookup_named_color(&c) {
+                Some(name) => name.to_string(),
+                None => format!(
+                    "#{:02x}{:02x}{:02x}",
+                    c.legacy_rgb[0].round() as u8,
+                    c.legacy_rgb[1].round() as u8,
+                    c.legacy_rgb[2].round() as u8
+                ),
+            };
+            Ok(Value::String(format!("{a}{color_str}"), qa))
+        }
         (Value::String(a, qa), Value::Null) => Ok(Value::String(a, qa)),
         (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(
             format!("{}{}{b}", n, u.as_deref().unwrap_or("")),
             qb,
         )),
-        (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
-            format!(
-                "#{:02x}{:02x}{:02x}{b}",
-                c.legacy_rgb[0].round() as u8,
-                c.legacy_rgb[1].round() as u8,
-                c.legacy_rgb[2].round() as u8
-            ),
-            qb,
-        )),
+        (Value::Color(c), Value::String(b, qb)) => {
+            let color_str = match crate::eval::Evaluator::reverse_lookup_named_color(&c) {
+                Some(name) => name.to_string(),
+                None => format!(
+                    "#{:02x}{:02x}{:02x}",
+                    c.legacy_rgb[0].round() as u8,
+                    c.legacy_rgb[1].round() as u8,
+                    c.legacy_rgb[2].round() as u8
+                ),
+            };
+            Ok(Value::String(format!("{color_str}{b}"), qb))
+        }
         (Value::Null, Value::String(b, qb)) => Ok(Value::String(b, qb)),
         // String + Calc / Calc + String — 拼接字符串表示
         (Value::String(a, qa), Value::Calc(c)) => Ok(Value::String(format!("{a}{c}"), qa)),
@@ -141,28 +148,34 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
             format!("{a}-{}{}", n, u.as_deref().unwrap_or("")),
             qa,
         )),
-        (Value::String(a, qa), Value::Color(c)) => Ok(Value::String(
-            format!(
-                "{a}-#{:02x}{:02x}{:02x}",
-                c.legacy_rgb[0].round() as u8,
-                c.legacy_rgb[1].round() as u8,
-                c.legacy_rgb[2].round() as u8
-            ),
-            qa,
-        )),
+        (Value::String(a, qa), Value::Color(c)) => {
+            let color_str = match crate::eval::Evaluator::reverse_lookup_named_color(&c) {
+                Some(name) => name.to_string(),
+                None => format!(
+                    "#{:02x}{:02x}{:02x}",
+                    c.legacy_rgb[0].round() as u8,
+                    c.legacy_rgb[1].round() as u8,
+                    c.legacy_rgb[2].round() as u8
+                ),
+            };
+            Ok(Value::String(format!("{a}-{color_str}"), qa))
+        }
         (Value::Number(n, u), Value::String(b, qb)) => Ok(Value::String(
             format!("{}{}-{b}", n, u.as_deref().unwrap_or("")),
             qb,
         )),
-        (Value::Color(c), Value::String(b, qb)) => Ok(Value::String(
-            format!(
-                "#{:02x}{:02x}{:02x}-{b}",
-                c.legacy_rgb[0].round() as u8,
-                c.legacy_rgb[1].round() as u8,
-                c.legacy_rgb[2].round() as u8
-            ),
-            qb,
-        )),
+        (Value::Color(c), Value::String(b, qb)) => {
+            let color_str = match crate::eval::Evaluator::reverse_lookup_named_color(&c) {
+                Some(name) => name.to_string(),
+                None => format!(
+                    "#{:02x}{:02x}{:02x}",
+                    c.legacy_rgb[0].round() as u8,
+                    c.legacy_rgb[1].round() as u8,
+                    c.legacy_rgb[2].round() as u8
+                ),
+            };
+            Ok(Value::String(format!("{color_str}-{b}"), qb))
+        }
         // Number - Calc / Calc - Number — 作为 calc 表达式
         (Value::Number(n, u), Value::Calc(c)) => {
             let n_str = format!("{n}{}", u.as_deref().unwrap_or(""));
