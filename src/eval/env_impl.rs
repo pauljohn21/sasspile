@@ -413,6 +413,9 @@ impl Env {
     }
 
     /// 从当前 scope 提取字段到 ModuleExports（用于模块加载完成后构建导出）。
+    ///
+    /// `global_writes`（!global 写入）合并到 `local_vars` 中，
+    /// 确保模块内 mixin 通过 !global 修改的变量能被正确导出。
     pub(crate) fn take_scope_fields(
         &mut self,
     ) -> (
@@ -428,8 +431,11 @@ impl Env {
             Err(rc) => (*rc).clone(),
         };
         self.current = Rc::new(Scope::new());
+        // !global 写入合并到 local_vars（global_writes 优先级更高，覆盖同名 local）
+        let mut local_vars = scope.local_vars;
+        local_vars = scope.global_writes.union(local_vars);
         (
-            scope.local_vars,
+            local_vars,
             scope.local_mixins,
             scope.local_functions,
             scope.forwarded_vars,
