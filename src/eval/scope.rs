@@ -40,15 +40,15 @@ impl Scope {
 
 /// 沿 parent 链向上查找变量。
 ///
-/// 优先检查 local_vars，再检查 global_writes（!global 赋值在同一作用域内即生效），
-/// 最后沿 parent 链向上查找。
+/// 优先检查 global_writes（!global 写入优先级最高，跨 mixin 覆盖外层声明），
+/// 再检查 local_vars，最后沿 parent 链向上查找。
 pub(crate) fn lookup(&self, name: &str) -> Option<&Value> {
     let mut scope: &Scope = self;
     loop {
-        if let Some(v) = scope.local_vars.get(name) {
+        if let Some(v) = scope.global_writes.get(name) {
             return Some(v);
         }
-        if let Some(v) = scope.global_writes.get(name) {
+        if let Some(v) = scope.local_vars.get(name) {
             return Some(v);
         }
         scope = scope.parent.as_deref()?;

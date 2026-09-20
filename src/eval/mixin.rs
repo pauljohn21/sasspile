@@ -90,15 +90,16 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         } else {
             mixin_env
         };
-        // 在 eval_nodes 消费 mixin_env 前保存 !global 写入的克隆
-        let global_writes_snapshot = mixin_env.current_global_writes().clone();
-        // 求值 mixin body——move mixin_env
-        let (css, _) = Self::eval_nodes(&mixin.body, mixin_env)?;
-        // 回传 !global 变量写入到调用者 env
-        // mixin 内部变量仍不泄漏（仅在 global_writes 中的传播）
-        let result_env = global_writes_snapshot
-            .into_iter()
-            .fold(content_env, |acc, (k, v)| acc.add_global_write(k, v));
+        // 求值 mixin body——move mixin_env，捕获返回的 env 用于读取 !global 写入
+        let (css, returned_env) = Self::eval_nodes(&mixin.body, mixin_env)?;
+        // 回传 mixin body 内的 !global 变量写入到调用者 env
+        // mixin 内部局部变量不泄漏（通过 move 语义自然隔离）
+        let result_env = returned_env
+            .current_global_writes()
+            .iter()
+            .fold(content_env, |acc, (k, v)| {
+                acc.add_global_write(k.clone(), v.clone())
+            });
         Ok((css, result_env))
     }
 
