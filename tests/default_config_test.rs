@@ -4,10 +4,23 @@
 
 use sasspile::{OutputStyle, compile_expanded, compile_file, init_tracing_otel};
 
+/// 线程安全的唯一临时目录计数器——防止并行测试冲突。
+static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// 辅助函数：创建唯一临时目录 + 多文件 + 编译。
+/// 目录名包含 PID + 线程 ID + 原子计数器，确保并行测试互不干扰。
 fn compile_multi_file(files: &[(&str, &str)]) -> String {
     let () = init_tracing_otel();
-    let dir = std::env::temp_dir().join(format!("sasspile_default_cfg_{}", std::process::id()));
+    let tid = format!("{:?}", std::thread::current().id())
+        .replace("ThreadId(", "")
+        .replace(')', "");
+    let seq = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!(
+        "sasspile_default_cfg_{}_{}_{}",
+        std::process::id(),
+        tid,
+        seq
+    ));
     std::fs::create_dir_all(&dir).expect("unexpected failure in test");
     let mut main_path = dir.join("input.scss");
     for (name, content) in files {
@@ -88,7 +101,16 @@ fn through_forward_show() {
 #[test]
 fn distributed_vars() {
     let () = init_tracing_otel();
-    let dir = std::env::temp_dir().join(format!("sasspile_distributed_{}", std::process::id()));
+    let tid = format!("{:?}", std::thread::current().id())
+        .replace("ThreadId(", "")
+        .replace(')', "");
+    let seq = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!(
+        "sasspile_distributed_{}_{}_{}",
+        std::process::id(),
+        tid,
+        seq
+    ));
     std::fs::create_dir_all(dir.join("module/a")).expect("unexpected failure in test");
     std::fs::create_dir_all(dir.join("module/b")).expect("unexpected failure in test");
     std::fs::write(

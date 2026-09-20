@@ -2,6 +2,7 @@ use super::*;
 use crate::__tracing::{debug, warn};
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
+use crate::eval::builtin::dispatch;
 use crate::parse::ast::BinOpKind;
 
 mod calc;
@@ -141,7 +142,12 @@ match env.get_namespace(ns).cloned() {
                 // CSS 函数内的插值 #{} —— 展开后重新构造 Calc
                 // parser 在 var(#{jn($args)}) 中保留 #{} 供此层展开
                 if s.contains("#{") {
-                    let evaluated = eval_interp_str(&s, env);
+                    let evaluated = eval_interp_str(s, env);
+                    return Ok(Value::Calc(evaluated));
+                }
+                // EP FIX: 检测 calc() 内部未求值的 Sass 函数调用（如 getCssVar("index","normal")）
+                // parser 将 calc(...) 原始内容保留为字符串——求值时识别内部用户函数并替换
+                if let Some(evaluated) = Self::try_eval_calc_inner_functions(s, env)? {
                     return Ok(Value::Calc(evaluated));
                 }
                 // 空 calc()/clamp()/min()/max() — 检查是否有用户定义的函数覆盖
@@ -533,6 +539,201 @@ fn is_css_vendor_call(name: &str, args: &[Arg]) -> bool {
         "blur" | "brightness" | "contrast" | "grayscale" | "invert" | "opacity" |
         "saturate" | "sepia" | "hue-rotate" | "drop-shadow"
     )
+}
+
+impl Evaluator {
+    /// 尝试求值 calc() 内部的 Sass 函数调用。
+    ///
+    /// EP 模式: `calc(getCssVar("index", "normal") - 1)` — parser 保留原始 calc 字符串，
+    /// 此函数检测内部的 `ident(...)` 模式，如果是用户函数则求值并替换。
+    ///
+    /// 返回 Some(new_calc_string) 如果发生了替换，None 如果不需要处理。
+    fn try_eval_calc_inner_functions(s: &str, env: &Env) -> Result<Option<String>> {
+        // 快速排除：不包含字母+左括号的 calc 内容不需要处理
+        if !s.contains('(') {
+            return Ok(None);
+        }
+        // 扫描字符串，查找 ident(...) 模式
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        let mut result = String::with_capacity(s.len());
+        let mut changed = false;
+
+        while i < bytes.len() {
+            let c = bytes[i] as char;
+            // 检查是否 ident 开始（字母开头）
+            if c.is_ascii_alphabetic() || c == '_' || c == '$' {
+                let start = i;
+                // 消费 ident
+                while i < bytes.len() {
+                    let ch = bytes[i] as char;
+                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '$' {
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let ident = &s[start..i];
+                // 跳过空白
+                let ws_start = i;
+                while i < bytes.len() && (bytes[i] as char).is_ascii_whitespace() {
+                    i += 1;
+                }
+                // 检查是否有 "(" —— 是函数调用
+                if i < bytes.len() && bytes[i] == b'(' {
+                    // 检查函数原点 —— 是否是用户定义函数
+                    let is_user_fn = !dispatch::is_known_builtin(ident)
+                        && !dispatch::is_css_native_function(ident)
+                        && env.get_function(ident).is_some();
+
+                    // 回退空白消费，保留原始 whitespace
+                    let ws = &s[ws_start..i];
+                    if is_user_fn {
+                        // 找到匹配的闭合括号
+                        let args_start = i + 1;
+                        let mut depth = 1;
+                        let mut j = args_start;
+                        while j < bytes.len() && depth > 0 {
+                            match bytes[j] as char {
+                                '(' => depth += 1,
+                                ')' => depth -= 1,
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                        if depth != 0 {
+                            // 括号不匹配，放弃
+                            result.push_str(&s[start..i]);
+                            continue;
+                        }
+                        // args 内容 (不包含外层括号)
+                        let args_end = j - 1;
+                        let args_str = &s[args_start..args_end];
+
+                        // 将参数用 rust-script 的 ParseStream 太复杂——改用简单的字符串分割
+                        match Self::eval_user_fn_str_args(ident, args_str, env) {
+                            Ok(val) => {
+                                result.push_str(&val.to_string());
+                                changed = true;
+                                i = j;
+                            }
+                            Err(_) => {
+                                // 求值失败，保留原始文本
+                                result.push_str(&s[start..i]);
+                                i = ws_start;
+                            }
+                        }
+                    } else {
+                        // 不是用户函数，保留原始文本（包括空白和括号）
+                        result.push_str(ident);
+                        result.push_str(ws);
+                        // i 已经指向 '('
+                    }
+                } else {
+                    // 不是函数调用，保留 ident
+                    result.push_str(ident);
+                    i = ws_start;
+                }
+            } else {
+                result.push(c);
+                i += 1;
+            }
+        }
+
+        match changed {
+            true => Ok(Some(result)),
+            false => Ok(None),
+        }
+    }
+
+    /// 用逗号分割简单参数并尝试调用用户函数。
+    ///
+    /// 处理 `getCssVar("index", "normal")` 等简单调用——参数为字面量（数字/字符串/标识符）。
+    fn eval_user_fn_str_args(name: &str, args_str: &str, env: &Env) -> Result<Value> {
+        let func = env.get_function(name).ok_or_else(|| {
+            SassError::Eval(format!("Function {name} not found"))
+        })?;
+
+        // 简单参数分割：跟踪引号和括号深度
+        let mut arg_values: Vec<Value> = Vec::new();
+        let mut current = String::new();
+        let mut in_string: Option<char> = None;
+        let mut paren_depth = 0;
+
+        for c in args_str.chars() {
+            match in_string {
+                Some(q) => {
+                    current.push(c);
+                    if c == q {
+                        in_string = None;
+                    }
+                }
+                None => match c {
+                    '"' | '\'' => {
+                        in_string = Some(c);
+                        current.push(c);
+                    }
+                    '(' => {
+                        paren_depth += 1;
+                        current.push(c);
+                    }
+                    ')' => {
+                        paren_depth -= 1;
+                        current.push(c);
+                    }
+                    ',' if paren_depth == 0 => {
+                        let v = Self::parse_literal_arg(&current)?;
+                        arg_values.push(v);
+                        current = String::new();
+                    }
+                    _ => current.push(c),
+                },
+            }
+        }
+        if !current.trim().is_empty() {
+            let v = Self::parse_literal_arg(&current)?;
+            arg_values.push(v);
+        }
+
+        let pos_args: Vec<Value> = arg_values;
+        let kw_args = HashMap::new();
+        Self::call_user_function(func, &pos_args, &kw_args, env)
+    }
+
+    /// 将参数字符串解析为字面量 Value。
+    fn parse_literal_arg(s: &str) -> Result<Value> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Ok(Value::Null);
+        }
+        // 字符串
+        if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+            let inner = &s[1..s.len() - 1];
+            return Ok(Value::String(inner.to_string(), true));
+        }
+        // 数字
+        if let Ok(n) = s.parse::<f64>() {
+            return Ok(Value::Number(n, None));
+        }
+        // 带单位数字
+        if let Some(pos) = s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-') {
+            if let Ok(n) = s[..pos].parse::<f64>() {
+                let unit = s[pos..].trim();
+                if !unit.is_empty() {
+                    return Ok(Value::Number(n, Some(unit.to_string())));
+                }
+            }
+        }
+        // 布尔
+        match s {
+            "true" => return Ok(Value::Bool(true)),
+            "false" => return Ok(Value::Bool(false)),
+            "null" => return Ok(Value::Null),
+            _ => {}
+        }
+        // 未加引号字符串（标识符）
+        Ok(Value::String(s.to_string(), false))
+    }
 }
 
 

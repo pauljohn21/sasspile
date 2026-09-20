@@ -10,10 +10,12 @@ Element-Plus (EP) 项目有 121 个 SCSS 组件文件，通过 `@use 'mixins/mix
 
 | 指标 | 值 |
 |------|-----|
-| 当前一致 | 27/121 (22.3%) |
-| DIFF | 87 |
-| lightningcss FAIL | 7 |
+| 起始一致 | 27/121 (22.3%) |
+| **当前一致** | **45/121 (37.2%) — +18 文件** |
+| DIFF | 78 → 68 (normalized) |
+| lightningcss FAIL | 7 → 8 (新增 1 个因 dist 规范化) |
 | sass-spec | 7971/12133 (65.7%) |
+| 核心测试 | 130/130 ✅ |
 
 ## 问题分类（基于 ep_diff_test 分析）
 

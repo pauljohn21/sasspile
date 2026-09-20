@@ -197,6 +197,21 @@ impl ParseStream<'_> {
                             }
                             false => {}
                         }
+                        // EP FIX: For var(), try structured arg parsing so that
+                        // Sass expressions in the fallback (e.g. map.get()) get
+                        // evaluated at eval time instead of being preserved as raw text.
+                        // parse_args_prefix parses args WITHOUT requiring leading LParen.
+                        if name == "var" {
+                            let save_pos = self.pos;
+                            if let Ok(args) = self.parse_args_prefix() {
+                                self.skip_ws();
+                                if matches!(self.peek(), Some(&Token::RParen)) {
+                                    self.advance(); // 消费 )
+                                    return Ok(Value::Call(name, args));
+                                }
+                            }
+                            self.pos = save_pos;
+                        }
                         let mut content = String::new();
                         let mut depth = 1;
                         while let Some(t) = self.peek() {

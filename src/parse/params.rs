@@ -71,6 +71,19 @@ impl ParseStream<'_> {
 
     pub(crate) fn parse_args(&mut self) -> Result<Vec<Arg>> {
         self.expect(&Token::LParen)?;
+        self.parse_args_inner(false)
+    }
+
+    /// 解析函数参数列表（不含外层 LParen）。
+    /// 用于 var() 等场景——外层已消费 LParen。
+    /// 遇到 RParen 时停止，不消费 RParen（留给外层处理）。
+    pub(crate) fn parse_args_prefix(&mut self) -> Result<Vec<Arg>> {
+        self.parse_args_inner(true)
+    }
+
+    /// 参数解析核心逻辑。
+    /// `stop_at_rparen = true` 时遇到 RParen 停止但不消费它。
+    fn parse_args_inner(&mut self, stop_at_rparen: bool) -> Result<Vec<Arg>> {
         let mut args = Vec::new();
         loop {
             self.skip_ws();
@@ -269,7 +282,9 @@ impl ParseStream<'_> {
         self.skip_ws();
         match self.peek() {
             Some(Token::RParen) => {
-                self.advance();
+                if !stop_at_rparen {
+                    self.advance();
+                }
             }
             _ => {}
         }
