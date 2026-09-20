@@ -102,6 +102,14 @@ pub(super) fn fmt_color_auto(
     c: &Color,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
+    // rgba(0, 0, 0, 0) → "transparent"（CSS 规范缩写）
+    if c.a.abs() < ALPHA_TOLERANCE
+        && c.legacy_rgb[0].abs() < 0.5
+        && c.legacy_rgb[1].abs() < 0.5
+        && c.legacy_rgb[2].abs() < 0.5
+    {
+        return write!(f, "transparent");
+    }
     match c.space {
         ColorSpace::Hsl => {
             let (h, s, l) = (c.channels[0], c.channels[1], c.channels[2]);

@@ -62,6 +62,14 @@ pub(super) fn fmt_color(
     tracing::debug!(?c.space, c.a, ?output, ?c.channels, ?c.legacy_rgb, "fmt_color called");
     match output {
         ColorOutput::RgbExplicit => {
+            // rgba(0, 0, 0, 0) → "transparent"（CSS 规范缩写）
+            if c.a.abs() < ALPHA_TOLERANCE
+                && c.legacy_rgb[0].abs() < 0.5
+                && c.legacy_rgb[1].abs() < 0.5
+                && c.legacy_rgb[2].abs() < 0.5
+            {
+                return write!(f, "transparent");
+            }
             match (c.a - 1.0).abs() < ALPHA_TOLERANCE {
                 true => write!(
                     f,

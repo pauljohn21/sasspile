@@ -169,6 +169,14 @@ impl Evaluator {
     /// CSS 命名颜色反向查找——根据 RGB 值返回名称。
     #[allow(clippy::items_after_statements)]
     pub(crate) fn reverse_lookup_named_color(c: &Color) -> Option<&'static str> {
+        // 特殊处理 transparent：RGBA(0, 0, 0, 0) → "transparent"
+        if c.a.abs() < 0.0001
+            && c.legacy_rgb[0].abs() < 0.5
+            && c.legacy_rgb[1].abs() < 0.5
+            && c.legacy_rgb[2].abs() < 0.5
+        {
+            return Some("transparent");
+        }
         match (c.a - 1.0).abs() > 0.0001 {
             true => return None,
             false => {}
