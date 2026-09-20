@@ -28,7 +28,10 @@ fn dedup_compound_simples(nodes: &mut [(CssNode, usize)]) {
                 *selector = simplified;
             }
         }
-        CssNode::AtRule { children, has_body: true, .. } => {
+        // 仅递归非 keyframes 的 AtRule（如 @media、@supports）——keyframes 选择器不得通过 SelectorAst 重构
+        CssNode::AtRule { name, children, has_body: true, .. }
+            if !crate::parse::at_rule_kinds::CssAtRule::is_keyframes(name) =>
+        {
             let mut child_pairs: Vec<(CssNode, usize)> = children.iter().cloned().enumerate().map(|(i, n)| (n, i)).collect();
             dedup_compound_simples(&mut child_pairs);
             children.clone_from(&child_pairs.into_iter().map(|(n, _)| n).collect::<Vec<_>>());

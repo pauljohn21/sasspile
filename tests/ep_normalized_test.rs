@@ -87,7 +87,10 @@ fn test_ep_lightningcss_normalized_diff() {
         };
 
         let dist_css = match std::fs::read_to_string(&dist_path) {
-            Ok(css) => css,
+            Ok(css) => {
+                // 规范化 dist 文件（移除 vendor prefix、统一格式化）——确保和 sasspile 输出在同一基础上对比
+                normalize_css(&css).unwrap_or_else(|_| css)
+            }
             Err(_) => continue,
         };
 

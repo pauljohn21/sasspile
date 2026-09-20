@@ -464,16 +464,40 @@ impl Evaluator {
                 Ok(Value::Calc(format!("{name}({arg_str})")))
             }
 
-            // ── 未匹配 → 已知 CSS 原生函数原样输出 ──
+            // ── 未匹配 → 已知 CSS 原生函数输出（规范化函数名为标准 CSS 大小写） ──
             _ if Self::is_css_function(name) => {
+                let canonical = css_fn_canonical_name(name);
                 let arg_str = pos_args
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ");
-                Ok(Value::String(format!("{name}({arg_str})"), false))
+                Ok(Value::String(format!("{canonical}({arg_str})"), false))
             }
             _ => Err(SassError::UndefinedFunction(name.to_string())),
         }
     }
+}
+
+/// CSS 函数名 → 标准 CSS 形式映射（处理大小写不敏感输入）。
+/// CSS 规范和 dart-sass 要求 transform 函数输出标准大小写：
+/// `scalex` → `scaleX`, `translatex` → `translateX`, `rotatez` → `rotateZ`。
+fn css_fn_canonical_name(name: &str) -> String {
+    let canonical = match name {
+        // CSS transform 函数
+        "rotatex" => "rotateX",
+        "rotatey" => "rotateY",
+        "rotatez" => "rotateZ",
+        "scalex" => "scaleX",
+        "scaley" => "scaleY",
+        "scalez" => "scaleZ",
+        "skewx" => "skewX",
+        "skewy" => "skewY",
+        "translatex" => "translateX",
+        "translatey" => "translateY",
+        "translatez" => "translateZ",
+        // 已经是标准形式的直接透传
+        _ => return name.to_string(),
+    };
+    canonical.to_string()
 }

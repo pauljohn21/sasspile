@@ -63,7 +63,9 @@ impl RuleBuilder {
                 let with_rule = query
                     .as_ref()
                     .is_some_and(|q| q.contains("with: rule") || q.contains("with:rule"));
-                match without_media || without_supports || without_all || with_rule {
+                // `&` 父选择器检测：即使无 query，含 `&` 的规则也需父选择器展开
+                let has_parent_ref = nodes.iter().any(Evaluator::selector_contains_ampersand);
+                match without_media || without_supports || without_all || with_rule || has_parent_ref {
                     true => {
                         let nested = Evaluator::nest_rule_in_children(&self.selector, nodes);
                         self.flush_decls();
@@ -263,6 +265,23 @@ impl Evaluator {
         Ok((result, return_env))
     }
 
+    /// 递归检测 CssNode 中是否存在包含字面 `&` 的选择器。
+    /// 用于判断 @at-root 子规则是否需要父选择器展开。
+    fn selector_contains_ampersand(node: &CssNode) -> bool {
+        match node {
+            CssNode::Rule { selector, children, .. } => {
+                selector.contains('&') || children.iter().any(Self::selector_contains_ampersand)
+            }
+            CssNode::AtRule { children, .. } => {
+                children.iter().any(Self::selector_contains_ampersand)
+            }
+            CssNode::AtRoot(nodes, _) => {
+                nodes.iter().any(Self::selector_contains_ampersand)
+            }
+            _ => false,
+        }
+    }
+
     /// 组合选择器——处理 & 替换和逗号分隔选择器。
     pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
         let parents: Vec<&str> = parent
@@ -302,9 +321,10 @@ impl Evaluator {
             .join(", ")
     }
 
-    /// 将父选择器传播到 `AtRule` children 内的 Rule 子节点。
+    /// 将父选择器传播到 children 内的 Rule 子节点——递归展开嵌套 `&`。
     ///
-    /// 用于 `a {@import "other"}` 场景——被导入文件中的规则需要嵌套在父选择器 `a` 下。
+    /// 用于 `a { @at-root { &--x { ... } } }` 场景——`&` 需解析为实际父选择器。
+    /// 递归处理 Rules、AtRules、AtRoots 及其子节点，确保所有嵌套层级 `&` 正确展开。
     pub(crate) fn nest_rule_in_children(parent: &str, children: Vec<CssNode>) -> Vec<CssNode> {
         let (result, current_decls) = children.into_iter().fold(
             (Vec::<CssNode>::new(), Vec::<CssNode>::new()),
@@ -316,7 +336,7 @@ impl Evaluator {
                 CssNode::Rule {
                     selector,
                     declarations,
-                    children,
+                    children: rule_children,
                 } => {
                     match !current_decls.is_empty() {
                         true => {
@@ -329,17 +349,19 @@ impl Evaluator {
                         false => {}
                     }
                     let combined = Self::combine_selectors(parent, &selector);
+                    // 递归处理子节点：对仍含 `&` 的子选择器继续展开
+                    let processed_kids = Self::nest_rule_in_children(&combined, rule_children);
                     result.push(CssNode::Rule {
                         selector: combined,
                         declarations,
-                        children,
+                        children: processed_kids,
                     });
                     (result, current_decls)
                 }
                 CssNode::AtRule {
                     name,
                     params,
-                    children,
+                    children: atrule_children,
                     has_body: true,
                 } => {
                     use crate::parse::at_rule_kinds::CssAtRule;
@@ -354,8 +376,8 @@ impl Evaluator {
                         false => {}
                     }
                     let ch = match CssAtRule::is_keyframes(&name) {
-                        true => children,
-                        false => Self::nest_rule_in_children(parent, children),
+                        true => atrule_children,
+                        false => Self::nest_rule_in_children(parent, atrule_children),
                     };
                     result.push(CssNode::AtRule {
                         name,
@@ -363,6 +385,22 @@ impl Evaluator {
                         children: ch,
                         has_body: true,
                     });
+                    (result, current_decls)
+                }
+                // AtRoot：递归处理其内部节点，仍使用当前 parent 解析 `&`
+                CssNode::AtRoot(atroot_nodes, query) => {
+                    match !current_decls.is_empty() {
+                        true => {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        false => {}
+                    }
+                    let nested = Self::nest_rule_in_children(parent, atroot_nodes);
+                    result.push(CssNode::AtRoot(nested, query));
                     (result, current_decls)
                 }
                 other => {
