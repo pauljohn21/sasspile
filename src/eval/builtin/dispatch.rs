@@ -159,6 +159,7 @@ pub(crate) const META_NAMES: &[(&str, &str)] = &[
 /// CSS 通用函数名（无模块前缀变体）。
 const CSS_FUNC_NAMES: &[&str] = &["calc", "env", "var"];
 
+
 /// CSS 严格保留函数名（始终走 CSS 原生，不可被用户函数覆盖）。
 /// 即使 @function URL() 定义成功，调用 URL() 仍视为 CSS 原生 url()。
 /// 支持 vendor-prefixed 变体（如 -a-element、-A-EXPRESSION、-webkit-url）。

@@ -240,17 +240,36 @@ fn eval_mixin_def(
     ))
 }
 
+/// 收集整个 scope 链上的 !global 写入——从当前作用域沿 parent 链向上搜索。
+fn collect_global_writes(scope: &crate::eval::scope::Scope, out: &mut HashMap<String, Value>) {
+    for (k, v) in &scope.global_writes {
+        out.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+    if let Some(ref parent) = scope.parent {
+        collect_global_writes(parent, out);
+    }
+}
+
 /// 求值 @content 节点。
 fn eval_content(env: Env) -> Result<(Vec<CssNode>, Env)> {
     use crate::eval::Evaluator;
     match env.get_content() {
         Some((content_nodes, content_env)) => {
             // @content 在 mixin body 内执行，继承当前 current_selector
-            let content_env = content_env.clone().with_selector(
-                env.get_selector()
-                    .map(std::string::ToString::to_string)
-                    .unwrap_or_default(),
-            );
+            // 将当前 scope 链上所有 !global 写入合并到 content_env，
+            // 解决 mixin b() 中 @content 触发时 $B 尚未来得及通过 exec_mixin 回传的问题
+            let mut writes = HashMap::new();
+            collect_global_writes(&env.current, &mut writes);
+            let content_env = writes
+                .into_iter()
+                .fold(content_env.clone(), |acc, (k, v)| {
+                    acc.add_global_write(k, v)
+                })
+                .with_selector(
+                    env.get_selector()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_default(),
+                );
             let content_nodes = content_nodes.to_vec();
             Evaluator::eval_nodes(&content_nodes, content_env)
         }

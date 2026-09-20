@@ -14,13 +14,13 @@ pub(crate) fn add(l: &Value, r: &Value) -> Result<Value> {
     let r = r.clone();
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
-            // 不同单位不兼容时报错（如 1px + 1em）
+            // 不同单位不兼容时：包装为 calc() 表达式保留（而非报错）
             match u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
                 true => {
-                    let u1_str = u1.as_deref().unwrap_or("");
-                    let u2_str = u2.as_deref().unwrap_or("");
-                    return Err(SassError::Eval(format!(
-                        "{u1_str} and {u2_str} have incompatible units."
+                    return Ok(Value::Calc(format!(
+                        "calc({a}{} + {b}{})",
+                        u1.as_deref().unwrap_or(""),
+                        u2.as_deref().unwrap_or("")
                     )));
                 }
                 false => {}
@@ -121,13 +121,13 @@ pub(crate) fn sub(l: &Value, r: &Value) -> Result<Value> {
     let r = r.clone();
     match (l, r) {
         (Value::Number(a, u1), Value::Number(b, u2)) => {
-            // 不同单位不兼容时报错（如 1px - 1em）
+            // 不同单位不兼容时：包装为 calc() 表达式保留（而非报错）
             match u1.is_some() && u2.is_some() && !units_compatible(u1.as_deref(), u2.as_deref()) {
                 true => {
-                    let u1_str = u1.as_deref().unwrap_or("");
-                    let u2_str = u2.as_deref().unwrap_or("");
-                    return Err(SassError::Eval(format!(
-                        "{u1_str} and {u2_str} have incompatible units."
+                    return Ok(Value::Calc(format!(
+                        "calc({a}{} - {b}{})",
+                        u1.as_deref().unwrap_or(""),
+                        u2.as_deref().unwrap_or("")
                     )));
                 }
                 false => {}

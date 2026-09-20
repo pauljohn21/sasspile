@@ -138,6 +138,12 @@ match env.get_namespace(ns).cloned() {
             | Value::FunctionRef(..)
             | Value::ArgList(..) => Ok(value.clone()),
             Value::Calc(s) => {
+                // CSS 函数内的插值 #{} —— 展开后重新构造 Calc
+                // parser 在 var(#{jn($args)}) 中保留 #{} 供此层展开
+                if s.contains("#{") {
+                    let evaluated = eval_interp_str(&s, env);
+                    return Ok(Value::Calc(evaluated));
+                }
                 // 空 calc()/clamp()/min()/max() — 检查是否有用户定义的函数覆盖
                 let inner = s
                     .strip_prefix("calc(")
@@ -239,6 +245,7 @@ match env.get_namespace(ns).cloned() {
     }
 
     /// 求值函数调用。
+    #[tracing::instrument(skip(args, env), fields(name = %name, n_args = args.len()), ret, err(Display), level = "trace")]
     fn eval_call(name: &str, args: &[Arg], env: &Env) -> Result<Value> {
         // if() 惰性求值：只求值选中的分支
         match name == "if"
@@ -296,6 +303,29 @@ match env.get_namespace(ns).cloned() {
         {
             true => return Self::eval_value(&args[0].value, env),
             false => {}
+        }
+        // ── CSS vendor-prefixed 函数（-A-CALC 等）—— 先求值再透传 ──
+        if name.starts_with('-') && is_css_vendor_call(name, args) {
+            let (pos_args, kw_args) = Self::collect_args(args, env)?;
+            let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
+            let kw_parts: Vec<String> =
+                kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            parts.extend(kw_parts);
+            let css_name = name.to_lowercase();
+            return Ok(Value::String(format!("{css_name}({})", parts.join(", ")), false));
+        }
+        // ── CSS 全大写函数名（TYPE/URL 等无定义时）—— 先求值再透传 ──
+        if name.chars().all(|c| c.is_ascii_uppercase() || c == '-')
+            && !name.contains('.')
+            && !Self::is_known_builtin(name)
+        {
+            let (pos_args, kw_args) = Self::collect_args(args, env)?;
+            let mut parts: Vec<String> = pos_args.iter().map(|v| v.to_string()).collect();
+            let kw_parts: Vec<String> =
+                kw_args.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            parts.extend(kw_parts);
+            let css_name = name.to_lowercase();
+            return Ok(Value::String(format!("{css_name}({})", parts.join(", ")), false));
         }
         // 分离位置参数和关键字参数，展开 spread
         let (pos_args, kw_args) = Self::collect_args(args, env)?;
@@ -376,6 +406,7 @@ match env.get_namespace(ns).cloned() {
     }
 
     /// 分派函数调用——Sass 函数 → CSS 透传。
+    #[tracing::instrument(skip(pos_args, kw_args, env), fields(name = %name, n_pos = pos_args.len(), n_kw = kw_args.len()), level = "trace")]
     fn dispatch_function(
         name: &str,
         pos_args: Vec<Value>,
@@ -396,6 +427,12 @@ match env.get_namespace(ns).cloned() {
                 parts.extend(kw_parts);
                 // CSS 函数名统一 lowercase（规范要求）
                 let css_name = name.to_lowercase();
+                tracing::trace!(
+                    target: "sasspile::func_passthrough",
+                    func = %name,
+                    css_out = %format!("{css_name}({})", parts.join(", ")),
+                    "CSS passthrough (function not resolved)"
+                );
                 Ok(Value::String(
                     format!("{css_name}({})", parts.join(", ")),
                     false,
@@ -473,3 +510,29 @@ match env.get_namespace(ns).cloned() {
         result
     }
 }
+
+/// 检查 vendor-prefixed 函数名是否属于已知 CSS 函数的 vendor variant。
+/// `-A-CALC`, `-moz-transform`, `-webkit-linear-gradient` 等。
+fn is_css_vendor_call(name: &str, args: &[Arg]) -> bool {
+    let _ = args; // 未使用，保留签名以便未来扩展
+    // vendor prefix 格式：-xxx-NAME(...)
+    let base = match name.strip_prefix('-') {
+        Some(rest) => match rest.rsplit_once('-') {
+            Some((_vendor, base)) => base,
+            None => rest,
+        },
+        None => return false,
+    };
+    let lower = base.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "calc" | "clamp" | "min" | "max" | "var" | "env" |
+        "element" | "expression" | "url" | "attr" | "css" |
+        "linear-gradient" | "radial-gradient" | "conic-gradient" |
+        "rotate" | "translate" | "scale" | "skew" | "matrix" |
+        "blur" | "brightness" | "contrast" | "grayscale" | "invert" | "opacity" |
+        "saturate" | "sepia" | "hue-rotate" | "drop-shadow"
+    )
+}
+
+

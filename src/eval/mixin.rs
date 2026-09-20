@@ -90,10 +90,16 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         } else {
             mixin_env
         };
-        // 求值 mixin body——move mixin_env，返回 css（env 丢弃，mixin 作用域不传播）
+        // 在 eval_nodes 消费 mixin_env 前保存 !global 写入的克隆
+        let global_writes_snapshot = mixin_env.current_global_writes().clone();
+        // 求值 mixin body——move mixin_env
         let (css, _) = Self::eval_nodes(&mixin.body, mixin_env)?;
-        // 返回 content_env 作为调用者 env（mixin 内部变量不泄漏到外层）
-        Ok((css, content_env))
+        // 回传 !global 变量写入到调用者 env
+        // mixin 内部变量仍不泄漏（仅在 global_writes 中的传播）
+        let result_env = global_writes_snapshot
+            .into_iter()
+            .fold(content_env, |acc, (k, v)| acc.add_global_write(k, v));
+        Ok((css, result_env))
     }
 
     pub(crate) fn bind_params(params: &[Param], args: &[Arg], env: Env) -> Result<Env> {
@@ -174,15 +180,13 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
     }
 
     /// 调用函数（内建或用户定义）。
+    #[tracing::instrument(skip(pos_args, kw_args, env), fields(name = %name, n_args = pos_args.len(), dispatch_path = tracing::field::Empty), level = "trace", err)]
     pub(crate) fn call_function(
         name: &str,
         pos_args: &[Value],
         kw_args: &HashMap<String, Value>,
         env: &Env,
     ) -> Result<Value> {
-        let span =
-            crate::__tracing::info_span!("call_function", name = name, n_args = pos_args.len());
-        let _enter = span.enter();
         // star 模块冲突检测：同名函数被多个 as * 模块定义时报错
         match !name.contains('.') && env.star_conflict(name).is_some() {
             true => return Err(SassError::Eval(
@@ -191,14 +195,11 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             false => {}
         }
         // CSS 严格保留函数名（url/element/expression 及其大小写变体）—— 始终走内建
-        // 即使 @function URL() 定义成功，调用 URL() 仍视为 CSS 原生 url()
         let name_lower = name.to_ascii_lowercase();
         if !name.contains('.')
             && super::builtin::dispatch::is_css_reserved_function(&name_lower)
         {
-            // Vendor-prefixed 变体（如 -a-element、-A-EXPRESSION、-a-url）
             if name_lower.starts_with('-') {
-                // url() 特殊：去掉 vendor 前缀规范化为 url()
                 if name_lower
                     .strip_prefix('-')
                     .is_some_and(|rest| rest.rsplit_once('-').is_some_and(|(_, b)| b == "url"))
@@ -213,7 +214,6 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                         false,
                     ));
                 }
-                // 其他（element/expression）—— 原样 CSS 透传（小写化）
                 let arg_str = pos_args
                     .iter()
                     .map(std::string::ToString::to_string)
@@ -224,23 +224,28 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                     false,
                 ));
             }
+            tracing::Span::current().record("dispatch_path", &"css_reserved");
             return Self::call_builtin(name, pos_args, kw_args, env);
         }
         // 用户函数（精确匹配优先）—— 用户定义可覆盖 calc/clamp 等
         if let Some(func) = env.get_function(name) {
+            tracing::Span::current().record("dispatch_path", &"exact_match");
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // 用户函数（大小写不敏感匹配）
         if let Some(func) = env.get_function_ci(name) {
+            tracing::Span::current().record("dispatch_path", &"case_insensitive");
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // CSS 原生函数名（attr/css/calc/clamp 等）—— 仅在无用户定义时走内建
         if !name.contains('.')
             && super::builtin::dispatch::is_css_native_function(&name_lower)
         {
+            tracing::Span::current().record("dispatch_path", &"css_native");
             return Self::call_builtin(name, pos_args, kw_args, env);
         }
-        // 在命名空间模块中查找同名函数（跳过内建模块 — 其 FunctionDef 条目仅用于 meta 内省）。
+        // 在命名空间模块中查找同名函数（跳过内建模块）
+        let ns_count = env.get_namespaces().values().filter(|e| !e.is_builtin).count();
         let ns_func = env
             .get_namespaces()
             .values()
@@ -252,8 +257,16 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                     .map(|(_, f)| f.clone())
             });
         if let Some(func) = ns_func {
+            tracing::Span::current().record("dispatch_path", &"namespace_traverse");
             return Self::call_user_function(&func, pos_args, kw_args, env);
         }
+        tracing::trace!(
+            target: "sasspile::func_dispatch",
+            func = %name,
+            searched_ns = ns_count,
+            ci_checked = true,
+            "Function NOT found in any namespace — falling through to builtin or CSS passthrough"
+        );
         // 模块限定函数 (math.abs, map.get, etc.)
         match name.contains('.') {
             true => return Self::call_module_function(name, pos_args, kw_args, env),
@@ -286,18 +299,13 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         Self::call_user_function(&fdef, pos_args, kw_args, env)
     }
 
+    #[tracing::instrument(skip(func, pos_args, kw_args, env), fields(n_params = func.params.len(), n_args = pos_args.len(), result = tracing::field::Empty), level = "trace", ret, err)]
     pub(crate) fn call_user_function(
         func: &FunctionDef,
         pos_args: &[Value],
         kw_args: &HashMap<String, Value>,
         env: &Env,
     ) -> Result<Value> {
-        let span = crate::__tracing::info_span!(
-            "call_user_function",
-            n_params = func.params.len(),
-            n_args = pos_args.len()
-        );
-        let _enter = span.enter();
         let mut func_env = env.clone().incr_depth().enter_scope();
         // 合并函数定义时捕获的命名空间
         func_env = func

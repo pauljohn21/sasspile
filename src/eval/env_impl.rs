@@ -80,6 +80,19 @@ impl Env {
         env.with_scope(scope)
     }
 
+    /// 读取当前活跃作用域的 !global 写入表。
+    pub(crate) fn current_global_writes(&self) -> &HashMap<String, Value> {
+        &self.current.global_writes
+    }
+
+    /// 将一个 env 的所有 !global 写入合并到当前 env，返回新 env。
+    pub(crate) fn absorb_global_writes(self, other: &Self) -> Self {
+        other
+            .current_global_writes()
+            .iter()
+            .fold(self, |acc, (k, v)| acc.add_global_write(k.clone(), v.clone()))
+    }
+
     /// 直接写入 `forwarded_vars（用于` @forward 绑定变量）。
     pub(crate) fn define_forwarded_var(self, name: String, val: Value) -> Self {
         let (mut scope, env) = self.mutate_scope();

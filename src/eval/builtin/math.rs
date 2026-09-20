@@ -84,6 +84,7 @@ pub fn call(
                 }
                 _ => {
                     // 传统 1 参数 round(x) 或 round($number: x)
+                    // 或 CSS 2 参数 round(number, step)（无策略名，默认 nearest）
                     match args.len() {
                         0 => Err(SassError::Eval("Missing argument $number.".into())),
                         1 => match &args[0] {
@@ -97,8 +98,25 @@ pub fn call(
                             }
                             _ => Err(SassError::Eval("$number is not a number.".into())),
                         },
+                        2 => {
+                            // CSS round(number, step) — 默认 nearest 策略
+                            // 若两个参数都是 Number → 数值取整
+                            // 否则包装为 round(...) Calc 输出（保留原始表达式）
+                            match (&args[0], &args[1]) {
+                                (Value::Number(..), Value::Number(..)) => round_strategy(&[
+                                    Value::String("nearest".into(), true),
+                                    args[0].clone(),
+                                    args[1].clone(),
+                                ]),
+                                _ => {
+                                    let a = args[0].to_string();
+                                    let b = args[1].to_string();
+                                    Ok(Some(Value::Calc(format!("round({a}, {b})"))))
+                                }
+                            }
+                        }
                         n => Err(SassError::Eval(format!(
-                            "Only 1 argument allowed, but {n} {} passed.",
+                            "Only 1-2 arguments allowed, but {n} {} passed.",
                             match n == 1 { true => "was", false => "were" }
                         ))),
                     }

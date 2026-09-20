@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 #[test]
 fn test_ep_syntax_stats() {
-    let dir = PathBuf::from("/Users/pauljohn/rust/element-plus-dev/packages/theme-chalk/src");
+    let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/element-plus/packages/theme-chalk/src"));
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .expect("无法读取目录")
         .filter_map(|e| e.ok())

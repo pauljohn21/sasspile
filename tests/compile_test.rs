@@ -428,3 +428,133 @@ fn test_forward_css_error() {
     );
     std::fs::remove_dir_all(&dir).ok();
 }
+
+// ── CSS round() tests (Task 1.4) ──
+
+#[test]
+fn test_compile_round_2arg_nearest() {
+    let css = compile_expanded("a {b: round(117, 25)}").expect("round(117, 25)");
+    assert!(css.contains("125"), "round(117, 25) => 125, got: {css}");
+}
+
+#[test]
+fn test_compile_round_2arg_negative_step() {
+    let css = compile_expanded("a {b: round(-18, 10)}").expect("round(-18, 10)");
+    assert!(css.contains("-20"), "round(-18, 10) => -20, got: {css}");
+}
+
+#[test]
+fn test_compile_round_2arg_with_units() {
+    let css = compile_expanded("a {b: round(13px, 10px)}").expect("round(13px, 10px)");
+    assert!(css.contains("10px"), "round(13px, 10px) => 10px, got: {css}");
+}
+
+#[test]
+fn test_compile_round_2arg_negative_both() {
+    let css = compile_expanded("a {b: round(-13px, -10px)}").expect("round(-13px, -10px)");
+    assert!(css.contains("-10px"), "round(-13px, -10px) => -10px, got: {css}");
+}
+
+#[test]
+fn test_compile_round_strategy_up() {
+    let css =
+        compile_expanded("a {b: round(up, 5.1, 1)}").expect("round(up, 5.1, 1)");
+    assert!(css.contains("6"), "round(up, 5.1, 1) => 6, got: {css}");
+}
+
+#[test]
+fn test_compile_round_strategy_down() {
+    let css =
+        compile_expanded("a {b: round(down, 5.9, 1)}").expect("round(down, 5.9, 1)");
+    assert!(css.contains("5"), "round(down, 5.9, 1) => 5, got: {css}");
+}
+
+#[test]
+fn test_compile_round_strategy_to_zero() {
+    let css =
+        compile_expanded("a {b: round(to-zero, 5.9, 1)}").expect("round(to-zero, 5.9, 1)");
+    assert!(css.contains("5"), "round(to-zero, 5.9, 1) => 5, got: {css}");
+}
+
+// ── CSS vendor prefix tests (Task 4.5) ──
+
+#[test]
+fn test_compile_vendor_prefix_acalc() {
+    let css =
+        compile_expanded("$c: foo; a {b: -A-CALC($c)}").expect("-A-CALC($c)");
+    assert!(css.contains("-a-calc(foo)"), "vendor -A-CALC should lowercase, got: {css}");
+}
+
+#[test]
+fn test_compile_vendor_prefix_celement() {
+    let css = compile_expanded("$d: bar; a {b: -C-ELEMENT($d)}").expect("-C-ELEMENT($d)");
+    assert!(
+        css.contains("-c-element(bar)"),
+        "vendor -C-ELEMENT should lowercase, got: {css}"
+    );
+}
+
+#[test]
+fn test_compile_vendor_prefix_cexpression() {
+    let css = compile_expanded("$d: bar; a {b: -C-EXPRESSION($d)}")
+        .expect("-C-EXPRESSION($d)");
+    assert!(
+        css.contains("-c-expression(bar)"),
+        "vendor -C-EXPRESSION should lowercase, got: {css}"
+    );
+}
+
+#[test]
+fn test_compile_vendor_prefix_uppercase_single_dash() {
+    let css =
+        compile_expanded("a {b: ELEMENT(foo)}").expect("ELEMENT(foo)");
+    assert!(
+        css.contains("element(foo)"),
+        "uppercase CSS should lowercase, got: {css}"
+    );
+}
+
+// ── CSS rem()/mod() tests (Task 2.4) ──
+
+#[test]
+fn test_compile_rem_basic() {
+    let css = compile_expanded("a {b: rem(17px, 5px)}").expect("rem(17px, 5px)");
+    assert!(css.contains("2px"), "rem(17px, 5px) => 2px, got: {css}");
+}
+
+#[test]
+fn test_compile_mod_basic() {
+    let css = compile_expanded("a {b: mod(17px, 5px)}").expect("mod(17px, 5px)");
+    assert!(css.contains("2px"), "mod(17px, 5px) => 2px, got: {css}");
+}
+
+#[test]
+fn test_compile_rem_negative() {
+    let css = compile_expanded("a {b: rem(-17px, 5px)}").expect("rem(-17px, 5px)");
+    assert!(
+        css.contains("-2px"),
+        "rem(-17px, 5px) => -2px (truncated), got: {css}"
+    );
+}
+
+#[test]
+fn test_compile_mod_negative() {
+    let css = compile_expanded("a {b: mod(-17px, 5px)}").expect("mod(-17px, 5px)");
+    assert!(
+        css.contains("3px"),
+        "mod(-17px, 5px) => 3px (floored), got: {css}"
+    );
+}
+
+// ── Incompatible units calc-wrapping tests (Task 6.5) ──
+
+#[test]
+fn test_compile_incompatible_units_add_calc() {
+    let result = compile_expanded("a {b: round(1px + 0%, 1px + 0%)}");
+    assert!(result.is_ok(), "incompatible units should produce calc() wrap, err: {:?}", result.err());
+    let css = result.unwrap();
+    assert!(
+        css.contains("round(") && css.contains("calc("),
+        "expected round(calc(...), calc(...)), got: {css}"
+    );
+}

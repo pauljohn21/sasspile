@@ -220,8 +220,11 @@ impl ParseStream<'_> {
                                     self.advance();
                                 }
                                 Token::Interp(s) => {
-                                    // 插值在 CSS 函数中——求值变量后输出
+                                    // 插值在 CSS 函数中——保留 #{} 供 eval 层展开
+                                    // 必须保留 #{} 标记，否则 eval 层无法区分插值与原始文本
+                                    content.push_str("#{");
                                     content.push_str(s);
+                                    content.push('}');
                                     self.advance();
                                 }
                                 _ => {
