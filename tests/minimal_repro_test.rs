@@ -1,6 +1,4 @@
-//! Minimal reproduction for rest-param function dispatch
-//!
-//! Run: cargo test --features otel --test minimal_repro_test -- --nocapture
+//! Minimal reproduction for unquote(map.get()) evaluation
 
 use std::io::Write;
 
@@ -12,7 +10,9 @@ fn run_case(label: &str, scss: &str) -> (bool, String) {
                 || css.contains(" jn(")
                 || css.contains("inner(")
                 || css.contains("join-var(")
-                || css.contains("gcv(");
+                || css.contains("gcv(")
+                || css.contains("string.unquote(")
+                || css.contains("map.get(");
             if unresolved {
                 (false, format!("FAIL {label}: {css}"))
             } else {
@@ -24,54 +24,65 @@ fn run_case(label: &str, scss: &str) -> (bool, String) {
 }
 
 #[test]
-fn test_rest_param_dispatch() {
+fn test_unquote_map_get_diagnosis() {
     let mut output = Vec::new();
 
     let cases = [
+        // KEY DIFFERENCE: map parameter comes from mixin argument
         (
-            "rest->list",
-            r#"@function inner($list) { @return nth($list, 1); }
-@function outer($args...) { @return inner($args); }
-.test { val: outer(a, b, c); }"#,
-        ),
-        (
-            "joinVarName",
-            r#"@function joinVarName($list) {
-    $name: '--el';
-    @each $item in $list { $name: $name + '-' + $item; }
-    @return $name;
+            "mixin-param-map-get",
+            r#"@use 'sass:map';
+@use 'sass:string';
+$breakpoints: (
+  'sm': '(min-width: 576px)',
+  'md': '(min-width: 768px)',
+);
+@mixin res($key, $map: $breakpoints) {
+  @if map.has-key($map, $key) {
+    @media only screen and #{string.unquote(map.get($map, $key))} {
+      @content;
+    }
+  } @else {
+    @warn "Undefined points: `#{$map}`";
+  }
 }
-@function getCssVar($args...) { @return var(#{joinVarName($args)}); }
-.test { color: getCssVar(button, text-color); }"#,
+.test {
+  @include res('sm') {
+    display: none !important;
+  }
+}"#,
         ),
+        // Simpler version: just a function parameter
         (
-            "direct-list",
-            r#"@function jv($list) {
-    $name: '--el';
-    @each $item in $list { $name: $name + '-' + $item; }
-    @return $name;
+            "fn-param-map-get",
+            r#"@use 'sass:map';
+@use 'sass:string';
+$breakpoints: (
+  'sm': '(min-width: 576px)',
+);
+@function get-bp($key, $map: $breakpoints) {
+  @return string.unquote(map.get($map, $key));
 }
-.test { val: jv((a, b, c)); }"#,
+.test { content: get-bp('sm'); }"#,
         ),
+        // Does the @if condition matter?
         (
-            "EP-rest-call",
-            r#"@function jn($list) {
-    $name: '--el';
-    @each $item in $list { $name: $name + '-' + $item; }
-    @return $name;
+            "without-if",
+            r#"@use 'sass:map';
+@use 'sass:string';
+$breakpoints: (
+  'sm': '(min-width: 576px)',
+);
+@mixin res($key, $map: $breakpoints) {
+  @media only screen and #{string.unquote(map.get($map, $key))} {
+    @content;
+  }
 }
-@function gcv($args...) { @return var(#{jn($args)}); }
-.test { color: gcv(button, text); }"#,
-        ),
-        (
-            "explicit-tuple",
-            r#"@function jn($list) {
-    $name: '--el';
-    @each $item in $list { $name: $name + '-' + $item; }
-    @return $name;
-}
-@function gcv($a, $b) { @return var(#{jn(($a, $b))}); }
-.test { color: gcv(button, text); }"#,
+.test {
+  @include res('sm') {
+    display: none !important;
+  }
+}"#,
         ),
     ];
 
@@ -85,10 +96,8 @@ fn test_rest_param_dispatch() {
     }
 
     let output_str = String::from_utf8(output).expect("utf8");
-    // Write to file for analysis
-    std::fs::write("/tmp/minimal_repro_results.txt", &output_str).expect("write file");
+    std::fs::write("/tmp/unquote_diag_results.txt", &output_str).expect("write file");
 
-    // Also emit as a tracing error (will appear in OTel span events)
     for line in output_str.lines() {
         if line.starts_with("PASS") {
             tracing::info!("{line}");
@@ -97,5 +106,5 @@ fn test_rest_param_dispatch() {
         }
     }
 
-    assert!(all_pass, "Some cases failed — see /tmp/minimal_repro_results.txt");
+    assert!(all_pass, "Some cases failed — see /tmp/unquote_diag_results.txt");
 }
