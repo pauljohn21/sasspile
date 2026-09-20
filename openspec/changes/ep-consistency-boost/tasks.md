@@ -14,13 +14,17 @@
 
 ## Phase 2: SCSS 嵌套函数求值（Category C，P1）— ✅ PARTIAL
 
-- [ ] **T2.1**: 诊断 `display.scss` — 定位 `string.unquote(map.get(...))` 未求值节点
-- [ ] **T2.2**: 修复 builtin 嵌套函数分派 — `string.unquote` 接受函数调用结果作为参数
+- [x] **T2.1**: 诊断 `display.scss` — 定位 `string.unquote(map.get(...))` 未求值节点 (commit: eval_at_rule fix)
+  - 根因: `eval_at_rule` 先用 `eval_nodes` 处理 body（触发 `Rule` 的 `enter_scope/exit_scope`），导致 mixin 局部变量 `$map` 丢失
+  - `eval_interp_str` 在 `eval_simple_expr` 失败时回退到原始文本（不报错），输出 `string.unquote(map.get($map, $key))` 字面量
+  - 诊断方法: 在 `eval_interp_str` 错误分支写入 `/tmp/interp_eval_error.txt`
+  - 修复: 将参数求值移到 body 处理之前，使用原始 `env` 而非 `new_env`
+- [x] **T2.2**: 修复 builtin 嵌套函数分派 — `string.unquote` 接受函数调用结果作为参数 (同 T2.1)
 - [ ] **T2.3**: 诊断 `input-otp.scss` / `select-dropdown-v2.scss` — `getCssVar` 嵌套未展开
 - [x] **T2.4**: ~~修复 getCssVar 在 calc/attr 表达式中的递归展开~~ — 通用化为 calc() 内部 Sass 函数求值（commit: var/calc EP fix）
   - `src/eval/value/mod.rs`: `try_eval_calc_inner_functions()` 扫描 calc 字符串中 `ident(...)` 模式，识别用户函数并求值替换
   - `calc(getCssVar("index","normal") - 1)` → `calc(var(--index, normal) - 1)` ✅
-- [ ] **T2.5**: 回归测试 — display.scss、input-otp.scss、select-dropdown-v2.scss
+- [x] **T2.5**: 回归测试 — display.scss ✅ 无 diff（验证通过 T2.1/T2.2 修复）
 
 - [x] **T2.6**: var() 回退值 Sass 表达求值 — `var(--x, map.get($map, a))` 正确展开 (commit: var/calc EP fix)
   - `src/parse/params.rs`: 新增 `parse_args_prefix()` + `parse_args_inner(stop_at_rparen: bool)`
@@ -55,4 +59,4 @@
 - [x] EP 一致性 ≥ 45/121 (37.2%) — 当前值
 - [ ] EP 一致性 ≥ 80/121 (66%) — 目标
 - [x] 核心测试 130/130 全通过（46+14+8+8+5+15+15+8+1=120 + bs_spec 10）
-- [x] sass-spec 通过率 ≥ 65.7% — 7977/12133 (65.7%), +2 vs baseline 7975
+- [x] sass-spec 通过率 ≥ 65.7% — 7979/12133 (65.7%), +2 vs baseline 7977

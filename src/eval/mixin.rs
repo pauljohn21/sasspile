@@ -406,6 +406,13 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             crate::__tracing::info_span!("eval_at_rule", name = name, has_body = body.is_some());
         let _enter = span.enter();
 
+        // EP FIX: 先求值参数（使用原始 env，保留 mixin 局部变量如 $map），
+        // 再处理 body（body 内 Rule 的 enter_scope/exit_scope 会丢失局部变量）。
+        // 否则 @media #{string.unquote(map.get($map, $key))} 会因 $map 未定义而失败。
+        let eval_params = params
+            .as_ref()
+            .map(|p| Self::eval_at_params(name, p, &env));
+
         let (children, has_body, new_env) = match body {
             Some(nodes) => {
                 // at-rule body 内允许声明（如 @font-face { font-family: ...; }）
@@ -420,11 +427,6 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             }
             None => (Vec::new(), false, env),
         };
-
-        // 对 @media/@supports 参数做插值和表达式求值
-        let eval_params = params
-            .as_ref()
-            .map(|p| Self::eval_at_params(name, p, &new_env));
 
         // 分流 AtRoot 节点——需要提升到 at-rule 外面的内容
         // 官方语义：
