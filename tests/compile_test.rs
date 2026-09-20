@@ -225,6 +225,20 @@ fn test_compile_property_interpolation() {
 }
 
 #[test]
+fn test_compile_interp_string_concat() {
+    // #{} 内 $a + 'b' 必须正确求值（eval_simple_expr 的 $ 快捷路径不能吞掉复合表达式）
+    let css = compile_expanded("$B: 'hello'; .t { content: #{$B + ' world'}; }").expect("unexpected failure");
+    assert!(css.contains("hello world"), "string concat in interp: {css}");
+}
+
+#[test]
+fn test_compile_interp_var_with_operator() {
+    // 变量 + 字面量 + 变量 三串连接
+    let css = compile_expanded("$a: 'foo'; $b: 'bar'; .t { content: #{$a + '-' + $b}; }").expect("unexpected failure");
+    assert!(css.contains("foo-bar"), "multi-concat: {css}");
+}
+
+#[test]
 fn test_compile_selector_list_with_amp() {
     let css = compile_expanded(".a, .b { &:hover { color: red; } }").expect("unexpected failure in test");
     assert!(css.contains(".a:hover"), "应包含 .a:hover: {css}");

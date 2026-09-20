@@ -322,12 +322,15 @@ pub(crate) fn eval_interp_str(s: &str, env: &Env) -> String {
 /// 简单表达式求值（用于插值）。
 pub(crate) fn eval_simple_expr(expr: &str, env: &Env) -> crate::error::Result<Value> {
     let expr = expr.trim();
-    // 变量引用
+    // 纯变量引用——仅当整个 expr 仅为 $varname 时才走快捷路径
+    // 否则 $a + 'b' 会被错误匹配为 lookup("a + 'b'") 而失败
     if let Some(name) = expr.strip_prefix('$') {
-        return env
-            .lookup(name)
-            .cloned()
-            .ok_or_else(|| crate::error::SassError::UndefinedVariable(name.to_string()));
+        if name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            if let Some(val) = env.lookup(name) {
+                return Ok(val.clone());
+            }
+            return Err(crate::error::SassError::UndefinedVariable(name.to_string()));
+        }
     }
     // 尝试作为数字
     if let Ok(n) = expr.parse::<f64>() {
