@@ -50,6 +50,10 @@ pub enum CssNode {
     /// query: (without: media) / (with: media) / (without: all) 等
     AtRoot(Vec<CssNode>, Option<String>),
 
+    /// 来自 mixin @at-root 的直接节点——已在 mixin 内展开最终选择器，
+    /// 放置到源码位置，不受父选择器组合影响。
+    AtRootDirect(Box<CssNode>),
+
     /// 原始 CSS 内容——用于 `.css` 文件的原样输出。
     /// `.css` 文件不经过 SCSS 求值，内容直接输出。
     Raw(String),
@@ -87,6 +91,7 @@ impl std::fmt::Display for CssNode {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
+            CssNode::AtRootDirect(inner) => write!(f, "@at-root[{}]", inner),
             CssNode::Raw(text) => write!(f, "{text}"),
             CssNode::Return(_) => write!(f, ""),
         }

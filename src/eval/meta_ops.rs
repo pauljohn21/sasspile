@@ -130,6 +130,7 @@ impl Evaluator {
             .into_iter()
             .flat_map(|node| match node {
                 CssNode::AtRoot(nodes, _) => nodes,
+                CssNode::AtRootDirect(inner) => vec![*inner],
                 other => vec![other],
             })
             .collect();

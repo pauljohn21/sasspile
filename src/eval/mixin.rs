@@ -92,6 +92,19 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         };
         // 求值 mixin body——move mixin_env，捕获返回的 env 用于读取 !global 写入
         let (css, returned_env) = Self::eval_nodes(&mixin.body, mixin_env)?;
+        // EP BEM FIX：mixin 内部 @ at-root（如 e(), m()）生成的节点位置应在源码位置，
+        // 而非 RuleBuilder 默认的固定位置。将 AtRoot 节点替换为标记过的节点，
+        // 由 RuleBuilder::push 识别并直接放入 result 源码位置。
+        let css: Vec<CssNode> = css
+            .into_iter()
+            .flat_map(|node| match node {
+                CssNode::AtRoot(inner, _) => inner
+                    .into_iter()
+                    .map(|n| CssNode::AtRootDirect(Box::new(n)))
+                    .collect(),
+                other => vec![other],
+            })
+            .collect();
         // 回传 mixin body 内的 !global 变量写入到调用者 env
         // mixin 内部局部变量不泄漏（通过 move 语义自然隔离）
         let result_env = returned_env

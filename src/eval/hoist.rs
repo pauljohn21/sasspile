@@ -71,6 +71,18 @@ fn hoist_recursive(nodes: Vec<CssNode>) -> (Vec<CssNode>, Vec<CssNode>) {
                 imports.extend(extracted);
                 rest.push(CssNode::AtRoot(remaining, q));
             }
+            // AtRootDirect — 递归处理内部节点
+            CssNode::AtRootDirect(inner) => {
+                let (extracted, remaining) = hoist_recursive(vec![*inner.clone()]);
+                imports.extend(extracted);
+                if remaining.len() == 1 {
+                    rest.push(CssNode::AtRootDirect(Box::new(remaining.into_iter().next().unwrap())));
+                } else {
+                    for node in remaining {
+                        rest.push(CssNode::AtRootDirect(Box::new(node)));
+                    }
+                }
+            }
             // Rule — 递归处理 children，提取嵌套的 @import
             CssNode::Rule {
                 selector,

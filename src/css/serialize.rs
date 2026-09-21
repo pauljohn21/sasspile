@@ -132,6 +132,11 @@ impl Serializer {
                     state.prev = Some(item.clone());
                     vec![item]
                 }
+                // AtRootDirect：来自 mixin @at-root，应作为其内部节点直接展平
+                // 保持源码位置，不受父选择器组合影响
+                CssNode::AtRootDirect(inner) => {
+                    return process_node(&inner, state);
+                }
                 // 非 Rule 节点：继承前一个兄弟的 group_id（同源）
                 other => {
                     let gid = state.prev.as_ref().map_or(state.next_group, |(_, g)| *g);

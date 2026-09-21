@@ -20,6 +20,7 @@ impl Evaluator {
                     }
                     CssNode::AtRule { children, .. } => Self::collect_selectors(children),
                     CssNode::AtRoot(kids, _) => Self::collect_selectors(kids),
+                    CssNode::AtRootDirect(inner) => Self::collect_selectors(std::slice::from_ref(inner)),
                     _ => Vec::new(),
                 };
                 own
@@ -129,6 +130,11 @@ impl Evaluator {
                     }
                     CssNode::AtRoot(kids, q) => {
                         CssNode::AtRoot(Self::apply_extends(kids, extends, module_selectors), q)
+                    }
+                    CssNode::AtRootDirect(inner) => {
+                        let mut inner_vec = vec![*inner.clone()];
+                        let applied = Self::apply_extends(inner_vec, extends, module_selectors);
+                        CssNode::AtRootDirect(Box::new(applied.into_iter().next().unwrap()))
                     }
                     other => other,
                 }

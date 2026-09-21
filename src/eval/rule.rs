@@ -76,6 +76,11 @@ impl RuleBuilder {
                     }
                 }
             }
+            // AtRootDirect：来自 mixin @ at-root，已展开最终选择器，直接放入不参与父选择器组合
+            CssNode::AtRootDirect(inner) => {
+                self.flush_decls();
+                self.result.push(*inner);
+            }
             CssNode::Rule {
                 selector: child_sel,
                 declarations: child_decls,
@@ -314,6 +319,9 @@ impl Evaluator {
             CssNode::AtRoot(nodes, _) => {
                 nodes.iter().any(Self::selector_contains_ampersand)
             }
+            CssNode::AtRootDirect(inner) => {
+                Self::selector_contains_ampersand(inner)
+            }
             _ => false,
         }
     }
@@ -437,6 +445,24 @@ impl Evaluator {
                     }
                     let nested = Self::nest_rule_in_children(parent, atroot_nodes);
                     result.push(CssNode::AtRoot(nested, query));
+                    (result, current_decls)
+                }
+                // AtRootDirect：直接放入结果，不参与 parent 选择器组合
+                CssNode::AtRootDirect(inner) => {
+                    match !current_decls.is_empty() {
+                        true => {
+                            result.push(CssNode::Rule {
+                                selector: parent.to_string(),
+                                declarations: std::mem::take(&mut current_decls),
+                                children: vec![],
+                            });
+                        }
+                        false => {}
+                    }
+                    let processed = Self::nest_rule_in_children(parent, vec![*inner]);
+                    for node in processed {
+                        result.push(node);
+                    }
                     (result, current_decls)
                 }
                 other => {

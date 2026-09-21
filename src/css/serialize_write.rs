@@ -46,6 +46,10 @@ impl Serializer {
                 let trimmed = inner.strip_suffix('\n').unwrap_or(&inner);
                 buf.push_str(trimmed);
             }
+            // AtRootDirect 在 flatten 中已展开，此处兜底：直接序列化内部节点
+            CssNode::AtRootDirect(inner) => {
+                Self::serialize_expanded(&[((**inner).clone(), 0)], depth);
+            }
             CssNode::Rule {
                 selector,
                 declarations,
@@ -201,12 +205,15 @@ impl Serializer {
                 }
                 buf.push(';');
             }
-            CssNode::Comment(_) => {}
-            CssNode::AtRoot(nodes, _) => {
-                let wrapped: Vec<(CssNode, usize)> =
-                    nodes.iter().cloned().map(|n| (n, 0)).collect();
-                buf.push_str(&Self::serialize_compressed(&wrapped));
-            }
+CssNode::Comment(_) => {}
+CssNode::AtRoot(nodes, _) => {
+    let wrapped: Vec<(CssNode, usize)> =
+        nodes.iter().cloned().map(|n| (n, 0)).collect();
+    buf.push_str(&Self::serialize_compressed(&wrapped));
+}
+CssNode::AtRootDirect(inner) => {
+    buf.push_str(&Self::serialize_compressed(&[((**inner).clone(), 0)]));
+}
             CssNode::Rule {
                 selector,
                 declarations,
