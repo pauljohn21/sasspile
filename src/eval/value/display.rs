@@ -229,6 +229,24 @@ pub(crate) fn eval_interp_segments(segments: &[InterpSegment], env: &Env) -> Str
 
 /// 求值插值字符串 #{...}。
 ///
+/// 选择器上下文中的插值求值——展开 `&` 父选择器引用 + `#{...}` + `$var`。
+///
+/// 当前未被调用（`&` 展开始终由 `combine_selectors` 处理，避免嵌套爆炸）。
+/// 保留此函数作为 future reference。
+#[allow(dead_code)]
+pub(crate) fn eval_selector_str(s: &str, env: &Env) -> String {
+    // 先展开 & 父选择器引用
+    let expanded = match s.contains('&') {
+        true => match env.get_selector() {
+            Some(parent) if !parent.is_empty() => s.replace('&', parent),
+            _ => s.to_string(),
+        },
+        false => s.to_string(),
+    };
+    // 然后委托给 eval_interp_str 处理 #{...} 和 $var
+    eval_interp_str(&expanded, env)
+}
+
 /// 先尝试用 `eval_simple_expr` 整体求值（处理纯变量 `$a`、数字、表达式），
 /// 失败时回退到逐字符扫描嵌套 `#{}` 模式（处理混合文本 `prefix#{expr}suffix`）。
 #[cfg_attr(feature = "tracing", tracing::instrument(level = "debug", skip(env), fields(input = %s)))]

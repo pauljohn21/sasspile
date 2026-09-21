@@ -128,7 +128,8 @@ fn get_channel_value(c: &Color, channel: &str, space: Option<&str>) -> Result<Va
     let effective_space = space.unwrap_or_else(|| c.space.as_str());
 
     match effective_space {
-        "rgb" | "srgb" => get_rgb_channel(c, channel),
+        "rgb" => get_rgb_channel(c, channel),          // 0-255
+        "srgb" => get_rgb_channel_normalized(c, channel), // 0-1 归一化
         "hsl" => {
             let (h, s, l) = match c.space == ColorSpace::Hsl {
                 true => {
@@ -329,7 +330,20 @@ fn get_xyz(c: &Color, space: &str) -> (f64, f64, f64) {
 }
 
 fn get_rgb_channel(c: &Color, channel: &str) -> Result<Value> {
-    // sRGB local 空间：通道值是 normalized [0-1]，不是 raw [0-255]
+    // rgb 空间：通道值是 0-255 整数
+    // NaN（none 通道）→ 0
+    let val_or_zero = |v: f64| if v.is_nan() { 0.0 } else { v };
+    match channel {
+        "red" => Ok(Value::Number(val_or_zero(c.legacy_rgb[0]), None)),
+        "green" => Ok(Value::Number(val_or_zero(c.legacy_rgb[1]), None)),
+        "blue" => Ok(Value::Number(val_or_zero(c.legacy_rgb[2]), None)),
+        "alpha" => Ok(Value::Number(c.a, None)),
+        _ => Err(err_no_channel(&color_name(c), channel)),
+    }
+}
+
+fn get_rgb_channel_normalized(c: &Color, channel: &str) -> Result<Value> {
+    // srgb 空间：通道值是归一化 [0-1]
     // NaN（none 通道）→ 0
     let val_or_zero = |v: f64| if v.is_nan() { 0.0 } else { v };
     match channel {

@@ -191,7 +191,7 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_rule", selector = selector);
         let _enter = span.enter();
-        // 对选择器中的 #{...} 插值求值
+        // 对选择器中的 #{...} 插值求值（& 保留给 combine_selectors 处理）
         let selector = if selector.contains("#{") {
             crate::eval::value::eval_interp_str(selector, &env)
         } else {

@@ -16,7 +16,8 @@ mod partial;
 
 pub(crate) use calc_pure::is_pure_calc_expr;
 pub(crate) use display::{
-    eval_interp_segments, eval_interp_str, eval_property_name, eval_simple_expr, inspect_value,
+    eval_interp_segments, eval_interp_str, eval_property_name, eval_selector_str, eval_simple_expr,
+    inspect_value,
 };
 pub(crate) use ops::{add, compare, div, modulo, mul, sub, units_compatible, values_eq};
 pub(crate) use partial::PartialCond;
