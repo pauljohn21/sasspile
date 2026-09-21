@@ -164,6 +164,9 @@ impl RuleBuilder {
     }
 
     /// 消费构建器，返回最终节点列表。
+    ///
+    /// 关键语义：@at-root 提升节点紧跟在父规则声明块之后、嵌套子规则之前——
+    /// 与 dart-sass 一致（EP 的 BEM mixin 链依赖此顺序）。
     fn build(mut self) -> Vec<CssNode> {
         self.flush_decls();
         match self.result.is_empty() && self.root_nodes.is_empty() {
@@ -174,9 +177,41 @@ impl RuleBuilder {
                     children: vec![],
                 });
             }
-            false => {
-                self.result.extend(self.root_nodes);
-            }
+            false => match self.root_nodes.is_empty() {
+                true => {}
+                false => {
+                    // 将 root_nodes 插入到父声明块之后、嵌套子规则之前——
+                    // 与 dart-sass 语义一致：@at-root 规则在父声明块后立即输出，
+                    // 在所有非-@at-root 嵌套子规则之前。
+                    //
+                    // 当父规则无声明块时（纯 mixin  mixin 调用），
+                    // root_nodes 插入到所有子节点之前。
+                    let mut combined: Vec<CssNode> = Vec::new();
+                    let mut hoisted = false;
+                    for node in self.result {
+                        if !hoisted {
+                            if let CssNode::Rule { selector, .. } = &node {
+                                if selector == &self.selector {
+                                    combined.push(node);
+                                    combined.extend(self.root_nodes.iter().cloned());
+                                    hoisted = true;
+                                    continue;
+                                }
+                            }
+                        }
+                        combined.push(node);
+                    }
+                    self.result = match hoisted {
+                        true => combined,
+                        false => {
+                            // 父声明块不存在：root_nodes 插在所有子节点之前
+                            let mut all = self.root_nodes;
+                            all.extend(combined);
+                            all
+                        }
+                    };
+                }
+            },
         }
         self.result
     }
@@ -191,9 +226,10 @@ impl Evaluator {
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_rule", selector = selector);
         let _enter = span.enter();
-        // 对选择器中的 #{...} 插值求值（& 保留给 combine_selectors 处理）
+        // 对选择器中的 #{...} 插值求值——展开 #{...} 内部的 & 父选择器引用
+        // 字面量 & 保留给 combine_selectors 处理
         let selector = if selector.contains("#{") {
-            crate::eval::value::eval_interp_str(selector, &env)
+            crate::eval::value::eval_selector_str(selector, &env)
         } else {
             selector.to_string()
         };

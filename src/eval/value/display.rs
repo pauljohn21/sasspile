@@ -215,7 +215,7 @@ pub(crate) fn eval_interp_segments(segments: &[InterpSegment], env: &Env) -> Str
                     };
                     result.push_str(&s);
                 } else {
-                    // 求值失败——回退到逐字符处理
+                    // 求值失败——逐字符处理
                     result.push_str(&eval_interp_str(expr, env));
                 }
             }
@@ -227,24 +227,71 @@ pub(crate) fn eval_interp_segments(segments: &[InterpSegment], env: &Env) -> Str
     result
 }
 
-/// 求值插值字符串 #{...}。
+/// 求值选择器字符串——展开 `#{...}` 中的 `&` 父选择器引用 + 其他插值。
 ///
-/// 选择器上下文中的插值求值——展开 `&` 父选择器引用 + `#{...}` + `$var`。
+/// 与 `eval_interp_str` 不同，此函数只展开 `#{...}` 内部的 `&`，
+/// 不展开字面量 `&`（由 `combine_selectors` 处理）。
 ///
-/// 当前未被调用（`&` 展开始终由 `combine_selectors` 处理，避免嵌套爆炸）。
-/// 保留此函数作为 future reference。
-#[allow(dead_code)]
+/// 这对于 `#{& + '-root'}` 这类插值表达式至关重要——
+/// 在插值上下文中，`&` 应被替换为父选择器的值。
 pub(crate) fn eval_selector_str(s: &str, env: &Env) -> String {
-    // 先展开 & 父选择器引用
-    let expanded = match s.contains('&') {
-        true => match env.get_selector() {
-            Some(parent) if !parent.is_empty() => s.replace('&', parent),
-            _ => s.to_string(),
-        },
-        false => s.to_string(),
-    };
-    // 然后委托给 eval_interp_str 处理 #{...} 和 $var
+    // 快速路径：不含 #{ 也不含 $ 的纯文本直接返回
+    if !s.contains("#{") && !s.contains('$') {
+        return s.to_string();
+    }
+    // 不含 & → 直接委托给 eval_interp_str
+    if !s.contains('&') {
+        return eval_interp_str(s, env);
+    }
+    // 有 & 且有 #{：只展开 #{...} 内部的 &
+    let parent = env.get_selector();
+    if parent.is_none_or(|p| p.is_empty()) {
+        return eval_interp_str(s, env);
+    }
+    let parent = parent.expect("checked above");
+    let expanded = expand_amp_in_interp(s, parent);
     eval_interp_str(&expanded, env)
+}
+
+/// 只展开 `#{...}` 插值内部的 `&`，保留字面量 `&` 给 `combine_selectors` 处理。
+///
+/// 遍历字符串，跟踪 `#{...}` 嵌套深度。深度 > 0 时遇到的 `&` 替换为 parent，
+/// 深度 == 0 时的 `&` 保持不变。
+fn expand_amp_in_interp(s: &str, parent: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut result = String::with_capacity(s.len() + parent.len());
+    let mut i = 0;
+    let mut interp_depth: i32 = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '#' && i + 1 < chars.len() && chars[i + 1] == '{' {
+            // 进入插值
+            interp_depth += 1;
+            result.push(c);
+            result.push('{');
+            i += 2;
+        } else if c == '{' && interp_depth > 0 {
+            // 插值内部的嵌套 {
+            interp_depth += 1;
+            result.push(c);
+            i += 1;
+        } else if c == '}' && interp_depth > 0 {
+            // 退出插值
+            interp_depth -= 1;
+            result.push(c);
+            i += 1;
+        } else if c == '&' && interp_depth > 0 {
+            // 插值内部的 & → 替换为父选择器（带引号作为字符串字面量）
+            result.push('"');
+            result.push_str(parent);
+            result.push('"');
+            i += 1;
+        } else {
+            result.push(c);
+            i += 1;
+        }
+    }
+    result
 }
 
 /// 先尝试用 `eval_simple_expr` 整体求值（处理纯变量 `$a`、数字、表达式），

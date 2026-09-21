@@ -411,16 +411,18 @@ impl Evaluator {
 
         // 创建混合结果颜色
         let mixed_space = ca.space;
+        let lerped = [
+            lerp(cb.legacy_rgb[0], ca.legacy_rgb[0], w),
+            lerp(cb.legacy_rgb[1], ca.legacy_rgb[1], w),
+            lerp(cb.legacy_rgb[2], ca.legacy_rgb[2], w),
+        ];
         let mixed = Color::with_space(
             mixed_space,
             [r, g, bl],
             alpha,
-            ca.output,
-            [
-                lerp(cb.legacy_rgb[0], ca.legacy_rgb[0], w),
-                lerp(cb.legacy_rgb[1], ca.legacy_rgb[1], w),
-                lerp(cb.legacy_rgb[2], ca.legacy_rgb[2], w),
-            ],
+            // EP FIX: color.mix 结果强制 RgbPercent 输出——dart-sass 对混合色输出 rgb(r%,g%,b%)
+            ColorOutput::RgbPercent,
+            lerped,
         );
 
         // 如果 method 指定了混合空间，需要将结果转回第一个颜色的空间
@@ -432,6 +434,7 @@ impl Evaluator {
                 Ok(result)
             }
             // method 未指定且第一个颜色是 legacy 空间，结果转为 legacy RGB
+            // EP FIX: 保留 mixed.output（RgbPercent）——dart-sass 对混合色输出 rgb(r%,g%,b%)
             None if a.space.is_legacy() => {
                 Ok(Value::Color(Color::with_rgb(
                     mixed.legacy_rgb[0],
@@ -439,7 +442,7 @@ impl Evaluator {
                     mixed.legacy_rgb[2],
                     alpha,
                     crate::parse::ast::ColorSpace::Rgb,
-                    crate::parse::ast::ColorOutput::Auto,
+                    mixed.output,
                 )))
             }
             None => Ok(Value::Color(mixed)),
