@@ -28,7 +28,47 @@
 - **THEN** output SHALL be `.unrelated` at root level
 - **AND** `root_nodes` direct append SHALL be used
 
-#### Scenario: Deeply nested mixin with multiple `&`
+### Requirement: Interpolation With Parent Selector `&`
 
-- **WHEN** `m()` mixin inside `m()` emits `#{$selector}--x` where `$selector` = `.el-avatar--circle`
-- **THEN** output SHALL be `.el-avatar--circle--x` (or per CSS spec behavior)
+`eval_rule` SHALL expand `&` inside `#{...}` interpolation to the parent selector value, while preserving literal `&` for `combine_selectors` handling.
+
+#### Scenario: Simple interpolation concat
+
+- **WHEN** `.el-overlay { #{& + '-root'} { height: 0 } }` is evaluated
+- **THEN** output selector SHALL be `.el-overlay-root` (parent expanded)
+
+#### Scenario: Interpolation with multiple `&`
+
+- **WHEN** `.x { #{& + '__a'}, #{& + '__b'} { ... } }` is evaluated
+- **THEN** output SHALL be `.x__a, .x__b`
+
+#### Scenario: Nested interpolation
+
+- **WHEN** `.x { #{& + #{'-suffix'}} { ... } }` is evaluated
+- **THEN** output SHALL be `.x-suffix`
+
+#### Scenario: Literal `&` preserved for combine_selectors
+
+- **WHEN** `.x { & { color: red } }` is evaluated (no `#{`)
+- **THEN** output SHALL be `.x` (combine_selectors handles descendant)
+- **AND** `&` SHALL NOT be expanded during `eval_selector_str`
+
+#### Scenario: Mixed literal and interpolation `&`
+
+- **WHEN** `.x { & #{& + '-y'} { ... } }` is evaluated
+- **THEN** literal `&` preserved, interpolated `&` expanded
+- **AND** `combine_selectors` produces correct combined selector
+
+### Requirement: At-Root Hoisting Order
+
+`RuleBuilder::build` SHALL insert `@at-root` hoisted nodes after parent declarations but before nested child rules.
+
+#### Scenario: Parent has declarations and at-root children
+
+- **WHEN** `.x { color: red; @at-root { .y { ... } } .z { ... } }` is evaluated
+- **THEN** output order SHALL be: `.x { color: red }`, `.y { ... }`, `.x .z { ... }`
+
+#### Scenario: Parent has no declarations (pure mixin)
+
+- **WHEN** `.x { @at-root { .y { ... } } .z { ... } }` is evaluated
+- **THEN** output order SHALL be: `.y { ... }`, `.x .z { ... }`

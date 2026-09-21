@@ -1,46 +1,40 @@
-# Spec: CSS Output Format Normalization
+# Spec: CSS Output Formatting (EP Alignment)
 
 ## ADDED Requirements
 
-### Requirement: Named Colors Mapped to Hex
+### Requirement: color.mix Output Format
 
-The serializer SHALL output CSS using dart-sass-compatible color representations.
+`color.mix` builtin SHALL output `rgb(r%, g%, b%)` format for mixed colors, matching dart-sass behavior.
 
-#### Scenario: `white` becomes hex
+#### Scenario: Mix with weight 0.1
 
-- **WHEN** CSS variable or declaration value contains named color `white`
-- **THEN** serialized output SHALL use `#ffffff`
+- **WHEN** `color.mix(white, #409eff, 10%)` is evaluated
+- **THEN** output SHALL be `rgb(77.5294117647%, 88.5882352941%, 100%)` (percent format)
 
-#### Scenario: `black` becomes hex
+#### Scenario: Mix with legacy space fallback
 
-- **WHEN** CSS variable or declaration value contains named color `black`
-- **THEN** serialized output SHALL use `#000000`
+- **WHEN** `color.mix` result is in legacy RGB space
+- **THEN** output SHALL preserve `RgbPercent` mode (not revert to `Auto`)
 
-#### Scenario: `rgba(0, 0, 0, 0)` becomes `transparent`
+### Requirement: Selector Interpolation Parent Expansion
 
-- **WHEN** color expression evaluates to fully transparent black
-- **THEN** serialized output SHALL use `transparent`
+`eval_selector_str` SHALL expand `&` inside `#{...}` interpolation to parent selector value.
 
-### Requirement: CSS Function Names Use Standard Casing
+#### Scenario: BEM element interpolation
 
-#### Scenario: `scalex()` → `scaleX()`
+- **WHEN** `.el-component { #{& + '__element'} { ... } }` is evaluated
+- **THEN** output SHALL be `.el-component__element`
 
-- **WHEN** transform function `scalex(N)` appears in output
-- **THEN** serialized output SHALL be `scaleX(N)`
+#### Scenario: BEM modifier interpolation
 
-#### Scenario: `translatex()` → `translateX()`
+- **WHEN** `.el-component { #{& + '--modifier'} { ... } }` is evaluated
+- **THEN** output SHALL be `.el-component--modifier`
 
-- **WHEN** transform function `translatex(N)` appears in output
-- **THEN** serialized output SHALL be `translateX(N)`
+### Requirement: At-Root Hoisting Order
 
-#### Scenario: `rotatez()` → `rotateZ()`
+`RuleBuilder::build` SHALL place `@at-root` nodes after parent declarations, before nested children.
 
-- **WHEN** transform function `rotatez(N)` appears in output
-- **THEN** serialized output SHALL be `rotateZ(N)`
+#### Scenario: Standard at-root placement
 
-### Requirement: Keyframe Percentage NOT Escaped
-
-#### Scenario: `0%` in @keyframes not escaped
-
-- **WHEN** serializing `@keyframes` rule content with percentage `0%`
-- **THEN** output SHALL be `0%` (not `\30 0\%`)
+- **WHEN** `.x { color: red; @at-root { .y { } } .z { } }` is evaluated
+- **THEN** output order: `.x`, `.y`, `.x .z`
