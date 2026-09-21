@@ -76,10 +76,28 @@ impl RuleBuilder {
                     }
                 }
             }
-            // AtRootDirect：来自 mixin @ at-root，已展开最终选择器，直接放入不参与父选择器组合
+            // AtRootDirect：来自 mixin at-rule，部分选择器可能含字面 &（如 when() mixin 的 &.disabled）。
+            // 含 & 时需结合 RuleBuilder 当前 selector 展开（combine_selectors）；
+            // 不含 & 时（如 e() mixin 的 .el-backtop__icon）直接 push 不组合。
             CssNode::AtRootDirect(inner) => {
                 self.flush_decls();
-                self.result.push(*inner);
+                if let CssNode::Rule { selector, declarations, children } = *inner {
+                    match selector.contains('&') {
+                        true => {
+                            let combined = Evaluator::combine_selectors(&self.selector, &selector);
+                            self.result.push(CssNode::Rule {
+                                selector: combined,
+                                declarations,
+                                children,
+                            });
+                        }
+                        false => {
+                            self.result.push(CssNode::Rule { selector, declarations, children });
+                        }
+                    }
+                } else {
+                    self.result.push(*inner);
+                }
             }
             CssNode::Rule {
                 selector: child_sel,

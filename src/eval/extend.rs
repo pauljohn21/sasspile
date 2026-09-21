@@ -132,9 +132,9 @@ impl Evaluator {
                         CssNode::AtRoot(Self::apply_extends(kids, extends, module_selectors), q)
                     }
                     CssNode::AtRootDirect(inner) => {
-                        let mut inner_vec = vec![*inner.clone()];
+                        let inner_vec = vec![*inner];
                         let applied = Self::apply_extends(inner_vec, extends, module_selectors);
-                        CssNode::AtRootDirect(Box::new(applied.into_iter().next().unwrap()))
+                        CssNode::AtRootDirect(Box::new(applied.into_iter().next().expect("apply_extends returns one node per AtRootDirect")))
                     }
                     other => other,
                 }

@@ -73,10 +73,10 @@ fn hoist_recursive(nodes: Vec<CssNode>) -> (Vec<CssNode>, Vec<CssNode>) {
             }
             // AtRootDirect — 递归处理内部节点
             CssNode::AtRootDirect(inner) => {
-                let (extracted, remaining) = hoist_recursive(vec![*inner.clone()]);
+                let (extracted, remaining) = hoist_recursive(vec![*inner]);
                 imports.extend(extracted);
                 if remaining.len() == 1 {
-                    rest.push(CssNode::AtRootDirect(Box::new(remaining.into_iter().next().unwrap())));
+                    rest.push(CssNode::AtRootDirect(Box::new(remaining.into_iter().next().expect("hoist_recursive preserves AtRootDirect single-node invariant"))));
                 } else {
                     for node in remaining {
                         rest.push(CssNode::AtRootDirect(Box::new(node)));
