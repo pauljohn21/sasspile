@@ -76,25 +76,41 @@ impl RuleBuilder {
                     }
                 }
             }
-            // AtRootDirect：来自 mixin at-rule，部分选择器可能含字面 &（如 when() mixin 的 &.disabled）。
-            // 含 & 时需结合 RuleBuilder 当前 selector 展开（combine_selectors）；
-            // 不含 & 时（如 e() mixin 的 .el-backtop__icon）直接 push 不组合。
+            // AtRootDirect：来自 mixin at-rule，selector 可能含字面 &（如 when() mixin 的 &.disabled）。
+            // 含 & 时需结合 self.selector 展开（combine_selectors）；
+            // 不含 & 时直接 push 不组合，但子节点需与 self.selector 嵌套（EP BEM 链 m()→e() 语义）。
             CssNode::AtRootDirect(inner) => {
                 self.flush_decls();
                 if let CssNode::Rule { selector, declarations, children } = *inner {
-                    match selector.contains('&') {
-                        true => {
-                            let combined = Evaluator::combine_selectors(&self.selector, &selector);
-                            self.result.push(CssNode::Rule {
-                                selector: combined,
-                                declarations,
-                                children,
-                            });
-                        }
-                        false => {
-                            self.result.push(CssNode::Rule { selector, declarations, children });
-                        }
-                    }
+                    let resolved_selector = if selector.contains('&') {
+                        Evaluator::combine_selectors(&self.selector, &selector)
+                    } else {
+                        selector
+                    };
+                    // 子节点需与 resolved_selector 嵌套——combine child selectors with parent
+                    let nested_children: Vec<CssNode> = children
+                        .into_iter()
+                        .map(|child| match child {
+                            CssNode::Rule {
+                                selector: ref kid_sel,
+                                declarations: ref kid_decls,
+                                children: ref kid_kids,
+                            } => {
+                                let kid_combined = Evaluator::combine_selectors(&resolved_selector, kid_sel);
+                                CssNode::Rule {
+                                    selector: kid_combined,
+                                    declarations: kid_decls.clone(),
+                                    children: kid_kids.clone(),
+                                }
+                            }
+                            other => other,
+                        })
+                        .collect();
+                    self.result.push(CssNode::Rule {
+                        selector: resolved_selector,
+                        declarations,
+                        children: nested_children,
+                    });
                 } else {
                     self.result.push(*inner);
                 }
@@ -201,13 +217,7 @@ impl RuleBuilder {
                 });
             }
             false => match self.root_nodes.is_empty() {
-                true => {
-                    // NESTED @at-root FIX：self.selector 含 & 且存在非自身子节点时，
-                    // 将子节点嵌套进父 Rule 的 children —— dart-sass 嵌套 @at-root 语义。
-                    if self.selector.contains('&') {
-                        self.wrap_children_under_parent();
-                    }
-                }
+                true => {}
                 false => {
                     // 将 root_nodes 插入到父声明块之后、嵌套子规则之前——
                     // 与 dart-sass 语义一致：@at-root 规则在父声明块后立即输出，
@@ -243,37 +253,6 @@ impl RuleBuilder {
             },
         }
         self.result
-    }
-
-    /// 将 self.result 中首个匹配 self.selector 的 Rule 以外的所有兄弟节点
-    /// 收集为该 Rule 的 children。用于嵌套 @at-root 场景。
-    fn wrap_children_under_parent(&mut self) {
-        let selector = self.selector.clone();
-        // 查找首个匹配 selector 的 Rule 索引
-        let pidx = match self.result.iter().position(|node| {
-            matches!(node, CssNode::Rule { selector: sel, .. } if sel == &selector)
-        }) {
-            Some(p) => p,
-            None => return,
-        };
-        // 取出所有节点，分离父节点与其余节点
-        let all_nodes: Vec<CssNode> = std::mem::take(&mut self.result);
-        let mut parent: Option<CssNode> = None;
-        let mut siblings: Vec<CssNode> = Vec::new();
-        for (i, node) in all_nodes.into_iter().enumerate() {
-            if i == pidx {
-                parent = Some(node);
-            } else {
-                siblings.push(node);
-            }
-        }
-        // 重建 self.result：只保留父节点（附带 children），其余节点归入 children
-        if let Some(mut parent) = parent {
-            if let CssNode::Rule { children, .. } = &mut parent {
-                children.extend(siblings);
-            }
-            self.result = vec![parent];
-        }
     }
 }
 
