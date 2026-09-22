@@ -35,65 +35,138 @@ impl Evaluator {
     ) -> Vec<CssNode> {
         let span = crate::__tracing::info_span!("apply_extends", n_extends = extends.len());
         let _enter = span.enter();
+        // DEBUG: 打印所有 extends
+        for (ext, tgt, opt, _mod) in extends {
+            crate::__tracing::trace!(
+                target: "sasspile::extend_debug",
+                extender = %ext,
+                target = %tgt,
+                optional = %opt,
+                "extend entry"
+            );
+        }
+
+        // Phase 1: 构建 %placeholder → [extenders] 映射
+        let mut placeholder_groups: HashMap<String, Vec<String>> = HashMap::new();
+        for (extender, target, _optional, _module) in extends {
+            if target.trim().starts_with('%') {
+                placeholder_groups
+                    .entry(target.trim().to_string())
+                    .or_default()
+                    .push(extender.trim().to_string());
+            }
+        }
+        crate::__tracing::trace!(
+            target: "sasspile::extend_debug",
+            n_placeholder_groups = placeholder_groups.len(),
+            groups = ?placeholder_groups.keys().collect::<Vec<_>>(),
+            "placeholder groups"
+        );
+
+        // Phase 2: 过滤非 placeholder extends
+        let placeholder_targets: HashSet<String> = placeholder_groups.keys().cloned().collect();
+        let non_placeholder_extends: Vec<_> = extends
+            .iter()
+            .filter(|(_, target, _, _)| !placeholder_targets.contains(target.trim()))
+            .cloned()
+            .collect();
+
+        // Phase 3: 就地转换 %placeholder 规则为组合选择器，并处理其余节点
+        Self::transform_nodes(nodes, &placeholder_groups, &non_placeholder_extends, module_selectors)
+    }
+
+    /// 递归转换节点：
+    /// - `%placeholder { decls }` 规则（被 extend 的）→ `.ext1, .ext2 { decls }`
+    /// - `%placeholder { decls }` 规则（未被 extend 的）→ 移除
+    /// - 其他节点 → 保留，递归处理子节点
+    fn transform_nodes(
+        nodes: Vec<CssNode>,
+        placeholder_groups: &HashMap<String, Vec<String>>,
+        non_placeholder_extends: &[(String, String, bool, Option<PathBuf>)],
+        module_selectors: &HashMap<PathBuf, HashSet<String>>,
+    ) -> Vec<CssNode> {
+        // 构建 extender → 需要前置的占位符声明（仅单 extender 场景）
+        // 注意：extender key 是 eval_rule 时 env.get_selector() 的局部选择器（如 .child），
+        // 但 RuleBuilder 输出的规则选择器是完整组合形式（如 .parent .child）。
+        // 因此匹配时需要用"后缀匹配"：检查 extender 是否为 rule 选择器的后缀。
+        let mut extender_extra_decls: Vec<(String, Vec<CssNode>)> = Vec::new();
+        let mut placeholder_decls: HashMap<String, Vec<CssNode>> = HashMap::new();
+        Self::collect_placeholder_decls(&nodes, &mut placeholder_decls);
+        for (placeholder, extenders) in placeholder_groups {
+            if extenders.len() == 1 {
+                if let Some(decls) = placeholder_decls.get(placeholder) {
+                    extender_extra_decls.push((extenders[0].trim().to_string(), decls.clone()));
+                }
+            }
+        }
+
         nodes
             .into_iter()
-            .map(|node| {
-                match node {
-                    CssNode::Rule {
-                        selector,
-                        children,
-                        declarations,
-                    } => {
-                        crate::__tracing::debug!(
-                            target: "sasspile::extend",
-                            selector = %selector,
-                            "processing rule for extends"
-                        );
-                        // 用 AST 进行 extend——fold 累积扩展
-                        let sel_ast = extends.iter().fold(
+            .filter_map(|node| match node {
+                CssNode::Rule { selector, children, declarations } => {
+                    let sel = selector.trim();
+                    if sel.starts_with('%') {
+                        // 占位符规则
+                        match placeholder_groups.get(sel) {
+                            Some(extenders) if extenders.len() >= 2 && !declarations.is_empty() => {
+                                // 多 extender：生成组合选择器规则（在占位符位置）
+                                let combined_selector = extenders.join(", ");
+                                crate::__tracing::debug!(
+                                    target: "sasspile::extend",
+                                    combined = %combined_selector,
+                                    placeholder = %sel,
+                                    "placeholder multi-extend → combined rule"
+                                );
+                                Some(CssNode::Rule {
+                                    selector: combined_selector,
+                                    declarations,
+                                    children: vec![],
+                                })
+                            }
+                            Some(extenders) if extenders.len() == 1 => {
+                                // 单 extender：移除占位符规则，声明已合并到 extender 规则
+                                crate::__tracing::debug!(
+                                    target: "sasspile::extend",
+                                    extender = %extenders[0],
+                                    placeholder = %sel,
+                                    "placeholder single-extend → remove (merged into extender)"
+                                );
+                                None
+                            }
+                            _ => {
+                                // 未被 extend 或空声明 → 移除
+                                None
+                            }
+                        }
+                    } else {
+                        // 普通规则：处理非 placeholder extends
+                        let sel_ast = non_placeholder_extends.iter().fold(
                             parse_selector(&selector),
                             |sel_ast, (extender, target, _optional, module)| {
                                 let target_trimmed = target.trim();
                                 let extender_trimmed = extender.trim();
-                                // bogus 选择器检测
-                                match extender_trimmed.ends_with('+')
+                                if extender_trimmed.ends_with('+')
                                     || extender_trimmed.ends_with('>')
                                     || extender_trimmed.ends_with('~')
                                 {
-                                    true => return sel_ast,
-                                    false => {}
+                                    return sel_ast;
                                 }
-                                // 模块 scope 检查——仅当 module_selectors 非空且 module 在 map 中时执行
-                                // - module_selectors 为空：无模块化编译，跳过检查（全局匹配）
-                                // - module_path 不在 map 中：extend 来自入口文件（全局上下文），视为可见
-                                // - module_path 在 map 中：检查 target 在该模块 selector set 中的可见性
-                                 if let Some(module_path) = module {
+                                if let Some(module_path) = module {
                                     if let Some(set) = module_selectors.get(module_path) {
-                                        // 子串匹配：选择器字符串是组合形式（如 "%in-other.a"），
-                                        // 而 target 是子部分（如 "%in-other"），需用 iter+contains 做子串检查
-                                        let in_scope = set.iter().any(|sel| sel.contains(target_trimmed));
+                                        let in_scope = set.iter().any(|s| s.contains(target_trimmed));
                                         if !in_scope {
                                             return sel_ast;
                                         }
                                     }
-                                    // module_path 不在 module_selectors 中 → 入口文件/forwarded 上下文
-                                    // 视为全局可见（与 no-modules 编译语义一致）
                                 }
                                 let extendee = parse_selector(target_trimmed);
                                 let ext = parse_selector(extender_trimmed);
-                                let new_sel = selector_ops::extend_selector(&sel_ast, &extendee, &ext);
-                                crate::__tracing::debug!(
-                                    target: "sasspile::extend",
-                                    new_selector = %new_sel,
-                                    "extend applied"
-                                );
-                                new_sel
+                                selector_ops::extend_selector(&sel_ast, &extendee, &ext)
                             },
                         );
-                        // 递归处理子规则
-                        let children = Self::apply_extends(children, extends, module_selectors);
-                        // 移除未被继承的占位符选择器——filter + collect
-                        let selector = crate::css::selector_ast::Selector(
+                        // 递归处理子节点
+                        let children = Self::transform_nodes(children, placeholder_groups, non_placeholder_extends, module_selectors);
+                        let selector_str = crate::css::selector_ast::Selector(
                             sel_ast
                                 .0
                                 .into_iter()
@@ -108,38 +181,75 @@ impl Evaluator {
                                 .collect(),
                         )
                         .to_string();
-                        CssNode::Rule {
-                            selector,
-                            declarations,
-                            children,
+
+                        // 单 extender 场景：前置占位符声明
+                        // 后缀匹配：extender 如 ".child" 应匹配规则选择器 ".parent .child"
+                        let mut final_decls = declarations;
+                        let matched_extra = extender_extra_decls.iter().find_map(|(ext, decls)| {
+                            if decls.is_empty() {
+                                return None;
+                            }
+                            let ext_trimmed = ext.trim();
+                            if selector_str == ext_trimmed {
+                                return Some(decls);
+                            }
+                            // 后缀匹配：selector_str 以 " ext" 结尾（以组合器开头）
+                            // 如 ".parent .child" 以 " .child" 结尾
+                            for comb in [" ", ">", "+", "~"] {
+                                let suffix = format!("{comb}{ext_trimmed}");
+                                if selector_str.strip_suffix(&suffix).is_some() {
+                                    return Some(decls);
+                                }
+                            }
+                            None
+                        });
+                        if let Some(extra) = matched_extra {
+                            let mut merged = extra.clone();
+                            merged.extend(final_decls);
+                            final_decls = merged;
                         }
-                    }
-                    CssNode::AtRule {
-                        name,
-                        params,
-                        children,
-                        has_body: true,
-                    } => {
-                        let children = Self::apply_extends(children, extends, module_selectors);
-                        CssNode::AtRule {
-                            name,
-                            params,
+
+                        Some(CssNode::Rule {
+                            selector: selector_str,
+                            declarations: final_decls,
                             children,
-                            has_body: true,
-                        }
+                        })
                     }
-                    CssNode::AtRoot(kids, q) => {
-                        CssNode::AtRoot(Self::apply_extends(kids, extends, module_selectors), q)
-                    }
-                    CssNode::AtRootDirect(inner) => {
-                        let inner_vec = vec![*inner];
-                        let applied = Self::apply_extends(inner_vec, extends, module_selectors);
-                        CssNode::AtRootDirect(Box::new(applied.into_iter().next().expect("apply_extends returns one node per AtRootDirect")))
-                    }
-                    other => other,
                 }
+                CssNode::AtRule { name, params, children, has_body: true } => {
+                    let children = Self::transform_nodes(children, placeholder_groups, non_placeholder_extends, module_selectors);
+                    Some(CssNode::AtRule { name, params, children, has_body: true })
+                }
+                CssNode::AtRoot(kids, q) => {
+                    Some(CssNode::AtRoot(Self::transform_nodes(kids, placeholder_groups, non_placeholder_extends, module_selectors), q))
+                }
+                CssNode::AtRootDirect(inner) => {
+                    let inner_vec = vec![*inner];
+                    let applied = Self::transform_nodes(inner_vec, placeholder_groups, non_placeholder_extends, module_selectors);
+                    Some(CssNode::AtRootDirect(Box::new(applied.into_iter().next().expect("transform_nodes returns one node per AtRootDirect"))))
+                }
+                other => Some(other),
             })
             .collect()
+    }
+
+    /// 收集 CSS 树中所有 %placeholder 规则的声明（递归）
+    fn collect_placeholder_decls(nodes: &[CssNode], out: &mut HashMap<String, Vec<CssNode>>) {
+        for n in nodes {
+            match n {
+                CssNode::Rule { selector, children, declarations } => {
+                    let sel = selector.trim();
+                    if sel.starts_with('%') && children.is_empty() {
+                        out.insert(sel.to_string(), declarations.clone());
+                    }
+                    Self::collect_placeholder_decls(children, out);
+                }
+                CssNode::AtRule { children, .. } => Self::collect_placeholder_decls(children, out),
+                CssNode::AtRoot(kids, _) => Self::collect_placeholder_decls(kids, out),
+                CssNode::AtRootDirect(inner) => Self::collect_placeholder_decls(std::slice::from_ref(inner), out),
+                _ => {}
+            }
+        }
     }
 
     /// 检查未匹配的 extend target——非 optional 的未匹配 target 报错。

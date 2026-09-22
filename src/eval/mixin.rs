@@ -105,12 +105,21 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                 other => vec![other],
             })
             .collect();
-        // 回传 mixin body 内的 !global 变量写入到调用者 env
+        // 回传 mixin body 内的 !global 变量写入和 @extend 条目到调用者 env
         // mixin 内部局部变量不泄漏（通过 move 语义自然隔离）
+        // 注意：@extend 在 mixin body 内产生（如 EP 的 @include e() 中的 @extend %size），
+        // 必须将 returned_env.extends 传播到 result_env，否则 extend 条目丢失。
+        let result_env = returned_env
+            .get_extends()
+            .iter()
+            .fold(content_env, |acc, ext| {
+                let (extender, target, optional, module) = ext;
+                acc.add_extend(extender.clone(), target.clone(), *optional, module.clone())
+            });
         let result_env = returned_env
             .current_global_writes()
             .iter()
-            .fold(content_env, |acc, (k, v)| {
+            .fold(result_env, |acc, (k, v)| {
                 acc.add_global_write(k.clone(), v.clone())
             });
         Ok((css, result_env))
