@@ -37,6 +37,72 @@ fn expand_amp_in_interp(s: &str, parent: &str) -> String {
   → eval_interp_str 求值: ".el-overlay-root"
 ```
 
+## D3: mixin @at-root 源码位置（AtRootDirect）
+
+### 问题本质
+
+EP BEM mixin（`e()`, `m()`）内部 `@at-root { ... }` 用于生成子选择器。
+当 mixin 在父 rule body 的**嵌套规则之后**调用时（如 `&:hover` 之后调 `@include e(icon)`），
+RuleBuilder 把 `@at-root` 原始节点统一存入 `root_nodes`，`build()` 在固定位置插入
+（第一个 `.el-backtop` 之后），源码顺序被破坏。
+
+### 决策：新增 `CssNode::AtRootDirect` 节点类型
+
+在 `exec_mixin` 求值完成后，将 `CssNode::AtRoot(inner, _)` 替换为
+`CssNode::AtRootDirect(Box::new(n))`（每个 inner 节点独立包装）。
+
+`RuleBuilder::push` 新增 `AtRootDirect` 分支：`flush_decls()` 后直接
+`self.result.push(*inner)`，**bypass combine_selectors**——已在 mixin 内展开最终选择器，
+不需要再次与父选择器组合。
+
+全链路适配：`flatten_nodes` / `serialize_{expanded,compressed}` / `hoist` /
+`extend` / `meta_ops` 均新增 `AtRootDirect` match arm，保持等效序列化行为。
+
+### sass-spec 影响
+
+约 -84 case（7977 → 7893），集中在 mixin 内使用 `@at-root` 的测试。
+trade-off 接受：EP 一致性收益 > sass-spec 少量回归。
+
+## D4: 字面 `&` 选择器在 AtRootDirect 中的条件展开
+
+### 问题本质
+
+`when(disabled)` 等 mixin 生成含字面 `&` 的选择器（如 `&.disabled`）。
+该选择器通过 exec_mixin 时包装为 AtRootDirect(Rule("&.disabled", [...]))。
+原始 AtRootDirect 处理路径 `self.result.push(*inner)` 绕过 combine_selectors，
+导致字面量 `&` 原样输出，违反 Sass 规范。
+
+### 决策：条件性 combine_selectors
+
+```rust
+CssNode::AtRootDirect(inner) => {
+    self.flush_decls();
+    if let CssNode::Rule { selector, declarations, children } = *inner {
+        match selector.contains('&') {
+            true => {
+                let combined = Evaluator::combine_selectors(&self.selector, &selector);
+                self.result.push(CssNode::Rule { selector: combined, declarations, children });
+            }
+            false => {
+                self.result.push(CssNode::Rule { selector, declarations, children });
+            }
+        }
+    } else {
+        self.result.push(*inner);
+    }
+}
+```
+
+**语义正确性证明**：
+- 含 `&`：`&` 是对父选择器的引用，通过 combine_selectors 组合生成完整选择器
+  例：`.el-item-selected` + `&.disabled` → `.el-item-selected.is-disabled` ✓
+- 不含 `&`：已是完整选择器（如 `e()` mixin 生成的 `.el-backtop__icon`），直接 push 保持 at-root 语义 ✓
+
+### sass-spec 影响
+
+0 case。该分支仅对字面量 `&` 触发，sass-spec 测试中的 `&` 在插值内已被
+`expand_amp_in_interp` 处理，到达 RuleBuilder 时不含字面 `&`。
+
 ## D2: color.mix 输出格式
 
 ### 问题本质

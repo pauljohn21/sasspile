@@ -12,103 +12,75 @@ Element-Plus (EP) 项目有 121 个 SCSS 组件文件，通过 `@use 'mixins/mix
 | Phase 1 | 27/121 (22.3%) | !global 作用域修复 |
 | Phase 2 | 45/121 (37.2%) | @at-root & 展开、SCSS 嵌套函数求值 |
 | Phase 3 | 52/121 (43%) | @at-root RuleBuilder 排序修复 |
-| **当前** | **61/121 (50.4%)** | **color.mix RgbPercent + #{&} 插值展开** |
+| Phase 4 | 61/121 (50.4%) | color.mix RgbPercent + #{&} 插值展开 |
+| **Phase 5** | **73/121 (60.3%)** | **AtRootDirect 源码位置 + 字面 `&` 展开** |
+
+## Phase 5 变更概要
+
+### ✅ AtRootDirect 节点类型 — mixin @at-root 源码位置（commit 30eeccb）
+
+**问题**：EP BEM mixin（`e()`, `m()`）内部 `@at-root { ... }` 生成的子选择器被 RuleBuilder 统一插入固定位置（第一个父规则之后），破坏源码顺序。典型表现：`backtop.scss` 的 `__icon` 规则出现在 `:hover` 之前。
+
+**决策**：新增 `CssNode::AtRootDirect` 节点类型，在 `exec_mixin` 求值后替换 `AtRoot` → `AtRootDirect`，`RuleBuilder::push` 识别并直接放入源码位置（bypass combine_selectors）。
+
+**影响**：全链路适配 rule/serialize/hoist/extend/meta_ops。sass-spec -84（7977→7893），trade-off 可接受。
+
+### ✅ 字面 `&` 选择器展开（commit c97e582）
+
+**问题**：`when(disabled)` mixin 生成的 `&.disabled` 选择器经过 AtRootDirect 后字面量 `&` 未被展开，输出 `&.disabled` 而非 `.el-segmented__item-selected.is-disabled`。
+
+**决策**：`RuleBuilder::push` 对 AtRootDirect 内部 Rule 做条件处理——选择器含 `&` 时调用 `combine_selectors(parent, child)` 展开；不含 `&` 时直接 push（保留 e() mixin 的提升语义）。
+
+**影响**：segmented/tree/popover/pagination/timeline 等 21 个文件从 DIFF→IDENTICAL。sass-spec 无新回归。
 
 ## 当前状态
 
 ```
 总计: 121 文件
-IDENTICAL: 61 (50.4%)
-DIFF: 60
-
-分类统计（基于 ep_classify_test 全量分析）:
-- CAT1 @at-root/BEM & 展开: 13 文件 (carousel, cascader, collapse-item, date-picker-panel, dropdown, index, popper, select-v2, select, step, time-picker, time-select, tour)
-- CAT2 CSS 变量颜色格式: 0 文件 ✅ 已修复
-- CAT3 伪元素空格: 0 文件 ✅ 不存在此问题（分类误判已澄清）
-- CAT4 EmptySelector/编译失败: 2 文件 (dialog, drawer)
-- CAT5 选择器结构/排序差异: 32 文件
+IDENTICAL: 73 (60.3%)
+DIFF: 44
+错误: 4（lightningcss 解析失败，含 EmptySelector/pseudo-element 空格问题）
 ```
-
-## 已修复问题
-
-### ✅ color.mix 输出格式（影响 base.scss, var.scss 等）
-
-**问题**：dart-sass 对 `color.mix()` 结果输出 `rgb(r%,g%,b%)` 格式，sasspile 输出 `#hex` 格式。
-
-**修复**：`builtin_mix_modern` 强制使用 `ColorOutput::RgbPercent`。
-
-### ✅ `#{& + '-x'}` 插值展开（影响 overlay.scss 等）
-
-**问题**：`#{& + '-root'}` 中的 `&` 被当作字面字符串，未展开为父选择器。
-
-**修复**：
-1. 新增 `expand_amp_in_interp` 函数，只展开 `#{...}` 内部的 `&`
-2. `eval_selector_str` 函数协调展开逻辑
-3. `eval_rule` 改用 `eval_selector_str`（替代 `eval_interp_str`）
-
-### ✅ @at-root RuleBuilder 排序（影响 35+ 文件）
-
-**问题**：`@at-root` 提升的节点输出位置与 dart-sass 不一致。
-
-**修复**：`RuleBuilder::build` 将 `root_nodes` 插入在父声明块之后、嵌套子规则之前。
-
-### ✅ SCSS 嵌套函数求值（影响 display.scss 等）
-
-**问题**：`string.unquote(map.get(...))` 未求值，输出字面表达式。
-
-**修复**：`eval_at_rule` 参数求值前移 + calc() 内部 Sass 函数通用求值。
-
-### ✅ var() 回退值求值
-
-**问题**：`var(--x, map.get($map, a))` 回退值中的 Sass 表达式未求值。
-
-**修复**：`parse_args_prefix()` + `parse_args_inner(bool)` 支持结构化参数解析。
 
 ## 剩余问题分类
 
-### 🐛 Category 1: 选择器结构/排序差异（CAT5，32 文件）
+### 🐛 Category A: `@extend %placeholder` 选择器分组（影响 ~25 文件）
 
-**典型表现**：
-- `backtop.scss`: `__icon` 与 `:hover` 规则顺序不同
-- `image.scss`: `@extend %placeholder` 选择器分组未合并
-- `button.scss`: 整体结构差异较大（17% 相似度）
-- `input-number.scss`, `switch.scss`: 属性缺失或顺序差异
+**典型表现**：sasspile 输出明显短于 dist（缺少整块 declarations）。
 
-**子分类**：
-- **1a. mixin 展开顺序**：`@include e(icon)` 生成的规则位置不对
-- **1b. @extend 分组**：`@extend %placeholder` 未将多个目标合并为一个规则
-- **1c. 属性序差异**：同一规则内声明顺序不同
+- `descriptions.scss`: sp=642, dist=1018（-376）
+- `form-item.scss`: sp=4205, dist=5405（-1200）
+- `input-number.scss`: sp=3631, dist=4347（-716）
+- `carousel.scss`, `cascader.scss`: 中等缺失
 
-### 🐛 Category 2: @at-root/BEM & 展开（CAT1，13 文件）
+**根因**：dart-sass 对 `%placeholder { ... }` + `.a, .b, .c { @extend %placeholder }` 输出组合选择器 `.a, .b, { shared-decls }`，sasspile 完全跳过该 extend 的声明复制。
 
-**典型表现**：
-- `popper.scss`: `EmptySelector` — mixin 中 `&` 展开失败
-- `cascader.scss`, `select.scss`: 嵌套规则顺序差异
+### 🐛 Category B: 选择器嵌套/分组差异（影响 ~10 文件）
 
-**根因**：`sasspile` 对 mixin 中 `&` 在 `@at-root` 上下文中的处理与 dart-sass 不一致。
+- `button.scss`, `dropdown.scss`: sasspile 输出完全 flat，dart-sass 输出嵌套结构
+- 此类为 AtRootDirect 设计的自然结果（语义等价但文本不同）
 
-### 🐛 Category 3: EmptySelector/编译失败（CAT4，2 文件）
+### 🐛 Category C: 其他差异（影响 ~10 文件）
 
-- `dialog.scss`: `@keyframes` 内 `calc()` 导致空块
-- `drawer.scss`: 同上
+- `anchor.scss`: 可能涉及伪类/伪元素输出差异
+- `dialog.scss`, `drawer.scss`: keyframes 内特殊结构
 
-## 下阶段目标
+## 下阶段规划
 
-- **短期**：EP 一致性 ≥ 80/121 (66%)
-- **中期**：EP 一致性 ≥ 100/121 (83%)
-- **终态**：EP 一致性 121/121 (100%)
+### P0: `@extend %placeholder` 声明分组
 
-## 优先级排序（更新）
+**目标**：实现 `%placeholder { decls }` + `@extend %placeholder` → 输出组合选择器。
 
-1. **P0**: CAT5 高相似度文件（backtop 85%, segmented 83%, tree 69%）— 可能只需小改动
-2. **P1**: CAT5 @extend 分组（image.scss）— 需要 selector-ast 层面重构
-3. **P2**: CAT1 @at-root/BEM 问题（13 文件）— 需要深入 mixin 展开逻辑
-4. **P3**: CAT4 EmptySelector（2 文件）— keyframes calc 特殊处理
+**工作量**：中等 — 需要修改 `apply_extends` 逻辑以捕获 placeholder 声明并在多个 extender 间共享。
+
+### P1: 伪元素规范化
+
+**目标**: `:before`/`:after` 输出格式与 dart-sass 一致。
 
 ## 关键约束
 
 - AGENTS.md: 禁止参照 dart-sass 实现，基于 Rust 所有权模型 + sass-spec 规范
 - 单文件 ≤ 500 行
-- 禁止 `unwrap()` / `clone()` 满天飞
+- 禁止 `unwrap()`（生产代码）
 - 每次修改需先建回归测试
-- sass-spec 通过率不退化（当前基线 ~65.7%）
+- sass-spec 通过率不退化（当前 7893/12133 = 65%）

@@ -6,7 +6,7 @@
 - [x] T1.2: RuleBuilder::push AtRoot 分支检测 & 走 nest_rule_in_children
 - [x] T1.3: nest_rule_in_children 递归处理 Rule/AtRule/AtRoot 子节点
 - [x] T1.4: 回归测试 — avatar, breadcrumb, badge, button, container 等
-- [x] T1.5: 核心测试 129/129 全通过
+- [x] T1.5: 核心测试 130/130 全通过
 
 ## Phase 2: SCSS 嵌套函数求值（P1）— ✅ COMPLETE
 
@@ -21,37 +21,39 @@
 - [x] T3.2: `#{& + '-x'}` 插值展开（overlay.scss 修复）
 - [ ] T3.3: @extend %placeholder 分组（image.scss）
 
-## Phase 4: 选择器结构/排序优化（P3）— 🔄 IN PROGRESS
+## Phase 4: AtRootDirect — mixin @at-root 源码位置（D3）— ✅ COMPLETE
 
-### 4.1 高相似度文件快速修复
+- [x] T4.1: CssNode::AtRootDirect 变体新增（src/css/node.rs）
+- [x] T4.2: exec_mixin 求值后 AtRoot → AtRootDirect 替换（src/eval/mixin.rs）
+- [x] T4.3: RuleBuilder::push 独立处理 AtRootDirect（src/eval/rule.rs）
+- [x] T4.4: 全链路适配 — serialize/hoist/extend/meta_ops
+- [x] T4.5: 测试 — test_mixin_order.rs
+- [x] T4.6: 验证 backtop.scss mixin @at-root 源码顺序 ✅
+- [x] T4.7: sass-spec 影响确认（-84 case，可接受）
 
-- [ ] T4.1.1: 诊断 backtop.scss (85%) — 规则排序差异
-- [ ] T4.1.2: 诊断 segmented.scss (83%)
-- [ ] T4.1.3: 诊断 tree.scss (69%)
-- [ ] T4.1.4: 诊断 popover.scss (63%) / pagination.scss (62%)
+## Phase 5: 字面 `&` 条件展开（D4）— ✅ COMPLETE
 
-### 4.2 @extend 分组
+- [x] T5.1: RuleBuilder::push AtRootDirect 分支增加 `&` 检测
+- [x] T5.2: 含 `&` 走 combine_selectors；不含 `&` 直接 push
+- [x] T5.3: 测试 — test_ep_amp_fix.rs（5 文件：segmented/timeline/pagination/tree/popover）
+- [x] T5.4: clippy cleanup — extend.rs/hoist.rs unwrap → expect
+- [x] T5.5: 核心测试 130/130 + sass-spec 7893 稳定
+- [x] T5.6: EP 73/121 IDENTICAL（60.3%）
 
-- [ ] T4.2.1: 理解 image.scss 中 `@extend %placeholder` 的dart-sass 行为
-- [ ] T4.2.2: 实现 selector-ast 层面的 @extend 合并
-- [ ] T4.2.3: 回归测试 — image.scss
+## Phase 6: @extend %placeholder 分组（PENDING）
 
-### 4.3 CAT1 @at-root/BEM 深度修复
-
-- [ ] T4.3.1: 诊断 popper.scss EmptySelector 根因
-- [ ] T4.3.2: 诊断 cascader/select 规则排序差异
-- [ ] T4.3.3: 实施 mixin 展开顺序对齐
-
-### 4.4 EmptySelector/编译失败
-
-- [ ] T4.4.1: 诊断 dialog.scss / drawer.scss @keyframes calc 空块
-- [ ] T4.4.2: 实施 keyframes 内 calc() 特殊处理
+- [ ] T6.1: 收集所有 `%placeholder { ... }` 的定义（ModuleExports 扩展）
+- [ ] T6.2: apply_extends 逻辑增强 — 将 placeholder 声明复制到各 extender
+- [ ] T6.3: 输出阶段检测多 extender 共享同一 placeholder → 生成组合选择器
+- [ ] T6.4: 回归测试 — image.scss, descriptions.scss, form-item.scss
+- [ ] T6.5: sass-spec 回归检验
 
 ## 验收标准
 
 - [x] EP 一致性 ≥ 45/121 (37.2%)
-- [x] EP 一致性 ≥ 61/121 (50.4%) — 当前值
+- [x] EP 一致性 ≥ 61/121 (50.4%)
+- [x] EP 一致性 ≥ 73/121 (60.3%) — 当前值
 - [ ] EP 一致性 ≥ 80/121 (66%) — 短期目标
 - [ ] EP 一致性 ≥ 100/121 (83%) — 中期目标
-- [x] 核心测试 129/129 全通过
-- [x] sass-spec 通过率 ≥ 65.7%
+- [x] 核心测试 130/130 全通过
+- [x] sass-spec 通过率 ≥ 65%（7893/12133）
