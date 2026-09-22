@@ -16,6 +16,8 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
     let selector = normalize_attr_selectors(selector);
     // 处理相邻复合选择器（[a]b → [a] b）
     let selector = normalize_adjacent_compounds(&selector);
+    // 清理尾随逗号——SCSS 插值可能产生 ".foo, " 形式的选择器字符串
+    let selector = selector.trim_end_matches(|c: char| c == ',' || c == ' ').to_string();
     // 组合器验证——无效组合器返回空字符串
     if has_bogus_combinators(&selector) {
         return String::new();

@@ -92,16 +92,22 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         };
         // 求值 mixin body——move mixin_env，捕获返回的 env 用于读取 !global 写入
         let (css, returned_env) = Self::eval_nodes(&mixin.body, mixin_env)?;
-        // EP BEM FIX：mixin 内部 @ at-root（如 e(), m()）生成的节点位置应在源码位置，
+        // EP BEM FIX：mixin 内部 @at-root（如 e(), m()）生成的节点位置应在源码位置，
         // 而非 RuleBuilder 默认的固定位置。将 AtRoot 节点替换为标记过的节点，
         // 由 RuleBuilder::push 识别并直接放入 result 源码位置。
+        // BUG FIX：Declaration 节点不能包裹在 AtRootDirect 中——AtRootDirect 在
+        // flatten_nodes 中会无条件展开内部节点，导致 Declaration 泄漏到顶层转为裸声明
+        // （无效 CSS）。Declaration 保持原样，让 RuleBuilder::push 正常累积到 current_decls。
         let css: Vec<CssNode> = css
             .into_iter()
             .flat_map(|node| match node {
                 CssNode::AtRoot(inner, _) => inner
                     .into_iter()
-                    .map(|n| CssNode::AtRootDirect(Box::new(n)))
-                    .collect(),
+                    .flat_map(|n| match n {
+                        CssNode::Declaration { .. } => vec![n],
+                        other => vec![CssNode::AtRootDirect(Box::new(other))],
+                    })
+                    .collect::<Vec<_>>(),
                 other => vec![other],
             })
             .collect();

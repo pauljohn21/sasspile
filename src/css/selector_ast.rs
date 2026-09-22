@@ -114,37 +114,41 @@ pub enum Combinator {
 
 impl fmt::Display for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let parts: Vec<String> = self.0.iter().map(std::string::ToString::to_string).collect();
+        let parts: Vec<String> = self
+            .0
+            .iter()
+            .map(std::string::ToString::to_string)
+            .filter(|s| !s.is_empty())
+            .collect();
         write!(f, "{}", parts.join(", "))
     }
 }
 
 impl fmt::Display for ComplexSelector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut has_output = false;
         for (i, (comb, compound)) in self.compounds.iter().enumerate() {
             let is_empty = compound.0.is_empty();
-            match (i, comb) {
-                (0, Some(c)) if is_empty => match c {
-                    // 前导组合器 + 空 compound：只写组合器（如 `+`）
-                    Combinator::Descendant => {}
-                    Combinator::Child => write!(f, ">")?,
-                    Combinator::Adjacent => write!(f, "+")?,
-                    Combinator::Sibling => write!(f, "~")?,
-                },
-                (0, Some(c)) => match c {
-                    Combinator::Descendant => write!(f, " ")?,
-                    Combinator::Child => write!(f, "> ")?,
-                    Combinator::Adjacent => write!(f, "+ ")?,
-                    Combinator::Sibling => write!(f, "~ ")?,
-                },
-                (0, None) => {}
-                (_, Some(Combinator::Descendant) | None) => write!(f, " ")?,
-                (_, Some(Combinator::Child)) => write!(f, " > ")?,
-                (_, Some(Combinator::Adjacent)) => write!(f, " + ")?,
-                (_, Some(Combinator::Sibling)) => write!(f, " ~ ")?,
+            if !is_empty && has_output {
+                // 已有输出 + 非空 compound：写入组合器分隔符
+                match comb {
+                    Some(Combinator::Descendant) | None => write!(f, " ")?,
+                    Some(Combinator::Child) => write!(f, " > ")?,
+                    Some(Combinator::Adjacent) => write!(f, " + ")?,
+                    Some(Combinator::Sibling) => write!(f, " ~ ")?,
+                }
+            } else if !is_empty && !has_output && i > 0 {
+                // 首个非空 compound 但位置 > 0：仅写入非后代组合器（如 `>`）
+                match comb {
+                    Some(Combinator::Descendant) | None => {} // 无前导空格
+                    Some(Combinator::Child) => write!(f, ">")?,
+                    Some(Combinator::Adjacent) => write!(f, "+")?,
+                    Some(Combinator::Sibling) => write!(f, "~")?,
+                }
             }
             if !is_empty {
                 write!(f, "{compound}")?;
+                has_output = true;
             }
         }
         Ok(())

@@ -480,6 +480,7 @@ cargo test --test common_test     # 5 个
 cargo test --test interp_test     # 15 个
 cargo test --test bs_spec -- --nocapture    # 15 个
 cargo test --test ep_full -- --nocapture    # 121 个
+cargo test --test ep_normalized_test -- --nocapture  # 121 个（与 EP baseline 对比）
 
 # sass-spec 全量统计（约 4 分钟）
 RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture
@@ -494,6 +495,7 @@ SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 **通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
 **sass-spec 基线**：8003/12133 = 66%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
+**ep_normalized**：73/121 = 60.3%（Phase 7 目标 121/121）
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
@@ -532,6 +534,16 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+- **ep-consistency-boost**（2026-09-22）：EP 一致性 Phase 1-6 — AtRootDirect 优化、@at-root/@content 顺序、@extend %placeholder 选择器分组（含单/多 extender + mixin 传播增量快照 + 后缀匹配 + 指数膨胀 bug）、eval_at_rule @media 参数提前求值、var() fallback 求值、calc() 内函数求值 — EP 一致性 45/121→73/121 (+28)，sass-spec 7975→8003 (+28)
+
+## 🔄 活跃 OpenSpec 变更
+
+| Change | 状态 | 目标 |
+|--------|------|------|
+| `ep-consistency-phase7-all-diff-fix` | 规划中 (4/4 artifacts) | EP 一致性 73/121→121/121，5 capability：伪元素格式、嵌套 placeholder、keyframes、模块变量、选择器组合并 |
+
+更早的归档记录详见 `openspec/changes/archive/` 目录。
+
 - **math-clamp-comparable-error**（2026-09-19）：clamp 单位转换+min>max 回退、max/min 单位兼容性前置检查、ops.rs div 倒数单位（1/1px→1/px）— math 466→472 (+6)
 - **calc-round-infinity-fix**（2026-09-13）：CSS round() 策略取整（up/down/nearest/to-zero + step）+ 三角函数 infinity/NaN 输入支持 + validate_single_number 特殊值字符串接受 — 7837→7883 (+46 net)
 - **tokio-internal-async**（2026-09-13）：对内异步对外同步架构 — 引入 tokio runtime (block_on 桥接) + 清理 Reactor 死字段 (14→9) + 删除 6 死类型 (ReactorIO/Warning/IoRecord/ModuleCacheEntry/DefaultReactorIO/MockReactorIO) + Parser 回归 Iterator — sass-spec 7444→7592 (+148)
