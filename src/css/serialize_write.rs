@@ -48,7 +48,9 @@ impl Serializer {
             }
             // AtRootDirect 在 flatten 中已展开，此处兜底：直接序列化内部节点
             CssNode::AtRootDirect(inner) => {
-                Self::serialize_expanded(&[((**inner).clone(), 0)], depth);
+                let inner_css = Self::serialize_expanded(&[((**inner).clone(), 0)], depth);
+                let trimmed = inner_css.strip_suffix('\n').unwrap_or(&inner_css);
+                buf.push_str(trimmed);
             }
             CssNode::Rule {
                 selector,

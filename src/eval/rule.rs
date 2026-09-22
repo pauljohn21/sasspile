@@ -201,7 +201,13 @@ impl RuleBuilder {
                 });
             }
             false => match self.root_nodes.is_empty() {
-                true => {}
+                true => {
+                    // NESTED @at-root FIX：self.selector 含 & 且存在非自身子节点时，
+                    // 将子节点嵌套进父 Rule 的 children —— dart-sass 嵌套 @at-root 语义。
+                    if self.selector.contains('&') {
+                        self.wrap_children_under_parent();
+                    }
+                }
                 false => {
                     // 将 root_nodes 插入到父声明块之后、嵌套子规则之前——
                     // 与 dart-sass 语义一致：@at-root 规则在父声明块后立即输出，
@@ -237,6 +243,37 @@ impl RuleBuilder {
             },
         }
         self.result
+    }
+
+    /// 将 self.result 中首个匹配 self.selector 的 Rule 以外的所有兄弟节点
+    /// 收集为该 Rule 的 children。用于嵌套 @at-root 场景。
+    fn wrap_children_under_parent(&mut self) {
+        let selector = self.selector.clone();
+        // 查找首个匹配 selector 的 Rule 索引
+        let pidx = match self.result.iter().position(|node| {
+            matches!(node, CssNode::Rule { selector: sel, .. } if sel == &selector)
+        }) {
+            Some(p) => p,
+            None => return,
+        };
+        // 取出所有节点，分离父节点与其余节点
+        let all_nodes: Vec<CssNode> = std::mem::take(&mut self.result);
+        let mut parent: Option<CssNode> = None;
+        let mut siblings: Vec<CssNode> = Vec::new();
+        for (i, node) in all_nodes.into_iter().enumerate() {
+            if i == pidx {
+                parent = Some(node);
+            } else {
+                siblings.push(node);
+            }
+        }
+        // 重建 self.result：只保留父节点（附带 children），其余节点归入 children
+        if let Some(mut parent) = parent {
+            if let CssNode::Rule { children, .. } = &mut parent {
+                children.extend(siblings);
+            }
+            self.result = vec![parent];
+        }
     }
 }
 
