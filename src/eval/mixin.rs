@@ -108,14 +108,16 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         // 回传 mixin body 内的 !global 变量写入和 @extend 条目到调用者 env
         // mixin 内部局部变量不泄漏（通过 move 语义自然隔离）
         // 注意：@extend 在 mixin body 内产生（如 EP 的 @include e() 中的 @extend %size），
-        // 必须将 returned_env.extends 传播到 result_env，否则 extend 条目丢失。
-        let result_env = returned_env
-            .get_extends()
-            .iter()
-            .fold(content_env, |acc, ext| {
-                let (extender, target, optional, module) = ext;
-                acc.add_extend(extender.clone(), target.clone(), *optional, module.clone())
-            });
+        // 必须将 returned_env 中新增的 extend 条目传播到 result_env。
+        // BUG FIX：不能 fold 整个 returned_env.get_extends()，因为其中已包含 content_env 原有的条目。
+        // 否则多次 @include 会导致 extends 指数级膨胀（2^n 增长）。
+        // 只取 returned_env 比 content_env 多出的部分。
+        let base_extends_len = content_env.get_extends().len();
+        let new_extends = &returned_env.get_extends()[base_extends_len..];
+        let result_env = new_extends.iter().fold(content_env, |acc, ext| {
+            let (extender, target, optional, module) = ext;
+            acc.add_extend(extender.clone(), target.clone(), *optional, module.clone())
+        });
         let result_env = returned_env
             .current_global_writes()
             .iter()
