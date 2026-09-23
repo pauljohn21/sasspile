@@ -110,7 +110,16 @@ impl Evaluator {
                         match placeholder_groups.get(sel) {
                             Some(extenders) if extenders.len() >= 2 && !declarations.is_empty() => {
                                 // 多 extender：生成组合选择器规则（在占位符位置）
-                                let combined_selector = extenders.join(", ");
+                                // 关键：trim 每个 extender 的尾随逗号和空白——selector 归一化可能产生 ".foo," 形式
+                                // 排序：dart-sass 按逆文档顺序输出（后 extend 的先出现）
+                                let mut cleaned: Vec<String> = extenders
+                                    .iter()
+                                    .map(|e| e.trim().trim_end_matches(',').trim())
+                                    .filter(|e| !e.is_empty())
+                                    .map(String::from)
+                                    .collect();
+                                cleaned.reverse();
+                                let combined_selector = cleaned.join(",");
                                 crate::__tracing::debug!(
                                     target: "sasspile::extend",
                                     combined = %combined_selector,
@@ -184,12 +193,13 @@ impl Evaluator {
 
                         // 单 extender 场景：前置占位符声明
                         // 后缀匹配：extender 如 ".child" 应匹配规则选择器 ".parent .child"
+                        // 注意：ext 可能含尾随逗号（如 ".child,"），需 trim 后匹配
                         let mut final_decls = declarations;
                         let matched_extra = extender_extra_decls.iter().find_map(|(ext, decls)| {
                             if decls.is_empty() {
                                 return None;
                             }
-                            let ext_trimmed = ext.trim();
+                            let ext_trimmed = ext.trim().trim_end_matches(',').trim();
                             if selector_str == ext_trimmed {
                                 return Some(decls);
                             }

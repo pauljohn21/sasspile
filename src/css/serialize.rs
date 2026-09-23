@@ -84,6 +84,14 @@ impl Serializer {
                     }
                     let has_non_rule_children =
                         children.iter().any(|c| !matches!(c, CssNode::Rule { .. }));
+                    crate::__tracing::debug!(
+                        target: "sasspile::flatten",
+                        selector = %selector,
+                        n_children = children.len(),
+                        has_non_rule = has_non_rule_children,
+                        child_types = ?children.iter().map(|c| std::mem::discriminant(c)).collect::<Vec<_>>(),
+                        "process_node Rule"
+                    );
                     let flat = Serializer::flatten_children(selector, children, gid);
                     match has_non_rule_children {
                         true => {
@@ -161,7 +169,7 @@ impl Serializer {
     }
 
     pub(super) fn flatten_children(
-        _parent: &str,
+        parent: &str,
         children: &[CssNode],
         group_id: usize,
     ) -> Vec<(CssNode, usize)> {
@@ -189,6 +197,46 @@ impl Serializer {
                         .into_iter()
                         .chain(Self::flatten_children(selector, nested, group_id))
                         .collect::<Vec<_>>()
+                }
+                // AtRootDirect：嵌套在 Rule children 中时需展开内部节点并组合父选择器
+                // 场景：@at-root mixin (m/e 系列) 生成的 AtRootDirect 嵌套在父 Rule 下
+                CssNode::AtRootDirect(inner) => {
+                    if let CssNode::Rule { selector, declarations, children: nested } = inner.as_ref() {
+                        // 组合父选择器与 AtRootDirect 内部选择器
+                        let combined = if selector.contains('&') {
+                            selector.replace('&', parent)
+                        } else if parent.is_empty() || selector.starts_with(':') {
+                            // 空 parent 或以伪类开头 → 直接拼接
+                            format!("{parent}{selector}")
+                        } else {
+                            format!("{parent} {selector}")
+                        };
+                        let combined = crate::css::selector::sanitize_selector(&combined);
+                        crate::__tracing::debug!(
+                            target: "sasspile::flatten",
+                            parent = %parent,
+                            inner_sel = %selector,
+                            combined = %combined,
+                            "AtRootDirect nested → combined"
+                        );
+                        let decls: Vec<(CssNode, usize)> = if declarations.is_empty() {
+                            Vec::new()
+                        } else {
+                            vec![(
+                                CssNode::Rule {
+                                    selector: combined.clone(),
+                                    declarations: declarations.clone(),
+                                    children: vec![],
+                                },
+                                group_id,
+                            )]
+                        };
+                        let nested_flat = Self::flatten_children(&combined, nested, group_id);
+                        decls.into_iter().chain(nested_flat).collect::<Vec<_>>()
+                    } else {
+                        // 非 Rule 内部节点：直接传递
+                        vec![(child.clone(), group_id)]
+                    }
                 }
                 other => vec![(other.clone(), group_id)],
             })

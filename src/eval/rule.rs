@@ -78,42 +78,10 @@ impl RuleBuilder {
             }
             // AtRootDirect：来自 mixin at-rule，selector 可能含字面 &（如 when() mixin 的 &.disabled）。
             // 含 & 时需结合 self.selector 展开（combine_selectors）；
-            // 不含 & 时直接 push 不组合，但子节点需与 self.selector 嵌套（EP BEM 链 m()→e() 语义）。
+            // 不含 & 时也需与 self.selector 嵌套——内层 @at-root 需继承外层 EP BEM 链前缀。
             CssNode::AtRootDirect(inner) => {
                 self.flush_decls();
-                if let CssNode::Rule { selector, declarations, children } = *inner {
-                    let resolved_selector = if selector.contains('&') {
-                        Evaluator::combine_selectors(&self.selector, &selector)
-                    } else {
-                        selector
-                    };
-                    // 子节点需与 resolved_selector 嵌套——combine child selectors with parent
-                    let nested_children: Vec<CssNode> = children
-                        .into_iter()
-                        .map(|child| match child {
-                            CssNode::Rule {
-                                selector: ref kid_sel,
-                                declarations: ref kid_decls,
-                                children: ref kid_kids,
-                            } => {
-                                let kid_combined = Evaluator::combine_selectors(&resolved_selector, kid_sel);
-                                CssNode::Rule {
-                                    selector: kid_combined,
-                                    declarations: kid_decls.clone(),
-                                    children: kid_kids.clone(),
-                                }
-                            }
-                            other => other,
-                        })
-                        .collect();
-                    self.result.push(CssNode::Rule {
-                        selector: resolved_selector,
-                        declarations,
-                        children: nested_children,
-                    });
-                } else {
-                    self.result.push(*inner);
-                }
+                self.push_atroot_direct(*inner);
             }
             CssNode::Rule {
                 selector: child_sel,
@@ -200,6 +168,75 @@ impl RuleBuilder {
             }
         }
         self
+    }
+
+    /// 处理 AtRootDirect 节点：组合选择器 + 递归处理嵌套子节点。
+    ///
+    /// 核心语义：
+    /// 1. AtRootDirect 的 selector 与 self.selector 组合（& 替换或嵌套）
+    /// 2. 父 Rule 仅含自身声明，不含子节点
+    /// 3. 子节点（含嵌套 AtRootDirect）生成独立 Rule，selector 与 resolved 组合
+    fn push_atroot_direct(&mut self, inner: CssNode) {
+        match inner {
+            CssNode::Rule { selector, declarations, children } => {
+                // 关键：trim 尾随逗号——SCSS @at-root mixin 的选择器可能有 "&--large," 形式
+                let clean_sel = selector.trim().trim_end_matches(',').trim();
+                let resolved_selector = if clean_sel.contains('&') {
+                    let combined = Evaluator::combine_selectors(&self.selector, clean_sel);
+                    combined.trim().trim_end_matches(',').trim().to_string()
+                } else if clean_sel.starts_with(':') || clean_sel.starts_with('[') {
+                    // 伪类/属性选择器：直接拼接（后缀型，需依附于父选择器）
+                    format!("{}{}", self.selector, clean_sel)
+                } else {
+                    // 普通类选择器（如 e() mixin 输出的 .el-button__inner）：已是完整路径，直接使用
+                    clean_sel.to_string()
+                };
+                crate::__tracing::debug!(
+                    target: "sasspile::rule_builder",
+                    self_sel = %self.selector,
+                    atroot_sel = %selector,
+                    resolved = %resolved_selector,
+                    n_children = children.len(),
+                    "AtRootDirect push"
+                );
+                // 组合后的父 Rule（仅含自身声明）
+                self.result.push(CssNode::Rule {
+                    selector: resolved_selector.clone(),
+                    declarations,
+                    children: vec![],
+                });
+                // 子节点：AtRootDirect 需展开并组合，Rule 直接嵌套
+                for child in children {
+                    match child {
+                        CssNode::Rule { selector: kid_sel, declarations: kid_decls, children: kid_kids } => {
+                            // kid_sel 也可能含尾随逗号——trim 后组合
+                            let clean_kid = kid_sel.trim().trim_end_matches(',').trim();
+                            let kid_combined = Evaluator::combine_selectors(&resolved_selector, clean_kid);
+                            self.result.push(CssNode::Rule {
+                                selector: kid_combined,
+                                declarations: kid_decls,
+                                children: kid_kids,
+                            });
+                        }
+                        CssNode::AtRootDirect(nested_inner) => {
+                            // 嵌套 AtRootDirect：用 resolved_selector 作为新的 self.selector 递归处理
+                            let orig_selector = self.selector.clone();
+                            self.selector = resolved_selector.clone();
+                            self.push_atroot_direct(*nested_inner);
+                            self.selector = orig_selector;
+                        }
+                        other => {
+                            // 其他节点（Declaration 等）：直接 push
+                            self.result.push(other);
+                        }
+                    }
+                }
+            }
+            other => {
+                // 非 Rule 内部节点：直接 push
+                self.result.push(other);
+            }
+        }
     }
 
     /// 消费构建器，返回最终节点列表。
