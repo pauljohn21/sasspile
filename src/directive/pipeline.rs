@@ -121,90 +121,199 @@ fn parse_include_sig(s: &str) -> (String, Vec<String>) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// dispatch — match 替代 if/else, 函数式 fold 替代 mutate 循环
+// finalize — 闭合 block 时展开 body (取出 state.collecting, 重置为 None)
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn finalize_collecting(state: &mut CompileState) -> Vec<String> {
+    let collecting = std::mem::take(&mut state.collecting);
+    match collecting {
+        Collecting::Each { var_name, items, body } => {
+            let mut output = Vec::new();
+            let var_name = &var_name;
+            for item in items {
+                for body_line in &body {
+                    output.push(body_line.replace(var_name, &item));
+                }
+            }
+            output
+        }
+        Collecting::For { var_name, values, body } => {
+            let mut output = Vec::new();
+            let var_name = &var_name;
+            for v in values {
+                for body_line in &body {
+                    output.push(body_line.replace(var_name, &v));
+                }
+            }
+            output
+        }
+        Collecting::If { body, branch_taken } => {
+            if branch_taken { body } else { vec![] }
+        }
+        Collecting::MixinDef { params } => {
+            if let Some(name) = &state.current_mixin_name {
+                if let Some(mixin_def) = state.scope.mixins.get_mut(name) {
+                    mixin_def.params = params;
+                }
+            }
+            state.current_mixin_name = None;
+            vec![]
+        }
+        Collecting::None => vec![],
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// expand_mixin — 查询 mixin_def, fold 参数替换
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn expand_mixin(mixin_def: &MixinDef, args: &[String]) -> Vec<String> {
+    let defaults: Vec<Option<&str>> = mixin_def.params.iter()
+        .map(|(_, d)| d.as_deref()).collect();
+    mixin_def.body.iter().map(|body_token| {
+        mixin_def.params.iter().enumerate().fold(body_token.clone(), |mut acc, (i, (p_name, _))| {
+            let replacement = args.get(i)
+                .map(|s| s.as_str())
+                .or_else(|| defaults.get(i).copied().flatten());
+            if let Some(r) = replacement {
+                acc = acc.replace(p_name, r);
+            }
+            acc
+        })
+    }).collect()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// dispatch — if/else 链 + 状态机 (scan_map 驱动)
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
     let _span = info_span!("dispatch_pass", phase = ?state.phase, token = %token).entered();
-    // 剥离前导空白以支持缩进格式
     let t = token.trim();
 
-    match t {
-        // @mixin 定义: 消费 token, 存入 state (含 body), 输出空
-        t if t.starts_with("@mixin ") => {
-            if let Some((name, params)) = parse_mixin_sig(&t[7..]) {
-                // 提取 `{...}` body；若找不到，从 `)` 后取到字符串末尾作为 body
-                let body = t.find('{').and_then(|start| {
-                    t.rfind('}').map(|end| t[start..=end].to_string())
-                }).unwrap_or_default();
-                state.scope.mixins.insert(name, MixinDef { params, body: vec![body] });
-            }
-            vec![]
-        }
-        // @include: 查 state, fold 展开参数, 输出展开后 token
-        t if t.starts_with("@include ") => {
-            let (name, args) = parse_include_sig(&t[9..]);
-            state.scope.mixins.get(&name).map(|mixin_def| {
-                // 默认参数值 (params[i].1)
-                let defaults: Vec<Option<&str>> = mixin_def.params.iter()
-                    .map(|(_, d)| d.as_deref()).collect();
-                mixin_def.body.iter().map(|body_token| {
-                    mixin_def.params.iter().enumerate().fold(body_token.clone(), |mut acc, (i, (p_name, _))| {
-                        // 优先用调用参数, 其次用参数默认值
-                        let replacement = args.get(i)
-                            .map(|s| s.as_str())
-                            .or_else(|| defaults.get(i).copied().flatten());
-                        if let Some(r) = replacement {
-                            // p_name 已含 $ 前缀 (如 "$x"), 直接作为替换目标
-                            acc = acc.replace(p_name, r);
-                        }
-                        acc
-                    })
-                }).collect::<Vec<_>>()
-            }).unwrap_or_default()
-        }
-        // @each: 解析 → 展开为 N 个 token (@each 被消费)
-        t if t.starts_with("@each ") => {
-            parse_each_sig(&t[6..])
-                .map(|(var_name, items)| {
-                    items.into_iter().map(|item| {
-                        t.replacen("@each", "", 1).replace(&var_name, &item)
-                    }).collect()
-                })
-                .unwrap_or_default()
-        }
-        // @for: 解析 direction → 展开为 N 个 token
-        // 单行 form: `@for $i from 1 through 3 { b: $i; }` → 展开 body `{b: $i;}`, 3 个 token
-        t if t.starts_with("@for ") => {
-            parse_for_sig(&t[5..])
-                .and_then(|(var_name, values)| {
-                    // 提取 `{...}` body (支持内联单行)
-                    let body_start = t.find('{')?;
-                    let body_end = t.rfind('}')?;
-                    if body_end <= body_start { return None; }
-                    let body = &t[body_start..=body_end];
-                    Some(values.into_iter().map(move |v| body.replace(&var_name, &v)).collect())
-                })
-                .unwrap_or_default()
-        }
-        // @each: 展开为 N 个 token, body 内变量替换
-        t if t.starts_with("@each ") => {
-            parse_each_sig(&t[6..])
-                .and_then(|(var_name, items)| {
-                    let body_start = t.find('{')?;
-                    let body_end = t.rfind('}')?;
-                    if body_end <= body_start { return None; }
-                    let body = &t[body_start..=body_end];
-                    Some(items.into_iter().map(move |item| body.replace(&var_name, &item)).collect())
-                })
-                .unwrap_or_default()
-        }
-        // @if / @use / @forward: 消费 token, 无输出
-        t if t.starts_with("@if ") => vec![],
-        t if t.starts_with("@use ") || t.starts_with("@forward ") => vec![],
-        // 其他: 透传
-        _ => vec![token],
+    // ── 状态机: 收集中的 block body ────────────────────────────────────────
+    // 检测闭合 `}` — 无论 collecting 是什么状态, 遇到 } 都递减 depth, depth=0 时 finalize
+    if state.collecting != Collecting::None && t == "}" {
+        let result = finalize_collecting(state);
+        state.nesting_depth = state.nesting_depth.saturating_sub(1);
+        return result;
     }
+
+    // 收集模式下: 累积 body depth++
+    if state.collecting != Collecting::None {
+        match &mut state.collecting {
+            Collecting::MixinDef { params: _ } => {
+                state.nesting_depth += 1;
+                if !t.is_empty() {
+                    if let Some(mixin_name) = &state.current_mixin_name {
+                        if let Some(mixin_def) = state.scope.mixins.get_mut(mixin_name) {
+                            mixin_def.body.push(t.to_string());
+                        }
+                    }
+                }
+            }
+            Collecting::For { body, .. } => {
+                state.nesting_depth += 1;
+                if !t.is_empty() { body.push(t.to_string()); }
+            }
+            Collecting::Each { body, .. } => {
+                state.nesting_depth += 1;
+                if !t.is_empty() { body.push(t.to_string()); }
+            }
+            Collecting::If { body, .. } => {
+                state.nesting_depth += 1;
+                if !t.is_empty() { body.push(t.to_string()); }
+            }
+            Collecting::None => {}
+        }
+        return vec![];
+    }
+
+    // ── 非收集模式: dispatch 到各指令处理 ─────────────────────────────────
+
+    // 单行展开: 指令 + body 同行 (含 `{ ... }`)
+    if t.starts_with("@each ") && t.contains('{') && t.contains('}') {
+        return parse_each_sig(&t[6..])
+            .and_then(|(var_name, items)| {
+                let body_start = t.find('{')?;
+                let body_end = t.rfind('}')?;
+                if body_end <= body_start { return None; }
+                let body = &t[body_start..=body_end];
+                Some(items.into_iter().map(move |item| body.replace(&var_name, &item)).collect())
+            })
+            .unwrap_or_default();
+    }
+
+    if t.starts_with("@for ") && t.contains('{') && t.contains('}') {
+        return parse_for_sig(&t[5..])
+            .and_then(|(var_name, values)| {
+                let body_start = t.find('{')?;
+                let body_end = t.rfind('}')?;
+                if body_end <= body_start { return None; }
+                let body = &t[body_start..=body_end];
+                Some(values.into_iter().map(move |v| body.replace(&var_name, &v)).collect())
+            })
+            .unwrap_or_default();
+    }
+
+    // 多行收集: 指令 + { 开启, body 在后续行
+    if t.starts_with("@each ") && t.contains('{') {
+        return parse_each_sig(&t[6..])
+            .map(|(var_name, items)| {
+                state.nesting_depth += 1;
+                state.collecting = Collecting::Each { var_name, items, body: vec![] };
+                vec![]
+            })
+            .unwrap_or_default();
+    }
+
+    if t.starts_with("@for ") && t.contains('{') {
+        return parse_for_sig(&t[5..])
+            .map(|(var_name, values)| {
+                state.nesting_depth += 1;
+                state.collecting = Collecting::For { var_name, values, body: vec![] };
+                vec![]
+            })
+            .unwrap_or_default();
+    }
+
+    // @mixin: 提取 params + body (支持单行和多行)
+    if t.starts_with("@mixin ") {
+        if let Some((name, params)) = parse_mixin_sig(&t[7..]) {
+            if let Some(body_start) = t.find('{') {
+                if let Some(body_end) = t.rfind('}') {
+                    if body_end > body_start {
+                        // 单行: @mixin foo() { ... } 同行 body
+                        let body = t[body_start..=body_end].to_string();
+                        state.scope.mixins.insert(name, MixinDef { params, body: vec![body] });
+                        return vec![];
+                    }
+                }
+            }
+            // 多行: @mixin foo() { 开始, 后续行收集
+            state.current_mixin_name = Some(name.clone());
+            state.collecting = Collecting::MixinDef { params };
+            state.scope.mixins.insert(name, MixinDef { params: vec![], body: vec![] });
+            state.nesting_depth += 1;
+        }
+        return vec![];
+    }
+
+    // @include: 查询 mixin, 展开参数
+    if t.starts_with("@include ") {
+        let (name, args) = parse_include_sig(&t[9..]);
+        return state.scope.mixins.get(&name).map(|mixin_def| {
+            expand_mixin(mixin_def, &args)
+        }).unwrap_or_default();
+    }
+
+    // @if / @use / @forward / @else: 消费
+    if t.starts_with("@if ") || t.starts_with("@use ") || t.starts_with("@forward ") || t.starts_with("@else ") {
+        return vec![];
+    }
+
+    // 其他: 透传
+    vec![token]
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -73,7 +73,7 @@ pub enum Phase {
 
 // ─── 控制流收集状态 ────────────────────────────────────────────────────────
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Collecting {
     #[default]
     None,
