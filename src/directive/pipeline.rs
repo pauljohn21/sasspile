@@ -8,9 +8,50 @@
 //!   from_stream → scan_map → flat_map → scan_map → flat_map → collect → last → subscribe
 
 use super::state::{Collecting, CompileState, MixinDef};
-use crate::css::{CssBuilder, render_node};
+use crate::css::{CssBuilder, CssNode, render_node};
 use rxrust::prelude::*;
 use tracing::info_span;
+
+// ─── @media 合并 ─────────────────────────────────────────────────────────
+// 合并具有相同 query 的相邻 AtRule 节点, 在最终输出阶段应用
+// (流式 scan_map 内无法预知后续是否出现同 query, 故延迟合并)
+fn merge_media_nodes(nodes: Vec<CssNode>) -> Vec<CssNode> {
+    let mut result: Vec<CssNode> = Vec::new();
+    let mut media_idx: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for node in nodes {
+        // 检查是否是重复 media
+        let merge_idx = match &node {
+            CssNode::AtRule { query, .. } if query.starts_with("@media ") => {
+                media_idx.get(query).copied()
+            }
+            _ => None
+        };
+
+        if let Some(idx) = merge_idx {
+            // 合并 children 到已存在的 at-rule
+            let new_children = match &node {
+                CssNode::AtRule { children, .. } => children.iter().cloned().collect::<Vec<_>>(),
+                _ => unreachable!(),
+            };
+            if let Some(at_rule) = result.get_mut(idx) {
+                if let CssNode::AtRule { children: existing, .. } = at_rule {
+                    existing.extend(new_children);
+                }
+            }
+            continue;  // 合并完成,不 push
+        }
+
+        // 首次遇到此 media query → 注册
+        if let CssNode::AtRule { query, .. } = &node {
+            if query.starts_with("@media ") {
+                media_idx.insert(query.clone(), result.len());
+            }
+        }
+        result.push(node);
+    }
+    result
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 解析辅助 (纯函数, 无副作用)
@@ -313,63 +354,92 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 管线入口 — 算子链 = 工厂模式
+// 管线入口 — Subject 多播, dispatch 展开 + passthrough, 单一 CssBuilder
 // ═══════════════════════════════════════════════════════════════════════════
+//
+// 架构:
+//
+//   Subject<String, Infallible>
+//        │
+//        ├──→ Expander:  filter(@mixin/@include/@for/@each/@if/@use/@forward/@else)
+//        │       → scan_map(CompileState, dispatch_pass) → flat_map
+//        │       ──→ 产出展开后的 CSS 行 (已去除 @ 指令前缀)
+//        │
+//        ├──→ PassThrough:  filter(非 @ 指令行: @media @at-root 规则 声明 注释)
+//        │       ──→ 直接 emit (保持顺序)
+//        │
+//        └──→ merge → scan_map(单一 CssBuilder, feed) → flat_map → render_node
+//                            ──→ 所有行汇入同一个 CssBuilder 维护嵌套栈
+//                                 @at-root 提升到顶层, @media 正常嵌套
+//
+// 关键: 单一条 CssBuilder scan_map, 所有行都经过它, 共享 rule_stack
+fn is_expandable_directive(line: &str) -> bool {
+    let t = line.trim();
+    t.starts_with("@mixin ")
+        || t.starts_with("@include ")
+        || t.starts_with("@for ")
+        || t.starts_with("@each ")
+        || t.starts_with("@if ")
+        || t.starts_with("@use ")
+        || t.starts_with("@forward ")
+        || t.starts_with("@else ")
+        || t == "}"
+}
 
-/// 编译 SCSS → CSS (rxrust Shared 多线程响应式管线)
-///
-/// 所有权流转:
-///   input.lines() → Shared::from_stream 多线程分发
-///   scan_map(CompileState) 消费指令, 就地 mutate &mut state
-///   flat_map 展开 Vec → 独立事件 (有序组合)
-///   scan_map(CssBuilder) 构建 AST, 就地 mutate &mut builder
-///   flat_map 展开 CssNode
-///   render_node(&node) 借用渲染
-///   collect/last 汇聚最终结果
-///   subscribe 消费 TaskHandle, String 所有权返回调用者
-///
-/// 零 Arc<Mutex>, 零外部共享状态 — scan_map 算子即状态机
 pub fn compile_pipeline(input: &str) -> String {
     let _root = info_span!("compile_pipeline", bytes = input.len()).entered();
 
-    // Source: input.lines() 是 &str, Shared 跨线程需要 owned String
-    // 这里 clone 是不可避免的 (Send + 'static 边界), 后续算子内部全部用借用
+    // ── Runtime: SharedScheduler ────────────────────────────────────────
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("Failed to create tokio runtime");
+    let _enter_guard = rt.enter();
+
     let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
 
-    // 终端结果回收: oneshot channel = 单次值传递 (非共享可变状态)
-    // tx 包裹在 Option 中, 闭包 take() 实现一次性 move (collect/last 保证最多一次调用)
+    // ── Terminal oneshot ───────────────────────────────────────────────────
     let (tx, rx) = tokio::sync::oneshot::channel::<String>();
     let mut tx_opt = Some(tx);
 
-    // 管线: scan_map 持有状态所有权, flat_map 有序组合展开
-    let handle = Shared::from_stream(futures::stream::iter(lines))
-        // Phase 1: 指令展开 — CompileState 由 scan_map 算子内部管理
+    // ── Subject 多播中心 ──────────────────────────────────────────────────
+    let subject = Shared::subject::<String, std::convert::Infallible>();
+    let mut emitter = subject.clone();
+
+    // ── Expander: 展开 @mixin/@include/@for/@each 等指令 ───────────────
+    let expander = subject.clone()
+        .filter(|line: &String| is_expandable_directive(line))
         .scan_map(CompileState::new(), dispatch_pass)
-        // flat_map 有序组合展开 Vec<Vec<String>> 为独立 String 事件
-        .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
-        // Phase 2: AST 构建 — CssBuilder 由 scan_map 算子内部管理
+        .flat_map(|v| Shared::from_iter(v));
+
+    // ── PassThrough: @media @at-root @keyframes 规则 声明 注释 直接通过 ─
+    let passthrough = subject.clone()
+        .filter(|line: &String| !is_expandable_directive(line));
+
+    // ── 单一 CssBuilder: merge → 共享嵌套栈 → collect → @media 合并 → render
+    let subscription = expander
+        .merge(passthrough)
         .scan_map(CssBuilder::new(), |builder, line: String| builder.feed(&line))
-        // flat_map 有序组合展开 Vec<CssNode> 为独立 CssNode 事件
-        .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
-        // Phase 3: 渲染 — render_node 借用 &CssNode, 产出 owned String
-        .map(|node| render_node(&node))
-        // 汇聚所有 CSS 行 → Option<Vec<String>>
+        .flat_map(|v| Shared::from_iter(v))
+        .collect::<Vec<CssNode>>()
+        .last()
+        .map(|nodes| merge_media_nodes(nodes))
+        .flat_map(|nodes| Shared::from_iter(nodes))
+        .map(|node: CssNode| render_node(&node))
         .collect::<Vec<String>>()
         .last()
-        // 终端: take() 取出 tx 发送结果 (make illegal state unrepresentable)
         .subscribe(move |css_vec: Vec<String>| {
             if let Some(tx) = tx_opt.take() {
                 let _ = tx.send(css_vec.join("\n"));
             }
         });
 
-    // 驱动 Shared 管线的 TaskHandle 在当前线程完成
-    // collect/last 在 Shared 上下文中返回 SourceWithDynamicSubs<SourceWithDynamicSubs<TaskHandle>>
-    // 需要深入 .source.source 拿到真正的 TaskHandle (Future) 才能 block_on
-    tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(handle.source.source);
-    });
+    // ── Drive: 广播各行 ────────────────────────────────────────────────
+    for line in lines {
+        emitter.clone().next(line);
+    }
+    emitter.complete();
 
-    // 阻塞接收管线产物, channel 消费后自动释放 — 零 Arc, 零 Mutex, 零 clone
-    rx.blocking_recv().unwrap_or_default()
+    rt.block_on(rx).unwrap_or_default()
 }

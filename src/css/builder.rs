@@ -1,10 +1,12 @@
 //! CssBuilder — scan_map reducer 将 style-line tokens 构建为 CssNode 树
 //!
 //! 设计:
-//!   - CssBuilder 持有 scan_map 的 Acc 状态
+//!   - CssBuilder 持有 scan_map 的 Acc 状态 (&mut self 就地修改)
 //!   - feed 方法消费一行 token, 输出 Vec<CssNode>
 //!   - 用 Rule 嵌套栈管理 "{" "}" 配对
-//!   - 用 plain_text 模式支持非规则行 (声明/注释/其他)
+//!   - @at-root 提升到顶层输出
+//!
+//! @media 合并由管线 merge_media_nodes 函数处理 (汇聚后一次性合并)
 
 use super::node::CssNode;
 use tracing::info_span;
@@ -24,6 +26,7 @@ pub struct RuleFrame {
     pub selector: String,
     pub children: Vec<CssNode>,
     pub is_atrule: bool,
+    pub at_root: bool,
 }
 
 impl CssBuilder {
@@ -51,14 +54,21 @@ impl CssBuilder {
             return self.start_atrule(trimmed);
         }
 
+        // @at-root: 标记下一个规则提升到顶层
+        let (trimmed, at_root) = if let Some(rest) = trimmed.strip_prefix("@at-root ") {
+            (rest, true)
+        } else {
+            (trimmed, false)
+        };
+
         // 单行完整规则: "selector { prop: val; ... }" — 直接解析 emit
         if !trimmed.starts_with('@') && trimmed.contains('{') && trimmed.ends_with('}') && !trimmed.starts_with('$') {
-            return self.parse_single_line_rule(trimmed);
+            return self.parse_single_line_rule(trimmed, at_root);
         }
 
         // 规则开启: "selector {"
         if trimmed.ends_with('{') && !trimmed.starts_with('@') {
-            return self.start_rule(trimmed);
+            return self.start_rule(trimmed, at_root);
         }
 
         // 纯声明: "property: value;"
@@ -68,24 +78,52 @@ impl CssBuilder {
 
         // 注释: // ... 或 /* ... */
         if trimmed.starts_with("//") || trimmed.starts_with("/*") {
-            return vec![CssNode::Comment(trimmed.trim_start_matches("//").trim_start_matches("/*").trim_end_matches("*/").trim().to_string())];
+            return vec![CssNode::Comment(
+                trimmed
+                    .trim_start_matches("//")
+                    .trim_start_matches("/*")
+                    .trim_end_matches("*/")
+                    .trim()
+                    .to_string(),
+            )];
         }
 
-        // 未知行 — 透传为注释 (trace-only)
+        // 其他行: 递归处理后检测 @at-root (回溯 prefix)
         vec![]
     }
 
     // ── 私有方法 ────────────────────────────────────────────────────────────
 
-    fn start_rule(&mut self, line: &str) -> Vec<CssNode> {
+    fn start_rule(&mut self, line: &str, at_root: bool) -> Vec<CssNode> {
         // line = "selector {"
         let selector = line[..line.len() - 1].trim().to_string();
+        // @at-root: 展开 & 为父选择器
+        let selector = if at_root {
+            self.expand_parent_ref(&selector)
+        } else {
+            selector
+        };
         self.rule_stack.push(RuleFrame {
             selector,
             children: vec![],
             is_atrule: false,
+            at_root,
         });
         vec![]
+    }
+
+    /// 展开选择器中的 & 为父选择器
+    fn expand_parent_ref(&self, selector: &str) -> String {
+        if !selector.contains('&') {
+            return selector.to_string();
+        }
+        let parent = self.rule_stack.last().map(|f| f.selector.as_str()).unwrap_or("");
+        if parent.is_empty() {
+            // 无父上下文: 移除 &
+            selector.replace("&", "")
+        } else {
+            selector.replace('&', parent)
+        }
     }
 
     fn start_atrule(&mut self, line: &str) -> Vec<CssNode> {
@@ -99,6 +137,7 @@ impl CssBuilder {
             selector: query,
             children: vec![],
             is_atrule: true,
+            at_root: false,
         });
         vec![]
     }
@@ -118,14 +157,24 @@ impl CssBuilder {
                 children: frame.children,
             }
         };
+
+        // @at-root: 提升到顶层 (不附加到父 Rule)
+        if frame.at_root {
+            return self.emit_top_level(node);
+        }
+
         if let Some(parent) = self.rule_stack.last_mut() {
             parent.children.push(node);
             vec![]
         } else {
-            self.output.push(node);
-            // 顶层 emit 节点
-            vec![self.output.pop().unwrap()]
+            self.emit_top_level(node)
         }
+    }
+
+    /// 处理顶层输出
+    fn emit_top_level(&mut self, node: CssNode) -> Vec<CssNode> {
+        self.output.push(node.clone());
+        vec![node]
     }
 
     fn add_declaration(&mut self, line: &str) -> Vec<CssNode> {
@@ -151,13 +200,19 @@ impl CssBuilder {
         }
     }
 
-    fn parse_single_line_rule(&mut self, line: &str) -> Vec<CssNode> {
+    fn parse_single_line_rule(&mut self, line: &str, at_root: bool) -> Vec<CssNode> {
         // line = "selector { prop: val; prop2: val2; }"
         let Some(brace_open) = line.find('{') else { return vec![]; };
         let Some(brace_close) = line.rfind('}') else { return vec![]; };
         if brace_close <= brace_open { return vec![]; }
 
         let selector = line[..brace_open].trim().to_string();
+        let selector = if at_root {
+            // @at-root 单行规则: 展开 & 为父选择器
+            self.expand_parent_ref(&selector)
+        } else {
+            selector
+        };
         let body = &line[brace_open + 1..brace_close];
 
         // 解析 body 中的声明
@@ -175,12 +230,17 @@ impl CssBuilder {
 
         let node = CssNode::Rule { selector, children };
 
+        // @at-root: 提升到顶层
+        if at_root {
+            return self.emit_top_level(node);
+        }
+
         // 附加到父 Rule 或作为顶层输出
         if let Some(parent) = self.rule_stack.last_mut() {
             parent.children.push(node);
             vec![]
         } else {
-            vec![node]
+            self.emit_top_level(node)
         }
     }
 }
