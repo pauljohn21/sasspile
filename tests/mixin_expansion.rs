@@ -1,23 +1,25 @@
-use sasspile_rx::compile;
+//! mixin 展开测试
 
-#[tokio::test]
-async fn test_mixin_default_param() {
+use sasspile::compile;
+
+#[test]
+fn mixin_default_param() {
     let input = "@mixin pad($x: 8px) { padding: $x; }\n@include pad();\n";
-    let result = compile(input).await;
+    let result = compile(input);
     assert!(result.contains("padding: 8px"), "got: {:?}", result);
 }
 
-#[tokio::test]
-async fn test_mixin_override_default() {
+#[test]
+fn mixin_override_default() {
     let input = "@mixin pad($x: 8px) { padding: $x; }\n@include pad(16px);\n";
-    let result = compile(input).await;
+    let result = compile(input);
     assert!(result.contains("padding: 16px"), "got: {:?}", result);
 }
 
-#[tokio::test]
-async fn test_mixin_two_params() {
+#[test]
+fn mixin_two_params() {
     let input = "@mixin btn($size, $color) { .btn { width: $size; color: $color; } }\n@include btn(16px, blue);\n";
-    let result = compile(input).await;
+    let result = compile(input);
     assert!(
         result.contains("width: 16px") && result.contains("color: blue"),
         "got: {:?}",

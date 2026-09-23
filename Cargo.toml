@@ -1,12 +1,12 @@
 [package]
-name = "sasspile-rx"
+name = "sasspile"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 
 [dependencies]
 rxrust = "1.0.0-rc.5"
-tokio = { version = "1", features = ["rt-multi-thread", "rt", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "rt", "macros", "sync"] }
 futures = "0.3"
 tracing = "0.1"
 tracing-subscriber = "0.3"

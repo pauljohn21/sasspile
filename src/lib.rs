@@ -1,57 +1,26 @@
+//! sasspile — 统一状态 + rxrust 响应式 SCSS 编译器
+//!
+//! 架构 (Shared 多线程上下文):
+//!   CompileState (统一状态, Send + 'static)
+//!     → Shared::from_stream(futures::stream::iter(tokens))
+//!     → scan_map(dispatch_pass)  ← 按 phase 分发 struct/expand/resolve
+//!     → flat_map(Shared::from_stream(futures::stream::iter(v)))
+//!     → collect::<Vec<String>>()
+//!     → last()
+//!     → subscribe(消费结果到 mpsc::channel)
+//!     → TaskHandle
+//!
+//! 驱动方式:
+//!   tokio::task::block_in_place + tokio::runtime::Handle::current()
+//!   SharedScheduler 内部使用 tokio runtime, 由 block_in_place 驱动.
+//!
+//! scan_map 框架线程化状态，零 clone，零 Arc<Mutex>。
+
 mod directive;
-mod state;
 
-use std::sync::{Arc, Mutex};
+pub use directive::compile_pipeline;
 
-use directive::DirectiveOps;
-use rxrust::prelude::*;
-
-fn tokenize(input: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut buf = String::new();
-
-    for ch in input.chars() {
-        if ch == ';' || ch == '{' || ch == '}' {
-            if !buf.is_empty() {
-                tokens.push(buf.clone());
-                buf.clear();
-            }
-            tokens.push(ch.to_string());
-        } else {
-            buf.push(ch);
-        }
-    }
-
-    if !buf.is_empty() {
-        tokens.push(buf);
-    }
-
-    tokens
-}
-
-pub async fn compile(input: &str) -> String {
-    let result = Arc::new(Mutex::new(String::new()));
-    let result_clone = result.clone();
-
-    let handle = Shared::from_stream(futures::stream::iter(tokenize(input)))
-        .use_()
-        .mixin()
-        .include()
-        .if_()
-        .for_()
-        .each()
-        .map(|token| token + "\n")
-        .collect::<String>()
-        .last()
-        .subscribe(move |s| {
-            *result_clone.lock().unwrap() = s;
-        });
-
-    handle.await;
-
-    Arc::try_unwrap(result).unwrap().into_inner().unwrap()
-}
-
-pub async fn compile_parallel(input: &str) -> String {
-    compile(input).await
+/// 编译 SCSS 源码为 CSS（响应式多线程管线）
+pub fn compile(input: &str) -> String {
+    compile_pipeline(input)
 }

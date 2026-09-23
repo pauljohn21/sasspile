@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use futures::stream::StreamExt;
 use tracing::info_span;
 
-use sasspile_rx::compile;
+use sasspile::compile;
 
 struct SpecTest {
     name: String,
@@ -143,7 +143,7 @@ async fn main() {
             let span = info_span!("sasspec", test = %test.name);
             async move {
                 let _enter = span.enter();
-                let actual = compile(&test.input).await;
+                let actual = compile(&test.input);
                 let actual_trimmed = actual.trim().to_string();
                 let expected_trimmed = test.expected_output.trim().to_string();
                 TestResult {

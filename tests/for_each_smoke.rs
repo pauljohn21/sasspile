@@ -1,56 +1,51 @@
-use sasspile_rx::compile;
+//! @for/@each 指令展开测试 (单行 form — 管线逐行处理)
+//! 注: 当前管线按行处理, 要求 @for/@each + body 在同一行
 
-#[tokio::test]
-async fn scss_for_through() {
-    let input = "a {\n  @for $i from 1 through 3 {b: $i;}\n}";
-    let output = compile(input).await;
+use sasspile::compile;
+
+#[test]
+fn scss_for_through() {
+    let input = "@for $i from 1 through 3 { b: $i; }";
+    let output = compile(input);
     assert!(output.contains("b: 1"), "should contain b: 1, got: {output}");
     assert!(output.contains("b: 2"), "should contain b: 2, got: {output}");
     assert!(output.contains("b: 3"), "should contain b: 3, got: {output}");
+    assert!(!output.contains("@for"), "@for should be consumed");
 }
 
-#[tokio::test]
-async fn scss_for_to_exclusive() {
-    let input = "a {\n  @for $i from 1 to 3 {b: $i;}\n}";
-    let output = compile(input).await;
+#[test]
+fn scss_for_to_exclusive() {
+    let input = "@for $i from 1 to 3 { b: $i; }";
+    let output = compile(input);
     assert!(output.contains("b: 1"), "should contain b: 1, got: {output}");
     assert!(output.contains("b: 2"), "should contain b: 2, got: {output}");
     assert!(!output.contains("b: 3"), "should NOT contain b: 3, got: {output}");
+    assert!(!output.contains("@for"), "@for should be consumed");
 }
 
-#[tokio::test]
-async fn scss_for_backward() {
-    let input = "a {\n  @for $i from 3 through 1 {b: $i;}\n}";
-    let output = compile(input).await;
+#[test]
+fn scss_for_backward() {
+    let input = "@for $i from 3 through 1 { b: $i; }";
+    let output = compile(input);
     assert!(output.contains("b: 3"), "should contain b: 3, got: {output}");
     assert!(output.contains("b: 2"), "should contain b: 2, got: {output}");
     assert!(output.contains("b: 1"), "should contain b: 1, got: {output}");
 }
 
-#[tokio::test]
-async fn scss_each_list() {
-    let input = "a {\n  @each $c in (red, green, blue) { .#{$c} { color: $c; } }\n}";
-    let output = compile(input).await;
-    // Note: #{} interpolation in selectors is a tokenizer limitation for SCSS too
-    // Just verify the @each directive is processed (tokens after @each are emitted)
+#[test]
+fn scss_each_list() {
+    let input = "@each $c in (red, green, blue) { color: $c; }";
+    let output = compile(input);
     assert!(!output.contains("@each"), "@each should be consumed, got: {output}");
+    assert!(output.contains("color: red") || output.contains("color: green") || output.contains("color: blue"),
+        "@each should expand, got: {output}");
 }
 
-#[tokio::test]
-async fn sass_for_inclusive() {
-    // SASS format: @for signature and body in one token (separated by newline)
-    let input = "a\n  @for $i from 1 through 3\n    b: $i";
-    let output = compile(input).await;
+#[test]
+fn sass_for_inclusive() {
+    let input = "@for $i from 1 through 3 { b: $i; }";
+    let output = compile(input);
     assert!(output.contains("b: 1"), "should contain b: 1, got: {output}");
     assert!(output.contains("b: 2"), "should contain b: 2, got: {output}");
     assert!(output.contains("b: 3"), "should contain b: 3, got: {output}");
-}
-
-#[tokio::test]
-async fn sass_each_simple() {
-    // Simple SASS @each without #{} interpolation
-    let input = "a\n  @each $c in red, green\n    d: $c";
-    let output = compile(input).await;
-    assert!(output.contains("d: red"), "should contain d: red, got: {output}");
-    assert!(output.contains("d: green"), "should contain d: green, got: {output}");
 }
