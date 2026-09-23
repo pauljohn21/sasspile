@@ -124,6 +124,8 @@ pub struct CompileState {
     pub current_mixin_name: Option<String>,
     /// 当前管线阶段 (struct → expand → resolve)
     pub phase: Phase,
+    /// 父选择器栈 (嵌套规则上下文, 索引 0 = 最外层)
+    pub selector_stack: Vec<String>,
 }
 
 impl CompileState {

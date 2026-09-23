@@ -191,8 +191,15 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
     let _span = info_span!("dispatch_pass", phase = ?state.phase, token = %token).entered();
     let t = token.trim();
 
+    // ── 检测闭合 `}` — 选择器 nesting (pop stack) ──────────────────────────
+    if t == "}" && state.collecting == Collecting::None && !state.selector_stack.is_empty() {
+        state.selector_stack.pop();
+        state.nesting_depth = state.nesting_depth.saturating_sub(1);
+        return vec![];
+    }
+
     // ── 状态机: 收集中的 block body ────────────────────────────────────────
-    // 检测闭合 `}` — 无论 collecting 是什么状态, 遇到 } 都递减 depth, depth=0 时 finalize
+    // 检测闭合 `}` — finalize collecting
     if state.collecting != Collecting::None && t == "}" {
         let result = finalize_collecting(state);
         state.nesting_depth = state.nesting_depth.saturating_sub(1);
@@ -310,6 +317,33 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
     // @if / @use / @forward / @else: 消费
     if t.starts_with("@if ") || t.starts_with("@use ") || t.starts_with("@forward ") || t.starts_with("@else ") {
         return vec![];
+    }
+
+    // ── 选择器嵌套: 检测 `{` + 非指令行 → 展开嵌套选择器 ─────────────────
+    // 如果当前行是 "selector {" 形式 (非 @media 等非嵌套指令), 视为嵌套 rule
+    if !t.starts_with('@') && t.contains('{') {
+        if let Some(brace_pos) = t.find('{') {
+            let selector_part = t[..brace_pos].trim();
+            // 取栈顶直接父选择器 (CSS 嵌套规则中 & 指编译后的父选择器)
+            let parent = state.selector_stack.last().map(|s| s.as_str());
+            // 构建完整选择器
+            let full_selector = match parent {
+                Some(ref p) if selector_part.contains('&') => {
+                    // &:hover + ".a .b" → ".a .b:hover"
+                    selector_part.replace('&', p)
+                }
+                Some(ref p) => {
+                    // .c + ".a .b" → ".a .b .c"
+                    format!("{p} {selector_part}")
+                }
+                None => selector_part.to_string(),
+            };
+            let expanded = format!("{full_selector}{}", &t[brace_pos..]);
+            // 存储展开后的选择器 (不含 &) 供子级拼接
+            state.selector_stack.push(full_selector);
+            state.nesting_depth += 1;
+            return vec![expanded];
+        }
     }
 
     // 其他: 透传
