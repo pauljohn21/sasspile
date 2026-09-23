@@ -389,6 +389,19 @@ fn is_expandable_directive(line: &str) -> bool {
 pub fn compile_pipeline(input: &str) -> String {
     let _root = info_span!("compile_pipeline", bytes = input.len()).entered();
 
+    // Detect existing runtime: if already in tokio context (e.g. sasspec #[tokio::main]),
+    // we must NOT create a nested runtime — spawn on a separate OS thread instead.
+    if tokio::runtime::Handle::try_current().is_ok() {
+        // Already inside a runtime → run pipeline on a fresh thread (own runtime)
+        std::thread::scope(|s| {
+            s.spawn(|| compile_pipeline_inner(input)).join().unwrap()
+        })
+    } else {
+        compile_pipeline_inner(input)
+    }
+}
+
+fn compile_pipeline_inner(input: &str) -> String {
     // ── Runtime: SharedScheduler ────────────────────────────────────────
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
