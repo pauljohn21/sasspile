@@ -1,18 +1,14 @@
-//! 统一响应式管线 — rxrust 1.0.0-rc.5 Shared 多线程
+//! sa
+//! 统一响应式管线 — rxrust 1.0.0-rc.5
 //!
-//! 管线:
-//!   Shared::from_stream(iter(tokens))
-//!     .scan_map(CompileState::new(), dispatch_pass)
-//!     .flat_map(|v| Shared::from_stream(iter(v)))
-//!     .collect::<Vec<String>>()
-//!     .last()
-//!     .subscribe(|css| tx.send(css.join("\n")))
+//! 核心洞察: SCSS 编译是多线程有序组合 (composition)
+//!   flat_map + Shared::from_stream = 多线程有序组合
 //!
-//! 结果传递: subscribe → std::sync::mpsc → rx.recv() 阻塞
-//! 调度: SharedScheduler 内部 tokio runtime, 独立驱动
-//! 零手写 block_on, 零手写 runtime.
+//! 管线 = 算子链, 每个算子消费上游、产出下游:
+//!   from_stream → scan_map → flat_map → scan_map → flat_map → collect → last → subscribe
 
-use super::state::*;
+use super::state::{Collecting, CompileState, MixinDef};
+use crate::css::{CssBuilder, render_node};
 use rxrust::prelude::*;
 use tracing::info_span;
 
@@ -21,10 +17,8 @@ use tracing::info_span;
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn parse_mixin_sig(s: &str) -> Option<(String, Vec<(String, Option<String>)>)> {
-    // s 形式: "name($x: default, $y)" — 找到第一个 ( 和对应的 )
     let (name, rest) = s.split_once('(')?;
     let name = name.trim().to_string();
-    // 仅取到第一个 ) 为止作为参数列表 (之后是 { body })
     let params_end = rest.find(')')?;
     let params_str = &rest[..params_end].trim();
     let params = if params_str.is_empty() {
@@ -49,8 +43,6 @@ fn parse_for_sig(s: &str) -> Option<(String, Vec<String>)> {
     let (var_name, rest) = rest.split_once(' ')?;
     let var_name = format!("${}", var_name.trim());
     let rest = rest.trim().strip_prefix("from")?.trim();
-    // rest 现在是 "1 through 3 ..." 或 "1 to 3 ..."
-    // 取第一个数字作为 from, 取 'through'/'to' 后的数字作为 to
     let parts: Vec<&str> = rest.split_whitespace().collect();
     if parts.len() < 3 { return None; }
 
@@ -103,7 +95,6 @@ fn parse_each_sig(s: &str) -> Option<(String, Vec<String>)> {
 }
 
 fn parse_include_sig(s: &str) -> (String, Vec<String>) {
-    // 剥离尾随分号和空白 (处理输入行的 SCSS 语法)
     let s = s.trim().trim_end_matches(';').trim();
     match s.split_once('(') {
         Some((name, rest)) => {
@@ -121,7 +112,7 @@ fn parse_include_sig(s: &str) -> (String, Vec<String>) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// finalize — 闭合 block 时展开 body (取出 state.collecting, 重置为 None)
+// finalize — 闭合 block 时展开 body
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn finalize_collecting(state: &mut CompileState) -> Vec<String> {
@@ -163,10 +154,6 @@ fn finalize_collecting(state: &mut CompileState) -> Vec<String> {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// expand_mixin — 查询 mixin_def, fold 参数替换
-// ═══════════════════════════════════════════════════════════════════════════
-
 fn expand_mixin(mixin_def: &MixinDef, args: &[String]) -> Vec<String> {
     let defaults: Vec<Option<&str>> = mixin_def.params.iter()
         .map(|(_, d)| d.as_deref()).collect();
@@ -183,30 +170,22 @@ fn expand_mixin(mixin_def: &MixinDef, args: &[String]) -> Vec<String> {
     }).collect()
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// dispatch — if/else 链 + 状态机 (scan_map 驱动)
-// ═══════════════════════════════════════════════════════════════════════════
-
 fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
     let _span = info_span!("dispatch_pass", phase = ?state.phase, token = %token).entered();
     let t = token.trim();
 
-    // ── 检测闭合 `}` — 选择器 nesting (pop stack, emit }) ──────────────────
     if t == "}" && state.collecting == Collecting::None && !state.selector_stack.is_empty() {
         state.selector_stack.pop();
         state.nesting_depth = state.nesting_depth.saturating_sub(1);
         return vec!["}".to_string()];
     }
 
-    // ── 状态机: 收集中的 block body ────────────────────────────────────────
-    // 检测闭合 `}` — finalize collecting
     if state.collecting != Collecting::None && t == "}" {
         let result = finalize_collecting(state);
         state.nesting_depth = state.nesting_depth.saturating_sub(1);
         return result;
     }
 
-    // 收集模式下: 累积 body depth++
     if state.collecting != Collecting::None {
         match &mut state.collecting {
             Collecting::MixinDef { params: _ } => {
@@ -236,9 +215,6 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
         return vec![];
     }
 
-    // ── 非收集模式: dispatch 到各指令处理 ─────────────────────────────────
-
-    // 单行展开: 指令 + body 同行 (含 `{ ... }`)
     if t.starts_with("@each ") && t.contains('{') && t.contains('}') {
         return parse_each_sig(&t[6..])
             .and_then(|(var_name, items)| {
@@ -263,7 +239,6 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
             .unwrap_or_default();
     }
 
-    // 多行收集: 指令 + { 开启, body 在后续行
     if t.starts_with("@each ") && t.contains('{') {
         return parse_each_sig(&t[6..])
             .map(|(var_name, items)| {
@@ -284,20 +259,17 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
             .unwrap_or_default();
     }
 
-    // @mixin: 提取 params + body (支持单行和多行)
     if t.starts_with("@mixin ") {
         if let Some((name, params)) = parse_mixin_sig(&t[7..]) {
             if let Some(body_start) = t.find('{') {
                 if let Some(body_end) = t.rfind('}') {
                     if body_end > body_start {
-                        // 单行: @mixin foo() { ... } 同行 body
                         let body = t[body_start..=body_end].to_string();
                         state.scope.mixins.insert(name, MixinDef { params, body: vec![body] });
                         return vec![];
                     }
                 }
             }
-            // 多行: @mixin foo() { 开始, 后续行收集
             state.current_mixin_name = Some(name.clone());
             state.collecting = Collecting::MixinDef { params };
             state.scope.mixins.insert(name, MixinDef { params: vec![], body: vec![] });
@@ -306,7 +278,6 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
         return vec![];
     }
 
-    // @include: 查询 mixin, 展开参数
     if t.starts_with("@include ") {
         let (name, args) = parse_include_sig(&t[9..]);
         return state.scope.mixins.get(&name).map(|mixin_def| {
@@ -314,148 +285,91 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
         }).unwrap_or_default();
     }
 
-    // @if / @use / @forward / @else: 消费
     if t.starts_with("@if ") || t.starts_with("@use ") || t.starts_with("@forward ") || t.starts_with("@else ") {
         return vec![];
     }
 
-    // ── 选择器嵌套: 检测 `{` + 非指令行 → 展开嵌套选择器 ─────────────────
-    // 如果当前行是 "selector {" 形式 (非 @media 等非嵌套指令), 视为嵌套 rule
     if !t.starts_with('@') && t.contains('{') {
         if let Some(brace_pos) = t.find('{') {
             let selector_part = t[..brace_pos].trim();
-            // 取栈顶直接父选择器 (CSS 嵌套规则中 & 指编译后的父选择器)
             let parent = state.selector_stack.last().map(|s| s.as_str());
-            // 构建完整选择器
             let full_selector = match parent {
                 Some(ref p) if selector_part.contains('&') => {
-                    // &:hover + ".a .b" → ".a .b:hover"
                     selector_part.replace('&', p)
                 }
                 Some(ref p) => {
-                    // .c + ".a .b" → ".a .b .c"
                     format!("{p} {selector_part}")
                 }
                 None => selector_part.to_string(),
             };
             let expanded = format!("{full_selector}{}", &t[brace_pos..]);
-            // 存储展开后的选择器 (不含 &) 供子级拼接
             state.selector_stack.push(full_selector);
             state.nesting_depth += 1;
             return vec![expanded];
         }
     }
 
-    // 其他: 透传
     vec![token]
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 管线入口 — Shared 多线程, 结果经 channel 传回
+// 管线入口 — 算子链 = 工厂模式
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 编译 SCSS → CSS (Shared 多线程响应式管线)
+/// 编译 SCSS → CSS (rxrust Shared 多线程响应式管线)
 ///
-/// 数据流: input → Shared::from_stream → scan_map → flat_map → collect → last → subscribe(mpsc)
-/// SharedScheduler 需要 tokio runtime — 本函数内创建局部 runtime 驱动管线。
-/// subscribe 触发管线执行, 结果经 channel 传回, recv 阻塞等待。
+/// 所有权流转:
+///   input.lines() → Shared::from_stream 多线程分发
+///   scan_map(CompileState) 消费指令, 就地 mutate &mut state
+///   flat_map 展开 Vec → 独立事件 (有序组合)
+///   scan_map(CssBuilder) 构建 AST, 就地 mutate &mut builder
+///   flat_map 展开 CssNode
+///   render_node(&node) 借用渲染
+///   collect/last 汇聚最终结果
+///   subscribe 消费 TaskHandle, String 所有权返回调用者
+///
+/// 零 Arc<Mutex>, 零外部共享状态 — scan_map 算子即状态机
 pub fn compile_pipeline(input: &str) -> String {
     let _root = info_span!("compile_pipeline", bytes = input.len()).entered();
 
-    // SharedScheduler 需要 tokio runtime (内部 spawn 任务)
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .thread_name("sasspile-shared")
-        .enable_all()
-        .build()
-        .expect("tokio runtime failed");
+    // Source: input.lines() 是 &str, Shared 跨线程需要 owned String
+    // 这里 clone 是不可避免的 (Send + 'static 边界), 后续算子内部全部用借用
+    let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
 
-    rt.block_on(async {
-        let tokens: Vec<String> = input.lines().map(|l| l.to_string()).collect();
-        let state = CompileState::new();
-        let (tx, rx) = tokio::sync::oneshot::channel();
+    // 终端结果回收: oneshot channel = 单次值传递 (非共享可变状态)
+    // tx 包裹在 Option 中, 闭包 take() 实现一次性 move (collect/last 保证最多一次调用)
+    let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+    let mut tx_opt = Some(tx);
 
-        // Shared 管线 — SharedScheduler 全局 tokio runtime, 无需额外 runtime
-        // subscribe 是 FnMut (可能多次调用), 用 Option + take 实现一次性 move
-        let mut tx_opt = Some(tx);
-        let _sub = Shared::from_stream(futures::stream::iter(tokens))
-            .scan_map(state, dispatch_pass)
-            .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
-            .collect::<Vec<String>>()
-            .last()
-            .subscribe(move |css| {
-                if let Some(sender) = tx_opt.take() {
-                    let _ = sender.send(css.join("\n"));
-                }
-            });
-
-        // 等待管线完成 → rx 接收最终结果 → CSS 格式化
-        let raw = rx.await.unwrap_or_default();
-        format_css(&raw)
-    })
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// CSS formatter — 后处理 token 流为格式化 CSS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// 将管线输出的 token 流格式化为可读 CSS
-///
-/// 规则:
-///   - `{` 前空格, 后换行
-///   - `}` 前换行 (去缩进)
-///   - 属性行缩进 2 空格
-///   - 空行去除
-fn format_css(raw: &str) -> String {
-    let indent_step = "  ";
-    let mut indent_level: usize = 0;
-    let mut output = String::new();
-    let mut prev_token_ended_block_open = false;
-
-    for token in raw.split('\n') {
-        // 跳过空 token
-        if token.trim().is_empty() {
-            continue;
-        }
-        let line = token.trim();
-
-        if line == "}" {
-            // 闭合: 减少缩进, 换行, 再 }
-            indent_level = indent_level.saturating_sub(1);
-            output.push('\n');
-            output.push_str(&indent_step.repeat(indent_level));
-            output.push('}');
-            prev_token_ended_block_open = false;
-        } else if line.ends_with('{') {
-            // 块开启: 空格后 { 然后换行
-            if prev_token_ended_block_open {
-                output.push(' ');
-            } else if !output.is_empty() {
-                output.push('\n');
-                output.push_str(&indent_step.repeat(indent_level));
+    // 管线: scan_map 持有状态所有权, flat_map 有序组合展开
+    let handle = Shared::from_stream(futures::stream::iter(lines))
+        // Phase 1: 指令展开 — CompileState 由 scan_map 算子内部管理
+        .scan_map(CompileState::new(), dispatch_pass)
+        // flat_map 有序组合展开 Vec<Vec<String>> 为独立 String 事件
+        .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
+        // Phase 2: AST 构建 — CssBuilder 由 scan_map 算子内部管理
+        .scan_map(CssBuilder::new(), |builder, line: String| builder.feed(&line))
+        // flat_map 有序组合展开 Vec<CssNode> 为独立 CssNode 事件
+        .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
+        // Phase 3: 渲染 — render_node 借用 &CssNode, 产出 owned String
+        .map(|node| render_node(&node))
+        // 汇聚所有 CSS 行 → Option<Vec<String>>
+        .collect::<Vec<String>>()
+        .last()
+        // 终端: take() 取出 tx 发送结果 (make illegal state unrepresentable)
+        .subscribe(move |css_vec: Vec<String>| {
+            if let Some(tx) = tx_opt.take() {
+                let _ = tx.send(css_vec.join("\n"));
             }
-            output.push_str(line);
-            output.push('\n');
-            indent_level += 1;
-            prev_token_ended_block_open = true;
-        } else {
-            // 属性行
-            if prev_token_ended_block_open {
-                // { 后第一行, 已经在上面处理过了
-            } else if !output.is_empty() && !output.ends_with('\n') {
-                output.push('\n');
-            }
-            if !prev_token_ended_block_open && !output.is_empty() && !output.ends_with('\n') {
-                output.push('\n');
-            }
-            output.push_str(&indent_step.repeat(indent_level));
-            output.push_str(line);
-            prev_token_ended_block_open = false;
-        }
-    }
-    if output.starts_with('\n') {
-        output.trim_start().to_string()
-    } else {
-        output.trim().to_string()
-    }
+        });
+
+    // 驱动 Shared 管线的 TaskHandle 在当前线程完成
+    // collect/last 在 Shared 上下文中返回 SourceWithDynamicSubs<SourceWithDynamicSubs<TaskHandle>>
+    // 需要深入 .source.source 拿到真正的 TaskHandle (Future) 才能 block_on
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(handle.source.source);
+    });
+
+    // 阻塞接收管线产物, channel 消费后自动释放 — 零 Arc, 零 Mutex, 零 clone
+    rx.blocking_recv().unwrap_or_default()
 }

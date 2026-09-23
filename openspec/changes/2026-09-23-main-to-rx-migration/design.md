@@ -5,265 +5,181 @@
 > rx 不是 main 的移植，是以 rxrust 响应式约束重新实现。
 
 ```
-铁律:
-1. scan_map (CompileState, dispatch_pass)      ← 唯一状态修改窗口
-2. flat_map(Shared::from_iter(...))            ← 1→N 展开的唯一手段
-3. collect::<T>() + last() + subscribe         ← 唯一收集出口
-4. 纯函数 helper                               ← 离开 scan_map 闭包后禁止副作用
-5. 单文件 ≤ 500 行                             ← 强制模块化
+铁律 (v5.0 — 基于编译通过的实际代码):
+0. 先读 rxrust 源码, 从框架内部实现, 不猜 API 不造轮子
+1. scan_map (CompileState / CssBuilder)  ← 算子即状态机, 零外部状态
+2. flat_map(Shared::from_stream(iter))   ← 多线程有序组合 (composition)
+3. collect/last + oneshot + subscribe    ← 唯一收集出口, 单次值转移
+4. render_node(&node) 借用渲染           ← 不 clone
+5. 零 Arc<Mutex>/Rc<RefCell>             ← 禁止 GC 共享可变
 ```
 
 ---
 
-### 1. 当前 rx 管线（v0.1 — 已完成）
-
-```
-Shared::from_stream(futures::stream::iter(input.lines()))
-  .scan_map(CompileState::new(), dispatch_pass)
-      dispatch_pass 内:
-        ── 状态机 (Collecting 4 态):
-           None ─→ (@for/$each/$if/$mixin 开启) ─→ For/Each/If/MixinDef
-           For/Each/If/MixinDef ─→ (遇到 }) ─→ None (finalize_collecting)
-        ── 非收集态分发:
-           @each (含 { 不含 }) ─→ 多行收集
-           @each (含 { 含 })  ─→ 单行立即展开
-           @for   同 @each
-           @mixin (含 { })   ─→ 单行立即 / 多行收集
-           @include           ─→ expand_mixin (fold 参数)
-           @if/@use/@forward   ─→ 消费
-           selector {         ─→ selector_stack 拼接, emit 完整选择器
-           }                  ─→ selector_stack.pop, emit }
-           _                  ─→ 透传 (vec![token])
-  .flat_map(|v: Vec<String>| Shared::from_stream(futures::stream::iter(v)))
-  .collect::<Vec<String>>()
-  .last()
-  .subscribe(|css| tx_opt.take().map(|s| s.send(css.join("\n"))))
-→ format_css(&rx.await.unwrap_or_default())
-→ String
-```
-
----
-
-### 2. 目标 rx 管线（v1.0 — 迁移后）
-
-新增 **CSS AST 构建阶段** + **extend/hoisting 阶段** + **函数求值阶段**：
-
-```
-Phase 1: StyleLine stream
-═══════════════════════════════════════════════════════════════════
-input.lines()
-  → Shared::from_stream
-  .scan_map(CompileState::new(), line_dispatch)
-      ─ 同 v0.1 嵌套选择器展开 + selector_stack
-      ─ + CSS 指令 (@Media/@Keyframes/@supports) 状态收集
-      ─ + @extend 暂存到 extends_queued 列表
-      ─ + 字面量 token 透传 (declaration/rule-header/rule-closing)
-  .flat_map(from_iter)
-  .collect::<Vec<String>>().last()
-
-Phase 2: Post-process directives
-═══════════════════════════════════════════════════════════════════
-(apply_extends  — 非必须,可 inline 进 dispatch 或作为独立算子)
-(var resolution — 已完成 variable lookup in state.scope.variables)
-
-Phase 3: CSS AST Construction (新增)
-═══════════════════════════════════════════════════════════════════
-StyleLine stream → scan_map(CssBuilder::new(), css_builder_feed)
-  CssBuilder.feed(line):
-    跟踪 current_selector, depth
-    "{":  push RuleNode { selector, children: vec![] }, current_selector = None
-    "}":  pop RuleNode, 附加到 parent's children 或 emit top-level
-    "color: red":  push DeclarationNode { prop, value }
-    "@media ...":  push AtRuleNode { query, children: vec![] }
-  emits: Vec<CssNode>
-
-Phase 4: Serialize (改造 formatCss 为 AST→String)
-═══════════════════════════════════════════════════════════════════
-scan_map + flat_map 后转换为 CssNode stream
-  .flat_map(|css_node: CssNode| from_iter(render_node(css_node)))
-  .collect::<String>()
-  .last()
-  → String (formatted CSS)
-```
-
----
-
-### 3. 能力 #1: css-ast-construction
-
-#### 数据结构
+### 1. 当前 rx 管线（v5.0 — 编译通过）
 
 ```rust
-// src/css/node.rs
-#[derive(Clone, Debug)]
+// src/directive/pipeline.rs
+pub fn compile_pipeline(input: &str) -> String {
+    let lines: Vec<String> = input.lines().map(|l| l.to_string()).collect();
+    let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+    let mut tx_opt = Some(tx);
+
+    let handle = Shared::from_stream(futures::stream::iter(lines))
+        // Phase 1: 指令展开 — scan_map(CompileState) 内部 &mut 就地修改
+        .scan_map(CompileState::new(), dispatch_pass)
+        // 多线程有序组合展开 Vec → 独立 String 事件
+        .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
+        // Phase 2: CSS AST — scan_map(CssBuilder) 内部 &mut 构建 AST
+        .scan_map(CssBuilder::new(), |builder, line| builder.feed(&line))
+        // 有序组合展开 Vec<CssNode> → 独立 CssNode
+        .flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
+        // Phase 3: 借用渲染 (render_node(&node), 零 clone)
+        .map(|node| render_node(&node))
+        // 汇聚 + 终端: oneshot 单次值转移
+        .collect::<Vec<String>>()
+        .last()
+        .subscribe(move |css_vec| {
+            if let Some(tx) = tx_opt.take() {
+                let _ = tx.send(css_vec.join("\n"));
+            }
+        });
+
+    // 驱动 Shared 管线的 TaskHandle
+    // collect/last 在 Shared 返回 SourceWithDynamicSubs<SourceWithDynamicSubs<TaskHandle>>
+    // 需要 .source.source 深入拿到 Future
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(handle.source.source);
+    });
+
+    // 阻塞消费
+    rx.blocking_recv().unwrap_or_default()
+}
+```
+
+**所有权流转**:
+```
+input: &str (借用)
+  → lines: Vec<String> (唯一 clone, 因 Shared 需 Send+'static)
+  → scan_map(CompileState) — &mut 就地 mutate, 状态在算子内部
+  → flat_map — Vec 展开为独立事件
+  → scan_map(CssBuilder) — &mut 就地 mutate, 状态在算子内部
+  → flat_map — CssNode 展开
+  → map(render_node(&node)) — 借用, 零 clone
+  → collect → last → subscribe(tx.send) — tx move 进闭包
+  → block_on(handle.source.source) — 驱动 TaskHandle
+  → rx.blocking_recv() — 消费, 返回 String
+```
+
+---
+
+### 2. 目标 rx 管线（v6.0 — 下一步）
+
+新增能力（在现有 v5.0 骨架上扩展）:
+
+- **@media 内合并**: CssBuilder 跟踪 @media query, 相同 query 合并 children
+- **@extend 选择器分组**: Phase 1.5 extend 暂存 + 规则闭合时应用
+- **嵌套 @at-root**: CssBuilder 遇到 AtRoot 时 children 提升到顶层
+- **@keyframes 特殊序列化**: 百分比节点格式化
+- **函数求值**: dispatch_pass 内 try_eval_builtin, 替换字面量
+
+所有扩展都在现有 scan_map(CompileState) 或 scan_map(CssBuilder) 内部完成, 不改变管线拓扑。
+
+---
+
+### 3. 能力 #1: css-ast-construction ✅ 已完成
+
+#### 数据结构 (src/css/node.rs)
+
+```rust
 pub enum CssNode {
-    Rule {
-        selector: String,           // 已展平的完全选择器
-        children: Vec<CssNode>,     // body 子节点
-    },
-    Declaration {
-        property: String,
-        value: String,
-    },
-    AtRoot {
-        // @at-root 包装: 其 children 提升到顶层
-        children: Vec<CssNode>,
-    },
-    AtRule {
-        query: String,              // @media / @keyframes / ...
-        children: Vec<CssNode>,
-    },
+    Rule { selector: String, children: Vec<CssNode> },
+    Declaration { property: String, value: String },
+    AtRoot { children: Vec<CssNode> },
+    AtRule { query: String, children: Vec<CssNode> },
     Comment(String),
 }
 ```
 
-#### scan_map builder
+#### scan_map builder (src/css/builder.rs)
 
 ```rust
-// src/css/builder.rs
 pub struct CssBuilder {
-    pub stack: Vec<CssNode>,        // Rule 嵌套栈
-    pub output: Vec<CssNode>,       // top-level 累积
+    pub output: Vec<CssNode>,
+    pub rule_stack: Vec<RuleFrame>,
 }
 
 impl CssBuilder {
-    pub fn feed(&mut self, line: &str) -> Vec<CssNode> {
-        // 处理 depth 不匹配的 Rule 弹出 + 新 Rule/Declaration/Media 创建
-    }
+    pub fn feed(&mut self, line: &str) -> Vec<CssNode> { ... }
 }
-```
-
-#### 测试：builder 独立可测
-
-```rust
-let style_lines = vec![".parent {", "  color: red;", "}"].into_iter();
-let nodes: Vec<CssNode> = style_lines
-    .scan_map(CssBuilder::new(), |b, line| b.feed(line))
-    .flat_map(from_iter)
-    .collect::<Vec<_>>().last().subscribe(...)
-// assert nodes == vec![Rule { selector: ".parent", children: [Declaration("color", "red")] }]
 ```
 
 ---
 
-### 4. 能力 #2: selector-extend
+### 4. 能力 #2: selector-nesting ✅ 已完成
 
-#### 数据结构
-
+`dispatch_pass` 中:
 ```rust
-// src/css/selector.rs
-pub struct ExtendTarget {
-    pub selector: String,       // 被扩展的选择器
-    pub extenders: Vec<String>, // 添加此 selector 的源选择器
+if !t.starts_with('@') && t.contains('{') {
+    let parent = state.selector_stack.last().map(|s| s.as_str());
+    let full_selector = match parent {
+        Some(ref p) if selector_part.contains('&') => selector_part.replace('&', p),
+        Some(ref p) => format!("{p} {selector_part}"),
+        None => selector_part.to_string(),
+    };
+    state.selector_stack.push(full_selector.clone());
 }
-```
-
-#### 状态机集成
-
-CompileState 新增字段：
-
-```rust
-pub struct CompileState {
-    // ... existing ...
-    pub extends_queued: Vec<(String, String)>, // (extender, target)
-    pub placeholders_extending: Vec<(String, Vec<String>)>, // (placeholder, extenders)
-}
-```
-
-rx 响应式处理策略：
-
-1. **收集阶段** (`Collecting::ExtendDef`): 遇到 `%placeholder { ... }`，收集其 body
-2. **暂存阶段**: `@extend %placeholder` 解析后暂存到 `extends_queued`
-3. **应用阶段**: `finalize_collecting`（规则闭合）时或最终 resolve pass 合并规则
-
-关键：**extend 不立即消费规则，等 top-level rules 收集完毕后再统一应用**。这与 `CssBuilder` 的输出交互。
-
----
-
-### 5. 能力 #3: function-call-eval
-
-#### 架构
-
-```rust
-// src/eval/builtin.rs
-use rxrust::prelude::*;
-// 纯函数 map：调用参数 → 返回值
-type BuiltinFn = fn(&[String]) -> Option<String>;
-
-// 注册
-pub const BUILTINS: &[(&str, BuiltinFn)] = &[
-    ("lighten", color::lighten),
-    ("darken", color::darken),
-    ("rgba", color::rgba),
-    ("round", math::round),
-    ("nth", list::nth),
-    ...
-];
-```
-
-#### 集成到 dispatch_pass
-
-```rust
-t if is_function_call(t) => {
-    // 例: "background: lighten($color, 10%);"
-    match try_eval_builtin(t, state) {
-        Some(resolved) => vec![resolved],      // "background: #fff;"
-        None => vec![token],                    // 无法求值则原样透传
-    }
-}
-```
-
-`try_eval_builtin` 闭包参数来自 `CompileState` 的 `scope.variables` 查询。
-
----
-
-### 6. 能力 #7: at-root-hoisting
-
-#### CssNode::AtRoot 特殊处理
-
-```rust
-// CssBuilder.feed 遇到 CssNode::AtRoot 时:
-// 不推入 stack，直接展开其 children 到 output
-let at_root_hoist = |node: &CssNode| {
-    match node {
-        CssNode::AtRoot { children } => children.clone(),
-        _ => vec![node.clone()],
-    }
-};
 ```
 
 ---
 
-### 7. 文件拆分（避免单文件 > 500）
+### 5. 能力 #3: for/each/mixin/include ✅ 已完成
+
+见 `dispatch_pass` + `finalize_collecting` (pipeline.rs):
+- `@for $i from 1 through 3 { ... }` — 单行/多行
+- `@each $item in a, b, c { ... }` — 单行/多行
+- `@mixin name($param: default) { ... }` — 多行收集
+- `@include name($arg)` — fold 参数回退默认值
+
+---
+
+### 6. 能力 #4: zero-gc-pattern ✅ 已完成
+
+| 之前 (GC 思维) | 现在 (Rust 所有权) |
+|---|---|
+| `Arc<Mutex<String>>` 共享 | `oneshot channel` 单次值转移 |
+| `Rc<RefCell<T>>` + `borrow_mut()` | `scan_map(State, reducer)` |
+| `std::mem::take(&mut *lock)` | `rx.blocking_recv()` |
+
+---
+
+### 7. 文件拆分 (实际)
 
 ```
+src/css/
+├── mod.rs           — 模块声明
+├── node.rs          — CssNode + render_node (91 行)
+└── builder.rs       — CssBuilder (187 行)
+
 src/directive/
-├── pipeline.rs (约 150 行)
-│   use super::{state, finalize, selector_stack, format};
-│   pub fn compile_pipeline(input: &str) -> String { ... }
-│   fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> { ... }
-│
-├── state.rs (约 170 行) ✅ 已有
-│   pub struct CompileState { ... }
-│
-├── finalize.rs (约 130 行)
-│   pub fn finalize_collecting(state: &mut CompileState) -> Vec<String> { ... }
-│
-├── selector_stack.rs (约 80 行)
-│   pub fn resolve_nested_selector(parent: Option<&str>, selector: &str) -> String { ... }
-│
-└── format.rs (约 80 行)
-    pub fn format_css(raw: &str) -> String { ... }
+├── mod.rs           — 模块声明
+├── pipeline.rs      — compile_pipeline + dispatch_pass + helper (376 行)
+└── state.rs         — CompileState + Collecting (169 行)
 ```
+
+所有文件 ≤ 500 行, 符合约束。
 
 ---
 
-### 8. 整合点
+### 8. 源码参考清单 (开发必读)
 
-| 整合点 | 主文件 | 辅助函数 |
-|--------|--------|----------|
-| 指令展开 | `dispatch_pass` | `expand_mixin`, `parse_*_sig` |
-| 嵌套选择器 | `dispatch_pass` | `resolve_nested_selector` |
-| 函数求值 | `dispatch_pass`（或 pre-process） | `try_eval_builtin` |
-| Extend 暂存 | `dispatch_pass` (ExtendsDef 收集态) | `apply_extends` |
-| CSS 输出 | `format_css` (或 CssNode→String) | `render_node` |
-| Module 加载 | `Collection::Use` 阶段 | `load_module` |
+| 开发问题 | 读哪里 |
+|---------|--------|
+| 算子签名 | `src/observable.rs` |
+| 创建 Observable | `src/factory.rs` |
+| 订阅返回类型 | `src/observable.rs` 141 行 |
+| Subscription 嵌套 | `src/subscription/source_with_dynamic.rs` |
+| 调度器 / TaskHandle | `src/scheduler.rs` |
+| Shared 上下文 | `src/rc.rs` |
+
+源码路径: `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rxrust-1.0.0-rc.5/`
