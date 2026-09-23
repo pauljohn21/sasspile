@@ -191,11 +191,11 @@ fn dispatch_pass(state: &mut CompileState, token: String) -> Vec<String> {
     let _span = info_span!("dispatch_pass", phase = ?state.phase, token = %token).entered();
     let t = token.trim();
 
-    // ── 检测闭合 `}` — 选择器 nesting (pop stack) ──────────────────────────
+    // ── 检测闭合 `}` — 选择器 nesting (pop stack, emit }) ──────────────────
     if t == "}" && state.collecting == Collecting::None && !state.selector_stack.is_empty() {
         state.selector_stack.pop();
         state.nesting_depth = state.nesting_depth.saturating_sub(1);
-        return vec![];
+        return vec!["}".to_string()];
     }
 
     // ── 状态机: 收集中的 block body ────────────────────────────────────────
@@ -389,7 +389,73 @@ pub fn compile_pipeline(input: &str) -> String {
                 }
             });
 
-        // 等待管线完成 → rx 接收最终结果
-        rx.await.unwrap_or_default()
+        // 等待管线完成 → rx 接收最终结果 → CSS 格式化
+        let raw = rx.await.unwrap_or_default();
+        format_css(&raw)
     })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CSS formatter — 后处理 token 流为格式化 CSS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// 将管线输出的 token 流格式化为可读 CSS
+///
+/// 规则:
+///   - `{` 前空格, 后换行
+///   - `}` 前换行 (去缩进)
+///   - 属性行缩进 2 空格
+///   - 空行去除
+fn format_css(raw: &str) -> String {
+    let indent_step = "  ";
+    let mut indent_level: usize = 0;
+    let mut output = String::new();
+    let mut prev_token_ended_block_open = false;
+
+    for token in raw.split('\n') {
+        // 跳过空 token
+        if token.trim().is_empty() {
+            continue;
+        }
+        let line = token.trim();
+
+        if line == "}" {
+            // 闭合: 减少缩进, 换行, 再 }
+            indent_level = indent_level.saturating_sub(1);
+            output.push('\n');
+            output.push_str(&indent_step.repeat(indent_level));
+            output.push('}');
+            prev_token_ended_block_open = false;
+        } else if line.ends_with('{') {
+            // 块开启: 空格后 { 然后换行
+            if prev_token_ended_block_open {
+                output.push(' ');
+            } else if !output.is_empty() {
+                output.push('\n');
+                output.push_str(&indent_step.repeat(indent_level));
+            }
+            output.push_str(line);
+            output.push('\n');
+            indent_level += 1;
+            prev_token_ended_block_open = true;
+        } else {
+            // 属性行
+            if prev_token_ended_block_open {
+                // { 后第一行, 已经在上面处理过了
+            } else if !output.is_empty() && !output.ends_with('\n') {
+                output.push('\n');
+            }
+            if !prev_token_ended_block_open && !output.is_empty() && !output.ends_with('\n') {
+                output.push('\n');
+            }
+            output.push_str(&indent_step.repeat(indent_level));
+            output.push_str(line);
+            prev_token_ended_block_open = false;
+        }
+    }
+    if output.starts_with('\n') {
+        output.trim_start().to_string()
+    } else {
+        output.trim().to_string()
+    }
 }
