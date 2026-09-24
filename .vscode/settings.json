@@ -17,6 +17,7 @@
         "eprintln",
         "falsey",
         "fenter",
+        "fract",
         "Idents",
         "infalletible",
         "interp",
@@ -40,10 +41,12 @@
         "rxrust",
         "sasspec",
         "segs",
+        "stylesheet",
         "sxrust",
         "toks",
         "twbs",
         "Unsub",
-        "vtable"
+        "vtable",
+        "zxrust"
     ]
 }

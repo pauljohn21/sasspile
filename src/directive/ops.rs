@@ -7,7 +7,6 @@ use super::parse::{expand_mixin, parse_include_sig, substitute_vars};
 use super::state::CompileState;
 
 pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<String> {
-    // 只读视图: &CompileState 是 Copy, 闭包可安全共享
     let state_ref: &CompileState = &*state;
 
     match block {
@@ -15,27 +14,13 @@ pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<Str
             .into_iter()
             .flat_map(|line| process_line(&line, state))
             .collect(),
-        DirectiveBlock::For {
-            ref var_name,
-            ref values,
-            ref body,
-        } => values
+        DirectiveBlock::For { ref var_name, ref values, ref body } => values
             .iter()
-            .flat_map(|v| {
-                body.iter()
-                    .map(|b| substitute_vars(state_ref, &b.replace(var_name, v)))
-            })
+            .flat_map(|v| body.iter().map(|b| substitute_vars(state_ref, &b.replace(var_name, v))))
             .collect(),
-        DirectiveBlock::Each {
-            ref var_name,
-            ref items,
-            ref body,
-        } => items
+        DirectiveBlock::Each { ref var_name, ref items, ref body } => items
             .iter()
-            .flat_map(|i| {
-                body.iter()
-                    .map(|b| substitute_vars(state_ref, &b.replace(var_name, i)))
-            })
+            .flat_map(|i| body.iter().map(|b| substitute_vars(state_ref, &b.replace(var_name, i))))
             .collect(),
         DirectiveBlock::If { ref branches } => {
             for (cond, body) in branches {
@@ -43,17 +28,12 @@ pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<Str
                     None => true,
                     Some(expr) => eval_condition(state_ref, expr),
                 };
-                if take {
-                    return body.clone();
-                }
+                if take { return body.clone(); }
             }
             vec![]
         }
         DirectiveBlock::MixinDef { name, params, body } => {
-            state.scope.mixins.insert(
-                name,
-                crate::directive::state::MixinDef { params, body },
-            );
+            state.scope.mixins.insert(name, crate::directive::state::MixinDef { params, body });
             vec![]
         }
         DirectiveBlock::PlaceholderDef { name, body } => {
@@ -61,7 +41,38 @@ pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<Str
             vec![]
         }
         DirectiveBlock::While { cond, body } => expand_while(state, &cond, &body),
+        DirectiveBlock::Include { name, args, using, body } => {
+            expand_include_multi(state, &name, &args, &using, &body)
+        }
     }
+}
+
+/// 展开多行 @include (含 using 子句 + content 块)
+///
+/// content block 的 body 行作为独立 CSS 行 emit,不做 join — 保留原有结构,
+/// CssBuilder 能正确解析嵌套规则
+fn expand_include_multi(state: &CompileState, name: &str, args: &[String], using: &[String], body: &[String]) -> Vec<String> {
+    let Some(def) = state.scope.mixins.get(name) else {
+        return vec![];
+    };
+
+    let mut effective_args = args.to_vec();
+    if !using.is_empty() {
+        effective_args.extend_from_slice(using);
+    }
+
+    let expanded = expand_mixin(def, &effective_args);
+
+    // 展开: 逐行扫描 mixin body, 遇到 @content 则用 body 行替代, 否则保留该 line
+    expanded.iter().flat_map(|line| {
+        if line.contains("@content") {
+            // 用 content body 行替代 @content 占位符 (保留结构, 非 join)
+            body.iter().map(|b| b.as_str()).collect::<Vec<&str>>()
+        } else {
+            vec![line.as_str()]
+        }
+    }).map(|s| s.to_string())  // &str → String (flat_map 需要 owned flat_map)
+    .collect()
 }
 
 /// @while 展开: 求值 cond, 若 true 则展开 body, 跳过 $@var 赋值, 直到 false 或 body 耗尽Safety: body 中必须包含变量mutation (如 `$i: $i + 1;`) 以防无限循环

@@ -10,6 +10,14 @@ use super::state::{CompileState, MixinDef};
 // ─── 签名解析 ─────────────────────────────────────────────────────────
 
 pub fn parse_mixin_sig(s: &str) -> Option<(String, Vec<(String, Option<String>)>)> {
+    let s = s.trim();
+    // 无参 mixin: "foo {" / "foo" / "foo { ... }"
+    if !s.contains('(') {
+        let name = s.split(|c: char| c == '{' || c == ' ' || c == ';').next()?.trim().to_string();
+        if name.is_empty() { return None; }
+        return Some((name, vec![]));
+    }
+    // 有参 mixin: "name($a, $b: val)"
     let (name, rest) = s.split_once('(')?;
     let name = name.trim().to_string();
     let params_end = rest.find(')')?;

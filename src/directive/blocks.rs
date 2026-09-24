@@ -5,7 +5,7 @@
 //! flat_map 消费 DirectiveBlock → emit Vec<String> (展开后的 CSS 行)
 
 use super::eval::TokenKind;
-use super::parse::{parse_each_sig, parse_for_sig, parse_mixin_sig};
+use super::parse::{parse_each_sig, parse_for_sig, parse_include_sig, parse_mixin_sig};
 use super::state::CompileState;
 use super::ops::process_block;
 
@@ -21,6 +21,7 @@ pub enum DirectiveBlock {
     /// %placeholder 定义 — 存入 state 后不输出
     PlaceholderDef { name: String, body: Vec<String> },
     While { cond: String, body: Vec<String> },
+    Include { name: String, args: Vec<String>, using: Vec<String>, body: Vec<String> },
 }
 
 // ─── 分块状态机 (scan_map Acc) ──────────────────────────────────────────────
@@ -35,19 +36,30 @@ pub struct BlockAccumulator {
 
 #[derive(Debug)]
 enum Building {
-    For { var_name: String, values: Vec<String>, body: Vec<String> },
-    Each { var_name: String, items: Vec<String>, body: Vec<String> },
+    For { var_name: String, values: Vec<String>, body: Vec<String>, brace_depth: i32 },
+    Each { var_name: String, items: Vec<String>, body: Vec<String>, brace_depth: i32 },
     If {
         branches: Vec<(Option<String>, Vec<String>)>,
         current_cond: Option<String>,
         current_body: Vec<String>,
     },
-    MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String> },
-    PlaceholderDef { name: String, body: Vec<String> },
-    While { cond: String, body: Vec<String> },
+    MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String>, brace_depth: i32 },
+    PlaceholderDef { name: String, body: Vec<String>, brace_depth: i32 },
+    While { cond: String, body: Vec<String>, brace_depth: i32 },
+    Include { name: String, args: Vec<String>, using: Vec<String>, body: Vec<String>, brace_depth: i32 },
 }
 
 // ─── scan_map reducer: 累积行 → Vec<DirectiveBlock> ──────────────────────────
+
+/// 计算行内 { 和 } 的净增深度
+#[inline]
+fn count_brace_depth(line: &str) -> i32 {
+    line.chars().fold(0, |d, c| match c {
+        '{' => d + 1,
+        '}' => d - 1,
+        _ => d,
+    })
+}
 
 pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<DirectiveBlock> {
     let trimmed = line.trim();
@@ -91,7 +103,8 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
         TokenKind::AtForSingle => try_emit_block(&mut acc.current_lines, parse_single_for(trimmed)),
         TokenKind::AtForMulti => {
             if let Some((var, values)) = trimmed.strip_prefix("@for ").or_else(|| trimmed.strip_prefix("@for")).and_then(|s| parse_for_sig(s)) {
-                acc.building = Some(Building::For { var_name: var, values, body: vec![] });
+                let brace_depth = count_brace_depth(trimmed);
+                acc.building = Some(Building::For { var_name: var, values, body: vec![], brace_depth });
             }
             vec![]
         }
@@ -100,7 +113,8 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
         }
         TokenKind::AtEachMulti => {
             if let Some((var, items)) = trimmed.strip_prefix("@each ").or_else(|| trimmed.strip_prefix("@each")).and_then(|s| parse_each_sig(s)) {
-                acc.building = Some(Building::Each { var_name: var, items, body: vec![] });
+                let brace_depth = count_brace_depth(trimmed);
+                acc.building = Some(Building::Each { var_name: var, items, body: vec![], brace_depth });
             }
             vec![]
         }
@@ -115,11 +129,25 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
         }
         TokenKind::AtWhile => {
             let cond = extract_at_while_cond(trimmed);
-            acc.building = Some(Building::While { cond, body: vec![] });
+            let brace_depth = count_brace_depth(trimmed);
+            acc.building = Some(Building::While { cond, body: vec![], brace_depth });
+            vec![]
+        }
+        TokenKind::AtIncludeMulti => {
+            // strip @include 前缀后去掉尾部 { 再 parse, 避免 { 混入 args
+            let after_include = trimmed.strip_prefix("@include ").unwrap_or(trimmed);
+            let sig = after_include.trim_end_matches('{').trim();
+            let (name, args) = parse_include_sig(sig);
+            // brace_depth = 当前行中 { 的数量 - } 的数量
+            let brace_depth = trimmed.chars().fold(0i32, |d, c| match c {
+                '{' => d + 1,
+                '}' => d - 1,
+                _ => d,
+            });
+            acc.building = Some(Building::Include { name, args, using: vec![], body: vec![], brace_depth });
             vec![]
         }
         TokenKind::PlaceholderDef => {
-            // 单行: "%foo { color: red; }"
             if let Some((name, s, e)) = parse_placeholder_sig(trimmed) {
                 if e > s {
                     return try_emit_block(
@@ -130,8 +158,8 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
                         }),
                     );
                 }
-                // 多行: "%foo {" — 开启收集
-                acc.building = Some(Building::PlaceholderDef { name, body: vec![] });
+                let brace_depth = count_brace_depth(trimmed);
+                acc.building = Some(Building::PlaceholderDef { name, body: vec![], brace_depth });
             }
             vec![]
         }
@@ -152,7 +180,8 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
                     }
                 }
                 if let Some((name, params)) = parse_mixin_sig(&trimmed[7..]) {
-                    acc.building = Some(Building::MixinDef { name, params, body: vec![] });
+                    let brace_depth = count_brace_depth(trimmed);
+                    acc.building = Some(Building::MixinDef { name, params, body: vec![], brace_depth });
                 }
             }
             vec![]
@@ -174,20 +203,55 @@ fn append_and_maybe_close(
         None => return vec![],
     };
 
+    // 所有累积型 block 共用 brace_depth 逻辑: depth=0 时遇到 } 才关闭
+    let depth_delta = count_brace_depth(t);
+    let closes = |d: i32| d + depth_delta <= 0 && (t.contains('}') || t.ends_with('}'));
+
     let result = match &mut building {
-        Building::For { body, .. }
-        | Building::Each { body, .. }
-        | Building::MixinDef { body, .. }
-        | Building::PlaceholderDef { body, .. }
-        | Building::While { body, .. } => {
-            if t == "}" {
+        Building::For { body, brace_depth, .. }
+        | Building::Each { body, brace_depth, .. }
+        | Building::MixinDef { body, brace_depth, .. }
+        | Building::PlaceholderDef { body, brace_depth, .. }
+        | Building::While { body, brace_depth, .. } => {
+            if closes(*brace_depth) {
                 block_to_directive(building)
-            } else if !t.is_empty() {
-                body.push(t.to_string());
+            } else {
+                *brace_depth += depth_delta;
+                if !t.is_empty() {
+                    body.push(t.to_string());
+                }
                 acc.building = Some(building);
                 vec![]
+            }
+        }
+        Building::Include { name, args, using, body, brace_depth } => {
+            let new_depth = *brace_depth + depth_delta;
+            if closes(*brace_depth) {
+                let mut final_body = body.clone();
+                if !t.is_empty() && t != "}" {
+                    let cleaned = t.trim().trim_end_matches('}').trim();
+                    if !cleaned.is_empty() {
+                        final_body.push(cleaned.to_string());
+                    }
+                }
+                block_to_directive(Building::Include { name: name.clone(), args: args.clone(), using: using.clone(), body: final_body, brace_depth: 0 })
             } else {
-                acc.building = Some(building);
+                let mut new_using = using.clone();
+                let mut done_using = false;
+                if t.trim().starts_with("using") && !t.trim().starts_with("@content") {
+                    if let Some(start) = t.find('(') {
+                        if let Some(end) = t.rfind(')') {
+                            let params = &t[start + 1..end];
+                            let params: Vec<String> = params.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect();
+                            new_using = params;
+                            done_using = true;
+                        }
+                    }
+                }
+                if !done_using && !t.is_empty() {
+                    body.push(t.to_string());
+                }
+                acc.building = Some(Building::Include { name: name.clone(), args: args.clone(), using: new_using, body: body.clone(), brace_depth: new_depth });
                 vec![]
             }
         }
@@ -198,7 +262,6 @@ fn append_and_maybe_close(
         } => {
             if t == "}" {
                 branches.push((current_cond.take(), std::mem::take(current_body)));
-                // 暂存 branches, 等待可能的 @else
                 acc.pending_branches = Some(std::mem::take(branches));
                 vec![]
             } else if matches!(kind, TokenKind::AtElseIf) {
@@ -226,21 +289,24 @@ fn append_and_maybe_close(
 
 fn block_to_directive(building: Building) -> Vec<DirectiveBlock> {
     match building {
-        Building::For { var_name, values, body } => {
+        Building::For { var_name, values, body, .. } => {
             vec![DirectiveBlock::For { var_name, values, body }]
         }
-        Building::Each { var_name, items, body } => {
+        Building::Each { var_name, items, body, .. } => {
             vec![DirectiveBlock::Each { var_name, items, body }]
         }
         Building::If { branches, .. } => vec![DirectiveBlock::If { branches }],
-        Building::MixinDef { name, params, body } => {
+        Building::MixinDef { name, params, body, .. } => {
             vec![DirectiveBlock::MixinDef { name, params, body }]
         }
-        Building::PlaceholderDef { name, body } => {
+        Building::PlaceholderDef { name, body, .. } => {
             vec![DirectiveBlock::PlaceholderDef { name, body }]
         }
-        Building::While { cond, body } => {
+        Building::While { cond, body, .. } => {
             vec![DirectiveBlock::While { cond, body }]
+        }
+        Building::Include { name, args, using, body, .. } => {
+            vec![DirectiveBlock::Include { name, args, using, body }]
         }
     }
 }

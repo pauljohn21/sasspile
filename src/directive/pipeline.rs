@@ -8,10 +8,28 @@
 use crate::css::{CssBuilder, CssNode, render_node};
 use rxrust::prelude::*;
 use std::convert::Infallible;
-use tracing::info_span;
+use tracing::{debug_span, info_span};
 
 use super::blocks::{accumulate_block, expand_block, BlockAccumulator, DirectiveBlock};
 use super::state::CompileState;
+
+// ─── Sass 缩进语法: +name → @include name ───────────────────────────────────
+
+#[inline]
+fn transform_indented_include(line: String) -> String {
+    let t = line.trim_start();
+    if let Some(after_plus) = t.strip_prefix('+') {
+        let after = after_plus.trim_start();
+        // +foo → @include foo
+        // +foo($a, $b) → @include foo($a, $b)
+        if !after.is_empty() && !after.starts_with('@') {
+            // 替换行首 + 为 @include (保留缩进)
+            let leading = &line[..line.len() - t.len()];
+            return format!("{leading}@include {after}");
+        }
+    }
+    line
+}
 
 // ─── @media 合并 (函数式 fold, into_iter 零 clone) ──────────────────────────
 
@@ -114,35 +132,50 @@ pub fn compile_pipeline(input: &str) -> String {
     subject
         .clone()
         // ══════════════════════════════════════════════════════════════════
+        // Phase 0: 预处理 — Sass 缩进语法 +name → @include name
+        // ══════════════════════════════════════════════════════════════════
+        .map(transform_indented_include)
+        .tap(|line: &String| {
+            let _s = debug_span!("phase0_preprocess", line = %line).entered();
+        })
+        // ══════════════════════════════════════════════════════════════════
         // Phase 1: 指令分块 + 展开 (scan_map + flat_map)
         // ══════════════════════════════════════════════════════════════════
-        // scan_map = Flux.accumulate / Flux.bufferUntil
-        //   累积行 → emit DirectiveBlock (多行) or Lines (单行)
         .scan_map(BlockAccumulator::default(), accumulate_block)
-        // flat_map = Flux.groupBy + flatMap
+        .tap(|blocks: &Vec<DirectiveBlock>| {
+            let _s = debug_span!("phase1_blocks", count = blocks.len(), kinds = ?blocks.iter().map(std::any::type_name_of_val).collect::<Vec<_>>()).entered();
+        })
         .flat_map(|v: Vec<DirectiveBlock>| Shared::from_iter(v))
-        // 独立 scan_map: 各 block 展开 (共享 CompileState &mut 就地修改)
         .scan_map(CompileState::new(), expand_block)
+        .tap(|lines: &Vec<String>| {
+            let _s = debug_span!("phase1_expanded", count = lines.len(), first = lines.first().map(|s| s.as_str()).unwrap_or("")).entered();
+        })
         .flat_map(|v: Vec<String>| Shared::from_iter(v))
+        .tap(|line: &String| {
+            let _s = debug_span!("phase1_out", line = %line).entered();
+        })
         // ══════════════════════════════════════════════════════════════════
         // Phase 2: CSS AST 构建 (scan_map CssBuilder)
-        // ══════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════
         .scan_map(CssBuilder::new(), |builder: &mut CssBuilder, line: String| {
             builder.feed(&line)
         })
         .flat_map(|v: Vec<CssNode>| Shared::from_iter(v))
-        // 汇聚
         .collect::<Vec<CssNode>>()
         .last()
-        // CSS 选择器嵌套展平
         .map(flatten_nested_selectors)
-        // @media 合并
         .map(merge_media_nodes)
+        .tap(|nodes: &Vec<CssNode>| {
+            let _s = debug_span!("phase2_merged", count = nodes.len()).entered();
+        })
         .flat_map(|nodes| Shared::from_iter(nodes))
         // ══════════════════════════════════════════════════════════════════
         // Phase 3: 渲染 (&借用 → String, 零 clone)
         // ══════════════════════════════════════════════════════════════════
         .map(|node: CssNode| render_node(&node))
+        .tap(|css: &String| {
+            let _s = debug_span!("phase3_css", css = %css).entered();
+        })
         .collect::<Vec<String>>()
         .last()
         // ══════════════════════════════════════════════════════════════════

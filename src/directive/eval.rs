@@ -15,6 +15,7 @@ pub enum TokenKind {
     AtElse,
     AtMixinDef,
     AtInclude,
+    AtIncludeMulti,
     AtExtend,
     AtUse,
     AtForward,
@@ -75,7 +76,7 @@ impl TokenKind {
             ("else", "if") | ("else", "elseif") | ("elseif", _) => Self::AtElseIf,
             ("else", _) => Self::AtElse,
             ("mixin", _) => Self::AtMixinDef,
-            ("include", _) => Self::AtInclude,
+            ("include", _) => Self::classify_include(rest),
             ("extend", _) => Self::AtExtend,
             ("use", _) => Self::AtUse,
             ("forward", _) => Self::AtForward,
@@ -88,6 +89,14 @@ impl TokenKind {
     #[inline]
     fn from_single_line(s: &str, single: Self, multi: Self) -> Self {
         if Self::is_single_line_block(s) { single } else { multi }
+    }
+
+    /// @include 分类: 有 { 但无 } → Multi (content block 未闭); 否则 Single
+    #[inline]
+    fn classify_include(rest: &str) -> Self {
+        let has_open = rest.contains('{');
+        let has_close = rest.contains('}');
+        if has_open && !has_close { Self::AtIncludeMulti } else { Self::AtInclude }
     }
 
     fn is_single_line_block(s: &str) -> bool {
