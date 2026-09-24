@@ -16,8 +16,9 @@
 //!
 //! scan_map 框架线程化状态，零 clone，零 Arc<Mutex>。
 
-mod directive;
-mod css;
+pub mod directive;
+pub mod css;
+pub mod eval;
 
 pub use directive::compile_pipeline;
 
