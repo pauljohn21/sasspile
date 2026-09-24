@@ -133,6 +133,14 @@ pub struct CompileState {
     pub selector_stack: Vec<String>,
     /// 已闭合 @if 的 branch_taken 状态 — 供 @else 翻转使用
     pub pending_if_taken: Option<bool>,
+
+    // ── @extend 支持 ─────────────────────────────────────────────────
+    /// 待处理的 extend 请求: (extender_selector, placeholder_name, optional_flag)
+    pub extends_queued: Vec<(String, String, bool)>,
+    /// %placeholder 定义表: placeholder_name → body_lines
+    pub placeholder_defs: HashMap<String, Vec<String>>,
+    /// 当前正在定义的 placeholder 名称
+    pub current_placeholder_name: Option<String>,
 }
 
 impl CompileState {
