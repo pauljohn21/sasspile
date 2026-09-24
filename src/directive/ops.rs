@@ -16,11 +16,18 @@ pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<Str
             .collect(),
         DirectiveBlock::For { ref var_name, ref values, ref body } => values
             .iter()
-            .flat_map(|v| body.iter().map(|b| substitute_vars(state_ref, &b.replace(var_name, v))))
+            .flat_map(|v| body.iter().map(|b| {
+                // 先替换 #{$var} 整体, 再替换裸 $var, 避免破坏插值语法
+                let step1 = b.replace(&format!("#{{{var_name}}}"), v);
+                substitute_vars(state_ref, &step1.replace(var_name, v))
+            }))
             .collect(),
         DirectiveBlock::Each { ref var_name, ref items, ref body } => items
             .iter()
-            .flat_map(|i| body.iter().map(|b| substitute_vars(state_ref, &b.replace(var_name, i))))
+            .flat_map(|i| body.iter().map(|b| {
+                let step1 = b.replace(&format!("#{{{var_name}}}"), i);
+                substitute_vars(state_ref, &step1.replace(var_name, i))
+            }))
             .collect(),
         DirectiveBlock::If { ref branches } => {
             for (cond, body) in branches {

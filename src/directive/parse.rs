@@ -127,12 +127,33 @@ pub fn try_parse_var_def(line: &str) -> Option<(String, String)> {
 
 pub fn substitute_vars(state: &CompileState, line: &str) -> String {
     let mut result = line.to_string();
+
+    // 第一轮: 替换所有 #{$var} 插值 (选择器 + 值通用)
+    // 模式: #{...} → 提取内部 $var 名 → 查表 → 替换
+    while let Some(start) = result.find("#{") {
+        if let Some(end) = result[start..].find('}').map(|p| start + p) {
+            let inner = &result[start + 2..end]; // 去掉 #{ 和 }
+            // inner 可能是 $var 或表达式
+            if let Some(var_name) = inner.strip_prefix('$') {
+                let full_name = format!("${var_name}");
+                if let Some(value) = state.scope.variables.get(&full_name) {
+                    result.replace_range(start..=end, value);
+                } else {
+                    break; // 未定义变量, 停止替换
+                }
+            } else {
+                break; // 非变量插值, 停止
+            }
+        } else {
+            break; // 未找到闭合 }, 停止
+        }
+    }
+
+    // 第二轮: 替换裸 $var (值中残留)
     for (name, value) in &state.scope.variables {
-        // 先替换 #{$var} 形式,再替换 $var,避免顺序导致模式破坏
-        let interp = format!("#{{{name}}}");
-        result = result.replace(&interp, value);
         result = result.replace(name, value);
     }
+
     // 求值内置函数调用 (rgb/hsl/lighten/darken 等)
     eval_all_calls(&result)
 }
