@@ -1,16 +1,14 @@
 //! 指令管线模块 — 统一状态 + scan_map 响应式架构
 //!
-//! 设计:
-//!   1. CompileState: 唯一状态载体（变量/mixin/模块/展开缓冲/阶段）
-//!   2. pipeline.rs: scan_map 主循环，消费 &mut CompileState + token → Vec<String>
-//!   3. dispatch_pass 按 state.phase 分发到 struct/expand/resolve
-//!
-//! 对比旧设计:
-//!   旧 = 5 个独立 Observer（EachOp/ForOp/IfOp/MixinOp/UseOp）× 5 个分散 State 枚举
-//!   新 = 1 个 CompileState + 1 个 scan_map + dispatch_pass 分发
+//! 模块划分:
+//!   - state.rs:   CompileState / Scope / MixinDef / Module / Collecting / Phase
+//!   - parse.rs:   纯解析辅助 (签名解析 / 变量解析 / mixin 展开)
+//!   - eval.rs:    scan_map reducer (dispatch_pass / finalize_collecting)
+//!   - pipeline.rs: 管线入口 (compile_pipeline / merge_media_nodes)
 
 pub mod state;
+pub mod parse;
+pub mod eval;
 pub mod pipeline;
 
-pub use self::state::{CompileState, MixinDef, Module, Scope, Collecting, Phase};
 pub use self::pipeline::compile_pipeline;

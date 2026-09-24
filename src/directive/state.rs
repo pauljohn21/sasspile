@@ -104,6 +104,12 @@ pub enum Collecting {
     },
 }
 
+impl Collecting {
+    pub fn is_if_branch(&self) -> bool {
+        matches!(self, Collecting::If { .. })
+    }
+}
+
 // ─── 统一编译状态 ──────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Default)]
@@ -126,6 +132,8 @@ pub struct CompileState {
     pub phase: Phase,
     /// 父选择器栈 (嵌套规则上下文, 索引 0 = 最外层)
     pub selector_stack: Vec<String>,
+    /// 已闭合 @if 的 branch_taken 状态 — 供 @else 翻转使用
+    pub pending_if_taken: Option<bool>,
 }
 
 impl CompileState {
