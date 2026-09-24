@@ -5,7 +5,7 @@
 //! flat_map 消费 DirectiveBlock → emit Vec<String> (展开后的 CSS 行)
 
 use super::eval::TokenKind;
-use super::parse::{parse_each_sig, parse_for_sig, parse_mixin_sig, substitute_vars};
+use super::parse::{parse_each_sig, parse_for_sig, parse_mixin_sig};
 use super::state::CompileState;
 use super::ops::process_block;
 
@@ -20,6 +20,7 @@ pub enum DirectiveBlock {
     MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String> },
     /// %placeholder 定义 — 存入 state 后不输出
     PlaceholderDef { name: String, body: Vec<String> },
+    While { cond: String, body: Vec<String> },
 }
 
 // ─── 分块状态机 (scan_map Acc) ──────────────────────────────────────────────
@@ -43,6 +44,7 @@ enum Building {
     },
     MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String> },
     PlaceholderDef { name: String, body: Vec<String> },
+    While { cond: String, body: Vec<String> },
 }
 
 // ─── scan_map reducer: 累积行 → Vec<DirectiveBlock> ──────────────────────────
@@ -111,6 +113,11 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
             });
             vec![]
         }
+        TokenKind::AtWhile => {
+            let cond = extract_at_while_cond(trimmed);
+            acc.building = Some(Building::While { cond, body: vec![] });
+            vec![]
+        }
         TokenKind::PlaceholderDef => {
             // 单行: "%foo { color: red; }"
             if let Some((name, s, e)) = parse_placeholder_sig(trimmed) {
@@ -171,7 +178,8 @@ fn append_and_maybe_close(
         Building::For { body, .. }
         | Building::Each { body, .. }
         | Building::MixinDef { body, .. }
-        | Building::PlaceholderDef { body, .. } => {
+        | Building::PlaceholderDef { body, .. }
+        | Building::While { body, .. } => {
             if t == "}" {
                 block_to_directive(building)
             } else if !t.is_empty() {
@@ -230,6 +238,9 @@ fn block_to_directive(building: Building) -> Vec<DirectiveBlock> {
         }
         Building::PlaceholderDef { name, body } => {
             vec![DirectiveBlock::PlaceholderDef { name, body }]
+        }
+        Building::While { cond, body } => {
+            vec![DirectiveBlock::While { cond, body }]
         }
     }
 }
@@ -295,6 +306,14 @@ fn extract_at_if_cond(line: &str) -> String {
 
 fn extract_at_else_if_cond(line: &str) -> String {
     let after = line.trim_start_matches("@else").trim().trim_start_matches("if").trim();
+    match after.rfind('{') {
+        Some(b) => after[..b].trim().to_string(),
+        None => after.to_string(),
+    }
+}
+
+fn extract_at_while_cond(line: &str) -> String {
+    let after = line.trim_start_matches("@while").trim();
     match after.rfind('{') {
         Some(b) => after[..b].trim().to_string(),
         None => after.to_string(),
