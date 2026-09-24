@@ -9,6 +9,7 @@ pub enum TokenKind {
     AtEachMulti,
     AtForSingle,
     AtForMulti,
+    AtWhile,
     AtIfStart,
     AtElseIf,
     AtElse,
@@ -27,63 +28,66 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    /// 分类 — 纯函数, &str → enum
+    /// 分类 — 纯函数, &str → enum (match 表达式 dispatch, 无 if/return 链)
     pub fn classify(token: &str) -> Self {
         let t = token.trim();
 
-        if t.is_empty() {
-            return Self::EmptyLine;
+        match t {
+            "" => Self::EmptyLine,
+            "}" => Self::CloseBrace,
+            _ if Self::is_variable(t) => Self::VariableDef,
+            _ if t.starts_with('@') => Self::classify_at_rule(&t[1..]),
+            _ => Self::classify_non_at_rule(t),
         }
-        if t == "}" {
-            return Self::CloseBrace;
+    }
+
+    /// 非 @rule 分类: block 块 or plain
+    #[inline]
+    fn classify_non_at_rule(t: &str) -> Self {
+        let brace_idx = Self::find_block_brace(t);
+        match brace_idx {
+            Some(idx) => {
+                let sel = &t[..idx];
+                match (sel.starts_with('%'), t.ends_with('}')) {
+                    (true, _) => Self::PlaceholderDef,
+                    (_, true) => Self::RuleBlock,
+                    _ => Self::RuleStart,
+                }
+            }
+            None => Self::PlainLine,
         }
-        if t.starts_with('$') && t.contains(':') {
-            return Self::VariableDef;
-        }
-        if let Some(rest) = t.strip_prefix("@") {
-            return Self::classify_at_rule(rest);
-        }
-        if let Some(brace_idx) = Self::find_block_brace(t) {
-            let sel = &t[..brace_idx];
-            return if sel.starts_with('%') {
-                Self::PlaceholderDef
-            } else if t.ends_with('}') {
-                Self::RuleBlock
-            } else {
-                Self::RuleStart
-            };
-        }
-        Self::PlainLine
+    }
+
+    #[inline]
+    fn is_variable(t: &str) -> bool {
+        t.starts_with('$') && t.contains(':')
     }
 
     fn classify_at_rule(rest: &str) -> Self {
-        if rest.starts_with("each ") {
-            if Self::is_single_line_block(rest) { Self::AtEachSingle }
-            else { Self::AtEachMulti }
-        } else if rest.starts_with("for ") {
-            if Self::is_single_line_block(rest) { Self::AtForSingle }
-            else { Self::AtForMulti }
-        } else if rest.starts_with("if ") {
-            Self::AtIfStart
-        } else if rest.starts_with("else if ") || rest.starts_with("elseif ") {
-            Self::AtElseIf
-        } else if rest == "else" || rest.starts_with("else ") {
-            Self::AtElse
-        } else if rest.starts_with("mixin ") {
-            Self::AtMixinDef
-        } else if rest.starts_with("include ") {
-            Self::AtInclude
-        } else if rest.starts_with("extend ") {
-            Self::AtExtend
-        } else if rest.starts_with("use ") {
-            Self::AtUse
-        } else if rest.starts_with("forward ") {
-            Self::AtForward
-        } else if rest.starts_with("keyframes ") {
-            Self::AtKeyframes
-        } else {
-            Self::PlainLine
+        // match 在 (首 token, 次 token) 元组上, 纯声明式 dispatch
+        let mut tokens = rest.split(' ');
+        let (first, second) = (tokens.next().unwrap_or(""), tokens.next().unwrap_or(""));
+        match (first, second) {
+            ("each", _) => Self::from_single_line(rest, Self::AtEachSingle, Self::AtEachMulti),
+            ("for", _)  => Self::from_single_line(rest, Self::AtForSingle, Self::AtForMulti),
+            ("while", _) => Self::AtWhile,
+            ("if", _) => Self::AtIfStart,
+            ("else", "if") | ("else", "elseif") | ("elseif", _) => Self::AtElseIf,
+            ("else", _) => Self::AtElse,
+            ("mixin", _) => Self::AtMixinDef,
+            ("include", _) => Self::AtInclude,
+            ("extend", _) => Self::AtExtend,
+            ("use", _) => Self::AtUse,
+            ("forward", _) => Self::AtForward,
+            ("keyframes", _) => Self::AtKeyframes,
+            _ => Self::PlainLine,
         }
+    }
+
+    /// 单行/多行分发: 有 `{...}` 同一行 → single, 否则 multi
+    #[inline]
+    fn from_single_line(s: &str, single: Self, multi: Self) -> Self {
+        if Self::is_single_line_block(s) { single } else { multi }
     }
 
     fn is_single_line_block(s: &str) -> bool {
