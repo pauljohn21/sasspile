@@ -96,15 +96,12 @@ fn process_line(line: &str, state: &mut CompileState) -> Vec<String> {
     if trimmed.starts_with("@include ") {
         return handle_include(trimmed, state);
     }
-    if trimmed.starts_with("@extend ") {
+    if trimmed.starts_with("@extend ") && state.current_rule_name.is_some() {
         // 跨行规则体中的 @extend: 延迟注入到规则关闭 }
-        if state.current_rule_name.is_some() {
-            if let Some(decl) = parse_inline_extend(trimmed, state) {
-                state.pending_extend_decls.push(decl);
-            }
-            return vec![];
+        if let Some(decl) = parse_inline_extend(trimmed, state) {
+            state.pending_extend_decls.push(decl);
         }
-        return handle_extend(trimmed, &*state);
+        return vec![];
     }
     // 行内 @extend: ".bar { @extend %foo; }" → 注入 placeholder decls
     if trimmed.contains("@extend ") && trimmed.ends_with('}') {
@@ -214,18 +211,6 @@ fn handle_include(line: &str, state: &CompileState) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn handle_extend(line: &str, state: &CompileState) -> Vec<String> {
-    let args = line[8..].trim().trim_end_matches(';');
-    let (placeholder, _optional) = match args.find("!optional") {
-        Some(idx) => (args[..idx].trim(), true),
-        None => (args, false),
-    };
-    state
-        .placeholder_defs
-        .get(placeholder)
-        .cloned()
-        .unwrap_or_default()
-}
 
 fn expand_single_line(line: &str, state: &CompileState) -> Vec<String> {
     let tr = line.trim();
