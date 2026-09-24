@@ -5,7 +5,7 @@
 //! flat_map 消费 DirectiveBlock → emit Vec<String> (展开后的 CSS 行)
 
 use super::eval::TokenKind;
-use super::parse::{parse_each_sig, parse_for_sig, parse_mixin_sig};
+use super::parse::{parse_each_sig, parse_for_sig, parse_mixin_sig, substitute_vars};
 use super::state::CompileState;
 use super::ops::process_block;
 
@@ -18,6 +18,8 @@ pub enum DirectiveBlock {
     Each { var_name: String, items: Vec<String>, body: Vec<String> },
     If { branches: Vec<(Option<String>, Vec<String>)> },
     MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String> },
+    /// %placeholder 定义 — 存入 state 后不输出
+    PlaceholderDef { name: String, body: Vec<String> },
 }
 
 // ─── 分块状态机 (scan_map Acc) ──────────────────────────────────────────────
@@ -40,6 +42,7 @@ enum Building {
         current_body: Vec<String>,
     },
     MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String> },
+    PlaceholderDef { name: String, body: Vec<String> },
 }
 
 // ─── scan_map reducer: 累积行 → Vec<DirectiveBlock> ──────────────────────────
@@ -108,6 +111,23 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
             });
             vec![]
         }
+        TokenKind::PlaceholderDef => {
+            // 单行: "%foo { color: red; }"
+            if let Some((name, s, e)) = parse_placeholder_sig(trimmed) {
+                if e > s {
+                    return try_emit_block(
+                        &mut acc.current_lines,
+                        Some(DirectiveBlock::PlaceholderDef {
+                            name,
+                            body: vec![trimmed[s..=e].to_string()],
+                        }),
+                    );
+                }
+                // 多行: "%foo {" — 开启收集
+                acc.building = Some(Building::PlaceholderDef { name, body: vec![] });
+            }
+            vec![]
+        }
         TokenKind::AtMixinDef => {
             if trimmed.len() > 7 {
                 if let (Some((name, params)), Some(s), Some(e)) =
@@ -150,7 +170,8 @@ fn append_and_maybe_close(
     let result = match &mut building {
         Building::For { body, .. }
         | Building::Each { body, .. }
-        | Building::MixinDef { body, .. } => {
+        | Building::MixinDef { body, .. }
+        | Building::PlaceholderDef { body, .. } => {
             if t == "}" {
                 block_to_directive(building)
             } else if !t.is_empty() {
@@ -207,6 +228,9 @@ fn block_to_directive(building: Building) -> Vec<DirectiveBlock> {
         Building::MixinDef { name, params, body } => {
             vec![DirectiveBlock::MixinDef { name, params, body }]
         }
+        Building::PlaceholderDef { name, body } => {
+            vec![DirectiveBlock::PlaceholderDef { name, body }]
+        }
     }
 }
 
@@ -222,6 +246,17 @@ fn try_emit_block(
         result.push(b);
     }
     result
+}
+
+/// 解析 placeholder 签名: "%foo {" / "%foo { color: red; }" → (name, open, close)
+fn parse_placeholder_sig(line: &str) -> Option<(String, usize, usize)> {
+    let s = line.strip_prefix('%').unwrap_or(line).trim_start_matches('%');
+    let name = s.split(|c: char| c == '{' || c == '}' || c == ';').next()?.trim().to_string();
+    if name.is_empty() { return None; }
+    match (line.find('{'), line.rfind('}')) {
+        (Some(o), Some(c)) => Some((name, o, c)),
+        _ => None,
+    }
 }
 
 fn parse_single_for(line: &str) -> Option<DirectiveBlock> {

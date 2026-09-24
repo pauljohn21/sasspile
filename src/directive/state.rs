@@ -141,6 +141,12 @@ pub struct CompileState {
     pub placeholder_defs: HashMap<String, Vec<String>>,
     /// 当前正在定义的 placeholder 名称
     pub current_placeholder_name: Option<String>,
+
+    // ── 跨行规则上下文 ─────────────────────────────────────────────
+    /// 当前正在处理的规则选择器 (.wrapper { ... })
+    pub current_rule_name: Option<String>,
+    /// 规则体内累积的 @extend 声明 (延迟注入到 })
+    pub pending_extend_decls: Vec<String>,
 }
 
 impl CompileState {
