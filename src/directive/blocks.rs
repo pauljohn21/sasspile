@@ -90,7 +90,7 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
     match kind {
         TokenKind::AtForSingle => try_emit_block(&mut acc.current_lines, parse_single_for(trimmed)),
         TokenKind::AtForMulti => {
-            if let Some((var, values)) = parse_for_sig(&trimmed[5..]) {
+            if let Some((var, values)) = trimmed.strip_prefix("@for ").or_else(|| trimmed.strip_prefix("@for")).and_then(|s| parse_for_sig(s)) {
                 acc.building = Some(Building::For { var_name: var, values, body: vec![] });
             }
             vec![]
@@ -99,7 +99,7 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
             try_emit_block(&mut acc.current_lines, parse_single_each(trimmed))
         }
         TokenKind::AtEachMulti => {
-            if let Some((var, items)) = parse_each_sig(&trimmed[6..]) {
+            if let Some((var, items)) = trimmed.strip_prefix("@each ").or_else(|| trimmed.strip_prefix("@each")).and_then(|s| parse_each_sig(s)) {
                 acc.building = Some(Building::Each { var_name: var, items, body: vec![] });
             }
             vec![]
@@ -297,7 +297,7 @@ fn parse_single_each(line: &str) -> Option<DirectiveBlock> {
 }
 
 fn extract_at_if_cond(line: &str) -> String {
-    let after = line[4..].trim();
+    let after = line.strip_prefix("@if ").unwrap_or_else(|| line.strip_prefix("@if").unwrap_or("")).trim();
     match after.rfind('{') {
         Some(b) => after[..b].trim().to_string(),
         None => after.to_string(),
