@@ -7,7 +7,6 @@
 //!   - 状态由 rxrust scan_map 框架线程化, 零 clone / 零 Arc<Mutex>
 
 use std::collections::HashMap;
-use tracing::info_span;
 
 // ─── Mixin 定义 ────────────────────────────────────────────────────────────
 

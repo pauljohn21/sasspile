@@ -8,6 +8,8 @@
 //!
 //! @media 合并由管线 merge_media_nodes 函数处理 (汇聚后一次性合并)
 
+use std::borrow::Cow;
+
 use super::node::CssNode;
 use tracing::info_span;
 
@@ -97,9 +99,9 @@ impl CssBuilder {
     fn start_rule(&mut self, line: &str, at_root: bool) -> Vec<CssNode> {
         // line = "selector {"
         let selector = line[..line.len() - 1].trim().to_string();
-        // @at-root: 展开 & 为父选择器
+        // @at-root: 展开 & 为父选择器 (Cow 零分配回退)
         let selector = if at_root {
-            self.expand_parent_ref(&selector)
+            self.expand_parent_ref(&selector).into_owned()
         } else {
             selector
         };
@@ -112,17 +114,16 @@ impl CssBuilder {
         vec![]
     }
 
-    /// 展开选择器中的 & 为父选择器
-    fn expand_parent_ref(&self, selector: &str) -> String {
+    /// 展开选择器中的 & 为父选择器 (无 & 时零分配, 借用输入)
+    fn expand_parent_ref<'a>(&self, selector: &'a str) -> Cow<'a, str> {
         if !selector.contains('&') {
-            return selector.to_string();
+            return Cow::Borrowed(selector);
         }
         let parent = self.rule_stack.last().map(|f| f.selector.as_str()).unwrap_or("");
         if parent.is_empty() {
-            // 无父上下文: 移除 &
-            selector.replace("&", "")
+            Cow::Owned(selector.replace("&", ""))
         } else {
-            selector.replace('&', parent)
+            Cow::Owned(selector.replace('&', parent))
         }
     }
 
@@ -208,8 +209,8 @@ impl CssBuilder {
 
         let selector = line[..brace_open].trim().to_string();
         let selector = if at_root {
-            // @at-root 单行规则: 展开 & 为父选择器
-            self.expand_parent_ref(&selector)
+            // @at-root 单行规则: 展开 & 为父选择器 (Cow 零分配回退)
+            self.expand_parent_ref(&selector).into_owned()
         } else {
             selector
         };

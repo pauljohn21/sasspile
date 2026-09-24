@@ -21,10 +21,6 @@ pub enum CssNode {
         property: String,
         value: String,
     },
-    /// @at-root 包装 — 序列化时 children 直接提升到顶层
-    AtRoot {
-        children: Vec<CssNode>,
-    },
     /// @media / @keyframes / @supports 等 at-rule
     AtRule {
         query: String,
@@ -57,14 +53,6 @@ fn render_node_indent(node: &CssNode, depth: usize, indent_step: &str) -> String
         CssNode::Declaration { property, value } => {
             format!("{indent}{property}: {value};\n")
         }
-        CssNode::AtRoot { children } => {
-            // AtRoot 不输出自身的包裹，直接渲染 children 到当前 depth
-            let mut out = String::new();
-            for child in children {
-                out.push_str(&render_node_indent(child, depth, indent_step));
-            }
-            out
-        }
         CssNode::AtRule { query, children } => {
             let mut out = format!("{indent}{query} {{\n");
             for child in children {
@@ -83,7 +71,6 @@ fn node_variant_name(node: &CssNode) -> &'static str {
     match node {
         CssNode::Rule { .. } => "Rule",
         CssNode::Declaration { .. } => "Declaration",
-        CssNode::AtRoot { .. } => "AtRoot",
         CssNode::AtRule { .. } => "AtRule",
         CssNode::Comment(_) => "Comment",
     }

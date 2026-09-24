@@ -1,6 +1,6 @@
 //! dispatch_pass: scan_map reducer
 //!
-//! 消费 &mut CompileState + token → Vec<String>
+//! 消费 &mut CompileState + &str token → Vec<String>
 //!   - 变量定义: 存 state, 输出 []
 //!   - @mixin: 存 state, 输出 []
 //!   - @include: 展开 mixin body, 输出展开行
@@ -253,44 +253,56 @@ fn expand_single_line_body(line: String, state: &CompileState) -> Vec<String> {
     }
 }
 
+/// 收官收集态 — 展开循环/分支为纯文本行 (match 模式 + 迭代器组合子)
 fn finalize_collecting(state: &mut CompileState) -> Vec<String> {
     let collecting = std::mem::take(&mut state.collecting);
+
     match collecting {
-        Collecting::Each { var_name, items, body } => {
-            let mut output = Vec::new();
-            let var_name = &var_name;
-            for item in items {
-                for body_line in &body {
-                    output.push(body_line.replace(var_name, &item));
-                }
-            }
-            output
-        }
-        Collecting::For { var_name, values, body } => {
-            let mut output = Vec::new();
-            let var_name = &var_name;
-            for v in values {
-                for body_line in &body {
-                    output.push(body_line.replace(var_name, &v));
-                }
-            }
-            output
-        }
+        Collecting::Each { var_name, items, body } =>
+            expand_loop(&items, &body, &var_name),
+
+        Collecting::For { var_name, values, body } =>
+            expand_loop(&values, &body, &var_name),
+
         Collecting::If { body, branch_taken } => {
             state.pending_if_taken = Some(branch_taken);
-            if branch_taken { body } else { vec![] }
+            branch_then_or_empty(branch_taken, body)
         }
+
         Collecting::MixinDef { params } => {
-            if let Some(name) = &state.current_mixin_name {
-                if let Some(mixin_def) = state.scope.mixins.get_mut(name) {
-                    mixin_def.params = params;
-                }
-            }
-            state.current_mixin_name = None;
+            finalize_mixin_def(state, params);
             vec![]
         }
+
         Collecting::None => vec![],
     }
+}
+
+/// 通用循环展开: 每个迭代值替换 body 中的变量引用
+fn expand_loop(items: &[String], body: &[String], var_name: &str) -> Vec<String> {
+    items
+        .iter()
+        .flat_map(|item| {
+            body.iter()
+                .map(|line| line.replace(var_name, item))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// 分支求真: taken 时返回 body, 否则返回空 Vec
+fn branch_then_or_empty(taken: bool, body: Vec<String>) -> Vec<String> {
+    taken.then_some(body).unwrap_or_default()
+}
+
+/// 收官 @mixin 定义 — 回写参数
+fn finalize_mixin_def(state: &mut CompileState, params: Vec<(String, Option<String>)>) {
+    if let Some(name) = &state.current_mixin_name {
+        if let Some(mixin_def) = state.scope.mixins.get_mut(name) {
+            mixin_def.params = params;
+        }
+    }
+    state.current_mixin_name = None;
 }
 
 /// 从 `@if expr {` 行提取条件表达式 (去掉前缀 `@if ` 与尾部 `{`)
@@ -305,7 +317,6 @@ fn extract_if_condition(line: &str) -> String {
 }
 
 /// 简易条件求值 — 支持字面量 true/false、null、$var 引用、== / != 比较、and / or / not
-/// Phase D.1 范围: 不处理算术, 仅逻辑与真值判断
 fn eval_condition(state: &CompileState, expr: &str) -> bool {
     let expr = substitute_vars(state, expr);
     let t = expr.trim();
