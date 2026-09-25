@@ -63,6 +63,19 @@ impl CssBuilder {
             (trimmed, false)
         };
 
+        // @extend 标记行: 由 ops.rs 注入的特殊标记 (必须在 declaration 检查之前)
+        // 格式: >>EXTEND:extender:target1:target2:...:optional
+        if let Some(rest) = trimmed.strip_prefix(">>EXTEND:") {
+            let parts: Vec<&str> = rest.split(':').collect();
+            if parts.len() >= 3 {
+                let extender = parts[0].to_string();
+                let optional = parts[parts.len() - 1] == "true";
+                // 中间部分都是 target (支持多目标)
+                let target = parts[1..parts.len() - 1].join(",");
+                return vec![CssNode::ExtendMarker { extender, target, optional }];
+            }
+        }
+
         // 单行完整规则: "selector { prop: val; ... }" — 直接解析 emit
         if !trimmed.starts_with('@') && trimmed.contains('{') && trimmed.ends_with('}') && !trimmed.starts_with('$') {
             return self.parse_single_line_rule(trimmed, at_root);

@@ -83,6 +83,118 @@ fn flatten_node(node: CssNode, parent_sel: &str) -> CssNode {
     }
 }
 
+/// Post-processing: 解析 @extend 标记, 合并选择器
+/// 将 ExtendMarker 中找到的目标规则的选择器扩展为 "target, extender"
+#[allow(clippy::redundant_clone)]
+fn resolve_extend_markers(nodes: Vec<CssNode>) -> Vec<CssNode> {
+    // 收集所有 extend 标记
+    let mut markers: Vec<(String, String, bool)> = vec![]; // (extender, target, optional)
+    let mut rule_indices: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    // 第一遍: 收集所有规则索引
+    for (i, node) in nodes.iter().enumerate() {
+        if let CssNode::Rule { selector, .. } = node {
+            rule_indices.insert(selector.clone(), i);
+        }
+    }
+
+    // 收集 extend 标记
+    for node in &nodes {
+        if let CssNode::ExtendMarker { extender, target, optional } = node {
+            markers.push((extender.clone(), target.clone(), *optional));
+        }
+    }
+
+    // 构建: target(原始选择器字符串) → 该规则当前最新的合并选择器
+    let mut current_selector: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    // 初始化: 每个已知规则的选择器
+    for node in &nodes {
+        if let CssNode::Rule { selector, .. } = node {
+            current_selector.insert(selector.clone(), selector.clone());
+        }
+    }
+
+    // 应用 extend: 将 extender 追加到 target 选择器
+    for (extender, target, optional) in &markers {
+        // 支持多目标: target 可能是逗号分隔的列表
+        let targets: Vec<&str> = target.split(',').map(str::trim).filter(|t| !t.is_empty()).collect();
+        let mut merged_any = false;
+        for single_target in &targets {
+            // 查找: 是否有规则的(当前)选择器包含此 target?
+            // 先尝试精确匹配 current_selector 的 key
+            if let Some(existing) = current_selector.get(*single_target) {
+                let merged = format!("{existing}, {extender}");
+                current_selector.insert(single_target.to_string(), merged.clone());
+                current_selector.insert(extender.clone(), merged);
+                merged_any = true;
+            } else {
+                // 尝试部分匹配: 某个规则的选择器逗号列表包含此 target
+                let mut found = false;
+                for (rule_sel, current_val) in current_selector.clone() {
+                    let parts: Vec<&str> = rule_sel.split(',').map(str::trim).collect();
+                    if parts.contains(single_target) {
+                        let merged = format!("{current_val}, {extender}");
+                        current_selector.insert(rule_sel.clone(), merged.clone());
+                        current_selector.insert(extender.clone(), merged);
+                        merged_any = true;
+                        found = true;
+                        break;
+                    }
+                }
+                if found {
+                    continue;
+                }
+            }
+        }
+        if !merged_any {
+            if *optional {
+                continue; // optional + 目标不存在: 静默忽略
+            }
+            // 非 optional: 至少让 extender 自身可查
+            current_selector.entry(extender.clone()).or_insert_with(|| extender.clone());
+        }
+    }
+
+    // 第二遍: 应用选择器修改, 移除 ExtendMarker
+    let mut result: Vec<CssNode> = Vec::new();
+    let mut removed_extenders: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // 收集需要移除的 extender (成功匹配的)
+    for (extender, target, _) in &markers {
+        let target_trimmed = target.split(',').next().unwrap_or(target).trim();
+        if let Some(current) = current_selector.get(target_trimmed) {
+            if rule_indices.contains_key(target_trimmed) || current != target_trimmed {
+                removed_extenders.insert(extender.clone());
+            }
+        }
+    }
+
+    for node in &nodes {
+        match node {
+            CssNode::ExtendMarker { .. } => continue,
+            CssNode::Rule { selector, children } => {
+                // 如果是 extender (成功匹配), 跳过 (已被合并到 target)
+                if removed_extenders.contains(selector) {
+                    continue;
+                }
+                // 应用选择器合并: 查找当前最新选择器
+                if let Some(new_sel) = current_selector.get(selector) {
+                    if new_sel != selector {
+                        result.push(CssNode::Rule {
+                            selector: new_sel.clone(),
+                            children: children.clone(),
+                        });
+                        continue;
+                    }
+                }
+                result.push(node.clone());
+            }
+            _ => result.push(node.clone()),
+        }
+    }
+    result
+}
+
 fn merge_media_nodes(nodes: Vec<CssNode>) -> Vec<CssNode> {
     let (result, _media_idx) = nodes.into_iter().fold(
         (Vec::<CssNode>::new(), std::collections::HashMap::<String, usize>::new()),
@@ -164,6 +276,7 @@ pub fn compile_pipeline(input: &str) -> String {
         .collect::<Vec<CssNode>>()
         .last()
         .map(flatten_nested_selectors)
+        .map(resolve_extend_markers)
         .map(merge_media_nodes)
         .tap(|nodes: &Vec<CssNode>| {
             let _s = debug_span!("phase2_merged", count = nodes.len()).entered();

@@ -6,14 +6,84 @@ use super::blocks::DirectiveBlock;
 use super::parse::{expand_mixin, parse_include_sig, substitute_vars};
 use super::state::CompileState;
 
+/// 跨行 @extend 合并预处理
+/// "d {@extend" + "a}" → "d {@extend a}"
+/// "d {@extend" + "a" + "}" → "d {@extend a}"
+/// "a {@extend b" + " !optional}" → "a {@extend b !optional}"
+/// "a {@extend b" + " !optional" + "}" → "a {@extend b !optional}"
+fn merge_extend_continuations(lines: &[String]) -> Vec<String> {
+    let mut result: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let line = &lines[i];
+        let trimmed = line.trim();
+        // 检测: 行内有 @extend 但 extend 不完整 (缺少目标就在本行)
+        // 即: @extend 后只有空白或换行,@extend 是行尾最后一个 token
+        let ends_with_extend = trimmed.ends_with("@extend") || trimmed.ends_with("@extend ");
+        // 或者行内有 @extend 但 } 在后续行
+        let has_incomplete_extend = trimmed.contains("@extend")
+            && !trimmed.contains('}')
+            && (trimmed.ends_with("@extend") || trimmed.trim_end().ends_with("@extend"));
+
+        if ends_with_extend || has_incomplete_extend {
+            // 收集后续行直到 } 出现
+            let mut combined = trimmed.to_string();
+            let mut j = i + 1;
+            let mut found_close = false;
+            while j < lines.len() {
+                let next = lines[j].trim();
+                if next == "}" {
+                    found_close = true;
+                    // 不追加空 }, 因为是规则结束
+                    j += 1;
+                    break;
+                } else if next.starts_with("}") {
+                    // "} ..." or " !optional}" — extract content before }
+                    let before_close = next.trim_start_matches('}').trim();
+                    if !before_close.is_empty() {
+                        combined.push(' ');
+                        combined.push_str(before_close);
+                    }
+                    found_close = true;
+                    j += 1;
+                    break;
+                } else if next.trim_end_matches('}').trim_end() != next {
+                    // contains } but not at start: " !optional}" or "a}"
+                    let before_close = next.trim_end_matches('}').trim();
+                    if !before_close.is_empty() {
+                        combined.push(' ');
+                        combined.push_str(before_close);
+                    }
+                    found_close = true;
+                    j += 1;
+                    break;
+                } else {
+                    combined.push(' ');
+                    combined.push_str(next);
+                }
+                j += 1;
+            }
+            if found_close || !combined.ends_with("@extend") {
+                result.push(combined);
+                i = j;
+                continue;
+            }
+        }
+        result.push(line.clone());
+        i += 1;
+    }
+    result
+}
+
 pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<String> {
     let state_ref: &CompileState = &*state;
 
     match block {
-        DirectiveBlock::Lines(lines) => lines
-            .into_iter()
-            .flat_map(|line| process_line(&line, state))
-            .collect(),
+        DirectiveBlock::Lines(lines) => {
+            // 预处理: 合并跨行 @extend ("d {@extend" + "a}" → "d {@extend a}")
+            let merged = merge_extend_continuations(&lines);
+            merged.into_iter().flat_map(|line| process_line(&line, state)).collect()
+        }
         DirectiveBlock::For { ref var_name, ref values, ref body } => values
             .iter()
             .flat_map(|v| body.iter().map(|b| {
@@ -223,15 +293,82 @@ fn process_line(line: &str, state: &mut CompileState) -> Vec<String> {
         return handle_include(trimmed, state);
     }
     if trimmed.starts_with("@extend ") && state.current_rule_name.is_some() {
-        // 跨行规则体中的 @extend: 延迟注入到规则关闭 }
+        // 跨行规则体中的 @extend: 尝试 placeholder 注入
         if let Some(decl) = parse_inline_extend(trimmed, state) {
             state.pending_extend_decls.push(decl);
+            return vec![];
+        }
+        // 选择器级 @extend: 输出 ExtendMarker 到管线
+        if let Some(marker) = build_extend_marker(trimmed, state) {
+            return vec![marker];
         }
         return vec![];
     }
     // 行内 @extend: ".bar { @extend %foo; }" → 注入 placeholder decls
     if trimmed.contains("@extend ") && trimmed.ends_with('}') {
-        return handle_inline_extend(trimmed, state);
+        // 提取 extend target (判断是否为 placeholder)
+        let after_extend = trimmed.split("@extend ").nth(1).unwrap_or("");
+        let target_spec = after_extend
+            .split(|c: char| c == ';' || c == '}')
+            .next()
+            .unwrap_or("")
+            .trim();
+        let is_placeholder = target_spec.starts_with('%');
+        let placeholder_name = target_spec.strip_prefix('%')
+            .map(|s| s.trim_end_matches("!optional").trim())
+            .unwrap_or("");
+        let is_optional = target_spec.contains("!optional");
+        let placeholder_exists = state.placeholder_defs.contains_key(placeholder_name);
+
+        if is_placeholder && placeholder_exists {
+            // placeholder 存在: 注入 declarations
+            let placeholder_result = handle_inline_extend(trimmed, state);
+            if !placeholder_result.is_empty() {
+                return placeholder_result;
+            }
+        }
+
+        // 选择器级 @extend: 输出 ExtendMarker
+        if let Some(marker) = build_extend_marker(trimmed, state) {
+            // 判断规则体是否只包含 @extend (无其他声明)
+            let inner = trimmed
+                .trim_start_matches(|c: char| c != '{')
+                .trim_start_matches('{')
+                .trim_end_matches('}')
+                .trim();
+            // 规则体只含 @extend: 去掉末尾 ; 后就是 "@extend ..." 且声明内部没有额外 ;
+            let only_extend = {
+                let without_semi = inner.trim_end_matches(';').trim();
+                without_semi.starts_with("@extend")
+                    && !without_semi[7..].contains(';')
+            };
+
+            if is_placeholder && is_optional && !placeholder_exists {
+                // !optional + placeholder 不存在: 移除 @extend 行, 保留其余声明
+                if only_extend {
+                    // 规则体只有 @extend: 不输出空规则
+                    return vec![];
+                }
+                let without_extend = remove_extend_line(trimmed);
+                if without_extend.is_empty() || without_extend == "{" || without_extend == "{}" {
+                    return vec![];
+                }
+                return vec![without_extend];
+            }
+
+            if only_extend {
+                return vec![marker];
+            }
+            // 规则体有其他声明: 同时输出 marker + 原规则 (原规则去掉 @extend 行)
+            let without_extend = remove_extend_line(trimmed);
+            if without_extend.is_empty() || without_extend == "{" || without_extend == "{}" {
+                return vec![marker];
+            }
+            return vec![marker, without_extend];
+        }
+
+        // extend 解析失败: 回退到原规则输出
+        return vec![substitute_vars(&*state, trimmed)];
     }
 
     // 规则开启: ".wrapper {"
@@ -245,6 +382,61 @@ fn process_line(line: &str, state: &mut CompileState) -> Vec<String> {
     }
 
     vec![substitute_vars(&*state, trimmed)]
+}
+
+/// 构建 extend 标记字符串 (注入管线 → CssBuilder → CssNode::ExtendMarker)
+/// line 必须是原始规则行 (如 "d {@extend a}" 或 "@extend a")
+fn build_extend_marker(line: &str, state: &CompileState) -> Option<String> {
+    // 确定 extender
+    let extender = if let Some(name) = &state.current_rule_name {
+        name.clone()
+    } else {
+        // 单行规则: 从 "{ " 前提取选择器
+        line.split('{').next()?.trim().to_string()
+    };
+    if extender.is_empty() {
+        return None;
+    }
+    // 提取 target: 从 "@extend " 后开始
+    let after_extend = line.split("@extend ").nth(1)?;
+    // 剥离后续内容 (;, }, 行尾)
+    let target_spec = after_extend
+        .split(|c: char| c == ';' || c == '}')
+        .next()?
+        .trim();
+    if target_spec.is_empty() {
+        return None;
+    }
+    // 剥离行末注释
+    let target_spec = if let Some(idx) = target_spec.find("//") {
+        &target_spec[..idx]
+    } else {
+        target_spec
+    };
+    // 剥离块注释
+    let target_spec = target_spec.replace("/**/", "").replace("/*", "").replace("*/", "");
+    let target_spec = target_spec.trim();
+    if target_spec.is_empty() {
+        return None;
+    }
+    // 检查 !optional (支持多目标时只检查整体)
+    let optional = target_spec.contains("!optional");
+    // 清理每个 target 的 !optional
+    let targets: Vec<String> = target_spec
+        .split(',')
+        .map(|t| t.trim().trim_end_matches("!optional").trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if targets.is_empty() {
+        return None;
+    }
+    // 如果 extender 在 targets 中, 跳过所有 (自扩展)
+    if targets.iter().any(|t| t == &extender) {
+        return None;
+    }
+    // 用冒号连接多目标
+    let target = targets.join(":");
+    Some(format!(">>EXTEND:{}:{}:{}", extender, target, optional))
 }
 
 /// 从单行 @extend 提取 placeholder declaration (跨行/单行通用)
@@ -365,6 +557,32 @@ fn parse_var_def(line: &str) -> Option<(String, String)> {
         return None;
     }
     Some((name, value))
+}
+
+/// 从规则行中移除 @extend 行 (保留其余声明)
+fn remove_extend_line(line: &str) -> String {
+    let Some(extend_rel) = line.find("@extend ") else {
+        return line.to_string();
+    };
+    let after_extend = &line[extend_rel + 8..];
+    let end_rel = after_extend.find(|c: char| c == ';' || c == '}').unwrap_or(after_extend.len());
+    // 构造: @extend 之前的部分 + @extend target 之后的部分
+    let before = &line[..extend_rel];
+    let after = &line[extend_rel + 8 + end_rel..];
+    // 跳过后面的 ; 或 }
+    let after = after.strip_prefix(';').unwrap_or(after);
+    let result = format!("{before}{after}");
+    let result = result.trim();
+    // 如果结果是 ".selector { }" 形式，只保留 ".selector { ... }"
+    if let Some(open) = result.find('{') {
+        if let Some(close) = result.rfind('}') {
+            let inner = &result[open + 1..close].trim();
+            if inner.is_empty() {
+                return String::new();
+            }
+        }
+    }
+    result.to_string()
 }
 
 fn eval_condition(state: &CompileState, expr: &str) -> bool {

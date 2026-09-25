@@ -8,6 +8,7 @@ use super::eval::TokenKind;
 use super::parse::{parse_each_sig, parse_for_sig, parse_include_sig, parse_mixin_sig};
 use super::state::CompileState;
 use super::ops::process_block;
+use tracing::debug_span;
 
 // ─── 分块产物 ────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ enum Building {
         current_cond: Option<String>,
         current_body: Vec<String>,
     },
+    /// 多行规则积累: selector { ... } (含 extend/普通声明)
+    Rule { selector: String, body: Vec<String>, brace_depth: i32 },
     MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String>, brace_depth: i32 },
     PlaceholderDef { name: String, body: Vec<String>, brace_depth: i32 },
     While { cond: String, body: Vec<String>, brace_depth: i32 },
@@ -149,7 +152,8 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
         }
         TokenKind::PlaceholderDef => {
             if let Some((name, s, e)) = parse_placeholder_sig(trimmed) {
-                if e > s {
+                if e != usize::MAX && e > s {
+                    // 单行: %foo { ... }
                     return try_emit_block(
                         &mut acc.current_lines,
                         Some(DirectiveBlock::PlaceholderDef {
@@ -158,10 +162,42 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
                         }),
                     );
                 }
+                // 多行: %foo { ... \n ... \n }
                 let brace_depth = count_brace_depth(trimmed);
-                acc.building = Some(Building::PlaceholderDef { name, body: vec![], brace_depth });
+                let after_brace = trimmed[s + 1..].trim();
+                let initial_body = if after_brace.is_empty() {
+                    vec![]
+                } else {
+                    vec![after_brace.to_string()]
+                };
+                acc.building = Some(Building::PlaceholderDef { name, body: initial_body, brace_depth });
             }
             vec![]
+        }
+        TokenKind::RuleStart => {
+            let _span = debug_span!("block.rule_start", selector = %trimmed).entered();
+            // 多行规则: "selector {" 或 "selector { @extend" → 积累 body 直到匹配 "}"
+            let brace_pos = trimmed.find('{').unwrap_or(0);
+            let selector = trimmed[..brace_pos].trim();
+            if !selector.is_empty() && !selector.starts_with('@') {
+                let brace_depth = count_brace_depth(trimmed);
+                // { 后面可能跟了内容 (如 "d {@extend"),需要把这部分放入 body
+                let after_brace = trimmed[brace_pos + 1..].trim();
+                let initial_body = if after_brace.is_empty() {
+                    vec![]
+                } else {
+                    vec![after_brace.to_string()]
+                };
+                acc.building = Some(Building::Rule {
+                    selector: selector.to_string(),
+                    body: initial_body,
+                    brace_depth,
+                });
+                return vec![];
+            }
+            // 不符合积累条件: 当作普通行
+            acc.current_lines.push(line);
+            vec![DirectiveBlock::Lines(std::mem::take(&mut acc.current_lines))]
         }
         TokenKind::AtMixinDef => {
             if trimmed.len() > 7 {
@@ -205,6 +241,7 @@ fn append_and_maybe_close(
 
     // 所有累积型 block 共用 brace_depth 逻辑: depth=0 时遇到 } 才关闭
     let depth_delta = count_brace_depth(t);
+    let _span = debug_span!("block.append", body = %t, delta = depth_delta).entered();
     let closes = |d: i32| d + depth_delta <= 0 && (t.contains('}') || t.ends_with('}'));
 
     let result = match &mut building {
@@ -212,8 +249,16 @@ fn append_and_maybe_close(
         | Building::Each { body, brace_depth, .. }
         | Building::MixinDef { body, brace_depth, .. }
         | Building::PlaceholderDef { body, brace_depth, .. }
-        | Building::While { body, brace_depth, .. } => {
+        | Building::While { body, brace_depth, .. }
+        | Building::Rule { body, brace_depth, .. } => {
             if closes(*brace_depth) {
+                // 关闭前提取 } 之前的内容 (如 "a}" → "a")
+                if !t.is_empty() && t != "}" {
+                    let cleaned = t.trim().trim_end_matches('}').trim();
+                    if !cleaned.is_empty() {
+                        body.push(cleaned.to_string());
+                    }
+                }
                 block_to_directive(building)
             } else {
                 *brace_depth += depth_delta;
@@ -296,6 +341,13 @@ fn block_to_directive(building: Building) -> Vec<DirectiveBlock> {
             vec![DirectiveBlock::Each { var_name, items, body }]
         }
         Building::If { branches, .. } => vec![DirectiveBlock::If { branches }],
+        Building::Rule { selector, body, .. } => {
+            // 多行规则: selector + body + 末尾 } (CssBuilder 需要 } 关闭规则)
+            let mut lines = vec![format!("{selector} {{")];
+            lines.extend(body);
+            lines.push("}".to_string());
+            vec![DirectiveBlock::Lines(lines)]
+        }
         Building::MixinDef { name, params, body, .. } => {
             vec![DirectiveBlock::MixinDef { name, params, body }]
         }
@@ -326,14 +378,14 @@ fn try_emit_block(
 }
 
 /// 解析 placeholder 签名: "%foo {" / "%foo { color: red; }" → (name, open, close)
+/// 支持多行: 有 { 但无 } 时返回 (name, open, usize::MAX) 表示需要后续积累
 fn parse_placeholder_sig(line: &str) -> Option<(String, usize, usize)> {
     let s = line.strip_prefix('%').unwrap_or(line).trim_start_matches('%');
     let name = s.split(|c: char| c == '{' || c == '}' || c == ';').next()?.trim().to_string();
     if name.is_empty() { return None; }
-    match (line.find('{'), line.rfind('}')) {
-        (Some(o), Some(c)) => Some((name, o, c)),
-        _ => None,
-    }
+    let open = line.find('{')?;
+    let close = line.rfind('}').unwrap_or(usize::MAX);
+    Some((name, open, close))
 }
 
 fn parse_single_for(line: &str) -> Option<DirectiveBlock> {

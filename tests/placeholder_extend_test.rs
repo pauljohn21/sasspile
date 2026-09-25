@@ -25,10 +25,13 @@ fn extend_placeholder_multi_line() {
 
 #[test]
 fn extend_optional_safe() {
-    let input = ".bar { @extend %undefined !optional; }";
+    // !optional + undefined placeholder: extender 保留自身声明, 移除 @extend 行
+    let input = ".bar { @extend %undefined !optional; color: red; }";
     let output = compile(input);
     tracing::info!(output = %output, "extend optional output");
-    assert!(output.contains(".bar"), "extender should still appear: {output}");
+    assert!(output.contains(".bar"), "extender should appear: {output}");
+    assert!(output.contains("color: red"), "existing declaration should remain: {output}");
+    assert!(!output.contains("@extend"), "@extend 应被消费: {output}");
 }
 
 #[test]

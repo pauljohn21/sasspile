@@ -145,8 +145,12 @@ pub struct CompileState {
     // ── 跨行规则上下文 ─────────────────────────────────────────────
     /// 当前正在处理的规则选择器 (.wrapper { ... })
     pub current_rule_name: Option<String>,
+    /// 当前规则是否仅含 @extend (是则不输出)
+    pub current_rule_is_extender: bool,
     /// 规则体内累积的 @extend 声明 (延迟注入到 })
     pub pending_extend_decls: Vec<String>,
+    /// 选择器级 @extend 请求: (extender, target, optional)
+    pub pending_selector_extends: Vec<(String, String, bool)>,
 }
 
 impl CompileState {

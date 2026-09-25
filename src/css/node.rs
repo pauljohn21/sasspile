@@ -26,6 +26,13 @@ pub enum CssNode {
         query: String,
         children: Vec<CssNode>,
     },
+    /// @extend 标记 — 在 post-processing 阶段合并选择器
+    /// (extender_selector, target_selector, optional)
+    ExtendMarker {
+        extender: String,
+        target: String,
+        optional: bool,
+    },
     /// 注释
     Comment(String),
 }
@@ -64,6 +71,8 @@ fn render_node_indent(node: &CssNode, depth: usize, indent_step: &str) -> String
         CssNode::Comment(text) => {
             format!("{indent}/* {text} */\n")
         }
+        // ExtendMarker 仅在 post-processing 阶段存在, 不应到达 render
+        CssNode::ExtendMarker { .. } => String::new(),
     }
 }
 
@@ -73,5 +82,6 @@ fn node_variant_name(node: &CssNode) -> &'static str {
         CssNode::Declaration { .. } => "Declaration",
         CssNode::AtRule { .. } => "AtRule",
         CssNode::Comment(_) => "Comment",
+        CssNode::ExtendMarker { .. } => "ExtendMarker",
     }
 }
