@@ -165,6 +165,9 @@ impl CssBuilder {
                 query: frame.selector,
                 children: frame.children,
             }
+        } else if frame.children.is_empty() {
+            // 空规则 (e.g. "a { @extend b !optional }" 未匹配) → 省略
+            return vec![]
         } else {
             CssNode::Rule {
                 selector: frame.selector,
@@ -241,6 +244,11 @@ impl CssBuilder {
                 })
             })
             .collect();
+
+        // 空规则省略 (e.g. "a { @extend b !optional }")
+        if children.is_empty() {
+            return vec![];
+        }
 
         let node = CssNode::Rule { selector, children };
 
