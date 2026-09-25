@@ -343,7 +343,7 @@ fn parse_forward_path(s: &str) -> String {
     s.to_string()
 }
 
-/// 文件路径解析: 尝试精确 / "_" + path / path + ".scss" / path + ".sass"
+/// 文件路径解析: 精确 / "_"前缀 / 扩展名 / index文件
 fn resolve_file_path<'a>(path: &str, files: &'a std::collections::HashMap<String, String>) -> Option<&'a String> {
     // 直接 (含扩展名)
     if let Some(content) = files.get(path) {
@@ -370,6 +370,23 @@ fn resolve_file_path<'a>(path: &str, files: &'a std::collections::HashMap<String
     }
     let with_underscore_sass = format!("_{path}.sass");
     if let Some(content) = files.get(&with_underscore_sass) {
+        return Some(content);
+    }
+    // 目录 index 文件 (for @use "module" => module/_index.scss / module/index.scss)
+    let index_scss = format!("{path}/_index.scss");
+    if let Some(content) = files.get(&index_scss) {
+        return Some(content);
+    }
+    let index_scss2 = format!("{path}/index.scss");
+    if let Some(content) = files.get(&index_scss2) {
+        return Some(content);
+    }
+    let index_sass = format!("{path}/_index.sass");
+    if let Some(content) = files.get(&index_sass) {
+        return Some(content);
+    }
+    let index_sass2 = format!("{path}/index.sass");
+    if let Some(content) = files.get(&index_sass2) {
         Some(content)
     } else {
         None
