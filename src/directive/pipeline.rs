@@ -259,29 +259,50 @@ fn process_use_directives(
 ) -> (String, String) {
     let mut module_outputs: Vec<String> = Vec::new();
     let mut remaining_lines: Vec<String> = Vec::new();
+    let mut pending_use: Option<(bool, String)> = None;
 
     for line in input.lines() {
         let trimmed = line.trim();
 
-        // @use "path" 或 @use "path" with ($a: val, ...)
+        // 累积跨行 @use / @forward (直到括号平衡)
+        if let Some((is_forward, acc)) = pending_use.clone() {
+            let mut accumulated = acc;
+            accumulated.push(' ');
+            accumulated.push_str(trimmed);
+            if accumulated.matches('(').count() <= accumulated.matches(')').count() {
+                flush_pending_use(&accumulated, is_forward, files, loading, &mut module_outputs);
+                pending_use = None;
+            } else {
+                pending_use = Some((is_forward, accumulated));
+            }
+            continue;
+        }
+
         if let Some(rest) = trimmed.strip_prefix("@use ") {
-            let (path, config) = parse_use_with(rest);
-            if !loading.contains(&path) {
-                loading.insert(path.clone());
-                if let Some(css) = compile_module(&path, &config, files, loading) {
-                    module_outputs.push(css);
+            if rest.matches('(').count() > rest.matches(')').count() {
+                pending_use = Some((false, rest.to_string()));
+            } else {
+                let (path, config) = parse_use_with(rest);
+                if !loading.contains(&path) {
+                    loading.insert(path.clone());
+                    if let Some(css) = compile_module(&path, &config, files, loading) {
+                        module_outputs.push(css);
+                    }
                 }
             }
             continue;
         }
 
-        // @forward "path" — 同 @use 语义 (对基础测试相同)
         if let Some(rest) = trimmed.strip_prefix("@forward ") {
-            let path = parse_forward_path(rest);
-            if !loading.contains(&path) {
-                loading.insert(path.clone());
-                if let Some(css) = compile_module(&path, &[], files, loading) {
-                    module_outputs.push(css);
+            if rest.matches('(').count() > rest.matches(')').count() {
+                pending_use = Some((true, rest.to_string()));
+            } else {
+                let path = parse_forward_path(rest);
+                if !loading.contains(&path) {
+                    loading.insert(path.clone());
+                    if let Some(css) = compile_module(&path, &[], files, loading) {
+                        module_outputs.push(css);
+                    }
                 }
             }
             continue;
@@ -291,6 +312,33 @@ fn process_use_directives(
     }
 
     (module_outputs.join("\n"), remaining_lines.join("\n"))
+}
+
+/// 处理累积的跨行 @use / @forward 指令 (rest = 去掉 @use / @forward 前缀后的内容)
+fn flush_pending_use(
+    rest: &str,
+    is_forward: bool,
+    files: &std::collections::HashMap<String, String>,
+    loading: &mut std::collections::HashSet<String>,
+    module_outputs: &mut Vec<String>,
+) {
+    if is_forward {
+        let path = parse_forward_path(rest);
+        if !loading.contains(&path) {
+            loading.insert(path.clone());
+            if let Some(css) = compile_module(&path, &[], files, loading) {
+                module_outputs.push(css);
+            }
+        }
+    } else {
+        let (path, config) = parse_use_with(rest);
+        if !loading.contains(&path) {
+            loading.insert(path.clone());
+            if let Some(css) = compile_module(&path, &config, files, loading) {
+                module_outputs.push(css);
+            }
+        }
+    }
 }
 
 /// 解析 @use "path" with ($a: val, $b: val) → (path, 配置变量表)
