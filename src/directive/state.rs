@@ -16,6 +16,15 @@ pub struct MixinDef {
     pub body: Vec<String>,
 }
 
+// ─── 函数定义 (@function / @return) ────────────────────────────────────────
+
+#[derive(Clone, Debug, Default)]
+pub struct FunctionDef {
+    pub params: Vec<(String, Option<String>)>,
+    pub return_value: String,
+    pub body: Vec<String>,
+}
+
 // ─── 模块系统 ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Default)]
@@ -52,6 +61,7 @@ impl Module {
 pub struct Scope {
     pub variables: HashMap<String, String>,
     pub mixins: HashMap<String, MixinDef>,
+    pub functions: HashMap<String, FunctionDef>,
 }
 
 impl Scope {
@@ -168,6 +178,10 @@ impl CompileState {
         self.scope.mixins.get(name)
     }
 
+    pub fn resolve_function(&self, name: &str) -> Option<&FunctionDef> {
+        self.scope.functions.get(name)
+    }
+
     // ── 写入接口 ──────────────────────────────────────────────────────
 
     pub fn set_variable(&mut self, name: String, value: String) {
@@ -176,6 +190,10 @@ impl CompileState {
 
     pub fn define_mixin(&mut self, name: String, def: MixinDef) {
         self.scope.mixins.insert(name, def);
+    }
+
+    pub fn define_function(&mut self, name: String, def: FunctionDef) {
+        self.scope.functions.insert(name, def);
     }
 
     pub fn load_module(&mut self, path: String, module: Module) {

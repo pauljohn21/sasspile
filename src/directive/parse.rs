@@ -106,7 +106,7 @@ pub fn parse_include_sig(s: &str) -> (String, Vec<String>) {
 
 // ─── 变量定义 + 替换 ──────────────────────────────────────────────────
 
-pub fn try_parse_var_def(line: &str) -> Option<(String, String)> {
+pub fn try_parse_var_def(line: &str) -> Option<(String, String, bool)> {
     let trimmed = line.trim();
     if !trimmed.starts_with('$') {
         return None;
@@ -114,15 +114,18 @@ pub fn try_parse_var_def(line: &str) -> Option<(String, String)> {
     let after_dollar = &trimmed[1..];
     let (name, value_part) = after_dollar.split_once(':')?;
     let name = format!("${}", name.trim());
+    let is_default = value_part.contains("!default");
     let value = value_part
         .trim()
         .trim_end_matches(';')
+        .trim()
+        .trim_end_matches("!default")
         .trim()
         .to_string();
     if value.is_empty() {
         return None;
     }
-    Some((name, value))
+    Some((name, value, is_default))
 }
 
 pub fn substitute_vars(state: &CompileState, line: &str) -> String {
@@ -155,7 +158,85 @@ pub fn substitute_vars(state: &CompileState, line: &str) -> String {
     }
 
     // 求值内置函数调用 (rgb/hsl/lighten/darken 等)
-    eval_all_calls(&result)
+    result = eval_all_calls(&result);
+
+    // 求值用户自定义函数 (@function / @return)
+    eval_user_functions(state, &result)
+}
+
+/// 扫描行中所有用户自定义函数调用并替换为返回值
+fn eval_user_functions(state: &CompileState, input: &str) -> String {
+    let mut result = input.to_string();
+    while let Some((start, end)) = find_function_call(&result) {
+        let call = &result[start..=end];
+        if let Some(func_name) = extract_func_name_from_call(call) {
+            if let Some(def) = state.scope.functions.get(func_name) {
+                let args = extract_args_from_call(call);
+                let replacement = apply_function(def, &args);
+                result.replace_range(start..=end, &replacement);
+                continue;
+            }
+        }
+        break;
+    }
+    result
+}
+
+/// 查找最右匹配的函数调用 (同 find_last_call 逻辑)
+fn find_function_call(input: &str) -> Option<(usize, usize)> {
+    let close = input.rfind(')')?;
+    let open = input[..close].rfind('(')?;
+    // 函数名必须由字母/数字/连字符/下划线组成，且不在字符串内
+    let before = &input[..open];
+    let name_end = before.rfind(|c: char| c.is_alphanumeric() || c == '-' || c == '_')?;
+    let name_start = before[..name_end].rfind(|c: char| !c.is_alphanumeric() && c != '-' && c != '_' && c != '.' && c != '$')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    Some((name_start, close))
+}
+
+/// 从函数调用中提取函数名
+fn extract_func_name_from_call(call: &str) -> Option<&str> {
+    let open = call.find('(')?;
+    let before = &call[..open];
+    let end = before.rfind(|c: char| c.is_alphanumeric() || c == '-' || c == '_')?;
+    let start = before[..end].rfind(|c: char| !c.is_alphanumeric() && c != '-' && c != '_' && c != '.' && c != '$')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    Some(&before[start..=end])
+}
+
+/// 从函数调用中提取参数列表
+fn extract_args_from_call(call: &str) -> Vec<String> {
+    let open = match call.find('(') {
+        Some(p) => p,
+        None => return vec![],
+    };
+    let close = match call.rfind(')') {
+        Some(p) => p,
+        None => return vec![],
+    };
+    if close <= open {
+        return vec![];
+    }
+    let inner = &call[open + 1..close];
+    if inner.trim().is_empty() {
+        return vec![];
+    }
+    inner.split(',').map(|s| s.trim().to_string()).collect()
+}
+
+/// 应用用户自定义函数: 参数替换到返回值
+fn apply_function(def: &super::state::FunctionDef, args: &[String]) -> String {
+    let mut result = def.return_value.clone();
+    for (i, (param_name, default_value)) in def.params.iter().enumerate() {
+        let arg_value = args.get(i)
+            .map(|s| s.as_str())
+            .or_else(|| default_value.as_deref())
+            .unwrap_or("");
+        result = result.replace(param_name, arg_value);
+    }
+    result
 }
 
 // ─── mixin 展开 ────────────────────────────────────────────────────────

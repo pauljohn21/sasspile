@@ -17,6 +17,7 @@ pub mod while_ops;
 pub mod eval;
 pub mod pipeline;
 pub mod module_system;
+pub mod member_parse;
 
 pub use self::pipeline::compile_pipeline;
 pub use self::module_system::process_module_imports;

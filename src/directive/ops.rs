@@ -46,6 +46,10 @@ pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<Str
             }
             vec![]
         }
+        DirectiveBlock::FunctionDef { name, params, return_value, body } => {
+            state.define_function(name, crate::directive::state::FunctionDef { params, return_value, body });
+            vec![]
+        }
         DirectiveBlock::MixinDef { name, params, body } => {
             state.scope.mixins.insert(name, crate::directive::state::MixinDef { params, body });
             vec![]
@@ -110,7 +114,11 @@ fn process_line(line: &str, state: &mut CompileState) -> Vec<String> {
     }
 
     if trimmed.starts_with('$') && trimmed.contains(':') {
-        if let Some((name, value)) = parse_var_def(trimmed) {
+        if let Some((name, value, is_default)) = parse_var_def(trimmed) {
+            // !default 语义: 仅当变量未定义时赋值 (with() config 优先)
+            if is_default && state.scope.variables.contains_key(&name) {
+                return vec![];
+            }
             state.scope.variables.insert(name, value);
         }
         return vec![];
@@ -233,16 +241,24 @@ fn expand_single_line(line: &str, state: &CompileState) -> Vec<String> {
 
 // ─── 变量定义解析 ───────────────────────────────────────────────────────────
 
-fn parse_var_def(line: &str) -> Option<(String, String)> {
+fn parse_var_def(line: &str) -> Option<(String, String, bool)> {
     if !line.starts_with('$') {
         return None;
     }
     let after_dollar = &line[1..];
     let (name, value_part) = after_dollar.split_once(':')?;
     let name = format!("${}", name.trim());
-    let value = value_part.trim().trim_end_matches(';').trim().to_string();
+    let raw_value = value_part.trim();
+    // 检测 !default 标志
+    let is_default = raw_value.contains("!default");
+    let value = raw_value
+        .trim_end_matches(';')
+        .trim()
+        .trim_end_matches("!default")
+        .trim()
+        .to_string();
     if value.is_empty() {
         return None;
     }
-    Some((name, value))
+    Some((name, value, is_default))
 }

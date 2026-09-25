@@ -18,6 +18,7 @@ pub enum DirectiveBlock {
     For { var_name: String, values: Vec<String>, body: Vec<String> },
     Each { var_name: String, items: Vec<String>, body: Vec<String> },
     If { branches: Vec<(Option<String>, Vec<String>)> },
+    FunctionDef { name: String, params: Vec<(String, Option<String>)>, return_value: String, body: Vec<String> },
     MixinDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String> },
     /// %placeholder 定义 — 存入 state 后不输出
     PlaceholderDef { name: String, body: Vec<String> },
@@ -50,6 +51,7 @@ enum Building {
     PlaceholderDef { name: String, body: Vec<String>, brace_depth: i32 },
     While { cond: String, body: Vec<String>, brace_depth: i32 },
     Include { name: String, args: Vec<String>, using: Vec<String>, body: Vec<String>, brace_depth: i32 },
+    FunctionDef { name: String, params: Vec<(String, Option<String>)>, body: Vec<String>, brace_depth: i32 },
 }
 
 // ─── scan_map reducer: 累积行 → Vec<DirectiveBlock> ──────────────────────────
@@ -134,6 +136,31 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
             let cond = extract_at_while_cond(trimmed);
             let brace_depth = count_brace_depth(trimmed);
             acc.building = Some(Building::While { cond, body: vec![], brace_depth });
+            vec![]
+        }
+        TokenKind::AtFunctionDef => {
+            let after_function = trimmed.strip_prefix("@function ").unwrap_or(trimmed.trim_start_matches("@function"));
+            if let Some((name, params)) = parse_mixin_sig(after_function) {
+                // 单行形式: @function name() { @return val; }
+                if let (Some(s), Some(e)) = (trimmed.find('{'), trimmed.rfind('}')) {
+                    if e > s {
+                        let body_str = &trimmed[s..=e];
+                        let return_value = extract_return_value(body_str);
+                        return try_emit_block(
+                            &mut acc.current_lines,
+                            Some(DirectiveBlock::FunctionDef {
+                                name,
+                                params,
+                                return_value,
+                                body: vec![body_str.to_string()],
+                            }),
+                        );
+                    }
+                }
+                // 多行形式
+                let brace_depth = count_brace_depth(trimmed);
+                acc.building = Some(Building::FunctionDef { name, params, body: vec![], brace_depth });
+            }
             vec![]
         }
         TokenKind::AtIncludeMulti => {
@@ -249,6 +276,7 @@ fn append_and_maybe_close(
         | Building::Each { body, brace_depth, .. }
         | Building::MixinDef { body, brace_depth, .. }
         | Building::PlaceholderDef { body, brace_depth, .. }
+        | Building::FunctionDef { body, brace_depth, .. }
         | Building::While { body, brace_depth, .. }
         | Building::Rule { body, brace_depth, .. } => {
             if closes(*brace_depth) {
@@ -348,6 +376,10 @@ fn block_to_directive(building: Building) -> Vec<DirectiveBlock> {
             lines.push("}".to_string());
             vec![DirectiveBlock::Lines(lines)]
         }
+        Building::FunctionDef { name, params, body, .. } => {
+            let return_value = extract_return_value(&body.join("\n"));
+            vec![DirectiveBlock::FunctionDef { name, params, return_value, body }]
+        }
         Building::MixinDef { name, params, body, .. } => {
             vec![DirectiveBlock::MixinDef { name, params, body }]
         }
@@ -379,6 +411,20 @@ fn try_emit_block(
 
 /// 解析 placeholder 签名: "%foo {" / "%foo { color: red; }" → (name, open, close)
 /// 支持多行: 有 { 但无 } 时返回 (name, open, usize::MAX) 表示需要后续积累
+/// 从函数定义 body 中提取 @return 值 (支持带/不带 braces)
+fn extract_return_value(body: &str) -> String {
+    for line in body.lines() {
+        let trimmed = line.trim().trim_start_matches('{').trim_end_matches('}').trim();
+        if let Some(after_return) = trimmed.strip_prefix("@return ") {
+            let value = after_return.trim().trim_end_matches(';').trim().to_string();
+            if !value.is_empty() {
+                return value;
+            }
+        }
+    }
+    String::new()
+}
+
 fn parse_placeholder_sig(line: &str) -> Option<(String, usize, usize)> {
     let s = line.strip_prefix('%').unwrap_or(line).trim_start_matches('%');
     let name = s.split(|c: char| c == '{' || c == '}' || c == ';').next()?.trim().to_string();

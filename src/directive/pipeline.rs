@@ -285,8 +285,7 @@ fn merge_media_nodes(nodes: Vec<CssNode>) -> Vec<CssNode> {
 pub fn compile_pipeline_with_files(input: &str, files: &std::collections::HashMap<String, String>) -> String {
     let _root = info_span!("compile_with_files", bytes = input.len(), file_count = files.len()).entered();
 
-    let mut loading = std::collections::HashSet::new();
-    let (injection, rewritten_main) = crate::directive::module_system::process_module_imports(input, files, &mut loading);
+    let (injection, rewritten_main) = crate::directive::module_system::process_module_imports(input, files);
 
     // 主管线输入 = 已注入的模块成员 (带 ns 前缀) + 主文件重写
     let combined_input = if injection.trim().is_empty() {
