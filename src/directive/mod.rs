@@ -12,6 +12,8 @@ pub mod state;
 pub mod parse;
 pub mod blocks;
 pub mod ops;
+pub mod extend_ops;
+pub mod while_ops;
 pub mod eval;
 pub mod pipeline;
 

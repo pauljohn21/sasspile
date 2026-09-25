@@ -3,7 +3,7 @@
 ## 总体策略
 
 > **逐 capability 推进，每个 capability 独立可测试，独立 commit。**
-> **每个 capability 必须先读 rxrust 源码, 从框架内部实现。**
+> **每个 capability 必须先读 rxrust 源码, 从框架内部找答案。**
 
 验证门控：每完成一个 capability，核心测试必须全部通过，无回退。
 
@@ -30,34 +30,50 @@
 
 ---
 
-## Phase 2 — 扩展能力 (待做)
+## Phase 2 — 扩展能力 (已完成 ✅)
 
 ### 2.1 @media 查询合并
 
-- [ ] **T2.1** CssBuilder 跟踪 @media query, 相同 query 合并 children
-- [ ] **T2.2** 独立测试: @media 合并后结构正确
+- [x] **T2.1** 相同 @media query 合并 children → `merge_media_nodes` (pipeline.rs)
+- [x] **T2.2** 独立测试: @media 合并后结构正确 → `at_root_media_test.rs::media_query_merge`
 
 ### 2.2 @extend 选择器分组
 
-- [ ] **T2.2** CompileState 暂存 extends_queued
-- [ ] **T2.3** 规则闭合时应用 extend (选择器合并)
-- [ ] **T2.4** 占位符 %placeholder extend 支持
+- [x] **T2.3** CompileState 暂存 extends_queued + placeholder_defs
+- [x] **T2.4** 规则闭合时应用 extend (选择器合并) → `resolve_extend_markers`
+- [x] **T2.5** 占位符 %placeholder extend 支持 → `handle_inline_extend`
+- [x] **T2.6** 选择器级 @extend → `build_extend_marker` + `CssNode::ExtendMarker`
+- [x] **T2.7** 测试: 链式 extend、多目标、!optional → `placeholder_extend_test.rs`
 
 ### 2.3 @at-root 提升
 
-- [ ] **T2.3** CssBuilder 遇到 AtRoot 时 children 提升到 output
-- [ ] **T2.4** 测试: @at-root 输出到顶层
+- [x] **T2.8** CssBuilder 遇到 AtRoot 时 children 提升到 output → `RuleFrame.at_root` flag
+- [x] **T2.9** 测试: @at-root 输出到顶层 → `at_root_media_test.rs::at_root_hoists_to_top_level`
 
 ### 2.4 函数求值
 
-- [ ] **T2.5** 内置函数注册表 (BUILTINS: &[(name, fn)])
-- [ ] **T2.6** dispatch_pass 内 try_eval_builtin 替换字面量
-- [ ] **T2.7** 内置: lighten/darken/rgba/round/nth 等
+- [x] **T2.10** 内置函数注册表 (BUILTINS: &[(name, fn)]) → `src/eval/mod.rs`
+- [x] **T2.11** dispatch_pass 内 try_eval_builtin 替换字面量 → `substitute_vars` 调用 `eval_all_calls`
+- [x] **T2.12** 内置: lighten/darken/rgba/round/nth 等全套实现
+- [x] **T2.13** 独立测试 → `builtins_test.rs` (22 测试) + `color_builtins_test.rs` (9 测试)
 
 ### 2.5 @keyframes 格式化
 
-- [ ] **T2.8** render_node 百分比节点特殊格式化
-- [ ] **T2.9** 测试: @keyframes 输出结构正确
+- [x] **T2.14** @keyframes 作为 AtRule 通用处理 (结构保留)
+- [x] **T2.15** 测试: @keyframes 输出结构正确 → `comprehensive_e2e_test.rs::keyframes_full_structure`
+
+---
+
+## Phase 3 — 模块结构规范化 (已完成 ✅)
+
+### 3.1 ops.rs 拆分
+
+- [x] **T3.1** 原 ops.rs (610 行) 拆分为以下子模块:
+  - `ops.rs` (248 行) — process_block 入口 + process_line + include 展开
+  - `extend_ops.rs` (145 行) — @extend 标记构建、inline extend 处理、placeholder 提取
+  - `while_ops.rs` (136 行) — @while 展开、@if 条件求值
+- [x] **T3.2** 全部源文件 ≤ 500 行约束满足
+- [x] **T3.3** 拆分后 32 个测试全通过，零回退
 
 ---
 
@@ -79,7 +95,7 @@
 
 ### 质量门控
 
-- 单文件 ≤ 500 行
-- 0 个 Rc<RefCell> / Arc<Mutex>
-- 0 个命令式 for + push
-- tracing 在 tap, 不在 map
+- 单文件 ≤ 500 行 ✅ 全部满足
+- 0 个 Rc<RefCell> / Arc<Mutex> ✅
+- 0 个命令式 for + push ✅ (管线全用算子链)
+- tracing 在 tap, 不在 map ✅
