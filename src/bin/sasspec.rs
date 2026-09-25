@@ -172,7 +172,19 @@ async fn main() {
         "sass-spec results"
     );
 
-    failed.iter().take(20).for_each(|r| {
+    // Categorize failures by first path segment
+    let mut categories: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    failed.iter().for_each(|r| {
+        let cat = r.name.split('/').next().unwrap_or("").to_string();
+        *categories.entry(cat).or_default() += 1;
+    });
+    let mut cats: Vec<_> = categories.iter().collect();
+    cats.sort_by_key(|(_, c)| std::cmp::Reverse(**c));
+    cats.iter().take(20).for_each(|(cat, count)| {
+        tracing::warn!(category = %cat, count = count, "failure category");
+    });
+
+    failed.iter().take(50).for_each(|r| {
         tracing::warn!(
             test = %r.name,
             expected = %r.expected,

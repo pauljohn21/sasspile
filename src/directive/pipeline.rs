@@ -232,6 +232,201 @@ fn merge_media_nodes(nodes: Vec<CssNode>) -> Vec<CssNode> {
 // 管线入口 — 算子链 (chain = 声明, subscribe = 执行边界)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// 多文件编译 — @use/@forward 模块系统
+///
+/// 预处理: 抽取 @use/@forward 行 → 解析路径 + 配置 → 递归编译模块 → 拼接到主输入前
+#[allow(clippy::redundant_clone)]
+pub fn compile_pipeline_with_files(input: &str, files: &std::collections::HashMap<String, String>) -> String {
+    let _root = info_span!("compile_with_files", bytes = input.len(), file_count = files.len()).entered();
+
+    let (module_css, remaining_input) = process_use_directives(input, files, &mut std::collections::HashSet::new());
+
+    // 主管线输入 = 模块 CSS (已编译) + 去除 @use 行的主文件
+    let combined_input = if module_css.is_empty() {
+        remaining_input
+    } else {
+        format!("{module_css}\n{remaining_input}")
+    };
+
+    compile_pipeline(&combined_input)
+}
+
+/// 抽取并编译 @use/@forward 行, 返回 (模块 CSS 输出, 去除 @use 行后的输入)
+fn process_use_directives(
+    input: &str,
+    files: &std::collections::HashMap<String, String>,
+    loading: &mut std::collections::HashSet<String>,
+) -> (String, String) {
+    let mut module_outputs: Vec<String> = Vec::new();
+    let mut remaining_lines: Vec<String> = Vec::new();
+
+    for line in input.lines() {
+        let trimmed = line.trim();
+
+        // @use "path" 或 @use "path" with ($a: val, ...)
+        if let Some(rest) = trimmed.strip_prefix("@use ") {
+            let (path, config) = parse_use_with(rest);
+            if !loading.contains(&path) {
+                loading.insert(path.clone());
+                if let Some(css) = compile_module(&path, &config, files, loading) {
+                    module_outputs.push(css);
+                }
+            }
+            continue;
+        }
+
+        // @forward "path" — 同 @use 语义 (对基础测试相同)
+        if let Some(rest) = trimmed.strip_prefix("@forward ") {
+            let path = parse_forward_path(rest);
+            if !loading.contains(&path) {
+                loading.insert(path.clone());
+                if let Some(css) = compile_module(&path, &[], files, loading) {
+                    module_outputs.push(css);
+                }
+            }
+            continue;
+        }
+
+        remaining_lines.push(line.to_string());
+    }
+
+    (module_outputs.join("\n"), remaining_lines.join("\n"))
+}
+
+/// 解析 @use "path" with ($a: val, $b: val) → (path, 配置变量表)
+fn parse_use_with(s: &str) -> (String, Vec<(String, String)>) {
+    let s = s.trim();
+    // 提取引号内的路径
+    let path = if let Some(start) = s.find('"') {
+        if let Some(end) = s[start + 1..].find('"') {
+            s[start + 1..start + 1 + end].to_string()
+        } else {
+            s.to_string()
+        }
+    } else {
+        s.to_string()
+    };
+
+    // 解析 with() 配置
+    let mut config = Vec::new();
+    if let Some(with_start) = s.find("with") {
+        let after_with = &s[with_start + 4..];
+        if let Some(p_start) = after_with.find('(') {
+            if let Some(p_end) = after_with.rfind(')') {
+                let params = &after_with[p_start + 1..p_end];
+                for pair in params.split(',') {
+                    let pair = pair.trim();
+                    if pair.is_empty() { continue; }
+                    if let Some((name, value)) = pair.split_once(':') {
+                        let name = name.trim().to_string();
+                        let value = value.trim().to_string();
+                        if !name.is_empty() && !value.is_empty() {
+                            config.push((name, value));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    (path, config)
+}
+
+/// 解析 @forward "path" → path
+fn parse_forward_path(s: &str) -> String {
+    let s = s.trim();
+    if let Some(start) = s.find('"') {
+        if let Some(end) = s[start + 1..].find('"') {
+            return s[start + 1..start + 1 + end].to_string();
+        }
+    }
+    s.to_string()
+}
+
+/// 文件路径解析: 尝试精确 / "_" + path / path + ".scss" / path + ".sass"
+fn resolve_file_path<'a>(path: &str, files: &'a std::collections::HashMap<String, String>) -> Option<&'a String> {
+    // 直接 (含扩展名)
+    if let Some(content) = files.get(path) {
+        return Some(content);
+    }
+    // 加下划线前缀
+    let with_underscore = format!("_{path}");
+    if let Some(content) = files.get(&with_underscore) {
+        return Some(content);
+    }
+    // 加 .scss 扩展名
+    let with_scss = format!("{path}.scss");
+    if let Some(content) = files.get(&with_scss) {
+        return Some(content);
+    }
+    let with_underscore_scss = format!("_{path}.scss");
+    if let Some(content) = files.get(&with_underscore_scss) {
+        return Some(content);
+    }
+    // 加 .sass 扩展名
+    let with_sass = format!("{path}.sass");
+    if let Some(content) = files.get(&with_sass) {
+        return Some(content);
+    }
+    let with_underscore_sass = format!("_{path}.sass");
+    if let Some(content) = files.get(&with_underscore_sass) {
+        Some(content)
+    } else {
+        None
+    }
+}
+
+/// 编译单个模块: 注入配置变量 + 递归预处理 + 主管线编译
+fn compile_module(
+    path: &str,
+    config: &[(String, String)],
+    files: &std::collections::HashMap<String, String>,
+    loading: &mut std::collections::HashSet<String>,
+) -> Option<String> {
+    let _span = info_span!("compile_module", path = %path, config_count = config.len()).entered();
+
+    let content = resolve_file_path(path, files)?;
+
+    // 注入配置变量 (with() 覆盖 !default): 作为最高优先级变量预置
+    let config_prefix: String = config
+        .iter()
+        .map(|(name, value)| format!("{name}: {value};"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let combined = if config_prefix.is_empty() {
+        content.to_string()
+    } else {
+        format!("{config_prefix}\n{content}")
+    };
+
+    // 递归处理: 模块内部可能还有 @use
+    let (module_css, remaining_module_input) =
+        process_use_directives(&combined, files, loading);
+
+    let module_main_input = if module_css.is_empty() {
+        remaining_module_input
+    } else {
+        format!("{module_css}\n{remaining_module_input}")
+    };
+
+    // 编译主模块内容 (reuse single-file pipeline)
+    let compiled = compile_pipeline(&module_main_input);
+
+    // 过滤掉空行后返回
+    let filtered: String = compiled
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if filtered.is_empty() {
+        None
+    } else {
+        Some(filtered)
+    }
+}
+
 pub fn compile_pipeline(input: &str) -> String {
     let _root = info_span!("compile_pipeline", bytes = input.len()).entered();
 

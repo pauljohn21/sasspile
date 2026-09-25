@@ -23,9 +23,18 @@ pub mod directive;
 pub mod css;
 pub mod eval;
 
+use std::collections::HashMap;
 pub use directive::compile_pipeline;
 
 /// 编译 SCSS 源码为 CSS (响应式多线程管线)
 pub fn compile(input: &str) -> String {
     compile_pipeline(input)
+}
+
+/// 多文件编译 — @use / @forward 模块系统
+///
+/// `files`: 辅助文件映射 (如 `_other.scss` → 内容), 不含主输入
+/// @use "other" 解析规则: 先精确匹配 key, 再尝试 "_" + key, 再尝试 key + ".scss"
+pub fn compile_with_files(input: &str, files: &HashMap<String, String>) -> String {
+    crate::directive::pipeline::compile_pipeline_with_files(input, files)
 }

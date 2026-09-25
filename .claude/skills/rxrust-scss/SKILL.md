@@ -1,8 +1,11 @@
 # rxrust-scss Skill
 
-## 核心原则
+## 元认知
 
 **使用 rxrust 内置功能,绝不手工造轮子。先读源码,再写代码。**
+
+sasspile 当前管线模式: **Shared Subject + mpsc channel 终端** (非 from_stream)。
+本文档补充 rxrust 算子级别的开发辅助规则。
 
 ---
 
@@ -17,24 +20,11 @@
 | 问题 | 读哪里 |
 |------|--------|
 | 算子签名 | `src/observable.rs` |
-| 创建 Observable | `src/factory.rs` |
-| 订阅返回 | `src/observable.rs` 141 行 |
-| Subscription 嵌套 | `src/subscription/source_with_dynamic.rs` |
-
----
-
-## 数据源
-
-```rust
-// ✅ 正确: 多线程 Shared + from_stream (跨线程需要 Send+'static)
-Shared::from_stream(futures::stream::iter(items))
-
-// ✅ 正确: flat_map 内有序组合
-.flat_map(|v| Shared::from_stream(futures::stream::iter(v)))
-
-// ❌ 错误: 手写 mpsc channel
-let (tx, rx) = std::sync::mpsc::channel();
-```
+| scan_map 实现 (Acc 隔离) | `src/ops/scan_map.rs` |
+| flat_map = MergeAll | `src/ops/flat_map.rs` |
+| collect (汇聚) | `src/ops/collect.rs` |
+| Observer trait (move 终结) | `src/observer.rs` |
+| re-entrant / broadcast | `src/subject/subject_core.rs` |
 
 ---
 
@@ -52,84 +42,45 @@ let (tx, rx) = std::sync::mpsc::channel();
 
 ## 聚合结果
 
-```rust
-// ✅ 正确: collect/last + oneshot + subscribe
-let (tx, rx) = tokio::sync::oneshot::channel::<String>();
-let mut tx_opt = Some(tx);
+### 模式 A: Shared Subject + mpsc (svg 当前生产管线)
 
-let handle = source
+```rust
+let subject = Shared::subject::<String, Infallible>();
+let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+subject.clone()
+    .scan_map(CompileState::new(), dispatch_pass)
+    .flat_map(|v: Vec<String>| Shared::from_iter(v))
+    ...
     .collect::<Vec<String>>()
     .last()
-    .subscribe(move |css_vec| {
-        if let Some(tx) = tx_opt.take() {
-            let _ = tx.send(css_vec.join("\n"));
-        }
+    .subscribe(move |v: Vec<String>| {
+        let _ = tx.send(v.join("\n"));
     });
 
-// 驱动 Shared 管线 (collect/last 返回嵌套 Subscription)
-tokio::task::block_in_place(|| {
-    tokio::runtime::Handle::current().block_on(handle.source.source);
-});
-
-// 消费结果
-rx.blocking_recv().unwrap_or_default()
+input.lines().for_each(|line| subject.clone().next(line.to_string()));
+subject.clone().complete();
+rx.recv().unwrap_or_default()
 ```
 
----
-
-## 自定义算子风格
-
-遵循 rxrust 内置算子(如 `Filter`/`FilterMap`)的原风格:
+### 模式 B: from_stream + oneshot (异步流场景, sasspile 当前未用)
 
 ```rust
-#[derive(Clone)]
-pub struct MixinOp<S> { pub source: S }
-
-#[derive(Clone)]
-pub struct MixinObserver<O> { observer: O }
-
-impl<S> ObservableType for MixinOp<S> where S: ObservableType {
-    type Item<'a> = S::Item<'a> where Self: 'a;
-    type Err = S::Err;
-}
-
-impl<O, Item, Err> Observer<Item, Err> for MixinObserver<O> where O: Observer<Item, Err> {
-    fn next(&mut self, value: Item) { /* 算子逻辑 */ self.observer.next(value); }
-    fn error(self, err: Err) { self.observer.error(err); }
-    fn complete(self) { self.observer.complete(); }
-    fn is_closed(&self) -> bool { self.observer.is_closed(); }
-}
-
-impl<S, C> CoreObservable<C> for MixinOp<S>
-where C: Context, S: CoreObservable<C::With<MixinObserver<C::Inner>>> {
-    type Unsub = S::Unsub;
-    fn subscribe(self, context: C) -> Self::Unsub {
-        let wrapped = context.transform(|observer| MixinObserver { observer });
-        self.source.subscribe(wrapped)
-    }
-}
+// 仅在真正需要异步生产时使用
+Shared::from_stream(futures::stream::iter(items))
+    ...
 ```
 
 ---
 
 ## 关键禁令
 
-1. **禁止 Arc<Mutex> 共享状态** — 用 scan_map 算子 + oneshot 终端
+1. **禁止 Arc<Mutex> 共享状态** — 用 scan_map 算子
 2. **禁止 Rc<RefCell>** — 用 scan_map 状态机
-3. **禁止手写 mpsc/channel** — 用 oneshot + collect/last
-4. **禁止手写 OnceLock<Runtime>** — Shared 内建 tokio runtime
-5. **禁止命令式 for+push** — 用 flat_map + collect
-6. **禁止猜测 API** — 先读 rxrust 源码
-7. **禁止 subscribe_boxed** — 这个方法不存在
-
----
-
-## 多线程调度
-
-`Shared::from_stream()` 内部使用 `SharedScheduler`,自动将任务分发到 tokio 线程池 (2 workers)。不需要:
-- 手写 tokio runtime
-- 手动 `observe_on(SharedScheduler)`
-- 额外的线程池配置
+3. **禁止命令式 for+push** — 用 flat_map + collect
+4. **禁止猜测 API** — 先读 rxrust 源码
+5. **禁止 subscribe_boxed** — 不存在
+6. **禁止 Flux→Rust "翻译"思维** — 直接用 Rust ownership 三态 (move/&/&) 思考
 
 ---
 
@@ -137,11 +88,10 @@ where C: Context, S: CoreObservable<C::With<MixinObserver<C::Inner>>> {
 
 如果遇到 `Send` 约束失败:
 1. 检查是否用了 `Rc`/`RefCell` (改为 scan_map 状态)
-2. 检查 observer 是否实现了 `Clone`
-3. 检查闭包是否捕获了非 `'static` 借用 (改为 move + oneshot)
+2. 检查闭包是否捕获非 `'static` 借用 (改为 move)
 
 如果遇到 `SourceWithDynamicSubs is not a Future`:
-- collect/last 在 Shared 返回嵌套 Subscription, 需要 `.source.source` 深入拿 TaskHandle
+- collect/last 在 Shared 返回嵌套 Subscription, 管线是同步的, 不需要 block_on
 
 ---
 
@@ -154,5 +104,4 @@ where C: Context, S: CoreObservable<C::With<MixinObserver<C::Inner>>> {
 - `collect.rs` — 终结操作(收集)
 - `last.rs` — 终结操作(最后值)
 - `flat_map.rs` — 展开子流(使用 `MergeAll<Map<...>>`)
-- `from_stream.rs` — 流式数据源(内部已有 loop)
 - `from_iter.rs` — 同步迭代器源
