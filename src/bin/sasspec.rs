@@ -262,6 +262,18 @@ async fn main() {
         tracing::warn!(category = %cat, count = count, "failure category");
     });
 
+    // Write full failure report to /tmp/sasspec_failures.tsv for diagnostic
+    let mut failure_output = String::new();
+    for r in &failed {
+        failure_output.push_str(&format!(
+            "{}\t{}\t{}\n",
+            r.name,
+            r.expected.replace('\n', "\\n").replace('\t', "\\t"),
+            r.actual.replace('\n', "\\n").replace('\t', "\\t")
+        ));
+    }
+    let _ = std::fs::write("/tmp/sasspec_failures.tsv", &failure_output);
+
     failed.iter().take(50).for_each(|r| {
         tracing::warn!(
             test = %r.name,
