@@ -129,15 +129,21 @@ fn flatten_node(node: CssNode, parent_sel: &str) -> CssNode {
     }
 }
 
-/// Post-processing: 解析 @extend 标记, 合并选择器
-/// 将 ExtendMarker 中找到的目标规则的选择器扩展为 "target, extender"
+/// Post-processing: @extend 标记解析 (rxrust .map() 算子)
+///
+/// rxrust 范式:
+///   - .collect::<Vec<CssNode>>().last() 汇聚全部节点 (rxrust collect 算子)
+///   - .map(resolve_extend_markers) 是纯函数转换: Vec<CssNode> → Vec<CssNode>
+///   - 多遍遍历是 fold 模式, 状态在 HashMap 中累积
+///
+/// Sass 语义: 目标为 empty placeholder 时, extender 仍应输出 (Sass 规范要求)
 #[allow(clippy::redundant_clone)]
 fn resolve_extend_markers(nodes: Vec<CssNode>) -> Vec<CssNode> {
     // 收集所有 extend 标记
     let mut markers: Vec<(String, String, bool)> = vec![]; // (extender, target, optional)
     let mut rule_indices: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 
-    // 第一遍: 收集所有规则索引
+    // 第一遍 (fold): 收集规则索引
     for (i, node) in nodes.iter().enumerate() {
         if let CssNode::Rule { selector, .. } = node {
             rule_indices.insert(selector.clone(), i);
@@ -151,14 +157,16 @@ fn resolve_extend_markers(nodes: Vec<CssNode>) -> Vec<CssNode> {
         }
     }
 
-    // 构建: target(原始选择器字符串) → 该规则当前最新的合并选择器
+    // Acc state: target(原始选择器字符串) → 合并后的选择器
     let mut current_selector: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    // 初始化: 每个已知规则的选择器
     for node in &nodes {
         if let CssNode::Rule { selector, .. } = node {
             current_selector.insert(selector.clone(), selector.clone());
         }
     }
+
+    // Acc state orphan: 目标不存在时仍要输出的 extender
+    let mut orphan_extenders: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     // 应用 extend: 将 extender 追加到 target 选择器
     for (extender, target, optional) in &markers {
@@ -166,8 +174,6 @@ fn resolve_extend_markers(nodes: Vec<CssNode>) -> Vec<CssNode> {
         let targets: Vec<&str> = target.split(',').map(str::trim).filter(|t| !t.is_empty()).collect();
         let mut merged_any = false;
         for single_target in &targets {
-            // 查找: 是否有规则的(当前)选择器包含此 target?
-            // 先尝试精确匹配 current_selector 的 key
             if let Some(existing) = current_selector.get(*single_target) {
                 let merged = format!("{existing}, {extender}");
                 current_selector.insert(single_target.to_string(), merged.clone());
@@ -196,48 +202,64 @@ fn resolve_extend_markers(nodes: Vec<CssNode>) -> Vec<CssNode> {
             if *optional {
                 continue; // optional + 目标不存在: 静默忽略
             }
-            // 非 optional: 至少让 extender 自身可查
+            // 非 optional orphan: 目标规则不存在 (如 %empty { })
+            // Sass 语义要求 extender 仍输出
             current_selector.entry(extender.clone()).or_insert_with(|| extender.clone());
+            orphan_extenders.insert(extender.clone());
         }
     }
 
-    // 第二遍: 应用选择器修改, 移除 ExtendMarker
-    let mut result: Vec<CssNode> = Vec::new();
+    // 第二遍: 收集需要移除的 extender (有目标规则且成功匹配)
     let mut removed_extenders: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    // 收集需要移除的 extender (成功匹配的)
     for (extender, target, _) in &markers {
         let target_trimmed = target.split(',').next().unwrap_or(target).trim();
-        if let Some(current) = current_selector.get(target_trimmed) {
-            if rule_indices.contains_key(target_trimmed) || current != target_trimmed {
-                removed_extenders.insert(extender.clone());
-            }
+        if rule_indices.contains_key(target_trimmed) {
+            removed_extenders.insert(extender.clone());
         }
     }
 
-    for node in &nodes {
-        match node {
-            CssNode::ExtendMarker { .. } => continue,
+    // 第三遍 (rxrust-style filter+map): 构建输出
+    let mut result: Vec<CssNode> = nodes
+        .iter()
+        .filter(|node| !matches!(node, CssNode::ExtendMarker { .. }))
+        .filter(|node| {
+            if let CssNode::Rule { selector, .. } = node {
+                !removed_extenders.contains(selector)
+            } else {
+                true
+            }
+        })
+        .map(|node| match node {
             CssNode::Rule { selector, children } => {
-                // 如果是 extender (成功匹配), 跳过 (已被合并到 target)
-                if removed_extenders.contains(selector) {
-                    continue;
-                }
-                // 应用选择器合并: 查找当前最新选择器
                 if let Some(new_sel) = current_selector.get(selector) {
                     if new_sel != selector {
-                        result.push(CssNode::Rule {
+                        return CssNode::Rule {
                             selector: new_sel.clone(),
                             children: children.clone(),
-                        });
-                        continue;
+                        };
                     }
                 }
-                result.push(node.clone());
+                node.clone()
             }
-            _ => result.push(node.clone()),
-        }
-    }
+            _ => node.clone(),
+        })
+        .collect();
+
+    // 第四遍 (flat_map): orphan extender 注入空规则节点
+    // 情景: `%empty { }` → CssBuilder 过滤空规则, `.x { @extend %empty; }` → 也是空规则
+    // 结果: nodes 中无任何 Rule, 只剩一个 ExtendMarker
+    // Sass 语义: .x 仍应输出 (仅选择器, 无声明)
+    let orphan_nodes: Vec<CssNode> = orphan_extenders
+        .iter()
+        .filter(|sel| !rule_indices.contains_key(*sel))
+        .filter(|sel| !removed_extenders.contains(*sel))
+        .map(|sel| CssNode::Rule {
+            selector: sel.clone(),
+            children: vec![],
+        })
+        .collect();
+    result.extend(orphan_nodes);
+
     result
 }
 

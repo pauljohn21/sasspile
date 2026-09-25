@@ -70,6 +70,11 @@ pub(super) fn parse_inline_extend(line: &str, state: &CompileState) -> Option<St
 }
 
 /// 处理行内 @extend: ".bar { @extend %foo; }" → ".bar { color: red; }"
+///
+/// rxrust 节点流语义:
+///   - 输出行进入 Phase 2 CssBuilder, 空规则会被过滤 (children.is_empty())
+///   - 但 @extend 仍需将 extender 选择器注入到 resolve_extend_markers 中
+///   - 因此当 placeholder body 为空, 函数返回 EMPTY, 上游 ops.rs 负责注入 ExtendMarker
 pub(super) fn handle_inline_extend(line: &str, state: &CompileState) -> Vec<String> {
     let Some(extend_start) = line.find("@extend ") else {
         return vec![substitute_vars(state, line)];
@@ -98,6 +103,12 @@ pub(super) fn handle_inline_extend(line: &str, state: &CompileState) -> Vec<Stri
     };
 
     let decls = extract_declarations(body);
+
+    // placeholder body 为空: %.empty { } — 不产出空规则,
+    // 由 ops.rs 自行注入 ExtendMarker, 进入 resolve_extend_markers 的 orphan 路径
+    if decls.is_empty() {
+        return vec![];
+    }
 
     let Some(open_brace) = without_extend.rfind('{') else {
         return vec![decls];
