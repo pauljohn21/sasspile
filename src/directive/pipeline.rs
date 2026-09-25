@@ -341,6 +341,28 @@ fn flush_pending_use(
     }
 }
 
+/// 剥离块注释 (/* ... */), 替换为空白保持位置对齐
+fn strip_block_comments(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            let mut prev = '\0';
+            while let Some(c) = chars.next() {
+                if prev == '*' && c == '/' {
+                    break;
+                }
+                prev = c;
+            }
+            result.push(' ');
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 /// 解析 @use "path" with ($a: val, $b: val) → (path, 配置变量表)
 fn parse_use_with(s: &str) -> (String, Vec<(String, String)>) {
     let s = s.trim();
@@ -355,13 +377,13 @@ fn parse_use_with(s: &str) -> (String, Vec<(String, String)>) {
         s.to_string()
     };
 
-    // 解析 with() 配置
+    // 解析 with() 配置 (先剥离块注释)
     let mut config = Vec::new();
     if let Some(with_start) = s.find("with") {
         let after_with = &s[with_start + 4..];
         if let Some(p_start) = after_with.find('(') {
             if let Some(p_end) = after_with.rfind(')') {
-                let params = &after_with[p_start + 1..p_end];
+                let params = strip_block_comments(&after_with[p_start + 1..p_end]);
                 for pair in params.split(',') {
                     let pair = pair.trim();
                     if pair.is_empty() { continue; }
