@@ -9,6 +9,7 @@
 //! @media 合并由管线 merge_media_nodes 函数处理 (汇聚后一次性合并)
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use super::node::CssNode;
 use tracing::info_span;
@@ -21,6 +22,12 @@ pub struct CssBuilder {
     pub output: Vec<CssNode>,
     /// 当前嵌套栈 (最近一个 Rule/AtRule)
     pub rule_stack: Vec<RuleFrame>,
+    /// @mixin 定义表: mixin_name -> body_lines (不含 @{mixin name { 和 })
+    pub mixins: HashMap<String, Vec<String>>,
+    /// 当前正在收集的 @mixin: (name, body_lines)
+    pending_mixin: Option<(String, Vec<String>)>,
+    /// 当前 mixin 收集的 brace 嵌套深度
+    collect_depth: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +53,27 @@ impl CssBuilder {
             return vec![];
         }
 
+        // 正在收集 @mixin body
+        //
+        // NOTE: 需要用 take 取出 pending 避免 borrow 冲突（body push 需要 &mut self,
+        // 存入 mixins 也需要 &mut self）
+        if self.pending_mixin.is_some() {
+            // 正在收集 @mixin body
+            if let Some((name, mut body)) = self.pending_mixin.take() {
+                let delta = Self::count_braces(line);
+                self.collect_depth += delta;
+                if self.collect_depth <= 0 {
+                    // 收集完成, 存入 mixins
+                    self.mixins.insert(name, body);
+                    self.collect_depth = 0;
+                } else {
+                    body.push(line.to_string());
+                    self.pending_mixin = Some((name, body));
+                }
+            }
+            return vec![];
+        }
+
         // 闭合 brace: 弹出栈顶 Rule 并 emit
         if trimmed == "}" {
             return self.close_rule();
@@ -56,28 +84,75 @@ impl CssBuilder {
             return self.start_atrule(trimmed);
         }
 
-        // @at-root: 标记下一个规则提升到顶层
-        let (trimmed, at_root) = if let Some(rest) = trimmed.strip_prefix("@at-root ") {
-            (rest, true)
-        } else {
-            (trimmed, false)
-        };
+        // @mixin 定义开始: @mixin name { ... }
+        if let Some(rest) = trimmed.strip_prefix("@mixin ") {
+            // 解析 mixin 名 (到空格或 '(' 或 '{')
+            let name_end = rest
+                .find(|c: char| c == ' ' || c == '(' || c == '{')
+                .unwrap_or(rest.len());
+            let name = rest[..name_end].trim().to_string();
+            let after_name = &rest[name_end..];
 
-        // @extend 标记行: 由 ops.rs 注入的特殊标记 (必须在 declaration 检查之前)
-        // 格式: >>EXTEND:extender:target1:target2:...:optional
-        if let Some(rest) = trimmed.strip_prefix(">>EXTEND:") {
-            let parts: Vec<&str> = rest.split(':').collect();
-            if parts.len() >= 3 {
-                let extender = parts[0].to_string();
-                let optional = parts[parts.len() - 1] == "true";
-                // 中间部分都是 target (支持多目标)
-                let target = parts[1..parts.len() - 1].join(",");
-                return vec![CssNode::ExtendMarker { extender, target, optional }];
+            // 判断是否是单行格式: @mixin name { body }
+            if let Some(brace_open) = after_name.find('{') {
+                // 找到对应的闭合: 检查整行是否包含匹配的 }
+                if let Some(brace_close) = after_name.rfind('}') {
+                    if brace_close > brace_open {
+                        // 单行 mixin: body 在 { ... } 中间
+                        let inner = &after_name[brace_open + 1..brace_close];
+                        let body_lines: Vec<String> = inner
+                            .split('\n')
+                            .map(String::from)
+                            .filter(|l| !l.trim().is_empty())
+                            .collect();
+                        self.mixins.insert(name, body_lines);
+                        return vec![];
+                    }
+                }
+            }
+
+            // 多行 mixin: 进入收集模式
+            self.pending_mixin = Some((name, vec![]));
+            self.collect_depth = Self::count_braces(after_name);
+            if self.collect_depth <= 0 {
+                // 单行空 mixin @mixin name {}
+                if let Some((name, body)) = self.pending_mixin.take() {
+                    self.mixins.insert(name, body);
+                }
+                self.collect_depth = 0;
+            }
+            return vec![];
+        }
+
+            // @include: 展开 mixin
+        if let Some(rest) = trimmed.strip_prefix("@include ") {
+            let invoke = rest.trim().trim_end_matches(';').trim();
+            // clone body 避免 borrow 冲突 (feed 需要 &mut self)
+            let body_clone = self.mixins.get(invoke).cloned();
+            if let Some(body) = body_clone {
+                // 展开 mixin body: 逐行递归调用 self.feed
+                let mut result = vec![];
+                for line in &body {
+                    result.extend(self.feed(line));
+                }
+                return result;
             }
         }
 
-        // 单行完整规则: "selector { prop: val; ... }" — 直接解析 emit
-        if !trimmed.starts_with('@') && trimmed.contains('{') && trimmed.ends_with('}') && !trimmed.starts_with('$') {
+        // @at-root: 标记下一个规则提升到顶层
+        let (trimmed, at_root) = self.strip_at_root(trimmed);
+
+        // @extend 标记行: 由 ops.rs 注入的特殊标记
+        if let Some(nodes) = Self::parse_extend_marker(trimmed) {
+            return nodes;
+        }
+
+        // 单行完整规则: "selector { prop: val; ... }"
+        if !trimmed.starts_with('@')
+            && trimmed.contains('{')
+            && trimmed.ends_with('}')
+            && !trimmed.starts_with('$')
+        {
             return self.parse_single_line_rule(trimmed, at_root);
         }
 
@@ -104,7 +179,6 @@ impl CssBuilder {
         }
 
         // 顶层 at-rule (单行, 不嵌套): @import / @charset — 整行 passthrough
-        // 注意: 经过 merge_import_lines 预处理后可能已含 ';', 不重复添加
         if trimmed.starts_with("@import ") || trimmed.starts_with("@charset ") {
             if trimmed.ends_with(';') {
                 return vec![CssNode::Statement(trimmed.trim_end_matches(';').trim().to_string())];
@@ -112,11 +186,46 @@ impl CssBuilder {
             return vec![CssNode::Statement(trimmed.to_string())];
         }
 
-        // 其他行: 无法识别的顶层 at-rule / 未知行 — 静默丢弃 (保持原行为)
+        // 其他行: 无法识别的顶层 at-rule / 未知行 — 静默丢弃
         vec![]
     }
 
     // ── 私有方法 ────────────────────────────────────────────────────────────
+
+    /// 计算一行中的 { } 净深度 ({ +1, } -1)
+    fn count_braces(line: &str) -> i32 {
+        line.chars()
+            .fold(0, |d, c| match c {
+                '{' => d + 1,
+                '}' => d - 1,
+                _ => d,
+            })
+    }
+
+    /// 预处理 @at-root: 返回 (去除前缀后的 trimmed, at_root 标志)
+    fn strip_at_root<'a>(&self, trimmed: &'a str) -> (&'a str, bool) {
+        if let Some(rest) = trimmed.strip_prefix("@at-root ") {
+            (rest, true)
+        } else {
+            (trimmed, false)
+        }
+    }
+
+    /// 处理 @extend 标记: >>EXTEND:extender:target:optional → ExtendMarker
+    fn parse_extend_marker(trimmed: &str) -> Option<Vec<CssNode>> {
+        let rest = trimmed.strip_prefix(">>EXTEND:")?;
+        let parts: Vec<&str> = rest.split(':').collect();
+        if parts.len() >= 3 {
+            let extender = parts[0].to_string();
+            let optional = parts[parts.len() - 1] == "true";
+            let target = parts[1..parts.len() - 1].join(",");
+            Some(vec![CssNode::ExtendMarker { extender, target, optional }])
+        } else {
+            None
+        }
+    }
+
+    // ── 私有方法 (Rule/Declaration) ────────────────────────────────────────
 
     fn start_rule(&mut self, line: &str, at_root: bool) -> Vec<CssNode> {
         // line = "selector {"
