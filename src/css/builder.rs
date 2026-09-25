@@ -103,7 +103,16 @@ impl CssBuilder {
             )];
         }
 
-        // 其他行: 递归处理后检测 @at-root (回溯 prefix)
+        // 顶层 at-rule (单行, 不嵌套): @import / @charset — 整行 passthrough
+        // 注意: 经过 merge_import_lines 预处理后可能已含 ';', 不重复添加
+        if trimmed.starts_with("@import ") || trimmed.starts_with("@charset ") {
+            if trimmed.ends_with(';') {
+                return vec![CssNode::Statement(trimmed.trim_end_matches(';').trim().to_string())];
+            }
+            return vec![CssNode::Statement(trimmed.to_string())];
+        }
+
+        // 其他行: 无法识别的顶层 at-rule / 未知行 — 静默丢弃 (保持原行为)
         vec![]
     }
 

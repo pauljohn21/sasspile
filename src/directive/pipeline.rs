@@ -47,6 +47,52 @@ fn split_else_line(line: &str) -> Vec<String> {
     vec![line.to_string()]
 }
 
+/// 合并 @import 多行 modifier (sass 语法: 缩进行自动合并到上一行)
+///
+/// 例如: `@import "a.css"\n  b` → `@import "a.css" b;`
+fn merge_import_lines(lines: &[String]) -> Vec<String> {
+    let mut result: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = &lines[i];
+        let trimmed = line.trim();
+
+        // 检查是否是未闭合的 @import/@charset (不以 ; 结尾)
+        if (trimmed.starts_with("@import ") || trimmed.starts_with("@charset "))
+            && !trimmed.ends_with(';')
+            && !trimmed.ends_with('}')
+        {
+            let mut merged = line.clone();
+            // 合并后续缩进行
+            while i + 1 < lines.len() {
+                let next = &lines[i + 1];
+                let next_trimmed = next.trim();
+                // 空行终止
+                if next_trimmed.is_empty() {
+                    break;
+                }
+                // 非缩进行终止 (无 leading whitespace)
+                if !next.starts_with(' ') && !next.starts_with('\t') {
+                    break;
+                }
+                // 处理逗号开头的行 (新 @import)
+                if next_trimmed.starts_with(',') {
+                    // 合并逗号
+                    merged = format!("{merged}{next_trimmed}");
+                } else {
+                    merged = format!("{merged} {next_trimmed}");
+                }
+                i += 1;
+            }
+            result.push(merged);
+        } else {
+            result.push(line.clone());
+        }
+        i += 1;
+    }
+    result
+}
+
 /// CSS 选择器嵌套展平: .parent { .child { color: red; } } → .parent .child { color: red; }
 fn flatten_nested_selectors(nodes: Vec<CssNode>) -> Vec<CssNode> {
     let mut result = Vec::new();
@@ -580,11 +626,12 @@ pub fn compile_pipeline(input: &str) -> String {
             let _ = tx.send(css_vec.join("\n"));
         });
 
-    // 驱动: 预处理 split } @else → 2 lines → push all → flush → complete
+    // 驱动: 预处理 split } @else → 2 lines → merge @import → push all → flush → complete
     let preprocessed: Vec<String> = input
         .lines()
         .flat_map(split_else_line)
         .collect();
+    let preprocessed = merge_import_lines(&preprocessed);
     for line in &preprocessed {
         subject.clone().next(line.to_string());
     }

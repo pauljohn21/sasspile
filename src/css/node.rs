@@ -35,6 +35,9 @@ pub enum CssNode {
     },
     /// 注释
     Comment(String),
+    /// 原始 CSS 语句 (不解析内部结构 — @import / @charset 等顶层 at-rule)
+    /// 整行原样输出, 管线不做语法分析
+    Statement(String),
 }
 
 // ─── 节点渲染 (AST → String) ───────────────────────────────────────────────
@@ -73,6 +76,7 @@ fn render_node_indent(node: &CssNode, depth: usize, indent_step: &str) -> String
         }
         // ExtendMarker 仅在 post-processing 阶段存在, 不应到达 render
         CssNode::ExtendMarker { .. } => String::new(),
+        CssNode::Statement(s) => format!("{indent}{s};\n"),
     }
 }
 
@@ -83,5 +87,6 @@ fn node_variant_name(node: &CssNode) -> &'static str {
         CssNode::AtRule { .. } => "AtRule",
         CssNode::Comment(_) => "Comment",
         CssNode::ExtendMarker { .. } => "ExtendMarker",
+        CssNode::Statement(_) => "Statement",
     }
 }
