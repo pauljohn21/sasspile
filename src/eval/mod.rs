@@ -5,52 +5,76 @@
 //!   - dispatch 时 try_eval_builtin 尝试替换字面量
 //!   - 不持有状态 (状态在 CompileState 中)
 //!   - 借用 AST 输入, 输出 Option<String>
+//!
+//! 模块拆分 (single-file ≤ 500):
+//!   - math_trig.rs: 三角函数/高级数学
+//!   - color.rs: 颜色函数
+//!   - string.rs: 字符串函数
+
+mod math_trig;
+mod color;
+mod string;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 公共 API
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 内置函数注册表 (name, evaluator_fn)
-/// 每个函数接收参数列表 (已解析的字符串), 返回 Some(replacement) 或 None
 type BuiltinFn = fn(&[String]) -> Option<String>;
 
 pub const BUILTINS: &[(&str, BuiltinFn)] = &[
-    // ── 颜色函数 ─────────────────────────────────────────────────────
-    ("rgba",    eval_rgba),
-    ("rgb",     eval_rgb_call),
-    ("hsl",     eval_hsl_call),
-    ("lighten", eval_lighten),
-    ("darken",  eval_darken),
-    ("mix",     eval_mix),
-    ("adjust-hue", eval_adjust_hue),
+    // ── 颜色函数 (color 模块) ─────────────────────────────────────────
+    ("rgba",       color::eval_rgba),
+    ("rgb",        color::eval_rgb_call),
+    ("hsl",        color::eval_hsl_call),
+    ("lighten",    color::eval_lighten),
+    ("darken",     color::eval_darken),
+    ("mix",        color::eval_mix),
+    ("adjust-hue", color::eval_adjust_hue),
 
     // ── 数学函数 ─────────────────────────────────────────────────────
-    ("round",   eval_round),
-    ("ceil",    eval_ceil),
-    ("floor",   eval_floor),
-    ("abs",     eval_abs),
-    ("min",     eval_min),
-    ("max",     eval_max),
+    ("round",      eval_round),
+    ("ceil",       eval_ceil),
+    ("floor",      eval_floor),
+    ("abs",        eval_abs),
+    ("min",        eval_min),
+    ("max",        eval_max),
     ("percentage", eval_percentage),
+    // ── 三角函数 (math_trig 模块) ───────────────────────────────────
+    ("sin",        math_trig::eval_sin),
+    ("cos",        math_trig::eval_cos),
+    ("tan",        math_trig::eval_tan),
+    ("asin",       math_trig::eval_asin),
+    ("acos",       math_trig::eval_acos),
+    ("atan",       math_trig::eval_atan),
+    ("sqrt",       math_trig::eval_sqrt),
+    ("pow",        math_trig::eval_pow),
+    ("log",        math_trig::eval_log),
+    ("exp",        math_trig::eval_exp),
+    ("sign",       math_trig::eval_sign),
+    ("clamp",      math_trig::eval_clamp),
+    ("mod",        math_trig::eval_mod),
 
-    // ── 字符串函数 ───────────────────────────────────────────────────
-    ("unquote", eval_unquote),
-    ("quote",   eval_quote),
+    // ── 字符串函数 (string 模块) ─────────────────────────────────────
+    ("unquote",      string::eval_unquote),
+    ("quote",        string::eval_quote),
+    ("str-length",   string::eval_str_length),
+    ("str-index",    string::eval_str_index),
+    ("str-slice",    string::eval_str_slice),
+    ("to-upper-case", string::eval_to_upper_case),
+    ("to-lower-case", string::eval_to_lower_case),
 
     // ── 列表函数 ──────────────────────────────────────────────────────
- ("length",  eval_length),
+    ("length",  eval_length),
     ("nth",     eval_nth),
 ];
 
 /// 尝试解析并求值内置函数调用 (如 "rgba(255, 0, 0, 0.5)")
-/// - 找到括号位置: 函数名 = &input[..open], inner = &input[open+1..close]
-///   - 查找函数名末尾: 最后一个非 alnum/- 字符之前 (因为 adjust-hue 含连字符)
 pub fn try_eval_builtin(input: &str) -> Option<String> {
     let (open, close) = find_parens(input)?;
     let func_name = extract_func_name(&input[..open])?;
     let inner = &input[open + 1..close];
 
-    let args =split_args(inner);
+    let args = split_args(inner);
 
     BUILTINS.iter()
         .find(|(name, _)| *name == func_name)
@@ -58,116 +82,31 @@ pub fn try_eval_builtin(input: &str) -> Option<String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 颜色函数实现
+// 基础数学函数实现
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn eval_rgb_call(args: &[String]) -> Option<String> {
-    let r = args.first()?.trim().parse::<u64>().ok()?.min(255) as u8;
-    let g = args.get(1)?.trim().parse::<u64>().ok()?.min(255) as u8;
-    let b = args.get(2)?.trim().parse::<u64>().ok()?.min(255) as u8;
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
-}
-
-fn eval_rgba(args: &[String]) -> Option<String> {
-    if args.len() == 4 {
-        // rgba(r, g, b, a) 形式
-        let r = args.first()?.trim().parse::<u64>().ok()?.min(255) as u8;
-        let g = args.get(1)?.trim().parse::<u64>().ok()?.min(255) as u8;
-        let b = args.get(2)?.trim().parse::<u64>().ok()?.min(255) as u8;
-        let a = args.get(3)?.trim().parse::<f64>().ok()?;
-        if a >= 1.0 {
-            Some(format!("#{r:02x}{g:02x}{b:02x}"))
-        } else {
-            Some(format!("#{r:02x}{g:02x}{b:02x}{:02x}", (a * 255.0).round() as u8))
+fn split_unit(s: &str) -> Option<(f64, &str)> {
+    let s = s.trim();
+    // 找单位起始: 第一个非数字/非点/非负号字符; 无单位则整个字符串是数字
+    match s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-') {
+        Some(split_pos) => {
+            let num = s[..split_pos].parse::<f64>().ok()?;
+            Some((num, &s[split_pos..]))
         }
-    } else if args.len() == 2 {
-        // rgba(#hex, alpha) 形式
-        let color = args.first()?.trim();
-        let base = color.trim_start_matches('#');
-        let a = args.get(1)?.trim().parse::<f64>().ok()?;
-        if base.len() == 6 {
-            let r = u8::from_str_radix(&base[0..2], 16).ok()?;
-            let g = u8::from_str_radix(&base[2..4], 16).ok()?;
-            let b = u8::from_str_radix(&base[4..6], 16).ok()?;
-            if a >= 1.0 {
-                Some(format!("#{r:02x}{g:02x}{b:02x}"))
-            } else {
-                Some(format!("#{r:02x}{g:02x}{b:02x}{:02x}", (a * 255.0).round() as u8))
-            }
-        } else {
-            None
+        None => {
+            let n = s.parse::<f64>().ok()?;
+            Some((n, ""))
         }
-    } else {
-        None
     }
 }
 
-fn eval_hsl_call(args: &[String]) -> Option<String> {
-    let h = args.first()?.trim().parse::<f64>().ok()?;
-    let s_pct = strip_pct(args.get(1)?)?;
-    let l_pct = strip_pct(args.get(2)?)?;
-    let (r, g, b) = hsl_to_rgb(h, s_pct / 100.0, l_pct / 100.0);
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
-}
-
-fn eval_lighten(args: &[String]) -> Option<String> {
-    let color = parse_color(args.first()?)?;
-    let amount = strip_pct(args.get(1)?)? / 100.0;
-    let (h, s, l) = rgb_to_hsl(color.0, color.1, color.2);
-    let new_l = (l + amount).clamp(0.0, 1.0);
-    let (r, g, b) = hsl_to_rgb(h, s, new_l);
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
-}
-
-fn eval_darken(args: &[String]) -> Option<String> {
-    let color = parse_color(args.first()?)?;
-    let amount = strip_pct(args.get(1)?)? / 100.0;
-    let (h, s, l) = rgb_to_hsl(color.0, color.1, color.2);
-    let new_l = (l - amount).clamp(0.0, 1.0);
-    let (r, g, b) = hsl_to_rgb(h, s, new_l);
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
-}
-
-fn eval_mix(args: &[String]) -> Option<String> {
-    let c1 = parse_color(args.first()?)?;
-    let c2 = parse_color(args.get(1)?)?;
-    let weight = args.get(2).and_then(|s| s.trim().parse::<f64>().ok()).unwrap_or(50.0) / 100.0;
-    let r = ((c1.0 as f64 * (1.0 - weight) + c2.0 as f64 * weight).round() as u8).min(255);
-    let g = ((c1.1 as f64 * (1.0 - weight) + c2.1 as f64 * weight).round() as u8).min(255);
-    let b = ((c1.2 as f64 * (1.0 - weight) + c2.2 as f64 * weight).round() as u8).min(255);
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
-}
-
-fn eval_adjust_hue(args: &[String]) -> Option<String> {
-    let color = parse_color(args.first()?)?;
-    let degrees = args.get(1)?.trim().parse::<f64>().ok()?;
-    let (h, s, l) = rgb_to_hsl(color.0, color.1, color.2);
-    let new_h = (h + degrees) % 360.0;
-    let new_h = if new_h < 0.0 { new_h + 360.0 } else { new_h };
-    let (r, g, b) = hsl_to_rgb(new_h, s, l);
-    Some(format!("#{r:02x}{g:02x}{b:02x}"))
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 数学函数实现
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// 从带单位的数值中分离数字和单位 (如 "3.7px" → (3.7, "px"))
-fn split_unit(s: &str) -> Option<(f64, &str)> {
-    let s = s.trim();
-    let split_pos = s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')?;
-    let num = s[..split_pos].parse::<f64>().ok()?;
-    Some((num, &s[split_pos..]))
-}
-
-/// 求值带单位函数 (round/ceil/floor/abs): 数字部分取整, 保留单位
 fn eval_math_with_unit(args: &[String], op: fn(f64) -> f64) -> Option<String> {
     let s = args.first()?.trim();
     if s.contains(|c: char| !c.is_ascii_digit() && c != '.' && c != '-') {
         let (num, unit) = split_unit(s)?;
-        Some(format!("{}{unit}", op(num) as i64))
+        Some(format!("{}{unit}", op(num)))
     } else {
-        Some(format!("{}", op(s.parse::<f64>().ok()?) as i64))
+        Some(format!("{}", op(s.parse::<f64>().ok()?)))
     }
 }
 
@@ -187,15 +126,14 @@ fn eval_abs(args: &[String]) -> Option<String> {
     let s = args.first()?.trim();
     if s.contains(|c: char| !c.is_ascii_digit() && c != '.' && c != '-') {
         let (num, unit) = split_unit(s)?;
-        Some(format!("{}{unit}", num.abs() as i64))
+        Some(format!("{}{unit}", num.abs()))
     } else {
         let n = s.parse::<f64>().ok()?;
-        Some(format!("{}", n.abs() as i64))
+        Some(format!("{}", n.abs()))
     }
 }
 
 fn eval_min(args: &[String]) -> Option<String> {
-    // 单位从第一个参数提取
     let first = args.first()?.trim();
     let unit = split_unit(first).map(|(_, u)| u).unwrap_or("");
     args.iter()
@@ -228,24 +166,6 @@ fn eval_percentage(args: &[String]) -> Option<String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 字符串函数实现
-// ═══════════════════════════════════════════════════════════════════════════
-
-fn eval_unquote(args: &[String]) -> Option<String> {
-    let s = args.first()?.trim();
-    Some(s.trim_matches('"').trim_matches('\'').to_string())
-}
-
-fn eval_quote(args: &[String]) -> Option<String> {
-    let s = args.first()?.trim();
-    if s.starts_with('"') || s.starts_with('\'') {
-        Some(s.to_string())
-    } else {
-        Some(format!("\"{s}\""))
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // 列表函数实现
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -254,7 +174,6 @@ fn eval_length(args: &[String]) -> Option<String> {
         Some("0".to_string())
     } else if args.len() == 1 {
         let s = args.first()?.trim();
-        // 单参数: 如果有逗号说明是列表, 按逗号分割计数
         if s.starts_with('(') || s.contains(',') {
             let items: Vec<&str> = s.trim_start_matches('(').trim_end_matches(')')
                 .split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
@@ -263,7 +182,6 @@ fn eval_length(args: &[String]) -> Option<String> {
             Some("1".to_string())
         }
     } else {
-        // 多参数: 每个参数表示一个元素
         Some(args.len().to_string())
     }
 }
@@ -277,31 +195,9 @@ fn eval_nth(args: &[String]) -> Option<String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 辅助函数 (纯函数, 零副作用)
+// 颜色辅助函数（各子模块共用）
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 查找最外层 '(' 和 ')' 位置
-fn find_parens(input: &str) -> Option<(usize, usize)> {
-    let open = input.rfind('(')?;
-    let close = input[open..].find(')').map(|p| open + p)?;
-    Some((open, close))
-}
-
-/// 从调用前缀中提取函数名 (取最后一个非 alnum 字符之后)
-fn extract_func_name(prefix: &str) -> Option<&str> {
-    let end = prefix.rfind(|c: char| c.is_alphanumeric() || c == '-')?;
-    Some(&prefix[..=end])
-}
-
-/// 按逗号分割参数 (不处理嵌套括号)
-fn split_args(inner: &str) -> Vec<String> {
-    if inner.trim().is_empty() {
-        return vec![];
-    }
-    inner.split(',').map(|s| s.trim().to_string()).collect()
-}
-
-/// 解析颜色字符串 — 支持 #hex 和命名颜色
 fn parse_color(s: &str) -> Option<(u8, u8, u8)> {
     let s = s.trim();
     if let Some(hex) = s.strip_prefix('#') {
@@ -321,7 +217,6 @@ fn parse_color(s: &str) -> Option<(u8, u8, u8)> {
             _ => None,
         }
     } else {
-        // 命名颜色 (简化版, 仅常用)
         match s.to_lowercase().as_str() {
             "red" => Some((255, 0, 0)),
             "green" => Some((0, 128, 0)),
@@ -338,12 +233,10 @@ fn parse_color(s: &str) -> Option<(u8, u8, u8)> {
     }
 }
 
-/// 去掉百分比后缀
 fn strip_pct(s: &str) -> Option<f64> {
     s.trim().trim_end_matches('%').parse::<f64>().ok()
 }
 
-/// RGB → HSL 转换
 fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
     let r1 = r as f64 / 255.0;
     let g1 = g as f64 / 255.0;
@@ -375,7 +268,6 @@ fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
     (h_deg, s, l)
 }
 
-/// HSL → RGB 转换
 fn hsl_to_rgb(h: f64, s: f64, l: f64) -> (u8, u8, u8) {
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let h_prime = h / 60.0;
@@ -395,26 +287,48 @@ fn hsl_to_rgb(h: f64, s: f64, l: f64) -> (u8, u8, u8) {
     (r, g, b)
 }
 
-/// 公开入口: 扫描字符串中所有函数调用并替换为求值结果
+// ═══════════════════════════════════════════════════════════════════════════
+// 辅助函数 (纯函数, 零副作用)
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn find_parens(input: &str) -> Option<(usize, usize)> {
+    let open = input.rfind('(')?;
+    let close = input[open..].find(')').map(|p| open + p)?;
+    Some((open, close))
+}
+
+fn extract_func_name(prefix: &str) -> Option<&str> {
+    let end = prefix.rfind(|c: char| c.is_alphanumeric() || c == '-')?;
+    Some(&prefix[..=end])
+}
+
+fn split_args(inner: &str) -> Vec<String> {
+    if inner.trim().is_empty() {
+        return vec![];
+    }
+    inner.split(',').map(|s| s.trim().to_string()).collect()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 公开入口: 扫描字符串中所有函数调用并替换为求值结果
+// ═══════════════════════════════════════════════════════════════════════════
+
 pub fn eval_all_calls(input: &str) -> String {
     let mut result = input.to_string();
 
-    // 遍历所有可能的函数调用位置 (从右向左避免偏移问题)
     while let Some((start, end)) = find_last_call(&result) {
         let call = &result[start..=end];
         if let Some(replacement) = try_eval_builtin(call) {
             result.replace_range(start..=end, &replacement);
         } else {
-            break; // 求值失败就停止 (避免无限循环)
+            break;
         }
     }
 
     result
 }
 
-/// 查找最后一个函数调用 (从字符串尾部开始扫描)
 fn find_last_call(input: &str) -> Option<(usize, usize)> {
-    // 从右向左找 ')' 及其匹配的 '(' 和函数名
     let close = input.rfind(')')?;
     let open = input[..close].rfind('(')?;
     let name_end = input[..open].rfind(|c: char| c.is_alphanumeric() || c == '-')?;
