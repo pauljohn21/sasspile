@@ -1,4 +1,4 @@
-//! DirectiveBlock — 多行指令的状态化分块 (Flux bufferUntil)
+//! DirectiveBlock — 多行指令的状态化分块 (scan_map 累积 + flat_map 展开)
 //!
 //! scan_map 累积行 → emit DirectiveBlock
 //! @if/@else 一体化 (状态机跨行跟踪 branches)
@@ -8,7 +8,7 @@ use super::eval::TokenKind;
 use super::parse::{parse_each_sig, parse_for_sig, parse_include_sig, parse_mixin_sig};
 use super::state::CompileState;
 use super::ops::process_block;
-use tracing::debug_span;
+use tracing::{debug_span, info_span};
 
 // ─── 分块产物 ────────────────────────────────────────────────────────────────
 
@@ -67,6 +67,7 @@ fn count_brace_depth(line: &str) -> i32 {
 }
 
 pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<DirectiveBlock> {
+    let _span = info_span!("accumulate_block", stage = "phase1", line = %line, building = acc.building.is_some()).entered();
     let trimmed = line.trim();
     let kind = TokenKind::classify(trimmed);
 
@@ -248,6 +249,31 @@ pub fn accumulate_block(acc: &mut BlockAccumulator, line: String) -> Vec<Directi
                 }
             }
             vec![]
+        }
+        TokenKind::RuleBlock => {
+            // 单行规则: selector { body } — 拆分为多行以便 process_line 处理 body 中的 @include/@extend 等
+            let mut emitted = vec![];
+            if let (Some(open), Some(close)) = (trimmed.find('{'), trimmed.rfind('}')) {
+                if close > open {
+                    let selector = trimmed[..open].trim();
+                    let inner = trimmed[open + 1..close].trim();
+                    let mut lines = vec![format!("{selector} {{")];
+                    if !inner.is_empty() {
+                        lines.push(inner.to_string());
+                    }
+                    lines.push("}".to_string());
+                    // 将当前行 + 拆分为多个独立的 Lines block (每个一行)
+                    // 这样 process_line 可以逐行处理 @include/@extend
+                    emitted.push(DirectiveBlock::Lines(lines));
+                } else {
+                    acc.current_lines.push(line);
+                    emitted.push(DirectiveBlock::Lines(std::mem::take(&mut acc.current_lines)));
+                }
+            } else {
+                acc.current_lines.push(line);
+                emitted.push(DirectiveBlock::Lines(std::mem::take(&mut acc.current_lines)));
+            }
+            emitted
         }
         _ => {
             acc.current_lines.push(line);

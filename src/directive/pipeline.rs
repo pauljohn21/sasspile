@@ -1,9 +1,9 @@
-//! 统一响应式管线 — Flux 思维 + rxrust 算子组合
+//! 统一响应式管线 — rxrust 算子链范式 (Rust ownership 三态驱动)
 //!
-//! Flux 模型:  groupBy(classify) → flatMap(各 group 独立 scanWith) → merge
-//! rxrust 等价: scan_map(accumulate_block) → flat_map(process_block) → collect
+//! 模式:  scan_map(accumulate_block) → flat_map(process_block) → collect
 //!
 //! 每个指令类型不是手写 handler,而是 rxrust 算子链的一个 sub-flow
+//! 所有权三态: map(&T), filter(&T → bool), scan_map(&mut Acc), subscribe(move T)
 
 use crate::css::{CssBuilder, CssNode, render_node};
 use rxrust::prelude::*;
@@ -50,59 +50,73 @@ fn split_else_line(line: &str) -> Vec<String> {
 /// 合并 @import 多行 modifier (sass 语法: 缩进行自动合并到上一行)
 ///
 /// 例如: `@import "a.css"\n  b` → `@import "a.css" b;`
+///
+/// scan_map 语义 fold:
+///   accumulator = (pending_merged_line: Option<String>, collected_results: Vec<String>)
+///   &mut accumulator 就地修改, 消除 while i < lines.len() 索引增量模式
 fn merge_import_lines(lines: &[String]) -> Vec<String> {
-    let mut result: Vec<String> = Vec::new();
-    let mut i = 0;
-    while i < lines.len() {
-        let line = &lines[i];
-        let trimmed = line.trim();
+    let (pending, mut result) = lines.iter().fold(
+        (None::<String>, Vec::<String>::new()),
+        |(pending, mut result), line| {
+            let trimmed = line.trim();
 
-        // 检查是否是未闭合的 @import/@charset (不以 ; 结尾)
-        if (trimmed.starts_with("@import ") || trimmed.starts_with("@charset "))
-            && !trimmed.ends_with(';')
-            && !trimmed.ends_with('}')
-        {
-            let mut merged = line.clone();
-            // 合并后续缩进行
-            while i + 1 < lines.len() {
-                let next = &lines[i + 1];
-                let next_trimmed = next.trim();
-                // 空行终止
-                if next_trimmed.is_empty() {
-                    break;
+            let is_import_start = (trimmed.starts_with("@import ") || trimmed.starts_with("@charset "))
+                && !trimmed.ends_with(';')
+                && !trimmed.ends_with('}');
+            let is_indented_continuation = !trimmed.is_empty()
+                && (line.starts_with(' ') || line.starts_with('\t'))
+                && pending.is_some();
+
+            if is_import_start {
+                // 开始新 @import 合并 → flush 之前 pending, 新进行为当前 pending
+                if let Some(merged) = pending {
+                    result.push(merged);
                 }
-                // 非缩进行终止 (无 leading whitespace)
-                if !next.starts_with(' ') && !next.starts_with('\t') {
-                    break;
+                (Some(line.clone()), result)
+            } else if is_indented_continuation {
+                // 追加到 pending 合并行
+                let merged = pending.map(|m| {
+                    if trimmed.starts_with(',') {
+                        format!("{m}{trimmed}")
+                    } else {
+                        format!("{m} {trimmed}")
+                    }
+                });
+                (merged, result)
+            } else {
+                // 普通行 → flush pending + emit 当前行
+                if let Some(merged) = pending {
+                    result.push(merged);
                 }
-                // 处理逗号开头的行 (新 @import)
-                if next_trimmed.starts_with(',') {
-                    // 合并逗号
-                    merged = format!("{merged}{next_trimmed}");
-                } else {
-                    merged = format!("{merged} {next_trimmed}");
-                }
-                i += 1;
+                result.push(line.clone());
+                (None, result)
             }
-            result.push(merged);
-        } else {
-            result.push(line.clone());
-        }
-        i += 1;
+        },
+    );
+
+    // flush 最终 pending
+    if let Some(merged) = pending {
+        result.push(merged);
     }
+
     result
 }
 
 /// CSS 选择器嵌套展平: .parent { .child { color: red; } } → .parent .child { color: red; }
+///
+/// 同时处理: .parent { color: blue; .child { ... } } →
+///   .parent { color: blue; }
+///   .parent .child { ... }
 fn flatten_nested_selectors(nodes: Vec<CssNode>) -> Vec<CssNode> {
     let mut result = Vec::new();
     for node in nodes {
-        result.push(flatten_node(node, ""));
+        flatten_node(node, "", &mut result);
     }
     result
 }
 
-fn flatten_node(node: CssNode, parent_sel: &str) -> CssNode {
+/// 递归展平, 结果写入 acc (Vec<CssNode>)
+fn flatten_node(node: CssNode, parent_sel: &str, acc: &mut Vec<CssNode>) {
     match node {
         CssNode::Rule { selector, children } => {
             let full_selector = if parent_sel.is_empty() {
@@ -112,27 +126,56 @@ fn flatten_node(node: CssNode, parent_sel: &str) -> CssNode {
             } else {
                 format!("{} {}", parent_sel, selector)
             };
-            let new_children: Vec<CssNode> = children
+
+            // 分离声明和嵌套规则
+            let (declarations, nested_rules): (Vec<CssNode>, Vec<CssNode>) = children
                 .into_iter()
-                .map(|c| flatten_node(c, &full_selector))
-                .collect();
-            CssNode::Rule {
-                selector: full_selector,
-                children: new_children,
+                .partition(|c| matches!(c, CssNode::Declaration { .. } | CssNode::Comment(..) | CssNode::Statement(..)));
+
+            if nested_rules.is_empty() {
+                // 纯声明规则: 直接 emit
+                acc.push(CssNode::Rule {
+                    selector: full_selector,
+                    children: declarations,
+                });
+            } else if declarations.is_empty() && parent_sel.is_empty() {
+                // 顶层Rule 只有嵌套规则 (无声明): 展平子规则 (不保留空壳)
+                for child in nested_rules {
+                    flatten_node(child, &full_selector, acc);
+                }
+            } else {
+                // 既有声明又有嵌套规则: 声明留在本层, 子规则展平提升
+                if !declarations.is_empty() {
+                    acc.push(CssNode::Rule {
+                        selector: full_selector.clone(),
+                        children: declarations,
+                    });
+                }
+                for child in nested_rules {
+                    flatten_node(child, &full_selector, acc);
+                }
             }
         }
         CssNode::AtRule { query, children } => {
-            // AtRule 保持子节点嵌套 (不展平)
-            CssNode::AtRule { query, children }
+            // AtRule 保持子节点嵌套 (不展平), 但递归展平规则子节点
+            let new_children: Vec<CssNode> = children
+                .into_iter()
+                .flat_map(|c| {
+                    let mut inner = Vec::new();
+                    flatten_node(c, "", &mut inner);
+                    inner
+                })
+                .collect();
+            acc.push(CssNode::AtRule { query, children: new_children });
         }
-        other => other,
+        other => acc.push(other),
     }
 }
 
-/// Post-processing: @extend 标记解析 (rxrust .map() 算子)
+/// Post-processing: @extend 标记解析 (.map() 纯函数转换)
 ///
-/// rxrust 范式:
-///   - .collect::<Vec<CssNode>>().last() 汇聚全部节点 (rxrust collect 算子)
+/// 模式:
+///   - .collect::<Vec<CssNode>>().last() 汇聚全部节点 (collect 算子)
 ///   - .map(resolve_extend_markers) 是纯函数转换: Vec<CssNode> → Vec<CssNode>
 ///   - 多遍遍历是 fold 模式, 状态在 HashMap 中累积
 ///
@@ -300,14 +343,20 @@ fn merge_media_nodes(nodes: Vec<CssNode>) -> Vec<CssNode> {
 // 管线入口 — 算子链 (chain = 声明, subscribe = 执行边界)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 多文件编译 — @use/@forward 模块系统
+/// 多文件编译 — @import / @use/@forward 模块系统
 ///
-/// 预处理: 解析 @use/@forward → 命名空间重写 → 注入带前缀的模块成员 → 主文件引用替换
+/// 预处理链:
+///   1. @import 展开: 文件内容注入全局作用域 (Sass 遗留语义)
+///   2. @use/@forward: 命名空间重写 + 模块成员注入
 #[allow(clippy::redundant_clone)]
 pub fn compile_pipeline_with_files(input: &str, files: &std::collections::HashMap<String, String>) -> String {
     let _root = info_span!("compile_with_files", bytes = input.len(), file_count = files.len()).entered();
 
-    let (injection, rewritten_main) = crate::directive::module_system::process_module_imports(input, files);
+    // Phase A: @import 展开 (文件内容注入全局作用域)
+    let after_imports = crate::directive::import_resolver::resolve_imports(input, files);
+
+    // Phase B: @use/@forward 模块系统 (命名空间重写)
+    let (injection, rewritten_main) = crate::directive::module_system::process_module_imports(&after_imports, files);
 
     // 主管线输入 = 已注入的模块成员 (带 ns 前缀) + 主文件重写
     let combined_input = if injection.trim().is_empty() {
@@ -323,7 +372,6 @@ pub fn compile_pipeline(input: &str) -> String {
     let _root = info_span!("compile_pipeline", bytes = input.len()).entered();
 
     // Shared Subject 入口 (String: Shared 需要 'static + Send)
-    // Flux 思维: 这就是 Flux.create() 的 Sinks.Many.asFlux()
     let subject = Shared::subject::<String, Infallible>();
     let (tx, rx) = std::sync::mpsc::channel::<String>();
 
@@ -357,6 +405,7 @@ pub fn compile_pipeline(input: &str) -> String {
         // Phase 2: CSS AST 构建 (scan_map CssBuilder)
         // ══════════════════════════════════════════════════════════
         .scan_map(CssBuilder::new(), |builder: &mut CssBuilder, line: String| {
+            let _s = debug_span!("phase2_css_builder", line = %line).entered();
             builder.feed(&line)
         })
         .flat_map(|v: Vec<CssNode>| Shared::from_iter(v))

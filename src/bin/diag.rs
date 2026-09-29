@@ -1,42 +1,67 @@
-use sasspile::compile;
+use sasspile::compile_with_files;
+use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let cases: Vec<(&str, &str)> = vec![
-        // 多行 placeholder extend
+    let cases: Vec<(&str, HashMap<&str, &str>, &str)> = vec![
+        // 基本 @use 变量引用 (单引号)
         (
-            "%spacer {\n  margin: 0;\n  padding: 0;\n}\n.box { @extend %spacer; }",
-            "extend_placeholder_multi_line",
+            "@use 'other';\na {b: other.$member}",
+            HashMap::from([("other.scss", "$member: value;")]),
+            "sq_use_var_ref",
         ),
-        // !optional + undefined placeholder
+        // 双引号 @use
         (
-            ".bar { @extend %undefined !optional; }",
-            "extend_optional_safe",
+            "@use \"other\";\na {b: other.$member}",
+            HashMap::from([("other.scss", "$member: value;")]),
+            "dq_use_var_ref",
         ),
-        // 选择器级 extend 跨行
+        // @use + function 调用
         (
-            "a {b: c}\nd {\n  @extend\n  a\n}",
-            "extend_multiline_selector",
+            "@use 'other';\na {b: other.member()}",
+            HashMap::from([("other.scss", "@function member() { @return value }")]),
+            "sq_use_fn_call",
         ),
-        // 选择器级 extend + !optional 跨行
+        // @use + mixin include
         (
-            "a {@extend b\n  !optional}",
-            "extend_multiline_optional",
+            "@use 'other';\n@include other.member;",
+            HashMap::from([("other.scss", "@mixin member() {a {b: c}}")]),
+            "sq_use_mixin_include",
         ),
-        // 选择器级 extend 目标在下一行
+        // @use ... with() 配置
         (
-            "a {b: c}\nd {@extend\n  a}",
-            "extend_before_arg_scss",
+            "@use 'other' with ($member: configured);\na {b: other.$member}",
+            HashMap::from([("other.scss", "$member: value;")]),
+            "sq_use_with_config",
+        ),
+        // basename: URL 带路径
+        (
+            "@use 'foo/bar/../baz/qux/other';\na {b: other.$variable}",
+            HashMap::from([("foo/baz/qux/other.scss", "$variable: value;")]),
+            "path_basename",
+        ),
+        // without_extensions: URL 带多个扩展名
+        (
+            "@use 'other.foo.bar.baz.scss';\na {b: other.$variable}",
+            HashMap::from([("other.foo.bar.baz.scss", "$variable: value;")]),
+            "without_extensions",
+        ),
+        // without_underscore: URL 带下划线
+        (
+            "@use '_other';\na {b: other.$variable}",
+            HashMap::from([("_other.scss", "$variable: value;")]),
+            "without_underscore",
         ),
     ];
 
-    for (input, desc) in cases {
-        let output = compile(input);
-        eprintln!("=== {desc} ===");
-        eprintln!("INPUT:\n{input}");
-        eprintln!("OUTPUT:\n<{output}>");
-        eprintln!("---");
+    for (input, files, desc) in cases {
+        let owned: HashMap<String, String> = files
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let output = compile_with_files(input, &owned);
+        tracing::info!(case = desc, output = %output, "diag_result");
     }
 }

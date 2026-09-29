@@ -1,6 +1,7 @@
 //! 模块成员解析 — 从模块文件内容提取 var/fn/mixin/raw_rules
 
-use crate::directive::module_system::{ModuleMembers, NsMap};
+pub use crate::directive::module_system::ModuleMembers;
+use crate::directive::module_system::NsMap;
 
 /// 解析模块内容，提取变量/函数/mixin/原始规则 (最高层成员)
 pub fn parse_module_members(content: &str) -> ModuleMembers {
@@ -11,6 +12,11 @@ pub fn parse_module_members(content: &str) -> ModuleMembers {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
+            // 空行关闭任何正在构建的 block (sass 格式 mixin 结束)
+            if let Some((head, body)) = block.take() {
+                emit_parsed_block(&head, &body, &mut members);
+            }
+            depth = 0;
             continue;
         }
 
@@ -32,8 +38,9 @@ pub fn parse_module_members(content: &str) -> ModuleMembers {
         }
 
         if let Some(rest) = trimmed.strip_prefix("@function ") {
-            let (name_paren, body_open) = split_fn_head(rest);
-            if body_open {
+            let (name_paren, body_starts) = split_fn_head(rest);
+            let brace_depth = count_braces(line);
+            if body_starts && brace_depth == 0 {
                 let name_only = extract_name_only(&name_paren);
                 let params = extract_fn_params(&name_paren);
                 let return_value = extract_return_value(&[rest.to_string()]);
@@ -41,18 +48,19 @@ pub fn parse_module_members(content: &str) -> ModuleMembers {
             } else {
                 let name = name_paren.trim().to_string();
                 block = Some((format!("fn {name}"), vec![]));
-                depth = count_braces(line);
+                depth = brace_depth;
                 depth = if depth <= 0 { block = None; 0 } else { depth };
             }
             continue;
         }
 
         if let Some(rest) = trimmed.strip_prefix("@mixin ") {
-            let (name_paren, body_open) = split_fn_head(rest);
-            if body_open {
+            let (name_paren, body_starts) = split_fn_head(rest);
+            let brace_depth = count_braces(line);
+            if body_starts && brace_depth == 0 {
+                // 单行完整定义: @mixin foo { ... }
                 let name_only = extract_name_only(&name_paren);
                 let params = extract_fn_params(&name_paren);
-                // 提取 { ... } 之间的内容作为 body
                 let inner = if let Some(open) = rest.find('{') {
                     if let Some(close) = rest.rfind('}') {
                         rest[open + 1..close].trim().to_string()
@@ -63,11 +71,16 @@ pub fn parse_module_members(content: &str) -> ModuleMembers {
                     rest.to_string()
                 };
                 members.mixins.push((name_only, params, vec![inner]));
-            } else {
+            } else if body_starts {
+                // 多行 scss 格式: @mixin foo { ... (未闭合)
                 let name = name_paren.trim().to_string();
                 block = Some((format!("mx {name}"), vec![]));
-                depth = count_braces(line);
-                depth = if depth <= 0 { block = None; 0 } else { depth };
+                depth = brace_depth;
+            } else {
+                // 多行 sass 格式: @mixin foo (无 {, 缩进语法)
+                let name = name_paren.trim().to_string();
+                block = Some((format!("mx {name}"), vec![]));
+                depth = 1; // 缩进语法，假设有一个隐式的 {
             }
             continue;
         }
@@ -78,6 +91,11 @@ pub fn parse_module_members(content: &str) -> ModuleMembers {
         }
 
         members.raw_rules.push(line.to_string());
+    }
+
+    // 循环结束时，关闭任何仍在构建的 block (sass 格式 mixin 可能没有空行结束)
+    if let Some((head, body)) = block.take() {
+        emit_parsed_block(&head, &body, &mut members);
     }
 
     members
@@ -181,8 +199,21 @@ fn count_braces(line: &str) -> i32 {
 
 // ─── 命名空间化输出 ──────────────────────────────────────────────────────
 
+/// 构建命名空间映射
+///
+/// 当 alias 为空时, 成员名不变 (全局作用域语义)
+/// 当 alias 包含连字符时 (如 "d-"), 使用它作为前缀 (用于 @forward as d-*)
+/// 否则使用 "{alias}_" 作为前缀 (用于 @use)
 pub fn build_ns_map(members: &ModuleMembers, alias: &str) -> NsMap {
-    let prefix = format!("{alias}_");
+    let prefix = if alias.is_empty() {
+        String::new()
+    } else if alias.ends_with('-') || alias.ends_with('_') {
+        // 前缀已包含分隔符 (如 "d-" 或 "d_")
+        alias.to_string()
+    } else {
+        // 默认使用下划线分隔符 (如 "midstream_")
+        format!("{alias}_")
+    };
     let mut ns = NsMap::default();
 
     for (name, _, _) in &members.variables {
@@ -199,10 +230,50 @@ pub fn build_ns_map(members: &ModuleMembers, alias: &str) -> NsMap {
     ns
 }
 
+/// 为 @forward as prefix-* 构建 use-site 映射
+///
+/// 与 build_ns_map 不同, 此映射方向是 prefixed_name → injected_name (identity),
+/// 因为 emit_namespaced_members 已经用前缀命名了注入的成员。
+///
+/// 示例: @forward "upstream" as d-* 其中 upstream 有 $c
+///   injection 生成 $d-c
+///   用户引用 midstream.$d-c
+///   此映射 {midstream → {$d-c → $d-c}} 使得 apply_ns_subs 能正确替换
+pub fn build_forward_use_site_map(members: &ModuleMembers, prefix: &str) -> NsMap {
+    let mut ns = NsMap::default();
+
+    for (name, _, _) in &members.variables {
+        let prefixed = format!("${prefix}{}", &name[1..]);
+        ns.var_map.insert(prefixed.clone(), prefixed);
+    }
+    for (name, _, _) in &members.functions {
+        let prefixed = format!("{prefix}{name}");
+        ns.fn_map.insert(prefixed.clone(), prefixed);
+    }
+    for (name, _, _) in &members.mixins {
+        let prefixed = format!("{prefix}{name}");
+        ns.mixin_map.insert(prefixed.clone(), prefixed);
+    }
+
+    ns
+}
+
 /// 输出命名空间化变量/函数/mixin/raw_rules 为文本 (注入主管线)
+///
+/// 当 alias 为空字符串时, 成员直接输出 (无前缀, 全局作用域语义, 对应 @use "url" as *)
+/// 当 alias 包含连字符时 (如 "d-"), 使用它作为前缀 (用于 @forward as d-*)
+/// 否则使用 "{alias}_" 作为前缀 (用于 @use)
 pub fn emit_namespaced_members(members: &ModuleMembers, alias: &str) -> String {
     let mut out = String::new();
-    let prefix = format!("{alias}_");
+    let prefix = if alias.is_empty() {
+        String::new()
+    } else if alias.ends_with('-') || alias.ends_with('_') {
+        // 前缀已包含分隔符 (如 "d-" 或 "d_")
+        alias.to_string()
+    } else {
+        // 默认使用下划线分隔符 (如 "midstream_")
+        format!("{alias}_")
+    };
 
     for (name, value, _) in &members.variables {
         let stripped_name = &name[1..];

@@ -70,6 +70,40 @@ impl Scope {
     }
 }
 
+// ─── WhileAcc — @while 展开的循环状态（scan_map 模式唯一栖息地）─────────
+
+/// @while 展开的循环累加器
+///
+/// 持有迭代状态: 变量表 + iter_count, 在循环闭包内 &mut 就地修改
+/// 消除 state.clone() + insert() 的 GC 模式
+#[derive(Debug, Clone)]
+pub struct WhileAcc {
+    /// 变量表 (从 CompileState 移入, 展开结束后移出)
+    pub variables: HashMap<String, String>,
+    /// 迭代计数 (安全上限保护)
+    pub iter_count: i32,
+}
+
+impl WhileAcc {
+    /// 从 CompileState 提取变量表, 构造 WhileAcc
+    pub fn from_state(state: &CompileState) -> Self {
+        Self {
+            variables: state.scope.variables.clone(),
+            iter_count: 0,
+        }
+    }
+
+    /// 将变量表回写到 CompileState
+    pub fn write_back(self, state: &mut CompileState) {
+        state.scope.variables = self.variables;
+    }
+
+    /// 安全上限检查
+    pub fn exceeded_limit(&self) -> bool {
+        self.iter_count >= 100
+    }
+}
+
 // ─── 当前收集阶段（scan_map 内部的三模式切换） ─────────────────────────────
 
 #[derive(Clone, Debug, Default)]

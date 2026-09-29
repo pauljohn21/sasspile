@@ -221,6 +221,7 @@ pub fn compile_pipeline(input: &str) -> String {
 - rxrust 1.0.0-rc.5 响应式框架（sasspile 用 Shared 多线程上下文）
 - SCSS 编译器项目（sasspile）
 - 详细指南：`docs/rxrust-reactive-guide.md`
+- 响应式 spec 约束：`openspec/changes/rxrust-spec-hardening/specs/`（no-gc-patterns, reactive-dataflow, rxrust-ownership, tracing-span 等追加约束）
 
 ---
 

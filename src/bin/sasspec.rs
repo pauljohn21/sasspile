@@ -30,7 +30,7 @@ const BLACKLIST_DIRS: &[&str] = &[
     "libsass-todo-tests",
 ];
 
-const FOCUS_DIR: &str = "directives";
+const FOCUS_DIR: &str = "";
 
 fn find_hrx_files(dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -224,9 +224,10 @@ async fn main() {
                 };
                 let actual_trimmed = actual.trim().to_string();
                 let expected_trimmed = test.expected_output.trim().to_string();
+                let passed = actual_trimmed == expected_trimmed;
                 TestResult {
                     name: test.name,
-                    passed: actual_trimmed == expected_trimmed,
+                    passed,
                     expected: expected_trimmed,
                     actual: actual_trimmed,
                 }

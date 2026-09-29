@@ -1,6 +1,8 @@
-//! 指令管线模块 — rxrust 算子组合 (Flux → rxrust 转译)
+//! 指令管线模块 — rxrust 算子组合 (Rust ownership 三态驱动)
 //!
 //! 架构: scan_map(分块状态机) → flat_map(各 block 独立 scan_map) → merge
+//!
+//! spec 约束请参考 openspec/changes/rxrust-spec-hardening/specs/ 下的能力域定义
 //!   - state.rs:   CompileState / Scope / MixinDef / Module / Phase / 分块状态
 //!   - parse.rs:   纯解析辅助 (签名解析 / 变量解析 / mixin 展开)
 //!   - blocks.rs:  DirectiveBlock enum + parse_blocks 状态机
@@ -18,6 +20,8 @@ pub mod eval;
 pub mod pipeline;
 pub mod module_system;
 pub mod member_parse;
+pub mod import_resolver;
 
 pub use self::pipeline::compile_pipeline;
 pub use self::module_system::process_module_imports;
+pub use self::import_resolver::resolve_imports;

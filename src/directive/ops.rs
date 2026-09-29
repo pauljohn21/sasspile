@@ -11,10 +11,77 @@ use super::extend_ops::{build_extend_marker, handle_inline_extend, parse_inline_
 use super::parse::{expand_mixin, parse_include_sig, substitute_vars};
 use super::state::CompileState;
 use super::while_ops::eval_condition;
+use tracing::info_span;
+
+// ─── 辅助函数 ───────────────────────────────────────────────────────────────
+
+fn block_variant_name(block: &DirectiveBlock) -> &'static str {
+    match block {
+        DirectiveBlock::Lines(_) => "Lines",
+        DirectiveBlock::For { .. } => "For",
+        DirectiveBlock::Each { .. } => "Each",
+        DirectiveBlock::If { .. } => "If",
+        DirectiveBlock::FunctionDef { .. } => "FunctionDef",
+        DirectiveBlock::MixinDef { .. } => "MixinDef",
+        DirectiveBlock::PlaceholderDef { .. } => "PlaceholderDef",
+        DirectiveBlock::While { .. } => "While",
+        DirectiveBlock::Include { .. } => "Include",
+    }
+}
+
+// ─── 行类型枚举 — 用于 process_line 的单层 match 分发 ─────────────────────
+
+/// 行类型 — 结构化分类, 消除嵌套 if/return 链
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineKind {
+    /// 空行
+    Empty,
+    /// 规则关闭: "}"
+    CloseBrace,
+    /// 变量定义: "$var: value;"
+    VarDef,
+    /// @include 指令
+    Include,
+    /// @extend 指令 (规则内)
+    AtExtend,
+    /// 行内 @extend: ".bar { @extend %foo; }"
+    InlineExtend,
+    /// 规则开启: ".selector {"
+    RuleStart,
+    /// 普通 CSS 行
+    Plain,
+}
+
+/// 将行文本分类为 LineKind (纯函数, &str 借用 → Copy 输出, 无副作用)
+fn classify_line(line: &str) -> LineKind {
+    if line.is_empty() {
+        return LineKind::Empty;
+    }
+    if line == "}" {
+        return LineKind::CloseBrace;
+    }
+    if line.starts_with('$') && line.contains(':') {
+        return LineKind::VarDef;
+    }
+    if line.starts_with("@include ") {
+        return LineKind::Include;
+    }
+    if line.starts_with("@extend ") {
+        return LineKind::AtExtend;
+    }
+    if line.contains("@extend ") && line.ends_with('}') {
+        return LineKind::InlineExtend;
+    }
+    if !line.starts_with('@') && !line.starts_with('$') && line.ends_with('{') {
+        return LineKind::RuleStart;
+    }
+    LineKind::Plain
+}
 
 // ─── Block 处理入口 ─────────────────────────────────────────────────────────
 
 pub fn process_block(block: DirectiveBlock, state: &mut CompileState) -> Vec<String> {
+    let _span = info_span!("process_block", stage = "phase1", variant = ?block_variant_name(&block)).entered();
     let state_ref: &CompileState = &*state;
 
     match block {
@@ -96,132 +163,161 @@ fn expand_include_multi(state: &CompileState, name: &str, args: &[String], using
 
 fn process_line(line: &str, state: &mut CompileState) -> Vec<String> {
     let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return vec![];
-    }
+    let kind = classify_line(trimmed);
 
-    // 规则关闭: 注入 pending @extend declarations
-    if trimmed == "}" && state.current_rule_name.is_some() {
-        let mut out = Vec::new();
-        if !state.pending_extend_decls.is_empty() {
-            for d in state.pending_extend_decls.drain(..) {
-                out.push(format!("  {d};"));
-            }
-        }
-        out.push(line.to_string());
-        state.current_rule_name = None;
-        return out;
-    }
+    // 单层 match 分发 — 消除嵌套 if/return 链
+    match kind {
+        LineKind::Empty => vec![],
 
-    if trimmed.starts_with('$') && trimmed.contains(':') {
-        if let Some((name, value, is_default)) = parse_var_def(trimmed) {
-            // !default 语义: 仅当变量未定义时赋值 (with() config 优先)
-            if is_default && state.scope.variables.contains_key(&name) {
-                return vec![];
-            }
-            state.scope.variables.insert(name, value);
-        }
-        return vec![];
-    }
-    if trimmed.starts_with("@include ") {
-        return handle_include(trimmed, state);
-    }
-    if trimmed.starts_with("@extend ") && state.current_rule_name.is_some() {
-        if let Some(decl) = parse_inline_extend(trimmed, state) {
-            state.pending_extend_decls.push(decl);
-            return vec![];
-        }
-        if let Some(marker) = build_extend_marker(trimmed, state) {
-            return vec![marker];
-        }
-        return vec![];
-    }
-    // 行内 @extend: ".bar { @extend %foo; }"
-    if trimmed.contains("@extend ") && trimmed.ends_with('}') {
-        let after_extend = trimmed.split("@extend ").nth(1).unwrap_or("");
-        let target_spec = after_extend
-            .split(|c: char| c == ';' || c == '}')
-            .next()
-            .unwrap_or("")
-            .trim();
-        let is_placeholder = target_spec.starts_with('%');
-        let placeholder_name = target_spec.strip_prefix('%')
-            .map(|s| s.trim_end_matches("!optional").trim())
-            .unwrap_or("");
-        let is_optional = target_spec.contains("!optional");
-        let placeholder_exists = state.placeholder_defs.contains_key(placeholder_name);
-
-        if is_placeholder && placeholder_exists {
-            let placeholder_result = handle_inline_extend(trimmed, state);
-            if !placeholder_result.is_empty() {
-                return placeholder_result;
+        LineKind::CloseBrace => {
+            // 规则关闭: 注入 pending @extend declarations
+            if state.current_rule_name.is_some() {
+                let mut out = Vec::new();
+                if !state.pending_extend_decls.is_empty() {
+                    for d in state.pending_extend_decls.drain(..) {
+                        out.push(format!("  {d};"));
+                    }
+                }
+                out.push(line.to_string());
+                state.current_rule_name = None;
+                out
+            } else {
+                vec![substitute_vars(&*state, trimmed)]
             }
         }
 
-        if let Some(marker) = build_extend_marker(trimmed, state) {
-            let inner = trimmed
-                .trim_start_matches(|c: char| c != '{')
-                .trim_start_matches('{')
-                .trim_end_matches('}')
-                .trim();
-            let only_extend = {
-                let without_semi = inner.trim_end_matches(';').trim();
-                without_semi.starts_with("@extend")
-                    && !without_semi[7..].contains(';')
-            };
-
-            if is_placeholder && is_optional && !placeholder_exists {
-                if only_extend {
+        LineKind::VarDef => {
+            if let Some((name, value, is_default)) = parse_var_def(trimmed) {
+                // !default 语义: 仅当变量未定义时赋值
+                if is_default && state.scope.variables.contains_key(&name) {
                     return vec![];
+                }
+                state.scope.variables.insert(name, value);
+                // 处理行内 ";" 之后的剩余内容
+                if let Some(semi_rel) = trimmed.find(';') {
+                    let remainder = trimmed[semi_rel + 1..].trim();
+                    if !remainder.is_empty() {
+                        return process_line(remainder, state);
+                    }
+                }
+            }
+            vec![]
+        }
+
+        LineKind::Include => handle_include(trimmed, state),
+
+        LineKind::AtExtend => {
+            // !optional + 不存在的 placeholder: 剥离 @extend 部分, 保留行内其余声明
+            if state.current_rule_name.is_some() && is_optional_nonexistent_extend(trimmed, state) {
+                let after_extend = trimmed.strip_prefix("@extend ").unwrap_or(trimmed);
+                let end_rel = after_extend.find(|c: char| c == ';' || c == '}').unwrap_or(after_extend.len());
+                let remainder = after_extend[end_rel..].trim_start_matches(';').trim();
+                if remainder.is_empty() {
+                    return vec![];
+                }
+                return process_line(remainder, state);
+            }
+            if state.current_rule_name.is_some() {
+                if let Some(decl) = parse_inline_extend(trimmed, state) {
+                    if !decl.is_empty() {
+                        state.pending_extend_decls.push(decl);
+                        return vec![];
+                    }
+                }
+                if let Some(marker) = build_extend_marker(trimmed, state) {
+                    return vec![marker];
+                }
+            }
+            vec![]
+        }
+
+        LineKind::InlineExtend => {
+            // 行内 @extend: ".bar { @extend %foo; }"
+            let after_extend = trimmed.split("@extend ").nth(1).unwrap_or("");
+            let target_spec = after_extend
+                .split(|c: char| c == ';' || c == '}')
+                .next()
+                .unwrap_or("")
+                .trim();
+            let is_placeholder = target_spec.starts_with('%');
+            let placeholder_name = target_spec.strip_prefix('%')
+                .map(|s| s.trim_end_matches("!optional").trim())
+                .unwrap_or("");
+            let is_optional = target_spec.contains("!optional");
+            let placeholder_exists = state.placeholder_defs.contains_key(placeholder_name);
+
+            if is_placeholder && placeholder_exists {
+                let placeholder_result = handle_inline_extend(trimmed, state);
+                if !placeholder_result.is_empty() {
+                    return placeholder_result;
+                }
+            }
+
+            if let Some(marker) = build_extend_marker(trimmed, state) {
+                let inner = trimmed
+                    .trim_start_matches(|c: char| c != '{')
+                    .trim_start_matches('{')
+                    .trim_end_matches('}')
+                    .trim();
+                let only_extend = {
+                    let without_semi = inner.trim_end_matches(';').trim();
+                    without_semi.starts_with("@extend")
+                        && !without_semi[7..].contains(';')
+                };
+
+                if is_placeholder && is_optional && !placeholder_exists {
+                    if only_extend {
+                        return vec![];
+                    }
+                    let without_extend = remove_extend_line(trimmed);
+                    if without_extend.is_empty() || without_extend == "{" || without_extend == "{}" {
+                        return vec![];
+                    }
+                    return vec![without_extend];
+                }
+
+                if only_extend {
+                    return vec![marker];
                 }
                 let without_extend = remove_extend_line(trimmed);
                 if without_extend.is_empty() || without_extend == "{" || without_extend == "{}" {
-                    return vec![];
+                    return vec![marker];
                 }
-                return vec![without_extend];
+                return vec![marker, without_extend];
             }
 
-            if only_extend {
-                return vec![marker];
-            }
-            let without_extend = remove_extend_line(trimmed);
-            if without_extend.is_empty() || without_extend == "{" || without_extend == "{}" {
-                return vec![marker];
-            }
-            return vec![marker, without_extend];
+            vec![substitute_vars(&*state, trimmed)]
         }
 
-        return vec![substitute_vars(&*state, trimmed)];
-    }
-
-    // 规则开启: ".wrapper {"
-    if !trimmed.starts_with('@') && !trimmed.starts_with('$') && trimmed.ends_with('{') {
-        if let Some(selector) = trimmed.strip_suffix('{').map(str::trim) {
-            if !selector.is_empty() && !selector.starts_with('@') {
-                state.current_rule_name = Some(selector.to_string());
+        LineKind::RuleStart => {
+            // 规则开启: ".wrapper {"
+            if let Some(selector) = trimmed.strip_suffix('{').map(str::trim) {
+                if !selector.is_empty() && !selector.starts_with('@') {
+                    state.current_rule_name = Some(selector.to_string());
+                }
             }
+            vec![substitute_vars(&*state, trimmed)]
         }
-        return vec![substitute_vars(&*state, trimmed)];
-    }
 
-    vec![substitute_vars(&*state, trimmed)]
+        LineKind::Plain => vec![substitute_vars(&*state, trimmed)],
+    }
 }
 
 // ─── @include 行处理 ────────────────────────────────────────────────────────
 
 fn handle_include(line: &str, state: &CompileState) -> Vec<String> {
     let (name, args) = parse_include_sig(&line[9..]);
-    state
-        .scope
-        .mixins
-        .get(&name)
-        .map(|def| {
-            expand_mixin(def, &args)
-                .into_iter()
-                .flat_map(|b| expand_single_line(&b, state))
-                .collect()
-        })
-        .unwrap_or_default()
+    if let Some(def) = state.scope.mixins.get(&name) {
+        // Phase 1 找到 mixin → 展开
+        expand_mixin(def, &args)
+            .into_iter()
+            .flat_map(|b| expand_single_line(&b, state))
+            .collect()
+    } else {
+        // Phase 1 未找到 (mixin 可能定义在嵌套规则内, 由 CssBuilder 收集)
+        // 原样返回给 Phase 2 CssBuilder 处理
+        vec![line.to_string()]
+    }
 }
 
 fn expand_single_line(line: &str, state: &CompileState) -> Vec<String> {
@@ -241,6 +337,41 @@ fn expand_single_line(line: &str, state: &CompileState) -> Vec<String> {
 
 // ─── 变量定义解析 ───────────────────────────────────────────────────────────
 
+/// 检测 @extend 行是否为 !optional + 不存在的 placeholder
+/// 匹配模式: @extend %name !optional; 或 @extend %name ... !optional;
+fn is_optional_nonexistent_extend(line: &str, state: &CompileState) -> bool {
+    let after = match line.strip_prefix("@extend ") {
+        Some(a) => a,
+        None => return false,
+    };
+    // 提取 targets 部分 (; 或 } 之前)
+    let targets_part = after
+        .split(|c: char| c == ';' || c == '}')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if !targets_part.contains("!optional") {
+        return false;
+    }
+    // 检查所有 placeholder target 是否都不存在
+    let targets: Vec<&str> = targets_part
+        .split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    if targets.is_empty() {
+        return false;
+    }
+    targets.iter().all(|t| {
+        let name = t
+            .trim_end_matches("!optional")
+            .trim()
+            .strip_prefix('%')
+            .unwrap_or("");
+        !state.placeholder_defs.contains_key(name)
+    })
+}
+
 fn parse_var_def(line: &str) -> Option<(String, String, bool)> {
     if !line.starts_with('$') {
         return None;
@@ -248,12 +379,13 @@ fn parse_var_def(line: &str) -> Option<(String, String, bool)> {
     let after_dollar = &line[1..];
     let (name, value_part) = after_dollar.split_once(':')?;
     let name = format!("${}", name.trim());
+    // 值从 ":" 后第一个非空字符开始到第一个 ";" 结束 (CSS 声明终结符)
     let raw_value = value_part.trim();
     // 检测 !default 标志
     let is_default = raw_value.contains("!default");
-    let value = raw_value
-        .trim_end_matches(';')
-        .trim()
+    // 在第一个 ";" 处截断, 避免吞掉行内后续内容
+    let value_until_semi = raw_value.split(';').next().unwrap_or(raw_value).trim();
+    let value = value_until_semi
         .trim_end_matches("!default")
         .trim()
         .to_string();

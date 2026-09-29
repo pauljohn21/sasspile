@@ -2,37 +2,50 @@
 //!
 //! 包含: while 循环展开, 简单表达式求值, 变量赋值解析, while 条件比较
 
-use super::state::CompileState;
+use super::state::{CompileState, WhileAcc};
 
 /// @while 展开: 求值 cond, 若 true 则展开 body, 跳过 $@var 赋值, 直到 false 或 body 耗尽
+///
+/// 使用 WhileAcc 作为循环状态唯一栖息地:
+///   - 从 CompileState 提取 variables clone (仅变量表, 非全量 state)
+///   - 循环闭包内 &mut WhileAcc 就地修改 iter_count + variables
+///   - 消除 state.clone() 全量克隆的 GC 模式
 pub(super) fn expand_while(state: &CompileState, cond: &str, body: &[String]) -> Vec<String> {
     let mut result: Vec<String> = Vec::new();
-    let max_iter = 100; // 防止无限循环的安全上限
-    let mut current_state = state.clone();
+    let mut acc = WhileAcc::from_state(state);
 
-    for _ in 0..max_iter {
+    // scan_map 语义循环: &mut acc 消费自身
+    loop {
+        if acc.exceeded_limit() {
+            break;
+        }
+
+        // 构建最小临时 CompileState (仅变量表) 供 substitute_vars 使用
+        let temp_state = state_with_vars(&acc.variables);
+
         // 求值条件
-        let cond_substituted = super::parse::substitute_vars(&current_state, cond);
+        let cond_substituted = super::parse::substitute_vars(&temp_state, cond);
         if !eval_while_condition(&cond_substituted) {
             break;
         }
+        acc.iter_count += 1;
 
         // 展开 body: 处理变量赋值和 CSS 行
         for line in body {
             let trimmed = line.trim();
             if trimmed.is_empty() { continue; }
 
-            // 变量赋值: "$i: $i + 1;" → 更新 state
+            // 变量赋值: "$i: $i + 1;" → &mut acc.variables 就地修改
             if trimmed.starts_with('$') && trimmed.contains(':') {
                 if let Some((name, value)) = parse_var_assignment(trimmed) {
-                    let evaluated = eval_expr_simple(&current_state, &value);
-                    current_state.scope.variables.insert(name, evaluated);
+                    let evaluated = eval_expr_simple_with_vars(&acc.variables, &value);
+                    acc.variables.insert(name, evaluated);
                 }
                 continue;
             }
 
             // CSS 行: 替换变量后 emit
-            let substituted = super::parse::substitute_vars(&current_state, trimmed);
+            let substituted = super::parse::substitute_vars(&temp_state, trimmed);
             result.push(substituted);
         }
     }
@@ -40,12 +53,18 @@ pub(super) fn expand_while(state: &CompileState, cond: &str, body: &[String]) ->
     result
 }
 
-/// 简单表达式求值: "$i + 1" / "$i - 1" 等
-fn eval_expr_simple(state: &CompileState, expr: &str) -> String {
-    let substituted = super::parse::substitute_vars(state, expr);
+/// 从变量表构建最小 CompileState (仅用于substitute_vars调用)
+fn state_with_vars(vars: &std::collections::HashMap<String, String>) -> CompileState {
+    let mut state = CompileState::new();
+    state.scope.variables = vars.clone();
+    state
+}
+
+/// 简单表达式求值 (直接使用变量表, 避免构建 CompileState)
+fn eval_expr_simple_with_vars(vars: &std::collections::HashMap<String, String>, expr: &str) -> String {
+    let substituted = substitute_in_vars(vars, expr);
     let t = substituted.trim();
 
-    // 尝试简单算术: "$i + 1" / "5 + 1"
     if let Some(idx) = t.find('+') {
         let (l, r) = t.split_at(idx);
         if let (Ok(a), Ok(b)) = (l.trim().parse::<f64>(), r[1..].trim().parse::<f64>()) {
@@ -62,6 +81,16 @@ fn eval_expr_simple(state: &CompileState, expr: &str) -> String {
     }
     t.to_string()
 }
+
+/// 在变量表内做简单替换 (避免构建完整 CompileState)
+fn substitute_in_vars(vars: &std::collections::HashMap<String, String>, input: &str) -> String {
+    let mut result = input.to_string();
+    for (name, value) in vars {
+        result = result.replace(name, value);
+    }
+    result
+}
+
 
 /// 解析变量赋值: "$i: $i + 1;" → ("$i", "$i + 1")
 fn parse_var_assignment(line: &str) -> Option<(String, String)> {

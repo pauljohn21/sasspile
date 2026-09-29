@@ -1,23 +1,25 @@
-//! sasspile — Flux 思维 + rxrust 算子组合的 SCSS 编译器
+//! sasspile — Rust ownership 三态 (move/&/&mut) 驱动的 SCSS 编译器
 //!
-//! 架构 (Flux → rxrust 转译):
-//!   groupBy(classify) → scan_map(accumulate_block) → flat_map(process_block)
-//!
-//! 数据流:
-//!   Shared::subject<String>                                  // Flux Sinks.Many
-//!     → scan_map(BlockAccumulator, accumulate_block)         // Flux bufferUntil/groupBy
-//!     → flat_map(Shared::from_iter<Vec<DirectiveBlock>>)     // Flux groupBy → inner
-//!     → scan_map(CompileState, expand_block)                 // Flux scanWith (各 block 独立)
+//! 架构 (rxrust 算子链组合):
+//!   Shared::subject<String> (入口)
+//!     → scan_map(BlockAccumulator, accumulate_block)         // &mut 就地累积 block
+//!     → flat_map(Shared::from_iter<Vec<DirectiveBlock>>)     // Vec → 单元素流
+//!     → scan_map(CompileState, expand_block)                 // &mut 就地展开各 block
 //!     → flat_map(Shared::from_iter<Vec<String>>)
-//!     → scan_map(CssBuilder, feed)                           // Flux scanWith (AST 构建)
+//!     → scan_map(CssBuilder, feed)                           // &mut 就地构建 AST
 //!     → flat_map(Shared::from_iter<Vec<CssNode>>)
-//!     → collect::<Vec<CssNode>>().last()                     // Flux collectList
+//!     → collect::<Vec<CssNode>>().last()                     // 汇聚, complete 时发射
 //!     → map(merge_media_nodes)
-//!     → map(render_node)                                     // 借引用, 零 clone
+//!     → map(render_node)                                     // &借用, 零 clone
 //!     → collect::<Vec<String>>().last()
 //!     → subscribe(move |v| tx.send(v.join("\n")))            // move 转移终态
 //!
 //! 驱动: push all lines → complete() → terminal 同步执行完毕 → rx.recv()
+//!
+//! 所有权三态:
+//!   - move: subscribe 闭包将 tx 所有权移入, 此后外部不可用
+//!   - &: render_node(&node) 借引用产生 String, 零 clone
+//!   - &mut Acc: scan_map 唯一持有状态, 就地修改, 零外部共享可变
 
 pub mod directive;
 pub mod css;
