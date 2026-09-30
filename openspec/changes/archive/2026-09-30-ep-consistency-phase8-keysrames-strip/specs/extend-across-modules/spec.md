@@ -1,13 +1,11 @@
-# extend-across-modules Specification
-
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: @extend SHALL work across module boundaries with proper scope rules
 When modules `@use` a common module, `@extend` targets SHALL be resolved across module boundaries following Sass scope rules. The inject placement SHALL match EP (Element Plus) reference compilation output exactly, including selector group ordering and nesting depth.
 
 #### Scenario: Diamond dependency extend merging
 - **WHEN** both `left` and `right` modules `@use "other"` and both `@extend %in-other`
-- **THEN** the output SHALL merge the extender selectors into a single rule with the target's declarations, with selector group order matching EP reference output
+- **THEN** the output SHALL merge the extender selectors into a single rule with the target's declarations, with selector group order matching EP reference output.
 
 #### Scenario: @extend through :is() pseudo-selector
 - **WHEN** `midstream` defines `:is(in-midstream) { @extend in-upstream }` and `input` defines `in-input { @extend in-midstream }`

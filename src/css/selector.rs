@@ -1,3 +1,41 @@
+/// CSS3 规范伪元素名集合（双冒号格式 `::xxx`）。
+/// 来源：https://drafts.csswg.org/selectors-4/#pseudo-elements
+const PSEUDO_ELEMENTS: &[&str] = &[
+    "after",
+    "backdrop",
+    "before",
+    "cue",
+    "file-selector-button",
+    "first-letter",
+    "first-line",
+    "grammar-error",
+    "highlight",
+    "marker",
+    "part",
+    "placeholder",
+    "selection",
+    "slotted",
+    "spelling-error",
+    "target-text",
+];
+
+/// 将单冒号伪元素（`:before`）转换为双冒号（`::before`），匹配 CSS3 规范。
+/// 仅转换 `PSEUDO_ELEMENTS` 列表中的名称，不影响伪类（`:hover`、`:nth-child()` 等）。
+fn normalize_pseudo_elements(selector: String) -> String {
+    PSEUDO_ELEMENTS.iter().fold(selector, |acc, &name| {
+        // 匹配 `:name` 但不匹配 `::name`（避免重复添加），使用边界断言
+        let single = format!(":{name}");
+        let double = format!("::{name}");
+        match acc.contains(&single) {
+            true => {
+                // 先替换 `::name` 占位防止重复，再替换 single
+                acc.replace(&double, &single).replace(&single, &double)
+            }
+            false => acc,
+        }
+    })
+}
+
 /// 选择器 token——用于组合器验证。
 #[derive(Debug)]
 pub(super) enum SelToken {
@@ -25,6 +63,8 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
     if !selector.contains('%') {
         return selector;
     }
+    // 规范化伪元素冒号格式（`:before` → `::before`）
+    let selector = normalize_pseudo_elements(selector);
     // 顶层逗号分隔——移除纯占位符部分
     let parts: Vec<&str> = selector
         .split(',')

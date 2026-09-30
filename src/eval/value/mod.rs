@@ -142,16 +142,24 @@ match env.get_namespace(ns).cloned() {
             Value::Calc(s) => {
                 // CSS 函数内的插值 #{} —— 展开后重新构造 Calc
                 // parser 在 var(#{jn($args)}) 中保留 #{} 供此层展开
-                if s.contains("#{") {
+                let interp_evaluated = if s.contains("#{") {
                     let evaluated = eval_interp_str(s, env);
-                    return Ok(Value::Calc(evaluated));
-                }
+                    Some(evaluated)
+                } else {
+                    None
+                };
+                let base = interp_evaluated.as_deref().unwrap_or(s);
                 // EP FIX: 检测 calc() 内部未求值的 Sass 函数调用（如 getCssVar("index","normal")）
                 // parser 将 calc(...) 原始内容保留为字符串——求值时识别内部用户函数并替换
-                if let Some(evaluated) = Self::try_eval_calc_inner_functions(s, env)? {
+                // 必须在插值展开后也执行，因为 EP 模式常在 var(#{...}, raw-text) 中混用
+                if let Some(evaluated) = Self::try_eval_calc_inner_functions(base, env)? {
                     return Ok(Value::Calc(evaluated));
                 }
-                // 空 calc()/clamp()/min()/max() — 检查是否有用户定义的函数覆盖
+                // 无插值且无函数调用时，返回插值后的结果（如有）
+                if let Some(ev) = interp_evaluated {
+                    return Ok(Value::Calc(ev));
+                }
+                // 空 calc()/clamp()/min()/max() — 检查是否有用户定义函数覆盖
                 let inner = s
                     .strip_prefix("calc(")
                     .or_else(|| s.strip_prefix("min("))
@@ -565,11 +573,20 @@ impl Evaluator {
             // 检查是否 ident 开始（字母开头）
             if c.is_ascii_alphabetic() || c == '_' || c == '$' {
                 let start = i;
-                // 消费 ident
+                // 消费 ident（支持模块限定名 map.get / math.div 等）
                 while i < bytes.len() {
                     let ch = bytes[i] as char;
                     if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '$' {
                         i += 1;
+                    } else if ch == '.' {
+                        // 前瞻：点号后必须是 ident 字符（模块限定）
+                        let next = bytes.get(i + 1).copied().map(|b| b as char);
+                        match next {
+                            Some(c) if c.is_ascii_alphanumeric() || c == '_' || c == '-' => {
+                                i += 1; // 消费点号
+                            }
+                            _ => break,
+                        }
                     } else {
                         break;
                     }
@@ -582,14 +599,18 @@ impl Evaluator {
                 }
                 // 检查是否有 "(" —— 是函数调用
                 if i < bytes.len() && bytes[i] == b'(' {
-                    // 检查函数原点 —— 是否是用户定义函数
-                    let is_user_fn = !dispatch::is_known_builtin(ident)
-                        && !dispatch::is_css_native_function(ident)
-                        && env.get_function(ident).is_some();
+                    // 检查函数类型 —— 用户函数 or 模块限定内建函数
+                    let user_fn = env.get_function(ident);
+                    let is_module_builtin = ident.contains('.')
+                        && dispatch::module_builtin_name(ident) != ident
+                        && dispatch::is_known_builtin(ident);
+                    let is_user_fn = user_fn.is_some()
+                        && !dispatch::is_known_builtin(ident)
+                        && !dispatch::is_css_native_function(ident);
 
                     // 回退空白消费，保留原始 whitespace
                     let ws = &s[ws_start..i];
-                    if is_user_fn {
+                    if is_user_fn || is_module_builtin {
                         // 找到匹配的闭合括号
                         let args_start = i + 1;
                         let mut depth = 1;
@@ -611,21 +632,36 @@ impl Evaluator {
                         let args_end = j - 1;
                         let args_str = &s[args_start..args_end];
 
-                        // 将参数用 rust-script 的 ParseStream 太复杂——改用简单的字符串分割
-                        match Self::eval_user_fn_str_args(ident, args_str, env) {
-                            Ok(val) => {
-                                result.push_str(&val.to_string());
-                                changed = true;
-                                i = j;
+                        if is_user_fn {
+                            // 用户函数：用简单字符串分割解析参数
+                            match Self::eval_user_fn_str_args(ident, args_str, env) {
+                                Ok(val) => {
+                                    result.push_str(&val.to_string());
+                                    changed = true;
+                                    i = j;
+                                }
+                                Err(_) => {
+                                    // 求值失败，保留原始文本
+                                    result.push_str(&s[start..i]);
+                                    i = ws_start;
+                                }
                             }
-                            Err(_) => {
-                                // 求值失败，保留原始文本
-                                result.push_str(&s[start..i]);
-                                i = ws_start;
+                        } else {
+                            // 模块限定内建函数（map.get / math.div 等）：解析参数并分派
+                            match Self::eval_user_fn_str_args(ident, args_str, env) {
+                                Ok(val) => {
+                                    result.push_str(&val.to_string());
+                                    changed = true;
+                                    i = j;
+                                }
+                                Err(_) => {
+                                    result.push_str(&s[start..i]);
+                                    i = ws_start;
+                                }
                             }
                         }
                     } else {
-                        // 不是用户函数，保留原始文本（包括空白和括号）
+                        // 不是可求值函数，保留原始文本（包括空白和括号）
                         result.push_str(ident);
                         result.push_str(ws);
                         // i 已经指向 '('
@@ -647,14 +683,10 @@ impl Evaluator {
         }
     }
 
-    /// 用逗号分割简单参数并尝试调用用户函数。
+    /// 用逗号分割简单参数并尝试调用函数（用户函数或模块限定内建函数）。
     ///
-    /// 处理 `getCssVar("index", "normal")` 等简单调用——参数为字面量（数字/字符串/标识符）。
+    /// 用户函数走 `call_user_function`，模块限定内建（map.get/math.div）走 `call_function`。
     fn eval_user_fn_str_args(name: &str, args_str: &str, env: &Env) -> Result<Value> {
-        let func = env.get_function(name).ok_or_else(|| {
-            SassError::Eval(format!("Function {name} not found"))
-        })?;
-
         // 简单参数分割：跟踪引号和括号深度
         let mut arg_values: Vec<Value> = Vec::new();
         let mut current = String::new();
@@ -698,7 +730,16 @@ impl Evaluator {
 
         let pos_args: Vec<Value> = arg_values;
         let kw_args = HashMap::new();
-        Self::call_user_function(func, &pos_args, &kw_args, env)
+
+        // 用户函数（精确匹配优先）
+        if let Some(func) = env.get_function(name) {
+            return Self::call_user_function(func, &pos_args, &kw_args, env);
+        }
+        // 模块限定内建函数（map.get / math.div 等）
+        if name.contains('.') {
+            return Self::call_function(name, &pos_args, &kw_args, env);
+        }
+        Err(SassError::Eval(format!("Function {name} not found")))
     }
 
     /// 将参数字符串解析为字面量 Value。

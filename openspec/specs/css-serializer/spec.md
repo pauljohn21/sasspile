@@ -39,3 +39,30 @@ The CSS serializer MUST output consistent spacing in at-rules.
 - **WHEN** `@keyframes name { from { opacity: 0; } to { opacity: 1; } }` is compiled
 - **THEN** output has `from {` and `to {` with correct indentation
 
+#### Scenario: Empty keyframe block preservation
+- **WHEN** `@keyframes name { 0% {} 100% { opacity: 1; } }` is compiled
+- **THEN** output SHALL contain `0% {}` block even when empty, matching EP reference output
+
+### Requirement: Pseudo-element SHALL use double-colon format (CSS3)
+The CSS serializer SHALL output pseudo-elements using double-colon notation (`::`) consistently, matching CSS3 specification and EP reference output.
+
+#### Scenario: ::before serialization
+- **WHEN** `.a::before { content: ""; }` is compiled
+- **THEN** output SHALL contain `::before` (double colon), never single colon `:before`
+
+#### Scenario: ::after serialization
+- **WHEN** `.a::after { content: ""; }` is compiled
+- **THEN** output SHALL contain `::after` (double colon)
+
+#### Scenario: ::placeholder serialization
+- **WHEN** `input::placeholder { color: gray; }` is compiled
+- **THEN** output SHALL contain `::placeholder` (double colon)
+
+#### Scenario: ::first-line and ::first-letter
+- **WHEN** `.a::first-line { }` or `.a::first-letter { }` is compiled
+- **THEN** output SHALL preserve double-colon format
+
+#### Scenario: CSS2 pseudo-elements normalized to double-colon
+- **WHEN** `.a:before { content: ""; }` is compiled (SCSS source uses CSS2 syntax)
+- **THEN** output SHALL normalize to `::before` (CSS3 double-colon format)
+
