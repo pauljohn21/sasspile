@@ -185,7 +185,19 @@ match env.get_namespace(ns).cloned() {
                     (true, _) => Ok(Value::String(eval_interp_str(s, env), *quoted)),
                     (false, false) => match Self::lookup_named_color(s) {
                         Some(color) => Ok(Value::Color(color)),
-                        None => Ok(value.clone()),
+                        None => {
+                            // & 字面量在值上下文中 = 当前选择器
+                            if s == "&" {
+                                Ok(Value::String(
+                                    env.get_selector()
+                                        .map(std::string::ToString::to_string)
+                                        .unwrap_or_default(),
+                                    false,
+                                ))
+                            } else {
+                                Ok(value.clone())
+                            }
+                        }
                     },
                     (false, true) => Ok(value.clone()),
                 }
@@ -748,8 +760,11 @@ impl Evaluator {
         if s.is_empty() {
             return Ok(Value::Null);
         }
-        // 字符串
-        if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+        // 字符串（长度 ≥ 2 才可能是合法的引号包裹）
+        if s.len() >= 2
+            && ((s.starts_with('"') && s.ends_with('"'))
+                || (s.starts_with('\'') && s.ends_with('\'')))
+        {
             let inner = &s[1..s.len() - 1];
             return Ok(Value::String(inner.to_string(), true));
         }

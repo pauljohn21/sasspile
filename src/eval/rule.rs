@@ -361,18 +361,49 @@ impl Evaluator {
             false => {}
         }
 
-        // 进入子作用域——零 clone，parent 指向当前 scope
-        let env = env.enter_scope().with_selector(selector.clone());
+        // FIX: 解析 selector 中的字面 & 后再存入 env.current_selector，
+        // 确保 mixin 内 $selector: & 读取到的是正确解析值（而非字面 &）。
+        // RuleBuilder 仍使用原始 selector（保留 & 供后续 combine_selectors 处理）。
+        // CRITICAL: trim 尾随逗号——EP 的 e() mixin 输出 "#{$currentSelector}" 含尾随逗号
+        //（如 ".el-badge__content,"），如果 current_selector 保留逗号，
+        // 后续 m() mixin 的 "$selector: &" 会捕获带逗号的值，
+        // 导致 $currentSelector 变成 ".el-badge__content,--primary"（双逗号 Bug）。
+        let resolved_sel = if selector.contains('&') {
+            let parent_sel = env.get_selector().map(String::from).unwrap_or_default();
+            Self::combine_selectors(&parent_sel, selector.as_str())
+        } else {
+            selector.clone()
+        };
+        // 归一化 current_selector：trim 尾逗号和空白
+        let resolved_sel = resolved_sel.trim().trim_end_matches(',').trim().to_string();
+
+        // FIX: 保存父级 current_selector，防止嵌套规则/孙规则修改后泄漏到兄弟节点。
+        // 典型场景：`.el-button-group { & > .el-button { ... } @include m('horizontal') }`
+        // 当嵌套的 `& > .el-button` 规则求值完成后，其内部 scope exit 会丢失父级 current_selector，
+        // 导致后续同级的 m() mixin 看到 `$selector: &` 被污染为深嵌套选择器。
+        let parent_selector = env.get_selector().map(String::from);
+        let env = env.enter_scope().with_selector(resolved_sel);
         let (css, new_env) = Self::eval_nodes(body, env)?;
 
-        // 使用 RuleBuilder + fold 处理嵌套规则
+        // 使用 RuleBuilder + fold 处理嵌套规则（selector 保留原始形式）。
+        // trim 尾逗号：e() mixin 通过 "#{$currentSelector}" 生成的 selector 含尾随逗号
+        //（如 ".el-badge__content,"），trim 后 RuleBuilder.flush_decls 输出正确的 .el-badge__content
+        let builder_selector = selector.trim().trim_end_matches(',').trim().to_string();
         let result = css
             .into_iter()
-            .fold(RuleBuilder::new(selector), RuleBuilder::push)
+            .fold(RuleBuilder::new(builder_selector), RuleBuilder::push)
             .build();
 
         // 退出子作用域——恢复父 scope，传播 !global 和新增 mixin/function
         let return_env = new_env.exit_scope();
+
+        // FIX: 恢复父级 current_selector（嵌套规则内 eval_nodes 可能修改了它）。
+        // 此修复确保同级 mixin 调用（如 m()）在嵌套规则后仍能正确看到父级选择器，
+        // 避免 :hover--horizontal 类 compound 膨胀 bug。
+        let return_env = match parent_selector {
+            Some(s) => return_env.with_selector(s),
+            None => return_env,
+        };
 
         Ok((result, return_env))
     }
@@ -397,18 +428,40 @@ impl Evaluator {
         }
     }
 
+    /// 按逗号分割选择器——但**不**分割括号内的逗号（`:not(.a, .b)` 内部逗号不是分隔符）。
+    ///
+    /// 跟踪圆括号嵌套深度，深度 > 0 时的逗号属于函数参数（如 `:not()`、`:is()`、`:where()`）。
+    fn split_selectors_respecting_parens(s: &str) -> Vec<&str> {
+        let mut result = Vec::new();
+        let mut start = 0;
+        let mut depth: i32 = 0;
+        for (i, b) in s.bytes().enumerate() {
+            match b {
+                b'(' => depth += 1,
+                b')' => depth -= 1,
+                b',' if depth == 0 => {
+                    let piece = &s[start..i];
+                    let trimmed = piece.trim();
+                    if !trimmed.is_empty() {
+                        result.push(trimmed);
+                    }
+                    start = i + 1;
+                }
+                _ => {}
+            }
+        }
+        let tail = &s[start..];
+        let trimmed = tail.trim();
+        if !trimmed.is_empty() {
+            result.push(trimmed);
+        }
+        result
+    }
+
     /// 组合选择器——处理 & 替换和逗号分隔选择器。
     pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
-        let parents: Vec<&str> = parent
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect();
-        let children: Vec<&str> = child
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect();
+        let parents = Self::split_selectors_respecting_parens(parent);
+        let children = Self::split_selectors_respecting_parens(child);
 
         // 空 parent 或空 child 时直接使用非空的一方
         match parents.is_empty() {
