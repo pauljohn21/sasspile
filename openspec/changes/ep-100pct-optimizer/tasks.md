@@ -15,20 +15,25 @@
 - [x] 2.5 运行 `SPEC_STORE_CMD=run` 确认 sass-spec +6 (7921 → 7927)
 - [x] 2.6 所有核心测试 202/202 通过
 
-## 阶段 3 — 诊断 & 管线特性标记 IN PROGRESS (2026-10-02)
+## 阶段 3 — at-root 嵌套上下文修复 ✅ COMPLETED (2026-10-03)
 
-- [x] 3.1 对所有 38 DIFF 文件进行逐文件 span 插桩诊断
-- [x] 3.2 分类为 sasspile bug vs EP 管线特性
-- [x] 3.3 确认 33 files 为管线特性（不可在 normalize 测试中修复）
-- [x] 3.4 确认 5 files 为 sasspile bug：descriptions, 等
+- [x] 3.1 新增 `at_root_top: bool` 字段至 `Env` 结构（env.rs）
+- [x] 3.2 新增 `with_at_root_top` 构造方法（env_impl.rs）
+- [x] 3.3 `eval_at_root()` 入口设置 `env.with_at_root_top(true)`（mixin.rs）
+- [x] 3.4 在 `eval_rule()` descenter 实现 compose-in-descender（depth > 0 + !at_root_top 时组合父链）
+- [x] 3.5 `enter_scope()` 时 reset `at_root_top = false`（rule.rs）
+- [x] 3.6 在 `RuleBuilder::push()` Rule arm 增加 `starts_with` 前缀检测避免双层膨胀
+- [x] 3.7 修复 descriptions.scss：`e(title)` 在 `m($size)` 内正确输出完整链
+- [x] 3.8 验证 descriptions.scss：`.el-descriptions--large .el-descriptions__header .el-descriptions__title` 完全匹配 EP dist
+- [x] 3.9 核心测试 119/119 通过（含 extend 回归测试）
+- [x] 3.10 sass-spec 全量验证无回归
+- [x] 3.11 EP consistency DIFF 16→15
 
 ## 阶段 4 — Sasspile bug 修复（剩余）
 
-- [ ] 4.1 修复 descriptions.scss: `e(title)` 在 `m($size)` 内 @at-root 上下文丢失
-- [ ] 4.2 验证 descriptions + ep_normalized_test 效果
-- [ ] 4.3 修复 rgba()/rgb() var() fallback 在 input-number 等文件中的展开
-- [ ] 4.4 运行 `SPEC_STORE_CMD=run` 确认 sass-spec ≥ 7927 无回归
-- [ ] 4.5 归档 openspec 到 `openspec/changes/archive/`
+- [ ] 4.1 修复 rgba()/rgb() var() fallback 在 input-number 等文件中的展开
+- [ ] 4.2 运行 `SPEC_STORE_CMD=run` 确认 sass-spec ≥ 7927 无回归
+- [ ] 4.3 归档 openspec 到 `openspec/changes/archive/`
 
 ## 阶段 5 — 收敛 & 验证（最终）
 

@@ -2,6 +2,17 @@
 
 # Changelog
 
+## [Unreleased] — 2026-10-03
+
+### Fixed
+
+- **BEM mixin at-root 嵌套上下文保留**：`e(title)` 在 `m($size)` 内 @at-root 不再丢失中间选择器层
+  - 根因：`env.current_selector` 在非 `&` 选择器时不组合父链，导致嵌套 e() 的 `&` 解析缺少前缀
+  - 修复：新增 `at_root_top` 标志（eval_at_root 入口设置），compose-in-descender 限定 depth>0，避免破坏顶层 extend 语义
+  - `RuleBuilder::push()` 增加 `starts_with` 前缀检测避免双层膨胀（____large--large）
+  - 影响：descriptions.scss 输出 `.el-descriptions--large .el-descriptions__header .el-descriptions__title`（完全匹配 EP dist）
+  - EP consistency DIFF：16→15；核心 119/119 + bs_spec 15/15 + sass-spec 全量通过
+
 ## [Unreleased] — 2026-09-19
 
 ### Fixed

@@ -197,6 +197,11 @@ impl Env {
         self.current_selector.as_deref()
     }
 
+    pub(crate) fn with_at_root_top(mut self, val: bool) -> Self {
+        self.at_root_top = val;
+        self
+    }
+
     pub fn with_load_paths(mut self, paths: Vec<PathBuf>) -> Self {
         self.load_paths = paths;
         self

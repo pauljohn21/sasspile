@@ -421,6 +421,8 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
     ) -> Result<(Vec<CssNode>, Env)> {
         let span = crate::__tracing::info_span!("eval_at_root", query = ?query);
         let _enter = span.enter();
+        // EP BEM FIX: at-root 顶层不组合父选择器（m() mixin 的 .el-X--large 独立）
+        let env = env.with_at_root_top(true);
         let (css, new_env) = Self::eval_nodes(body, env)?;
         Ok((vec![CssNode::AtRoot(css, query.clone())], new_env))
     }

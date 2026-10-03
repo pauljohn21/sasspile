@@ -1,5 +1,20 @@
 //! EP DIFF 精确诊断——逐文件分析 sasspile vs EP 官方输出的具体差异模式。
 
+#[test]
+fn diag_descriptions_v4() {
+    let src_dir = "element-plus/packages/theme-chalk/src";
+    let path = "element-plus/packages/theme-chalk/src/descriptions.scss";
+    if let Ok(css) = sasspile::compile_file_with_load_paths(
+        &std::path::PathBuf::from(path),
+        sasspile::OutputStyle::Expanded,
+        vec![std::path::PathBuf::from(src_dir)],
+    ) {
+        let size = css.len();
+        let _ = std::fs::write("/tmp/sp_desc_v4.out", css);
+        eprintln!("WROTE /tmp/sp_desc_v4.out size={}", size);
+    }
+}
+
 use std::path::PathBuf;
 
 const EP_SRC: &str = concat!(
