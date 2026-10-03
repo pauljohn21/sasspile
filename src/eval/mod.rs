@@ -169,7 +169,7 @@ impl Evaluator {
             } => Self::eval_forward(url, prefix, config, env, show, hide),
             Node::Import { url, modifier } => Self::eval_import(url, modifier, env),
             Node::Extend { selector, optional } => eval_extend_node(selector, *optional, env),
-            Node::AtRoot { query, body } => Self::eval_at_root(query, body, env),
+            Node::AtRoot { query, selector, body } => Self::eval_at_root(query, selector, body, env),
             Node::AtRule { name, params, body } => Self::eval_at_rule(name, params, body, env),
             Node::Warn(v) => eval_warn(v, env),
             Node::Debug(v) => eval_debug(v, env),

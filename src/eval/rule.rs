@@ -529,6 +529,39 @@ impl Evaluator {
             .join(", ")
     }
 
+    /// 对顶层 CssNode 列表中仍含 `&` 的选择器做原地解析。
+    ///
+    /// 与 `nest_rule_in_children` 不同：后者对 ALL 子 Rule 做 descendant combine，
+    /// 本函数仅替换选择器中残留的字面 `&`，不对不含 `&` 的选择器添加前缀。
+    /// 这防止 e() mixin 生成的 `$selector` 规则（已含完整父路径）被重复前缀。
+    pub(crate) fn resolve_ampersand_in_nodes(parent: &str, nodes: &[CssNode]) -> Vec<CssNode> {
+        nodes
+            .iter()
+            .map(|node| match node {
+                CssNode::Rule {
+                    selector,
+                    declarations,
+                    children,
+                } if selector.contains('&') => CssNode::Rule {
+                    selector: Self::combine_selectors(parent, selector),
+                    declarations: declarations.clone(),
+                    children: children.clone(),
+                },
+                CssNode::AtRoot(inner, q) => CssNode::AtRoot(
+                    Self::resolve_ampersand_in_nodes(parent, inner),
+                    q.clone(),
+                ),
+                CssNode::AtRootDirect(inner) => CssNode::AtRootDirect(Box::new(
+                    Self::resolve_ampersand_in_nodes(parent, std::slice::from_ref(inner))
+                        .into_iter()
+                        .next()
+                        .expect("single inner node"),
+                )),
+                _ => node.clone(),
+            })
+            .collect()
+    }
+
     /// 将父选择器传播到 children 内的 Rule 子节点——递归展开嵌套 `&`。
     ///
     /// 用于 `a { @at-root { &--x { ... } } }` 场景——`&` 需解析为实际父选择器。

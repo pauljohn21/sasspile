@@ -215,6 +215,8 @@ pub enum Node {
     AtRoot {
         /// 查询条件（如 `(without: media)`）。
         query: Option<String>,
+        /// 选择器前缀（如 `.el-step:last-of-type`）。可能含 `&`。
+        selector: Option<String>,
         /// 体节点列表。
         body: Vec<Node>,
     },

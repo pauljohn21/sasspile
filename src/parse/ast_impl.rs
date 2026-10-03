@@ -249,16 +249,20 @@ impl Node {
                 let opt = if *optional { " !optional" } else { "" };
                 format!("{pad}@extend {selector}{opt};")
             }
-            Node::AtRoot { query, body } => {
+            Node::AtRoot { query, selector, body } => {
                 let body_s: String = body
                     .iter()
                     .map(|n| n.to_scss(indent + 1))
                     .collect::<Vec<_>>()
                     .join("\n");
+                let sel_prefix = match selector {
+                    Some(s) => format!("{s} "),
+                    None => String::new(),
+                };
                 if let Some(q) = query {
-                    format!("{pad}@at-root {q} {{\n{body_s}\n{pad}}}")
+                    format!("{pad}@at-root {q} {sel_prefix}{{\n{body_s}\n{pad}}}")
                 } else {
-                    format!("{pad}@at-root {{\n{body_s}\n{pad}}}")
+                    format!("{pad}@at-root {sel_prefix}{{\n{body_s}\n{pad}}}")
                 }
             }
             Node::AtRule { name, params, body } => {

@@ -414,14 +414,47 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
     // 官方文档：@at-root 默认只脱离 style rules（父选择器），保留 @media 等 at-rules。
     // query 参数控制行为：without: media → 脱离 @media；without: all → 脱离所有；with: rule → 只保留 style rules。
     // 实际的 query 解析和分流在 RuleBuilder::push 和 eval_at_rule 中完成。
+    //
+    // selector 参数：@at-root 后面的选择器前缀（如 `.el-step:last-of-type` 或 `&.is-flex`）。
+    // 其作用是：为 body 内的子规则定义父上下文。选择器中的 `&` 需展开为当前 env 的选择器。
+    // BUG FIX：之前 parser 丢弃了该选择器，导致 when()/pseudo() mixin 无法正确组合嵌套选择器。
     pub(crate) fn eval_at_root(
         query: &Option<String>,
+        selector: &Option<String>,
         body: &[Node],
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
-        let span = crate::__tracing::info_span!("eval_at_root", query = ?query);
+        let span = crate::__tracing::info_span!("eval_at_root", query = ?query, selector = ?selector);
         let _enter = span.enter();
+
+        // 确定父选择器：有显式 at-root 选择器时使用，否则 env 当前选择器
+        let parent_sel = match selector {
+            Some(sel) => {
+                // 解析 #{}/$var 插值
+                let interpolated = crate::eval::value::eval_interp_str(sel, &env);
+                // 展开 & 引用
+                match interpolated.contains('&') {
+                    true => {
+                        let parent = env.get_selector().unwrap_or("").to_string();
+                        Self::combine_selectors(&parent, &interpolated)
+                    }
+                    false => interpolated,
+                }
+            }
+            None => env.get_selector().map(String::from).unwrap_or_default(),
+        };
+
+        let env = match selector {
+            Some(_) => env.with_selector(parent_sel.clone()),
+            None => env,
+        };
         let (css, new_env) = Self::eval_nodes(body, env)?;
+
+        // 对 body 顶层节点中仍含 `&` 的选择器做最终解析——
+        // eval_rule 内部虽对 `&` 做了 combine 处理，但返回的 CssNode::Rule 仍可能含字面 &，
+        // 需在这里用 parent_sel（at-root 最终父上下文）替换。
+        let css = Self::resolve_ampersand_in_nodes(&parent_sel, &css);
+
         Ok((vec![CssNode::AtRoot(css, query.clone())], new_env))
     }
 

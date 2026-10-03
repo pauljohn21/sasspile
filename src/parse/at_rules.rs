@@ -268,20 +268,16 @@ impl ParseStream<'_> {
             }
             _ => None,
         };
-        // 可能有选择器前缀
+        // 可能有选择器前缀——@at-root 选择器定义了 body 内子规则的父上下文
         self.skip_ws_and_comments();
-        match self.peek() {
-            Some(Token::LBrace) => {}
-            _ => {
-            // 选择器 + { body }
-            let sel = self.parse_selector()?;
-            let _ = sel; // 简化：忽略 at-root 选择器前缀
-            }
-        }
+        let selector = match self.peek() {
+            Some(Token::LBrace) => None,
+            _ => Some(self.parse_selector()?.trim().to_string()),
+        };
         self.skip_ws_and_comments();
         self.expect(&Token::LBrace)?;
         let body = self.parse_body()?;
-        Ok(Node::AtRoot { query, body })
+        Ok(Node::AtRoot { query, selector, body })
     }
 
     pub(crate) fn parse_warn(&mut self) -> Result<Node> {
