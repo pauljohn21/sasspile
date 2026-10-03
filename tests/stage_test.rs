@@ -52,7 +52,8 @@ fn test_parsed_evaluate() {
 
 #[test]
 fn test_serialize_empty() {
-    let css = Serializer::serialize(&[], OutputStyle::Expanded);
+    let mut empty: Vec<CssNode> = vec![];
+    let css = Serializer::serialize(&mut empty, OutputStyle::Expanded);
     assert_eq!(css, "\n");
 
     // 通过 Reactor 管线也产生相同结果
@@ -71,33 +72,31 @@ fn test_serialize_empty() {
 
 #[test]
 fn test_serialize_single_decl() {
-    let css = Serializer::serialize(
-        &[CssNode::Declaration {
-            property: "color".to_string(),
-            value: "red".to_string(),
-            important: false,
-        }],
-        OutputStyle::Expanded,
-    );
+    let mut nodes = vec![CssNode::Declaration {
+        property: "color".to_string(),
+        value: "red".to_string(),
+        important: false,
+    }];
+    let css = Serializer::serialize(&mut nodes, OutputStyle::Expanded);
     assert_eq!(css, "color: red;\n");
 }
 
 #[test]
 fn test_serialize_decl() {
-    let nodes = vec![CssNode::Declaration {
+    let mut nodes = vec![CssNode::Declaration {
         property: "color".into(),
         value: "red".into(),
         important: false,
     }];
     assert_eq!(
-        Serializer::serialize(&nodes, OutputStyle::Expanded),
+        Serializer::serialize(&mut nodes, OutputStyle::Expanded),
         "color: red;\n"
     );
 }
 
 #[test]
 fn test_serialize_rule() {
-    let nodes = vec![CssNode::Rule {
+    let mut nodes = vec![CssNode::Rule {
         selector: "a".into(),
         declarations: vec![CssNode::Declaration {
             property: "color".into(),
@@ -107,7 +106,7 @@ fn test_serialize_rule() {
         children: vec![],
     }];
     assert_eq!(
-        Serializer::serialize(&nodes, OutputStyle::Expanded),
+        Serializer::serialize(&mut nodes, OutputStyle::Expanded),
         "a {\n  color: red;\n}\n"
     );
 }

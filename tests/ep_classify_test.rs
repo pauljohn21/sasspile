@@ -1,64 +1,84 @@
-//! —— EP DIFF 细粒度分类 ——
+//! EP DIFF 分类诊断——区分 sasspile bug 与 EP 管线产物（autoprefixer/lightningcss）。
+//!
+//! 核心思路：将 sasspile 输出和 EP dist 都通过 lightningcss minify，
+//! 然后**移除 autoprefixer 注入的属性**（它们不在 sasspile 控制范围内），
+//! 再比较剩余差异 → 暴露真正的 sasspile bug。
 #![allow(clippy::unwrap_used, clippy::uninlined_format_args)]
 
 use std::path::PathBuf;
-use std::process::Command;
 
 const EP_SRC: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/element-plus/packages/theme-chalk/src"
 );
+const EP_DIST: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/element-plus/packages/theme-chalk/dist"
+);
 
-fn compile_dart_sass(path: &PathBuf, load_paths: &[PathBuf]) -> Result<String, String> {
-    let mut cmd = Command::new("/opt/homebrew/bin/sass");
-    cmd.arg("--style=expanded").arg("--no-source-map");
-    for lp in load_paths { cmd.arg("--load-path").arg(lp); }
-    cmd.arg(path);
-    let output = cmd.output().map_err(|e| format!("执行 dart-sass 失败: {e}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+fn scss_to_dist_name(scss_name: &str) -> String {
+    let stem = scss_name.trim_end_matches(".scss");
+    let no_el = ["index", "base", "display"];
+    if no_el.contains(&stem) {
+        format!("{stem}.css")
+    } else {
+        format!("el-{stem}.css")
     }
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-fn normalize(css: &str) -> String {
-    let mut result = String::with_capacity(css.len());
-    let bytes = css.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = bytes[i];
-        if c == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-            i += 2;
-            while i + 1 < bytes.len() {
-                if bytes[i] == b'*' && bytes[i + 1] == b'/' { i += 2; break; }
-                i += 1;
-            }
-            if !result.ends_with(' ') && !result.is_empty() { result.push(' '); }
-            continue;
-        }
-        if c == b'"' || c == b'\'' {
-            let quote = c; result.push(c as char); i += 1;
-            while i < bytes.len() && bytes[i] != quote {
-                if bytes[i] == b'\\' && i + 1 < bytes.len() { result.push(bytes[i] as char); i += 1; }
-                result.push(bytes[i] as char); i += 1;
-            }
-            if i < bytes.len() { result.push(bytes[i] as char); i += 1; }
-            continue;
-        }
-        if c.is_ascii_whitespace() {
-            while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
-            result.push(' '); continue;
-        }
-        result.push(c as char); i += 1;
-    }
-    result.split_whitespace().collect::<Vec<_>>().join(" ")
+fn normalize_css(css: &str) -> Result<String, String> {
+    use lightningcss::{
+        printer::PrinterOptions,
+        stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
+    };
+
+    let stylesheet = StyleSheet::parse(css, ParserOptions::default())
+        .map_err(|e| format!("parse: {e:?}"))?;
+    let mut s = stylesheet;
+    s.minify(MinifyOptions::default())
+        .map_err(|e| format!("minify: {e:?}"))?;
+    let result = s.to_css(PrinterOptions { minify: true, ..Default::default() })
+        .map_err(|e| format!("to_css: {e:?}"))?;
+    Ok(result.code)
+}
+
+/// 移除 autoprefixer 注入的 CSS 属性（EP 管线产物，非 sasspile 职责）
+fn strip_autoprefixer(css: &str) -> String {
+    // 移除以下 autoprefixer 注入的属性行：
+    // -webkit-appearance, -webkit-user-select, -moz-user-select,
+    // -ms-user-select, -webkit-inner-spin-button, -webkit-outer-spin-button,
+    // -webkit-tap-highlight-color, -webkit-box-orient, -webkit-line-clamp,
+    // backface-visibility (有些场景是 autoprefixer), -webkit-box-shadow (某些情况)
+    let lines: Vec<&str> = css.split(';')
+        .filter(|prop| {
+            let p = prop.trim();
+            !(p.contains("-webkit-appearance")
+                || p.contains("-webkit-user-select")
+                || p.contains("-moz-user-select")
+                || p.contains("-ms-user-select")
+                || p.contains("-webkit-inner-spin-button")
+                || p.contains("-webkit-outer-spin-button")
+                || p.contains("-webkit-tap-highlight-color")
+                || p.contains("-webkit-box-orient")
+                || p.contains("-webkit-line-clamp")
+                || p.contains("backface-visibility"))
+        })
+        .collect();
+    lines.join(";")
+}
+
+/// 移除 lightningcss 管线产物（translate → translate3d 化简等）
+fn strip_lightningcss_artifacts(css: &str) -> String {
+    // lightningcss 会将 translate(0,0) → translate(0) 等
+    // 这里只记录差异，不做移除（因为需要更精细分析）
+    css.to_string()
 }
 
 #[test]
-fn test_ep_classify_diffs() {
+fn test_classify_ep_diffs() {
     sasspile::init_tracing();
     let src_dir = PathBuf::from(EP_SRC);
-    let load_paths = vec![src_dir.clone(), src_dir.join("mixins")];
+    let dist_dir = PathBuf::from(EP_DIST);
 
     let mut entries: Vec<_> = std::fs::read_dir(&src_dir)
         .expect("无法读取 src 目录")
@@ -67,113 +87,86 @@ fn test_ep_classify_diffs() {
         .collect();
     entries.sort_by_key(|e| e.path());
 
-    // 细分分类
-    let mut v_structural: Vec<(String, String, String)> = Vec::new();
-    let mut v_cssvar: Vec<String> = Vec::new();
-    let mut v_pseudo: Vec<String> = Vec::new();
-    let mut v_empty_img: Vec<String> = Vec::new();
-    let mut v_atroot_issue: Vec<String> = Vec::new();
-    let mut v_minor_css: Vec<(String, f64)> = Vec::new();
-    let mut identical = 0;
+    let mut bug_files: Vec<(String, String)> = vec![];
+    let mut autoprefixer_only: Vec<String> = vec![];
+    let mut identical_after_strip: Vec<String> = vec![];
+    let mut identical: Vec<String> = vec![];
 
     for entry in &entries {
         let path = entry.path();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
+        let dist_name = scss_to_dist_name(&name);
+        let dist_path = dist_dir.join(&dist_name);
 
-        let sp_css = match sasspile::compile_file(&path, sasspile::OutputStyle::Expanded) {
+        let sasspile_css = match sasspile::compile_file(&path, sasspile::OutputStyle::Expanded) {
             Ok(css) => css,
             Err(e) => {
-                tracing::warn!(file = %name, error = %e, "COMPILE FAIL");
-                v_empty_img.push(format!("{name}(FAIL:{e})"));
+                tracing::error!(file = %name, error = %e, "✗ COMPILE FAIL");
                 continue;
             }
         };
 
-        let dart_css = match compile_dart_sass(&path, &load_paths) {
+        let normalized_sp = match normalize_css(&sasspile_css) {
             Ok(css) => css,
             Err(_) => continue,
         };
 
-        let sp = normalize(&sp_css);
-        let dn = normalize(&dart_css);
+        let dist_css = match std::fs::read_to_string(&dist_path) {
+            Ok(css) => normalize_css(&css).unwrap_or(css),
+            Err(_) => continue,
+        };
 
-        if sp == dn {
-            identical += 1;
+        if normalized_sp == dist_css {
+            identical.push(name.clone());
             continue;
         }
 
-        // 找第一处差异
-        let sp_chars: Vec<char> = sp.chars().collect();
-        let dn_chars: Vec<char> = dn.chars().collect();
-        let first_diff = sp_chars.iter().zip(dn_chars.iter())
-            .enumerate().find(|(_, (a, b))| a != b).map(|(i, _)| i);
+        // 移除 autoprefixer 注入后再比较
+        let sp_stripped = strip_autoprefixer(&normalized_sp);
+        let dist_stripped = strip_autoprefixer(&dist_css);
 
-        let pos = first_diff.unwrap_or(0);
-        let s_start = pos.saturating_sub(50);
-        let s_end = (pos + 80).min(sp_chars.len());
-        let d_end = (pos + 80).min(dn_chars.len());
-        let sp_ctx: String = sp_chars[s_start..s_end].iter().collect();
-        let dn_ctx: String = dn_chars[s_start..d_end].iter().collect();
-
-        let max_len = sp_chars.len().max(dn_chars.len());
-        let sim = if max_len > 0 {
-            100.0 - (sp_chars.iter().zip(dn_chars.iter())
-                .filter(|(a, b)| a != b).count().max(
-                    sp_chars.len().abs_diff(dn_chars.len())
-                ) as f64 / max_len as f64 * 100.0)
-        } else { 100.0 };
-
-        let sp_has_empty = sp.contains("  ") || sp.contains("{ }") || sp.contains("( )");
-        let atroot_issue = sp.contains("dark__") || sp.contains("__arrow") || sp.contains(".is-dark__");
-        let cssvar_issue = sp.contains("#79bbff") && dn.contains("rgb(47");
-        let pseudo_issue = sp.contains(": before") || sp.contains(":after");
-
-        let owned_name = name.clone();
-        if atroot_issue || owned_name == "popper.scss" || owned_name == "index.scss" {
-            v_atroot_issue.push(owned_name);
-        } else if cssvar_issue && (owned_name.contains("base") || owned_name.contains("var") || owned_name.contains("index")) {
-            v_cssvar.push(owned_name);
-        } else if pseudo_issue || owned_name.contains("anchor") {
-            v_pseudo.push(owned_name);
-        } else if sp_has_empty || sp.len() < dn.len() / 3 {
-            v_empty_img.push(owned_name);
+        if sp_stripped == dist_stripped {
+            autoprefixer_only.push(name.clone());
         } else {
-            v_minor_css.push((format!("{owned_name}({sim:.0}%)"), sim));
-            v_structural.push((owned_name, sp_ctx, dn_ctx));
+            // 还有差异 → 真正的 bug 或 lightningcss 产物
+            // 找第一个 diff 位置，输出上下文
+            let sp_chars: Vec<char> = sp_stripped.chars().collect();
+            let dist_chars: Vec<char> = dist_stripped.chars().collect();
+            let diff_pos = sp_chars.iter()
+                .zip(dist_chars.iter())
+                .position(|(a, b)| a != b)
+                .unwrap_or(sp_chars.len().min(dist_chars.len()));
+            let start = diff_pos.saturating_sub(30);
+            let end = (diff_pos + 60).min(sp_chars.len());
+            let ctx: String = sp_chars[start..end].iter().collect();
+            let dist_ctx: String = dist_chars[start..end.min(dist_chars.len())].iter().collect();
+
+            // 进一步判断是否为 lightningcss artifact
+            let is_lightning = ctx.contains("translate") || ctx.contains("calc(")
+                || ctx.contains("color-scheme");
+            if is_lightning {
+                bug_files.push((name.clone(), format!("lightningcss? @{diff_pos}: SP=`{}` EP=`{}`", ctx, dist_ctx)));
+            } else {
+                bug_files.push((name.clone(), format!("sasspile-bug @{diff_pos}: SP=`{}` EP=`{}`", ctx, dist_ctx)));
+            }
+            identical_after_strip.push(name.clone());
         }
     }
 
-    let total = entries.len();
-    let diff = total - identical;
-    tracing::warn!(total, identical = identical, diff, "=== EP SUMMARY ===");
-    tracing::warn!(
-        count = v_atroot_issue.len(),
-        files = v_atroot_issue.join(", "),
-        "CAT1 @at-root/BEM & 展開"
-    );
-    tracing::warn!(
-        count = v_cssvar.len(),
-        files = v_cssvar.join(", "),
-        "CAT2 CSS 變量顔色格式"
-    );
-    tracing::warn!(
-        count = v_pseudo.len(),
-        files = v_pseudo.join(", "),
-        "CAT3 僞元素/anchor 空格"
-    );
-    tracing::warn!(
-        count = v_empty_img.len(),
-        files = v_empty_img.join(", "),
-        "CAT4 EmptySelector/編譯失敗"
-    );
-    tracing::warn!(count = v_structural.len(), "CAT5 選擇器結構/排序差異:");
-    for (info, _) in &v_minor_css {
-        tracing::warn!(file = %info, "  diff");
+    tracing::error!("=============== EP DIFF 分类报告 ===============");
+    tracing::error!(count = identical.len(), "✅ 完全一致 ({} files)", identical.len());
+    tracing::error!(count = autoprefixer_only.len(), "🔧 仅 autoprefixer 差异 ({} files): {}", autoprefixer_only.len(), autoprefixer_only.join(", "));
+    tracing::error!(count = bug_files.len(), "🐛 移除 autoprefixer 后仍有差异 ({} files):", bug_files.len());
+    for (name, ctx) in &bug_files {
+        tracing::error!(file = %name, ctx = %ctx, "  → {}", name);
     }
-
-    for (name, sp_ctx, dn_ctx) in &v_structural {
-        if v_structural.len() <= 40 {
-            tracing::warn!(file = %name, sp_ctx = %sp_ctx, dart_ctx = %dn_ctx, "STRUCTURAL");
-        }
-    }
+    tracing::error!("================================================");
+    tracing::error!(
+        "总结: {} 一致 + {} autoprefixer + {} bug = {} / {} total",
+        identical.len(),
+        autoprefixer_only.len(),
+        bug_files.len(),
+        identical.len() + autoprefixer_only.len() + bug_files.len(),
+        entries.len()
+    );
 }

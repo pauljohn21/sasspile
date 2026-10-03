@@ -10,6 +10,7 @@
 pub mod node;
 mod serialize;
 mod serialize_write;
+pub mod keyframes;
 pub mod selector_ast;
 mod selector;
 pub mod selector_format;
@@ -29,7 +30,8 @@ pub struct Serializer;
 
 impl Serializer {
     /// 序列化 `CssNode` 列表为 CSS 字符串。
-    pub fn serialize(nodes: &[CssNode], style: OutputStyle) -> String {
+    pub fn serialize(nodes: &mut Vec<CssNode>, style: OutputStyle) -> String {
+        crate::css::keyframes::strip_empty_keyframe_steps(nodes);
         let mut flattened = Self::flatten_nodes(nodes, 0);
         crate::__tracing::debug!(count = flattened.len(), items = ?flattened.iter().map(|(n, g)| (n.to_string(), *g)).collect::<Vec<_>>(), "flatten result");
         crate::css::selector_simplify::simplify_rules(&mut flattened);

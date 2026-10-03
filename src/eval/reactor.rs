@@ -262,10 +262,10 @@ impl Reactor<StateEvaluated> {
     ///
     /// 将 CssNode 树序列化为 CSS 字符串。
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(stage = "serialize", n_nodes = self.css_nodes.len())))]
-    pub fn serialize(self, style: OutputStyle) -> Reactor<StateSerialized> {
+    pub fn serialize(mut self, style: OutputStyle) -> Reactor<StateSerialized> {
         let start = std::time::Instant::now();
 
-        let css = crate::css::Serializer::serialize(&self.css_nodes, style);
+        let css = crate::css::Serializer::serialize(&mut self.css_nodes, style);
 
         #[cfg(feature = "tracing")]
         let css_len = css.len();

@@ -144,9 +144,19 @@ impl RuleBuilder {
                             }
                             false => {}
                         }
+                    } else if let CssNode::AtRootDirect(inner) = kid {
+                        // BEM AtRootDirect 嵌套修复：当 AtRootDirect 出现在 child_kids 中时，
+                        // 需使用当前 Rule 的 combined selector 作为父上下文，
+                        // 避免丢失中间 BEM 层级（如 .el-anchor__list → .el-anchor__item 链）。
+                        let orig_selector = self.selector.clone();
+                        let orig_resolved = self.resolved_self.clone();
+                        self.selector = combined.clone();
+                        self.resolved_self = combined.clone();
+                        self.push_atroot_direct(*inner);
+                        self.selector = orig_selector;
+                        self.resolved_self = orig_resolved;
                     } else {
-                        // Group 4 修复：递归 dispatch，让 AtRootDirect 进入 push_atroot_direct
-                        // （而不是绕过直接 result.push 导致 selector 不经 combine）
+                        // Group 4 修复：递归 dispatch，让其他节点进入 push
                         self.push(kid);
                     }
                 }
@@ -215,7 +225,10 @@ impl RuleBuilder {
                     // 伪类/属性选择器：直接拼接（后缀型，需依附于父选择器）
                     format!("{}{}", self.selector, clean_sel)
                 } else {
-                    // 普通类选择器（如 e() mixin 输出的 .el-button__inner）：已是完整路径，直接使用
+                    // 普通类选择器：已是完整路径（m() mixin 后缀输出或 e() mixin 字面输出），直接使用。
+                    // 注意：此分支允许跨中间 wrapper 层级直接使用 bare selector。
+                    // 嵌套 BEM 中间链（如 .el-anchor__list 内的 .el-anchor__item）须通过
+                    // RuleBuilder::push 的 child_kids loop 中的 AtRootDirect 单独处理分支补全。
                     clean_sel.to_string()
                 };
                 crate::__tracing::debug!(
