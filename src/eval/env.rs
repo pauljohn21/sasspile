@@ -94,10 +94,6 @@ pub struct Env {
     pub(crate) star_imported: HashSet<String>,
     /// 累积的 CSS @import URL（从 @use'd 模块收集，最终提升到输出顶部）。
     pub(crate) css_imports: Vec<String>,
-    /// `@at-root` 顶层标志——为 true 时 eval_rule 对第一层 Rule 不做父组合。
-    /// EP 的 m() mixin 通过 at-root 生成独立新类（.el-X--large），
-    /// 需要独立于外层上下文，否则产生 .el-X .el-X--large 双层。
-    pub(crate) at_root_top: bool,
 }
 
 impl Clone for Env {
@@ -120,7 +116,6 @@ impl Clone for Env {
             star_members: self.star_members.clone(),
             star_imported: self.star_imported.clone(),
             css_imports: self.css_imports.clone(),
-            at_root_top: self.at_root_top,
         }
     }
 }

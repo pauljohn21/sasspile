@@ -89,13 +89,7 @@ impl RuleBuilder {
                 children: child_kids,
             } => {
                 self.flush_decls();
-                // EP BEM FIX: 子 Rule 的 selector 可能已由内层 at-root mixin 预组合了
-                // self.selector 前缀；若 child_sel 已以 self.selector 开头则跳过组合
-                let combined = if child_sel.trim().starts_with(self.selector.trim()) {
-                    child_sel
-                } else {
-                    Evaluator::combine_selectors(&self.selector, &child_sel)
-                };
+                let combined = Evaluator::combine_selectors(&self.selector, &child_sel);
                 match !child_decls.is_empty() {
                     true => {
                         self.result.push(CssNode::Rule {
@@ -113,12 +107,7 @@ impl RuleBuilder {
                         ..
                     } = kid
                     {
-                        let kid_combined =
-                            if kid_sel.trim().starts_with(combined.trim()) {
-                                kid_sel
-                            } else {
-                                Evaluator::combine_selectors(&combined, &kid_sel)
-                            };
+                        let kid_combined = Evaluator::combine_selectors(&combined, &kid_sel);
                         match !kid_decls.is_empty() {
                             true => {
                                 self.result.push(CssNode::Rule {
@@ -134,7 +123,6 @@ impl RuleBuilder {
                     }
                 }
             }
-
             other => {
                 self.flush_decls();
                 let other = match other {
@@ -380,21 +368,11 @@ impl Evaluator {
         //（如 ".el-badge__content,"），如果 current_selector 保留逗号，
         // 后续 m() mixin 的 "$selector: &" 会捕获带逗号的值，
         // 导致 $currentSelector 变成 ".el-badge__content,--primary"（双逗号 Bug）。
-        let resolved_sel = if env.at_root_top {
-            selector.trim().trim_end_matches(',').trim().to_string()
-        } else if selector.contains('&') {
+        let resolved_sel = if selector.contains('&') {
             let parent_sel = env.get_selector().map(String::from).unwrap_or_default();
             Self::combine_selectors(&parent_sel, selector.as_str())
         } else {
-            // EP BEM FIX：在 @at-root 上下文内嵌套声明链（at_root_top 已 reset 为 false），
-            // 需要与父选择器组合（如 .el-descriptions--large + .el-descriptions__header）。
-            match env.get_depth() > 0 {
-                true => {
-                    let parent_sel = env.get_selector().map(String::from).unwrap_or_default();
-                    Self::combine_selectors(&parent_sel, selector.as_str())
-                }
-                false => selector.clone(),
-            }
+            selector.clone()
         };
         // 归一化 current_selector：trim 尾逗号和空白
         let resolved_sel = resolved_sel.trim().trim_end_matches(',').trim().to_string();
@@ -404,10 +382,7 @@ impl Evaluator {
         // 当嵌套的 `& > .el-button` 规则求值完成后，其内部 scope exit 会丢失父级 current_selector，
         // 导致后续同级的 m() mixin 看到 `$selector: &` 被污染为深嵌套选择器。
         let parent_selector = env.get_selector().map(String::from);
-        let env = env
-            .enter_scope()
-            .with_selector(resolved_sel)
-            .with_at_root_top(false);
+        let env = env.enter_scope().with_selector(resolved_sel);
         let (css, new_env) = Self::eval_nodes(body, env)?;
 
         // 使用 RuleBuilder + fold 处理嵌套规则（selector 保留原始形式）。
