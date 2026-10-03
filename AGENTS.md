@@ -7,7 +7,7 @@
 | Item | Specification |
 |------|---------------|
 | Edition | 2024 |
-| Toolchain | 1.97 |
+| Toolchain | 1.99 |
 
 Cargo.toml 必须有 `edition = "2024"`。
 
@@ -16,7 +16,7 @@ Cargo.toml 必须有 `edition = "2024"`。
 ```toml
 [package]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.99"
 
 [lints.rust]
 unsafe_code = "warn"
@@ -493,9 +493,9 @@ SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 ```
 
 **通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
-**sass-spec 基线**：8003/12133 = 66%（含 color 目录，跳过 libsass 不支持目录）
+**sass-spec 基线**：7877/12133 = 64.9%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
-**ep_normalized**：73/121 = 60.3%（Phase 7 目标 121/121）
+**ep_normalized**：78/121 = 64.5%（Phase 7 目标 121/121）
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略

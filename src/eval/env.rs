@@ -82,6 +82,11 @@ pub struct Env {
     pub(crate) depth: usize,
     pub(crate) extends: Rc<Vec<(String, String, bool, Option<PathBuf>)>>,
     pub(crate) current_selector: Option<String>,
+    /// 选择器嵌套链（用于 @content 内 & 引用捕获）。
+    /// 格式：".a .b .c"（空格分隔的后代链）。
+    /// 与 `current_selector` 区别：后者是当前规则的 immediate 选择器（用于 extend、combine），
+    /// selector_chain 是完整嵌套路径（用于 & 引用展开）。
+    pub(crate) selector_chain: Option<String>,
     pub(crate) load_paths: Vec<PathBuf>,
     pub(crate) loaded_modules: Rc<HashSet<PathBuf>>,
     pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
@@ -108,6 +113,7 @@ impl Clone for Env {
             depth: self.depth,
             extends: self.extends.clone(),
             current_selector: self.current_selector.clone(),
+            selector_chain: self.selector_chain.clone(),
             load_paths: self.load_paths.clone(),
             loaded_modules: self.loaded_modules.clone(),
             module_cache: self.module_cache.clone(),

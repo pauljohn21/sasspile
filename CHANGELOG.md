@@ -6,14 +6,19 @@
 
 ### Fixed
 
-- **BEM mixin at-root 嵌套上下文保留**：`e(title)` 在 `m($size)` 内 @at-root 不再丢失中间选择器层
-  - 根因：`env.current_selector` 在非 `&` 选择器时不组合父链，导致嵌套 e() 的 `&` 解析缺少前缀
-  - 修复：新增 `at_root_top` 标志（eval_at_root 入口设置），compose-in-descender 限定 depth>0，避免破坏顶层 extend 语义
-  - `RuleBuilder::push()` 增加 `starts_with` 前缀检测避免双层膨胀（____large--large）
+- **BEM mixin at-root 修饰符上下文嵌套修复**：`e(title)` 在 `m($size)` @at-root 内正确继承修饰符前缀，消除双层重复
+  - 根因：e() mixin 生成的 `{&} { .__header, { @content } }` 包装 Rule 在 `nest_rule_in_children` 中被双重前缀，产生 `.el-descriptions--large .el-descriptions--large .el-descriptions__header`
+  - 修复 1：`src/eval/mixin.rs` — eval_at_root 新增 wrapper-skip 逻辑，识别 e() / m() mixin 注入的「上下文包装」Rule（选择器等于 at-root 当前 selector/path），跳过该层直接处理其子节点，并通过 `with_chain` 注入正确的链式上下文
+  - 修复 2：`src/eval/rule.rs` — `nest_rule_in_children` 内加入 descendant 前缀检测（`selector.starts_with("{parent} ")`），不修改全局 `starts_with_compound_prefix` 避免影响 sass-spec
+  - 修复 3：`src/eval/env.rs` / `env_impl.rs` — 新增 `selector_chain` 字段完整追踪嵌套链，解决 @content 跨 mixin 调用时 & 引用解析缺少父上下文的问题
   - 影响：descriptions.scss 输出 `.el-descriptions--large .el-descriptions__header .el-descriptions__title`（完全匹配 EP dist）
-  - EP consistency DIFF：16→15；核心 119/119 + bs_spec 15/15 + sass-spec 全量通过
+  - 测试结果：核心 202/202 通过、sass-spec 7877/12133（+1 vs 基线）、EP normalized 78/121 = 64.5%（+5）
 
-## [Unreleased] — 2026-09-19
+### Changed
+
+- toolchain: 1.97 → 1.99（Cargo.toml rust-version + README.md + AGENTS.md + openspec/config.yaml 全量同步）
+
+## [0.9.15] — 2026-09-19
 
 ### Fixed
 

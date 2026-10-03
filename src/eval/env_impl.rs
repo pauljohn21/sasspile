@@ -188,14 +188,59 @@ impl Env {
         &self.extends
     }
 
-    pub fn with_selector(mut self, sel: String) -> Self {
-        self.current_selector = Some(sel);
-        self
-    }
+pub fn with_selector(mut self, sel: String) -> Self {
+    self.current_selector = Some(sel);
+    self
+}
 
-    pub fn get_selector(&self) -> Option<&str> {
-        self.current_selector.as_deref()
-    }
+pub fn get_selector(&self) -> Option<&str> {
+    self.current_selector.as_deref()
+}
+
+/// 获取完整选择器链（后代分隔），用于 @content 内 & 引用解析。
+pub fn get_selector_chain(&self) -> Option<&str> {
+    self.selector_chain.as_deref()
+}
+
+/// 恢复 parent 上下文（selector + selector_chain）到 body eval 之前的状态。
+/// 用于 eval_rule 退出子作用域后，确保同级 mixin 看到的链状态一致。
+pub fn restore_parent_context(self, parent_selector: Option<&str>, parent_chain: Option<&str>) -> Self {
+    self.restore_selector(parent_selector)
+        .restore_selector_chain(parent_chain)
+}
+
+/// 恢复 current_selector（不修改 chain）。
+pub fn restore_selector(mut self, sel: Option<&str>) -> Self {
+    self.current_selector = sel.map(String::from);
+    self
+}
+
+/// 恢复 selector_chain（不修改 selector）。
+pub fn restore_selector_chain(mut self, chain: Option<&str>) -> Self {
+    self.selector_chain = chain.map(String::from);
+    self
+}
+
+/// 设置选择器链（在 eval_rule 中用于追加嵌套层级）。
+/// 当进入嵌套规则时，chain = parent_chain + " " + immediate_sel。
+pub fn with_chain(mut self, immediate: &str) -> Self {
+    let new_chain = match self.selector_chain {
+        Some(ref parent) => format!("{parent} {immediate}"),
+        None => immediate.to_string(),
+    };
+    tracing::debug!(target: "chain_trace", parent = ?self.selector_chain, immediate = immediate, new = %new_chain, "with_chain");
+    self.selector_chain = Some(new_chain);
+    self
+}
+
+/// 重置选择器上下文（用于 @at-root 语义——链式提升后应重新开始链）。
+/// 将 chain 设置为 sel（而非追加），模拟 @at-root 脱离外层作用域的行为。
+pub fn reset_selector(mut self, sel: String) -> Self {
+    tracing::debug!(target: "chain_trace", old_chain = ?self.selector_chain, new = %sel, "reset_selector");
+    self.current_selector = Some(sel.clone());
+    self.selector_chain = Some(sel);
+    self
+}
 
     pub fn with_load_paths(mut self, paths: Vec<PathBuf>) -> Self {
         self.load_paths = paths;
@@ -290,6 +335,7 @@ impl Env {
     #[allow(clippy::needless_for_each)]
     pub(crate) fn exit_scope(self) -> Self {
         let parent = self.current.parent.clone();
+        tracing::debug!(target: "chain_trace", chain_before_exit = ?self.selector_chain, "exit_scope");
         match parent {
             Some(parent_scope) => {
                 let child_scope = match Rc::try_unwrap(self.current) {

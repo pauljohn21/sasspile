@@ -109,10 +109,13 @@ impl Evaluator {
         let (css, env) = nodes.iter().try_fold(
             (Vec::new(), env),
             |(mut css, env), node| -> Result<(Vec<CssNode>, Env)> {
+                let env_chain_before = env.get_selector_chain().map(String::from);
                 let (out, new_env) = Self::eval_node(node, env).map_err(|e| {
                     crate::__tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
                     e
                 })?;
+                let env_chain_after = new_env.get_selector_chain().map(String::from);
+                tracing::debug!(target: "chain_trace", before = ?env_chain_before, after = ?env_chain_after, node_type = ?std::mem::discriminant(node), "eval_node chain");
                 css.extend(out);
                 Ok((css, new_env))
             },
@@ -169,7 +172,12 @@ impl Evaluator {
             } => Self::eval_forward(url, prefix, config, env, show, hide),
             Node::Import { url, modifier } => Self::eval_import(url, modifier, env),
             Node::Extend { selector, optional } => eval_extend_node(selector, *optional, env),
-            Node::AtRoot { query, selector, body } => Self::eval_at_root(query, selector, body, env),
+            Node::AtRoot { query, selector, body } => {
+                if selector.is_none() {
+                    tracing::debug!(target: "chain_trace", sel = selector.clone().unwrap_or_default(), env_chain = ?env.get_selector_chain(), "AtRoot dispatch");
+                }
+                Self::eval_at_root(query, selector, body, env)
+            }
             Node::AtRule { name, params, body } => Self::eval_at_rule(name, params, body, env),
             Node::Warn(v) => eval_warn(v, env),
             Node::Debug(v) => eval_debug(v, env),
@@ -266,7 +274,12 @@ fn eval_content(env: Env) -> Result<(Vec<CssNode>, Env)> {
                     acc.add_global_write(k, v)
                 })
                 .with_selector(
-                    env.get_selector()
+                    // BEM NESTING FIX: 使用 selector_chain（完整嵌套链）而非 immediate selector。
+                    // 对于 @at-root { .outer { .inner { @content } } } 场景，
+                    // immediate selector = ".inner"，但 & 应展开为 ".outer .inner"。
+                    // selector_chain 记录的正是这个完整路径。
+                    env.get_selector_chain()
+                        .or_else(|| env.get_selector())
                         .map(std::string::ToString::to_string)
                         .unwrap_or_default(),
                 );

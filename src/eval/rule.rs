@@ -417,12 +417,17 @@ impl Evaluator {
         // 归一化 current_selector：trim 尾逗号和空白
         let resolved_sel = resolved_sel.trim().trim_end_matches(',').trim().to_string();
 
-        // FIX: 保存父级 current_selector，防止嵌套规则/孙规则修改后泄漏到兄弟节点。
-        // 典型场景：`.el-button-group { & > .el-button { ... } @include m('horizontal') }`
-        // 当嵌套的 `& > .el-button` 规则求值完成后，其内部 scope exit 会丢失父级 current_selector，
-        // 导致后续同级的 m() mixin 看到 `$selector: &` 被污染为深嵌套选择器。
+        // FIX: 保存父级上下文（selector + chain），防止嵌套规则修改后泄漏到兄弟节点。
+        // BEM NESTING FIX: with_chain 将 resolved_sel 追加到 selector_chain 末尾，
+        // 使得 eval_content 捕获的 & 解析包含完整嵌套路径。
         let parent_selector = env.get_selector().map(String::from);
-        let env = env.enter_scope().with_selector(resolved_sel.clone());
+        let parent_chain = env.get_selector_chain().map(String::from);
+        tracing::debug!(target: "chain_trace", selector = %resolved_sel, parent_sel = ?parent_selector, parent_chain = ?parent_chain, "eval_rule enter");
+        let env = env
+            .enter_scope()
+            .with_selector(resolved_sel.clone())
+            .with_chain(&resolved_sel);
+        tracing::debug!(target: "chain_trace", selector = %resolved_sel, body_chain = ?env.get_selector_chain(), "eval_body_chain");
         let (css, new_env) = Self::eval_nodes(body, env)?;
 
         // Group 1 重构：for + &mut push 替代 fold（递归 dispatch AtRootDirect 需要 &mut self）
@@ -437,13 +442,9 @@ impl Evaluator {
         // 退出子作用域——恢复父 scope，传播 !global 和新增 mixin/function
         let return_env = new_env.exit_scope();
 
-        // FIX: 恢复父级 current_selector（嵌套规则内 eval_nodes 可能修改了它）。
-        // 此修复确保同级 mixin 调用（如 m()）在嵌套规则后仍能正确看到父级选择器，
-        // 避免 :hover--horizontal 类 compound 膨胀 bug。
-        let return_env = match parent_selector {
-            Some(s) => return_env.with_selector(s),
-            None => return_env,
-        };
+        // FIX: 恢复父级 selector 和 chain（嵌套规则内 eval_nodes 可能修改了它们）。
+        let return_env =
+            return_env.restore_parent_context(parent_selector.as_deref(), parent_chain.as_deref());
 
         Ok((result, return_env))
     }
@@ -589,7 +590,18 @@ impl Evaluator {
                         }
                         false => {}
                     }
-                    let combined = Self::combine_selectors(parent, &selector);
+                    // DOUBLE-PREFIX FIX：检测 child selector 是否已包含 parent 前缀。
+                    // 两种场景：
+                    // 1. compound 前缀（无空格，如 parent=".a" child=".a--b"）— starts_with_compound_prefix
+                    // 2. descendant 前缀（有空格，如 parent=".a--x" child=".a--x .b—y"）— 自定义检测
+                    // 场景 2 专门针对 e() mixin 内层 @content 已展开的嵌套链
+                    let already_has_prefix = starts_with_compound_prefix(parent, &selector)
+                        || selector.starts_with(&format!("{parent} "));
+                    let combined = if already_has_prefix {
+                        selector.clone()
+                    } else {
+                        Self::combine_selectors(parent, &selector)
+                    };
                     // 递归处理子节点：对仍含 `&` 的子选择器继续展开
                     let processed_kids = Self::nest_rule_in_children(&combined, rule_children);
                     result.push(CssNode::Rule {

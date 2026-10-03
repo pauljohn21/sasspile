@@ -3,14 +3,15 @@ use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 
 impl Evaluator {
-    pub(crate) fn eval_include(
-        name: &str,
-        args: &[Arg],
-        content: &Option<Vec<Node>>,
-        env: Env,
-    ) -> Result<(Vec<CssNode>, Env)> {
-        let span = crate::__tracing::info_span!("eval_include", name = name, n_args = args.len());
-        let _enter = span.enter();
+pub(crate) fn eval_include(
+    name: &str,
+    args: &[Arg],
+    content: &Option<Vec<Node>>,
+    env: Env,
+) -> Result<(Vec<CssNode>, Env)> {
+    tracing::debug!(target: "chain_trace", name = name, env_chain = ?env.get_selector_chain(), env_sel = ?env.get_selector(), "eval_include");
+    let span = crate::__tracing::info_span!("eval_include", name = name, n_args = args.len());
+    let _enter = span.enter();
         match name == "meta.apply" {
             true => return Self::eval_meta_apply(args, content, env),
             false => {}
@@ -92,6 +93,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         };
         // 求值 mixin body——move mixin_env，捕获返回的 env 用于读取 !global 写入
         let (css, returned_env) = Self::eval_nodes(&mixin.body, mixin_env)?;
+        tracing::debug!(target: "chain_trace", mixin_body_result = ?returned_env.get_selector_chain(), "after eval_nodes in exec_mixin");
         // EP BEM FIX：mixin 内部 @at-root（如 e(), m()）生成的节点位置应在源码位置，
         // 而非 RuleBuilder 默认的固定位置。将 AtRoot 节点替换为标记过的节点，
         // 由 RuleBuilder::push 识别并直接放入 result 源码位置。
@@ -130,6 +132,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             .fold(result_env, |acc, (k, v)| {
                 acc.add_global_write(k.clone(), v.clone())
             });
+        tracing::debug!(target: "chain_trace", result_chain = ?result_env.get_selector_chain(), "exec_mixin return");
         Ok((css, result_env))
     }
 
@@ -424,6 +427,9 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         body: &[Node],
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        let incoming_chain = env.get_selector_chain().map(String::from);
+        let incoming_sel = env.get_selector().map(String::from);
+        tracing::debug!(target: "chain_trace", ?query, ?selector, ?incoming_chain, ?incoming_sel, "eval_at_root enter");
         let span = crate::__tracing::info_span!("eval_at_root", query = ?query, selector = ?selector);
         let _enter = span.enter();
 
@@ -444,11 +450,49 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
             None => env.get_selector().map(String::from).unwrap_or_default(),
         };
 
+        // @at-root 语义：选择器链从 at-root 选择器重新开始（脱离外层作用域链）。
+        // 使用 reset_selector 而非 with_selector，避免将外层 chain 累加进 at-root body。
         let env = match selector {
-            Some(_) => env.with_selector(parent_sel.clone()),
+            Some(_) => env.reset_selector(parent_sel.clone()),
             None => env,
         };
-        let (css, new_env) = Self::eval_nodes(body, env)?;
+
+        // EP BEM FIX：当 body 首个 Rule 的选择器与 at-root selector 或当前
+        // effective parent 相同时，这个 Rule 是「上下文包装」— 用于定义 & 展开的
+        // 父引用，但本身不应作为嵌套层级累加进输出。
+        // 直接处理它的 children 并注入链式上下文。
+        // CRITICAL: 先对 first_sel 做插值求值，否则 #{$sel} 字面字符串无法等于 parent_trimmed。
+        let (css, new_env) = match body.first() {
+            Some(Node::Rule { selector: first_sel, body: first_body }) => {
+                let first_resolved = crate::eval::value::eval_interp_str(first_sel, &env);
+                let first_trimmed = first_resolved.trim_end_matches(',').trim();
+                let parent_trimmed = parent_sel.trim_end_matches(',').trim();
+                let at_root_match = selector.as_ref().is_some_and(|s| first_trimmed == s);
+                let outer_only = selector.is_none() && !parent_trimmed.is_empty() && first_trimmed == parent_trimmed;
+                tracing::debug!(target: "chain_trace", first_trimmed, parent_trimmed, at_root_match, outer_only, "wrapper_check");
+                if at_root_match || outer_only {
+                    // 仅当 env 当前无链式时（从 exec_mixin 等混合路径进入），才注入
+                    // wrapper selector 作为初始链。否则 children 会看到重复前缀。
+                    let env_for_children = match env.get_selector_chain().is_some() {
+                        true => env,
+                        false => env.with_chain(first_trimmed),
+                    };
+                    let (child_css, child_env) = Self::eval_nodes(first_body, env_for_children)?;
+                    // EP BEM 语义分两个场景：
+                    // - 修饰符上下文（selector 含 "--"）：子元素需前缀修饰符 → ".__info" → ".el-descriptions--large .__info"
+                    // - 基础块上下文：元素本身即顶层输出 → ".__info" 保持平坦（避免 .el-descriptions .el-descriptions__info）
+                    let prefixed_css = if parent_trimmed.contains("--") {
+                        Self::nest_rule_in_children(&parent_sel, child_css)
+                    } else {
+                        Self::resolve_ampersand_in_nodes(&parent_sel, &child_css)
+                    };
+                    (prefixed_css, child_env)
+                } else {
+                    Self::eval_nodes(body, env)?
+                }
+            }
+            _ => Self::eval_nodes(body, env)?,
+        };
 
         // 对 body 顶层节点中仍含 `&` 的选择器做最终解析——
         // eval_rule 内部虽对 `&` 做了 combine 处理，但返回的 CssNode::Rule 仍可能含字面 &，

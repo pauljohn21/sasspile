@@ -7,9 +7,9 @@
 [![License](https://img.shields.io/crates/l/sasspile)](LICENSE)
 [![CI](https://github.com/pauljohn21/sasspile/workflows/CI/badge.svg)](https://github.com/pauljohn21/sasspile/actions)
 
-纯 Rust 函数式 SCSS 编译器，使用 Rust 1.97 + Edition 2024 构建。
+纯 Rust 函数式 SCSS 编译器，使用 Rust 1.99 + Edition 2024 构建。
 
-> **v0.9.8** — tokio-internal-async (对内异步对外同步) + 死代码清理 (Reactor 14→9 字段, 删 6 死类型) + Parser 回归 Iterator — sass-spec 基线 7592/12133 (62%), ep_full 121/121 (100%).
+> **v0.9.14** — BEM modifier nesting (toolchain 1.99) — wrapper-skip + selector_chain + separator fix.
 
 sasspile 是一个从零实现的 SCSS 编译器，采用 Rust 所有权管线。通过类型状态机（Type-State Pattern）确保编译阶段类型安全，使用 move 语义实现零 clone 的数据流。
 
@@ -41,7 +41,7 @@ Reactor::from_file(&path)?
 
 ```toml
 [dependencies]
-sasspile = "0.4"
+sasspile = "0.9"
 ```
 
 最小示例：
