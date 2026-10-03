@@ -2,6 +2,7 @@
 //!
 //! 概要：逐文件对比 sasspile 和 dart-sass 的编译输出，验证 100% 正确性。
 //!       使用项目的 include paths 确保 @use/@import 能正确解析。
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args)]
 //!
 //! 运行：cd /Users/pauljohn/rust/sasspile && cargo test --test ep_diff_test -- --nocapture
 

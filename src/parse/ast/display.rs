@@ -13,7 +13,7 @@ use crate::consts::FLOAT_PRECISION_INV;
 /// 例如 f64::MAX `1.7976931348623157e308` 展开为 `17976931348623157` + 292 个零。
 pub(crate) fn format_large_int_e(n: f64) -> String {
     // {:e} 输出最短往返格式（17 位有效数字），如 "1.7976931348623157e308"
-    let s = format!("{:e}", n);
+    let s = format!("{n:e}");
     let (sign, s) = match s.starts_with('-') {
         true => ("-", &s[1..]),
         false => ("", s.as_str()),

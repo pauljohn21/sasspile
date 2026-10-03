@@ -1,4 +1,5 @@
 //! Minimal dialog check with the strip function applied
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args, clippy::print_stdout, clippy::print_stderr)]
 
 use std::path::PathBuf;
 

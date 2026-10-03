@@ -1,6 +1,7 @@
 //! —— EP dist 差异诊断（compressed vs compressed）——
 //!
 //! 用 sasspile compressed 输出与 EP 官方 dist 做对比，定位真实差异。
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args)]
 
 use std::path::PathBuf;
 

@@ -1,4 +1,5 @@
 //! CSS 变量颜色格式诊断
+#![allow(clippy::unwrap_used)]
 
 use std::path::PathBuf;
 
@@ -47,7 +48,7 @@ fn test_diag_var_color_format() {
 
     for fname in ["var.scss", "base.scss"] {
         let path = src.join(fname);
-        let sp = normalize(&sasspile::compile_file(&path, sasspile::OutputStyle::Expanded).unwrap());
+        let sp = normalize(&sasspile::compile_file(&path, sasspile::OutputStyle::Expanded).expect("compile sasspile"));
         let output = std::process::Command::new("/opt/homebrew/bin/sass")
             .arg("--style=expanded").arg("--no-source-map")
             .arg(&path)
@@ -57,9 +58,9 @@ fn test_diag_var_color_format() {
 
         // 比较所有 CSS 变量值
         let sp_vars: Vec<String> = sp.split("--el-").filter(|s| s.contains(':')).map(|s| {
-            let val = s.split(':').nth(1).unwrap_or("").trim().trim_end_matches(';').trim();
             format!("--el-{}", s.split(':').next().unwrap_or("").trim())
         }).collect();
+        drop(sp_vars);
 
         // 检查不同点
         let mut diffs = Vec::new();
@@ -78,12 +79,13 @@ fn test_diag_var_color_format() {
 
     // 找第一处颜色相关的差异
     let path = src.join("var.scss");
-    let sp = sasspile::compile_file(&path, sasspile::OutputStyle::Expanded).unwrap();
+    let sp = sasspile::compile_file(&path, sasspile::OutputStyle::Expanded).expect("compile sasspile");
     let dn = String::from_utf8_lossy(
         &std::process::Command::new("/opt/homebrew/bin/sass")
             .arg("--style=expanded").arg("--no-source-map")
             .arg(&path)
-            .output().unwrap().stdout
+            .output().expect("dart-sass available")
+            .stdout
     ).to_string();
 
     let sp_chars: Vec<char> = sp.chars().collect();

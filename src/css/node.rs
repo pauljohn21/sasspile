@@ -91,7 +91,7 @@ impl std::fmt::Display for CssNode {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
-            CssNode::AtRootDirect(inner) => write!(f, "@at-root[{}]", inner),
+            CssNode::AtRootDirect(inner) => write!(f, "@at-root[{inner}]"),
             CssNode::Raw(text) => write!(f, "{text}"),
             CssNode::Return(_) => write!(f, ""),
         }

@@ -1,7 +1,8 @@
 //! 压缩格式直接对比——验证 lightningcss 规范化前后对比。
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args, clippy::print_stdout, clippy::print_stderr)]
 
 #[test]
-#[ignore]
+#[ignore = "Diagnostic tool, run manually"]
 fn diag_normalized_compare() {
     use lightningcss::{
         printer::PrinterOptions,

@@ -3,6 +3,7 @@
 //! EP 官方 dist 由 dart-sass 编译后 lightningcss 压缩生成。
 //! 将 sasspile 编译结果也过 lightningcss minify 与 EP dist 对比，
 //! 消除格式差异，只暴露**语义差异**。
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args)]
 
 use std::path::PathBuf;
 

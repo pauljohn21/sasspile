@@ -29,16 +29,43 @@
 - [x] 3.10 sass-spec 全量验证无回归
 - [x] 3.11 EP consistency DIFF 16→15
 
-## 阶段 4 — Sasspile bug 修复（剩余）
+## 阶段 3 — at-root 上下文：已回退 ⚠️ REVERTED (2026-10-03)
 
-- [ ] 4.1 修复 rgba()/rgb() var() fallback 在 input-number 等文件中的展开
-- [ ] 4.2 运行 `SPEC_STORE_CMD=run` 确认 sass-spec ≥ 7927 无回归
-- [ ] 4.3 归档 openspec 到 `openspec/changes/archive/`
+- Phase 3 方案 (at_root_top flag) 净效应为负：修复 descriptions.css 但破坏 12 其他文件
+- 8dcd5bb (Phase 3 commit) + 206752c (revert) 都已保留在 history
+- True baseline 回退到 83/121 (8dcd5bb 之前的状态)
+- descriptions.css 的修复需要更精确的方案
+- 3.1-3.11 在 commit 8dcd5bb 中完成，commit 206752c 中回退
 
-## 阶段 5 — 收敛 & 验证（最终）
+## 阶段 4 — 精确 DIFF 分类（已完成） ✅ (2026-10-03)
 
-- [ ] 5.1 针对所有已知管线差异文件，在 normalize post-process 中标记为 KNOWN_DIFF
-- [ ] 5.2 软验证：actionable patch 全部应用后 EP 一致率达到可接受基线
-- [ ] 5.3 全量 `ep_normalized_test` + `ep_full` 121 tests 通过
-- [ ] 5.4 `SPEC_STORE_CMD=run` 全量 sass-spec 对比确认无回归
-- [ ] 5.5 codegraph sync
+- [x] 4.1 创建 ep_diff_analyzer，精确分类 38 个 DIFF 文件的根因
+- [x] 4.2 确认 EP 管线产物 22 files (autoprefixer/lightningcss) — 不可修复
+- [x] 4.3 识别 16 files 真正的 sasspile bug，按以下子分类：
+  - sel-doubling (3): anchor, popover, table-v2 — `&` 引用被重复嵌套
+  - bem-nesting / sel-missing (2): descriptions, color-picker-panel — 缺少中间层
+  - step-ampersand (1): step — `&` 在 @at-root 上下文中未展开为字面选择器
+  - dup-keyframes (3): dialog, drawer, message-box — keyframes 重复声明
+  - select-grouping (2): input-number, pagination — comma-grouping 未拆分
+  - rate-fv (1): rate — `.el-rate .el-rate:focus-visible` 重复
+  - not-vs-is (1): color-picker — `:not()` vs `:is()` 格式
+  - svg-replace (3): option, select, select-v2 — EP dist 用 border-trick 替代 SVG mask
+- [x] 4.4 建立 DIFF 分类决策矩阵（EP管线产物 22 + sasspile bug 16 = 38 DIFF）
+
+## 阶段 5 — 精确 Bug 修复（按优先级）
+
+- [ ] 5.1 sel-doubling 修复：anchor, popover, table-v2
+  - 根因：` nest_rule_in_children` 或 `push_atroot_direct` 中 propagate 父选择器时重复
+  - fix 方向：检测 child 是否已以 parent 开头，不重复嵌套
+- [ ] 5.2 step-ampersand 修复：step
+  - `&` 在 `pseudo()` mixin 内被 @at-root 包装为 AtRootDirect 时未展开
+  - fix 方向：push_atroot_direct 中 combine 时强制展开 `&`
+- [ ] 5.3 rate-fv 修复：rate
+  - 根因类似 sel-doubling：focus-visible 内 e(item) 嵌套时 `&` 被重复传播
+- [ ] 5.4 bem-nesting 修复：descriptions, color-picker-panel
+  - 需要精确方案避免 Phase 3 的 10-file 回归
+- [ ] 5.5 dup-keyframes 修复：dialog, drawer, message-box
+  - keyframes 去重或避免重复 @extend 传播
+- [ ] 5.6 每次修复后跑 `ep_normalized_test` + 核心测试 202/202
+- [ ] 5.7 每次修复后跑 `SPEC_STORE_CMD=run` 确认 sass-spec 无回归
+- [ ] 5.8 归档到 `openspec/changes/archive/`

@@ -2,12 +2,26 @@ use super::*;
 use crate::css::node::CssNode;
 use crate::error::Result;
 
-/// 规则构建器——封装 `eval_rule` 的 3 个累积器状态。
+/// 判断 child selector 是否已经以 parent 作为 compound 前缀。
+/// 用于 outer Rule arm combine：当 inner eval 输出已包含 parent 语义时跳过 descendant combine。
+fn starts_with_compound_prefix(parent: &str, child: &str) -> bool {
+    if parent.is_empty() || child == parent {
+        return !parent.is_empty();
+    }
+    let separators: &[u8] = b".:#[>+~";
+    child.len() > parent.len()
+        && child.starts_with(parent)
+        && child.as_bytes().get(parent.len()).is_some_and(|c| separators.contains(c))
+}
+
+/// 规则构建器——封装 `eval_rule` 的累积器状态。
 ///
 /// `result` 是最终输出节点列表，`current_decls` 是当前累积的声明，
 /// `root_nodes` 是 @at-root 提升的节点。
+/// `resolved_self` 是 selector 展开 `&` 后的值，用于 compound 前缀检测。
 struct RuleBuilder {
     selector: String,
+    resolved_self: String,
     result: Vec<CssNode>,
     current_decls: Vec<CssNode>,
     root_nodes: Vec<CssNode>,
@@ -16,6 +30,7 @@ struct RuleBuilder {
 impl RuleBuilder {
     fn new(selector: String) -> Self {
         Self {
+            resolved_self: selector.clone(),
             selector,
             result: Vec::new(),
             current_decls: Vec::new(),
@@ -38,8 +53,9 @@ impl RuleBuilder {
         }
     }
 
-    /// push 一个 CSS 节点到构建器。
-    fn push(mut self, node: CssNode) -> Self {
+    /// push 一个 CSS 节点到构建器（&mut self 模式——Group 1 重构关键前置）。
+    #[tracing::instrument(skip(self, node), fields(sel = %self.selector, node = ?std::mem::discriminant(&node)))]
+    fn push(&mut self, node: CssNode) {
         match node {
             CssNode::Declaration { .. } => {
                 self.current_decls.push(node);
@@ -89,7 +105,17 @@ impl RuleBuilder {
                 children: child_kids,
             } => {
                 self.flush_decls();
-                let combined = Evaluator::combine_selectors(&self.selector, &child_sel);
+                // Group 3 修复：用 resolved_self（& 已展开为完整 compound）检测 inner eval 输出
+                // 是否已包含 self 语义前缀。对 `&.--vertical { &.--underline {} }` 链式嵌套，
+                // inner Rule arm combine 时 self.selector 仍是 "&.--vertical"（字面）、
+                // 此时 child_sel 已是 ".el-anchor.el-anchor--vertical.el-anchor--underline"（已展开），
+                // 用 resolved_self 才能正确识别 → 跳过 double-prefix 的 descendant combine。
+                let has_prefix = starts_with_compound_prefix(&self.resolved_self, &child_sel);
+                let combined = if has_prefix {
+                    child_sel.clone()
+                } else {
+                    Evaluator::combine_selectors(&self.selector, &child_sel)
+                };
                 match !child_decls.is_empty() {
                     true => {
                         self.result.push(CssNode::Rule {
@@ -119,7 +145,9 @@ impl RuleBuilder {
                             false => {}
                         }
                     } else {
-                        self.result.push(kid);
+                        // Group 4 修复：递归 dispatch，让 AtRootDirect 进入 push_atroot_direct
+                        // （而不是绕过直接 result.push 导致 selector 不经 combine）
+                        self.push(kid);
                     }
                 }
             }
@@ -167,7 +195,6 @@ impl RuleBuilder {
                 self.result.push(other);
             }
         }
-        self
     }
 
     /// 处理 AtRootDirect 节点：组合选择器 + 递归处理嵌套子节点。
@@ -382,17 +409,17 @@ impl Evaluator {
         // 当嵌套的 `& > .el-button` 规则求值完成后，其内部 scope exit 会丢失父级 current_selector，
         // 导致后续同级的 m() mixin 看到 `$selector: &` 被污染为深嵌套选择器。
         let parent_selector = env.get_selector().map(String::from);
-        let env = env.enter_scope().with_selector(resolved_sel);
+        let env = env.enter_scope().with_selector(resolved_sel.clone());
         let (css, new_env) = Self::eval_nodes(body, env)?;
 
-        // 使用 RuleBuilder + fold 处理嵌套规则（selector 保留原始形式）。
-        // trim 尾逗号：e() mixin 通过 "#{$currentSelector}" 生成的 selector 含尾随逗号
-        //（如 ".el-badge__content,"），trim 后 RuleBuilder.flush_decls 输出正确的 .el-badge__content
+        // Group 1 重构：for + &mut push 替代 fold（递归 dispatch AtRootDirect 需要 &mut self）
         let builder_selector = selector.trim().trim_end_matches(',').trim().to_string();
-        let result = css
-            .into_iter()
-            .fold(RuleBuilder::new(builder_selector), RuleBuilder::push)
-            .build();
+        let mut builder = RuleBuilder::new(builder_selector);
+        builder.resolved_self = resolved_sel.trim().trim_end_matches(',').trim().to_string();
+        for node in css {
+            builder.push(node);
+        }
+        let result = builder.build();
 
         // 退出子作用域——恢复父 scope，传播 !global 和新增 mixin/function
         let return_env = new_env.exit_scope();

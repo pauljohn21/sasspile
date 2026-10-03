@@ -1,17 +1,80 @@
 //! EP DIFF 精确诊断——逐文件分析 sasspile vs EP 官方输出的具体差异模式。
 
 #[test]
-fn diag_descriptions_v4() {
-    let src_dir = "element-plus/packages/theme-chalk/src";
-    let path = "element-plus/packages/theme-chalk/src/descriptions.scss";
-    if let Ok(css) = sasspile::compile_file_with_load_paths(
+fn diag_badge_scss() {
+    sasspile::init_tracing();
+    let path = "element-plus/packages/theme-chalk/src/badge.scss";
+    if let Ok(css) = sasspile::compile_file(
         &std::path::PathBuf::from(path),
         sasspile::OutputStyle::Expanded,
-        vec![std::path::PathBuf::from(src_dir)],
     ) {
-        let size = css.len();
-        let _ = std::fs::write("/tmp/sp_desc_v4.out", css);
-        eprintln!("WROTE /tmp/sp_desc_v4.out size={}", size);
+        let relevant: String = css.lines()
+            .filter(|l| l.contains("el-badge__content") && !l.starts_with("/*"))
+            .take(5)
+            .collect::<Vec<_>>()
+            .join("\n");
+        tracing::error!("=== SP badge (content only, top 5) ===\n{}", relevant);
+    }
+}
+
+#[test]
+fn diag_anchor_scss() {
+    sasspile::init_tracing();
+    let path = "element-plus/packages/theme-chalk/src/anchor.scss";
+    if let Ok(css) = sasspile::compile_file(
+        &std::path::PathBuf::from(path),
+        sasspile::OutputStyle::Expanded,
+    ) {
+        // 只输出 anchor--vertical 相关规则
+        let relevant: String = css.lines()
+            .filter(|l| l.contains("anchor--vertical") || l.contains("anchor__marker"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        tracing::error!("=== SP anchor (vertical+marker only) ===\n{}", relevant);
+
+        let dist_anchor = std::fs::read_to_string(
+            "element-plus/packages/theme-chalk/dist/el-anchor.css"
+        ).unwrap_or_default();
+        let dist_relevant: String = dist_anchor.lines()
+            .filter(|l| l.contains("anchor--vertical") || l.contains("anchor__marker"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        tracing::error!("=== EP anchor (vertical+marker only) ===\n{}", dist_relevant);
+    }
+}
+
+#[test]
+fn diag_descriptions_ep() {
+    sasspile::init_tracing();
+    let path = "element-plus/packages/theme-chalk/src/descriptions.scss";
+    if let Ok(css) = sasspile::compile_file(
+        &std::path::PathBuf::from(path),
+        sasspile::OutputStyle::Expanded,
+    ) {
+        let _ = std::fs::write("/tmp/sp_desc_ep.out", &css);
+        let dist = std::fs::read_to_string(
+            "element-plus/packages/theme-chalk/dist/el-descriptions.css"
+        ).unwrap_or_default();
+        if css == dist {
+            tracing::error!("descriptions.scss: IDENTICAL");
+        } else {
+            let sp_bytes = css.as_bytes();
+            let dist_bytes = dist.as_bytes();
+            let min_len = sp_bytes.len().min(dist_bytes.len());
+            let mut first_diff = min_len;
+            for i in 0..min_len {
+                if sp_bytes[i] != dist_bytes[i] {
+                    first_diff = i;
+                    break;
+                }
+            }
+            let s = first_diff.saturating_sub(60);
+            let e = (first_diff + 60).min(sp_bytes.len().max(dist_bytes.len()));
+            tracing::error!(pos = first_diff, "SP :`{}`",
+                String::from_utf8_lossy(&sp_bytes[s..e.min(sp_bytes.len())]));
+            tracing::error!(pos = first_diff, "EP :`{}`",
+                String::from_utf8_lossy(&dist_bytes[s..e.min(dist_bytes.len())]));
+        }
     }
 }
 
@@ -53,7 +116,7 @@ fn normalize_css(css: &str) -> Result<String, String> {
 }
 
 #[test]
-#[ignore]
+#[ignore = "Slow diagnostic, run with EP_TARGET env var"]
 fn diag_ep_file_diffs() {
     sasspile::init_tracing();
     let src_dir = PathBuf::from(EP_SRC);
@@ -76,7 +139,7 @@ fn diag_ep_file_diffs() {
 
     for entry in &entries {
         let path = entry.path();
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        let name = path.file_name().expect("path has file_name").to_string_lossy().to_string();
         let dist_name = scss_to_dist_name(&name);
         let dist_path = dist_dir.join(&dist_name);
 

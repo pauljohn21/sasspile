@@ -566,7 +566,7 @@ fn test_compile_mod_negative() {
 fn test_compile_incompatible_units_add_calc() {
     let result = compile_expanded("a {b: round(1px + 0%, 1px + 0%)}");
     assert!(result.is_ok(), "incompatible units should produce calc() wrap, err: {:?}", result.err());
-    let css = result.unwrap();
+    let css = result.expect("compile should succeed with calc wrap");
     assert!(
         css.contains("round(") && css.contains("calc("),
         "expected round(calc(...), calc(...)), got: {css}"

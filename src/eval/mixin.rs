@@ -255,24 +255,24 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                     false,
                 ));
             }
-            tracing::Span::current().record("dispatch_path", &"css_reserved");
+            tracing::Span::current().record("dispatch_path", "css_reserved");
             return Self::call_builtin(name, pos_args, kw_args, env);
         }
         // 用户函数（精确匹配优先）—— 用户定义可覆盖 calc/clamp 等
         if let Some(func) = env.get_function(name) {
-            tracing::Span::current().record("dispatch_path", &"exact_match");
+            tracing::Span::current().record("dispatch_path", "exact_match");
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // 用户函数（大小写不敏感匹配）
         if let Some(func) = env.get_function_ci(name) {
-            tracing::Span::current().record("dispatch_path", &"case_insensitive");
+            tracing::Span::current().record("dispatch_path", "case_insensitive");
             return Self::call_user_function(func, pos_args, kw_args, env);
         }
         // CSS 原生函数名（attr/css/calc/clamp 等）—— 仅在无用户定义时走内建
         if !name.contains('.')
             && super::builtin::dispatch::is_css_native_function(&name_lower)
         {
-            tracing::Span::current().record("dispatch_path", &"css_native");
+            tracing::Span::current().record("dispatch_path", "css_native");
             return Self::call_builtin(name, pos_args, kw_args, env);
         }
         // 在命名空间模块中查找同名函数（跳过内建模块）
@@ -288,7 +288,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                     .map(|(_, f)| f.clone())
             });
         if let Some(func) = ns_func {
-            tracing::Span::current().record("dispatch_path", &"namespace_traverse");
+            tracing::Span::current().record("dispatch_path", "namespace_traverse");
             return Self::call_user_function(&func, pos_args, kw_args, env);
         }
         tracing::trace!(

@@ -187,7 +187,7 @@ pub(crate) fn eval_property_name(property: &str, env: &Env) -> String {
                 }
                 match env.lookup(&var_name) {
                     // 变量替换到属性名时也要去引号
-                    Some(val) => result.push_str(&val_to_interp_string(&val)),
+                    Some(val) => result.push_str(&val_to_interp_string(val)),
                     None => { let _ = write!(result, "${var_name}"); }
                 }
             }

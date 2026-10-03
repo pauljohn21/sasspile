@@ -3,6 +3,7 @@
 //! 概要：用 EP 官方 build 流程生成的 dist/*.css 作为参考，对比 sasspile 输出。
 //!       EP 官方流程：sass-embedded（dart-sass）编译 + lightningcss 压缩。
 //!       因此对比时需将 sasspile 输出也用 lightningcss 同等规范化。
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args)]
 //!
 //! 简化策略：将两边输出通过相同的 normalize（去注释、压缩空白、排序属性）后对比。
 //!
@@ -186,15 +187,17 @@ fn test_ep_compare_with_official_dist() {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    let pct = if total > 0 { identical as f64 / total as f64 * 100. } else { 0. };
     tracing::info!(
         total = total,
         identical = identical,
         diff = diff_count,
         sasspile_fail = sasspile_fail,
         no_dist_ref = no_dist_ref,
+        pct = pct,
         "===== 结果: {}/{} 一致 ({:.1}%) =====",
-        identical, total,
-        if total > 0 { identical as f64 / total as f64 * 100. } else { 0. }
+        identical, total, pct,
     );
 
     if !diff_details.is_empty() {

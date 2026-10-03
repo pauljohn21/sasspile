@@ -1,4 +1,5 @@
 //! —— EP DIFF 细粒度分类 ——
+#![allow(clippy::unwrap_used, clippy::uninlined_format_args)]
 
 use std::path::PathBuf;
 use std::process::Command;
