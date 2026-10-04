@@ -495,7 +495,7 @@ SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 **通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
 **sass-spec 基线**：7877/12133 = 64.9%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
-**ep_normalized**：78/121 = 64.5%（Phase 7 目标 121/121）
+**ep_normalized**：101/121 = 83.5%（Phase 8 目标 121/121）
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
@@ -534,13 +534,10 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 ## OpenSpec 归档
 
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
+## 🔄 归档记录
+
+- **ep-bem-atroot-chain-fix**（2026-10-04）：BEM 嵌套链传播修复 — with_chain 去重 + & 解析用 chain + eval_content 传播 chain + push_atroot_direct child 去重 — EP normalized 78/121→101/121 (+23)
 - **ep-consistency-boost**（2026-09-22）：EP 一致性 Phase 1-6 — AtRootDirect 优化、@at-root/@content 顺序、@extend %placeholder 选择器分组（含单/多 extender + mixin 传播增量快照 + 后缀匹配 + 指数膨胀 bug）、eval_at_rule @media 参数提前求值、var() fallback 求值、calc() 内函数求值 — EP 一致性 45/121→73/121 (+28)，sass-spec 7975→8003 (+28)
-
-## 🔄 活跃 OpenSpec 变更
-
-| Change | 状态 | 目标 |
-|--------|------|------|
-| _（无活跃变更）_ | — | — |
 
 更早的归档记录详见 `openspec/changes/archive/` 目录。
 

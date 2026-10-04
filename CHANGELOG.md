@@ -2,9 +2,18 @@
 
 # Changelog
 
-## [Unreleased] — 2026-10-03
+## [Unreleased] — 2026-10-04
 
 ### Fixed
+
+- **BEM 嵌套链传播全链路修复**：e() → when() → e() 嵌套场景中 `&` 展开为完整嵌套链，消除选择器重复和层级缺失
+  - 根因：eval_content 只传 current_selector 给 @content env，未传 selector_chain；with_chain 在 immediate 已包含 chain 时重复追加；push_atroot_direct child loop 缺少 already_has_prefix 检测
+  - 修复 1：`src/eval/env_impl.rs` — `with_chain` 增加「immediate.starts_with(parent)」早期返回，避免 chain 重复累积
+  - 修复 2：`src/eval/rule.rs` — `eval_rule` 中 `&` 解析改用 `get_selector_chain()` 而非 `get_selector()`，确保嵌套 BEM mixin 中 `&` 展开为完整嵌套路径
+  - 修复 3：`src/eval/mod.rs` — `eval_content` 新增 `with_chain_opt()` 将完整 nested chain 传给 content_env.selector_chain
+  - 修复 4：`src/eval/rule.rs` — `push_atroot_direct` child loop 增加 compound + descendant already_has_prefix 检测
+  - 示例：`.el-checkbox.el-checkbox--small .el-checkbox__input.is-indeterminate .el-checkbox__inner::before`（选择器结构完全正确，仅余 `::before` vs `:before` 序列化差异）
+  - 测试结果：核心 242/242 + EP full 121/121 维持、EP normalized 78/121→101/121 (+23) = 83.5%
 
 - **BEM mixin at-root 修饰符上下文嵌套修复**：`e(title)` 在 `m($size)` @at-root 内正确继承修饰符前缀，消除双层重复
   - 根因：e() mixin 生成的 `{&} { .__header, { @content } }` 包装 Rule 在 `nest_rule_in_children` 中被双重前缀，产生 `.el-descriptions--large .el-descriptions--large .el-descriptions__header`
