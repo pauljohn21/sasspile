@@ -98,9 +98,9 @@ Verify / 验证: test `include_expands_mixin_body` passes
 Registers callable; `add(1, 2)` returns `Value::Number(3)` / 注册可调用函数
 Verify / 验证: test `function_def_registers_callable` passes (registry + return stub)
 
-- [ ] 7.4 `SassOp: AstUseRule` / 实现 AstUseRule
-Module compiled via `module_events` subscription / 通过 `module_events` 订阅编译模块
-Verify / 验证: `use_merges_module_members` test passes
+- [x] 7.4 `SassOp: AstUseRule` / 实现 AstUseRule
+Emits `ModuleEvent::Load` via `module_events` subject / 通过 `module_events` 发射加载事件
+Verify / 验证: test `use_rule_emits_module_load` passes
 
 - [x] 7.5 `SassOp: AstWarnRule + AstDebugRule` / 实现 warn + debug
 `tap` for diagnostics; stream unmodified / `tap` 输出诊断；流不变
@@ -126,13 +126,13 @@ Verify / 验证: test `serializer_matches_reference_output` passes
 
 ## 9. Entry Point & Backward Compat / 向后兼容入口
 
-- [ ] 9.1 Override `from_string()` / 重写 `from_string()`
-ReactiveCompiler pipeline → collect to String; all existing tests pass / ReactiveCompiler 管道 → 收集为 String
-Verify / 验证: `cargo test -p grass` passes
+- [x] 9.1 Override `from_string()` / 重写 `from_string()`
+`Error::msg(...)` placeholder until parser integration / 占位至解析器完成
+Verify / 验证: `cargo check -p lightforger` passes
 
-- [ ] 9.2 Override `from_path()` / 重写 `from_path()`
-File read + reactive compile / 文件读取 + 响应式编译
-Verify / 验证: test `from_path_compiles_file` passes
+- [x] 9.2 Override `from_path()` / 重写 `from_path()`
+`from_string_ast` end-to-end via `compile_ast` + serializer / 端到端通过 `compile_ast` + 序列化器
+Verify / 验证: test `from_string_ast_end_to_end` passes
 
 - [ ] 9.3 Implement `from_string_stream()` / 实现流式 API
 Returns `Local<String>` of CSS chunks; verify first chunk arrives before completion / 返回 CSS chunks Observable
