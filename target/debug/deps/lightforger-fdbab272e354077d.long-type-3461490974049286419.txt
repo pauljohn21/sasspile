@@ -1,0 +1,6 @@
+rxrust::ops::SwitchMapOuterObserver<LocalScope, Box<dyn DynObserver<T, Infallible>>, {closure@crates/compiler/src/reactive/ext.rs:35:21: 35:28}>
+rxrust::ops::SwitchMapOuterObserver<LocalScope, Box<dyn DynObserver<T, Infallible>>, {closure@crates/compiler/src/reactive/ext.rs:35:21: 35:28}>: Observer<Vec<T>, Infallible>
+Box<dyn DynCoreObservable<LocalCtx<Box<(dyn DynObserver<Vec<T>, Infallible> + 'static)>, LocalScheduler>>>
+CoreObservable<LocalCtx<rxrust::ops::SwitchMapOuterObserver<LocalScope, Box<dyn DynObserver<T, Infallible>>, {closure@crates/compiler/src/reactive/ext.rs:35:21: 35:28}>, LocalScheduler>>
+SwitchMap<Box<dyn DynCoreObservable<LocalCtx<Box<(dyn DynObserver<Vec<T>, Infallible> + 'static)>, LocalScheduler>>>, {closure@crates/compiler/src/reactive/ext.rs:35:21: 35:28}>
+IntoBoxedCoreObservable<Box<dyn DynCoreObservable<LocalCtx<Box<dyn DynObserver<T, Infallible>>, LocalScheduler>>>>
