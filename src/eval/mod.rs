@@ -268,6 +268,10 @@ fn eval_content(env: Env) -> Result<(Vec<CssNode>, Env)> {
             // 解决 mixin b() 中 @content 触发时 $B 尚未来得及通过 exec_mixin 回传的问题
             let mut writes = HashMap::new();
             collect_global_writes(&env.current, &mut writes);
+            let content_chain = env
+                .get_selector_chain()
+                .or_else(|| env.get_selector())
+                .map(String::from);
             let content_env = writes
                 .into_iter()
                 .fold(content_env.clone(), |acc, (k, v)| {
@@ -278,11 +282,12 @@ fn eval_content(env: Env) -> Result<(Vec<CssNode>, Env)> {
                     // 对于 @at-root { .outer { .inner { @content } } } 场景，
                     // immediate selector = ".inner"，但 & 应展开为 ".outer .inner"。
                     // selector_chain 记录的正是这个完整路径。
-                    env.get_selector_chain()
-                        .or_else(|| env.get_selector())
-                        .map(std::string::ToString::to_string)
-                        .unwrap_or_default(),
-                );
+                    content_chain
+                        .as_deref()
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+                .with_chain_opt(content_chain.as_deref());
             let content_nodes = content_nodes.to_vec();
             Evaluator::eval_nodes(&content_nodes, content_env)
         }

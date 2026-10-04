@@ -540,7 +540,7 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 
 | Change | 状态 | 目标 |
 |--------|------|------|
-| `ep-consistency-phase7-all-diff-fix` | 规划中 (4/4 artifacts) | EP 一致性 73/121→121/121，5 capability：伪元素格式、嵌套 placeholder、keyframes、模块变量、选择器组合并 |
+| _（无活跃变更）_ | — | — |
 
 更早的归档记录详见 `openspec/changes/archive/` 目录。
 

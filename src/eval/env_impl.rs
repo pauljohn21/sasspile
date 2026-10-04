@@ -224,7 +224,10 @@ pub fn restore_selector_chain(mut self, chain: Option<&str>) -> Self {
 /// 设置选择器链（在 eval_rule 中用于追加嵌套层级）。
 /// 当进入嵌套规则时，chain = parent_chain + " " + immediate_sel。
 pub fn with_chain(mut self, immediate: &str) -> Self {
+    // 关键修复：如果 immediate 已包含 parent chain（如 &.block--mod 的 resolved_sel
+    // = .block.block--mod 已包含 parent = .block），则直接使用 immediate 避免重复累积。
     let new_chain = match self.selector_chain {
+        Some(ref parent) if immediate.starts_with(parent) => immediate.to_string(),
         Some(ref parent) => format!("{parent} {immediate}"),
         None => immediate.to_string(),
     };
@@ -239,6 +242,15 @@ pub fn reset_selector(mut self, sel: String) -> Self {
     tracing::debug!(target: "chain_trace", old_chain = ?self.selector_chain, new = %sel, "reset_selector");
     self.current_selector = Some(sel.clone());
     self.selector_chain = Some(sel);
+    self
+}
+
+/// 设置 selector_chain（如果 Some），None 时保持不变。
+/// 用于 eval_content 中传播完整嵌套链给 @content 上下文。
+pub fn with_chain_opt(mut self, chain: Option<&str>) -> Self {
+    if let Some(c) = chain {
+        self.selector_chain = Some(c.to_string());
+    }
     self
 }
 

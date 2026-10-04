@@ -251,7 +251,14 @@ impl RuleBuilder {
                         CssNode::Rule { selector: kid_sel, declarations: kid_decls, children: kid_kids } => {
                             // kid_sel 也可能含尾随逗号——trim 后组合
                             let clean_kid = kid_sel.trim().trim_end_matches(',').trim();
-                            let kid_combined = Evaluator::combine_selectors(&resolved_selector, clean_kid);
+                            // DOUBLE-PREFIX FIX：检测 child 是否已包含 parent 前缀。
+                            let kid_already_has = starts_with_compound_prefix(&resolved_selector, clean_kid)
+                                || clean_kid.starts_with(&format!("{resolved_selector} "));
+                            let kid_combined = if kid_already_has {
+                                clean_kid.to_string()
+                            } else {
+                                Evaluator::combine_selectors(&resolved_selector, clean_kid)
+                            };
                             self.result.push(CssNode::Rule {
                                 selector: kid_combined,
                                 declarations: kid_decls,
@@ -403,14 +410,15 @@ impl Evaluator {
 
         // FIX: 解析 selector 中的字面 & 后再存入 env.current_selector，
         // 确保 mixin 内 $selector: & 读取到的是正确解析值（而非字面 &）。
-        // RuleBuilder 仍使用原始 selector（保留 & 供后续 combine_selectors 处理）。
-        // CRITICAL: trim 尾随逗号——EP 的 e() mixin 输出 "#{$currentSelector}" 含尾随逗号
-        //（如 ".el-badge__content,"），如果 current_selector 保留逗号，
-        // 后续 m() mixin 的 "$selector: &" 会捕获带逗号的值，
-        // 导致 $currentSelector 变成 ".el-badge__content,--primary"（双逗号 Bug）。
+        // BEM CHAIN FIX: 使用 selector_chain（完整嵌套链）而非仅 get_selector()（直接父级）
+        // 解析 & — 当 &.block--mod 的 body 内调用 e() 时，& 应展开为完整链
+        // ".block.block--mod"，而非仅 ".block"。
         let resolved_sel = if selector.contains('&') {
-            let parent_sel = env.get_selector().map(String::from).unwrap_or_default();
-            Self::combine_selectors(&parent_sel, selector.as_str())
+            let parent_sel = env
+                .get_selector_chain()
+                .or_else(|| env.get_selector())
+                .unwrap_or("");
+            Self::combine_selectors(parent_sel, selector.as_str())
         } else {
             selector.clone()
         };
