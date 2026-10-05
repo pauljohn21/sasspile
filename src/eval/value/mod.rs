@@ -186,11 +186,16 @@ match env.get_namespace(ns).cloned() {
                     (false, false) => match Self::lookup_named_color(s) {
                         Some(color) => Ok(Value::Color(color)),
                         None => {
-                            // & 字面量在值上下文中 = 当前选择器
+                            // & 字面量在值上下文中 = 当前选择器链（完整嵌套路径）
+                            // 优先使用 chain——在嵌套规则或 @content 上下文中，
+                            // & 需反映完整嵌套链（如 .block--mod .block__elem）。
+                            // 这确保 e() mixin 内的 $selector: & 在嵌套 e() 调用时
+                            // 能命中 hitAllSpecialNestRule（包含 --）走正确分支，
+                            // 避免中间 BEM 层级丢失（e(item) 在 e(list) 内展开时丢失 __list 前缀）。
                             if s == "&" {
                                 Ok(Value::String(
-                                    env.get_selector()
-                                        .map(std::string::ToString::to_string)
+                                    env.get_selector_chain()
+                                        .or_else(|| env.get_selector().map(String::from))
                                         .unwrap_or_default(),
                                     false,
                                 ))

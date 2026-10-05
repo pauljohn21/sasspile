@@ -12,7 +12,7 @@
 use super::env::{Env, FunctionDef, MixinDef, ModuleExports};
 use super::scope::Scope;
 use crate::parse::ast::{Node, Param, Value};
-use imbl::{HashMap, HashSet};
+use imbl::{HashMap, HashSet, Vector};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -197,62 +197,151 @@ pub fn get_selector(&self) -> Option<&str> {
     self.current_selector.as_deref()
 }
 
-/// 获取完整选择器链（后代分隔），用于 @content 内 & 引用解析。
-pub fn get_selector_chain(&self) -> Option<&str> {
-    self.selector_chain.as_deref()
-}
+    /// 获取完整选择器链（后代分隔），用于 @content 内 & 引用解析。
+    ///
+    /// 注意：此方法 O(n)（必须 join 段为单个字符串——格式化输出本身需要 O(n) 堆写入）。
+    /// 性能关键：仅在必要时调用（如 & 展开、content chain 传播），不在每层嵌套中调用。
+    /// 每层嵌套的 `with_chain` 走快速 push_back 路径（O(log n)），不触发此方法。
+    pub fn get_selector_chain(&self) -> Option<String> {
+        if self.selector_chain.is_empty() {
+            None
+        } else {
+            Some(
+                self.selector_chain
+                    .iter()
+                    .map(|s| s.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        }
+    }
 
 /// 恢复 parent 上下文（selector + selector_chain）到 body eval 之前的状态。
 /// 用于 eval_rule 退出子作用域后，确保同级 mixin 看到的链状态一致。
-pub fn restore_parent_context(self, parent_selector: Option<&str>, parent_chain: Option<&str>) -> Self {
+///
+/// ## 性能优化：Vector<Rc<str>> 直接移动（无 format!/split）
+///
+/// `parent_chain` 是从 `env.selector_chain.clone()` 保存的快照（O(log n)）。
+/// 与旧实现（format! → Rc::from → split → push_back × N）相比，Vector clone
+/// 利用结构共享，无需堆字符串操作。
+pub fn restore_parent_context(
+    self,
+    parent_selector: Option<String>,
+    parent_chain: Vector<Rc<str>>,
+) -> Self {
     self.restore_selector(parent_selector)
-        .restore_selector_chain(parent_chain)
+        .restore_selector_chain_vec(parent_chain)
 }
 
 /// 恢复 current_selector（不修改 chain）。
-pub fn restore_selector(mut self, sel: Option<&str>) -> Self {
-    self.current_selector = sel.map(String::from);
+/// `sel: Option<String>` 所有权移动（避免 clone）。
+pub fn restore_selector(mut self, sel: Option<String>) -> Self {
+    self.current_selector = sel;
     self
 }
 
-/// 恢复 selector_chain（不修改 selector）。
-pub fn restore_selector_chain(mut self, chain: Option<&str>) -> Self {
-    self.selector_chain = chain.map(String::from);
-    self
-}
+    /// 恢复 selector_chain 从 Vector<Rc<str>> 快照（通常从 save 恢复）。
+    /// 直接移动整个 Vector —— 无需 format! 或 split。O(log n)。
+    pub fn restore_selector_chain_vec(mut self, chain: Vector<Rc<str>>) -> Self {
+        self.selector_chain = chain;
+                self
+    }
 
 /// 设置选择器链（在 eval_rule 中用于追加嵌套层级）。
 /// 当进入嵌套规则时，chain = parent_chain + " " + immediate_sel。
+///
+/// ## 所有权关键优化：延迟 join 替代 eager format!
+///
+/// OLD 实现中，每次调用 `format!("{parent} {immediate}")` 都全量拷贝父链 O(n)。
+/// N 层嵌套时总复杂度 O(n²)。
+///
+/// NEW 实现中，**常见情况**（单父单 immediate、不含逗号）：仅 push 新段至 Vector。
+/// Vector push_back 为 O(log n) + 原子 Rc 递增，无需堆数据复制！
+///
+/// **仅在 parents 含逗号或 immediate 含逗号时**才 format 整个段（罕见）。
+/// 最终 join 只在 `get_selector_chain()` 输出时一次性发生。
 pub fn with_chain(mut self, immediate: &str) -> Self {
-    // 关键修复：如果 immediate 已包含 parent chain（如 &.block--mod 的 resolved_sel
-    // = .block.block--mod 已包含 parent = .block），则直接使用 immediate 避免重复累积。
-    let new_chain = match self.selector_chain {
-        Some(ref parent) if immediate.starts_with(parent) => immediate.to_string(),
-        Some(ref parent) => format!("{parent} {immediate}"),
-        None => immediate.to_string(),
-    };
-    tracing::debug!(target: "chain_trace", parent = ?self.selector_chain, immediate = immediate, new = %new_chain, "with_chain");
-    self.selector_chain = Some(new_chain);
-    self
-}
+    use super::selector_combine::combine_selectors;
+    // 检查 last segment（如果存在）是否 commas —— 否则走快速 push 路径
+    let last_has_comma = self
+        .selector_chain
+        .back()
+        .is_some_and(|s| s.contains(','));
+    let immediate_has_comma = immediate.contains(',');
 
-/// 重置选择器上下文（用于 @at-root 语义——链式提升后应重新开始链）。
-/// 将 chain 设置为 sel（而非追加），模拟 @at-root 脱离外层作用域的行为。
-pub fn reset_selector(mut self, sel: String) -> Self {
-    tracing::debug!(target: "chain_trace", old_chain = ?self.selector_chain, new = %sel, "reset_selector");
-    self.current_selector = Some(sel.clone());
-    self.selector_chain = Some(sel);
-    self
-}
-
-/// 设置 selector_chain（如果 Some），None 时保持不变。
-/// 用于 eval_content 中传播完整嵌套链给 @content 上下文。
-pub fn with_chain_opt(mut self, chain: Option<&str>) -> Self {
-    if let Some(c) = chain {
-        self.selector_chain = Some(c.to_string());
+    // 快速路径：无逗号、非替换场景 → O(log n) push，无 format!
+    if !last_has_comma
+        && !immediate_has_comma
+        && !self.selector_chain.back().is_some_and(|last| immediate.starts_with(last.as_ref()))
+    {
+        self.selector_chain.push_back(Rc::from(immediate));
+                tracing::debug!(target: "chain_trace", chain_depth = self.selector_chain.len(), immediate = immediate, "with_chain FAST push");
+        return self;
     }
+
+    // 慢路径：有逗号替换或 expand —— 需要提取完整链并重新计算
+    let full_chain = self.get_selector_chain().unwrap_or_default();
+
+    let new_segment = if immediate.starts_with(full_chain.as_str()) {
+        // immediate 已包含 full chain（如 BEM 替换）→ 直接替换为 immediate
+        immediate.to_string()
+    } else if full_chain.contains(',') {
+        let parent_count = full_chain.matches(',').count() + 1;
+        let child_count = immediate.matches(',').count() + 1;
+        if child_count >= parent_count {
+            // immediate 已包含所有 parent 展开（如 &.mod 展开为 .a--mod, .b--mod）
+            immediate.to_string()
+        } else {
+            // Multi-parent + 简单扩展——拆分 parent 段逐段 combine
+            use super::selector_combine::split_selectors_respecting_parens;
+            split_selectors_respecting_parens(&full_chain)
+                .iter()
+                .map(|&p| combine_selectors(p, immediate))
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    } else if immediate_has_comma {
+        // Single parent + multi-item immediate —— 展开每个 immediate 段
+        combine_selectors(&full_chain, immediate)
+    } else {
+        // 默认：descendant 组合（但前面已过滤了 fast path case——不会到这里）
+        format!("{full_chain} {immediate}")
+    };
+
+    // 慢路径结果：替换整个段（清空后推入新段）
+    let mut new_chain = Vector::new();
+    new_chain.push_back(Rc::from(new_segment));
+    self.selector_chain = new_chain;
+        tracing::debug!(target: "chain_trace", new_chain = ?self.selector_chain, immediate = immediate, "with_chain SLOW rebuild");
     self
 }
+
+    /// 重置选择器上下文（用于 @at-root 语义——链式提升后应重新开始链）。
+    /// 将 chain 设置为 sel（而非追加），模拟 @at-root 脱离外层作用域的行为。
+    ///
+    /// Vector 实现：清空并推入单个段。O(log n) Vector 重建。
+    pub fn reset_selector(mut self, sel: String) -> Self {
+        tracing::debug!(target: "chain_trace", old_chain = ?self.selector_chain, new = %sel, "reset_selector");
+        self.current_selector = Some(sel.clone());
+        let mut new_chain = Vector::new();
+        new_chain.push_back(Rc::from(sel));
+        self.selector_chain = new_chain;
+                self
+    }
+
+    /// 设置 selector_chain（如果 Some），None 时保持不变。
+    /// 用于 eval_content 中传播完整嵌套链给 @content 上下文。
+    ///
+    /// `chain: Option<Rc<str>>` 所有权移动（避免 clone）。
+    /// 若 Some，清空旧链并推入单个格式化段（后续 with_chain 走快速 push 路径）。
+    pub fn with_chain_opt(mut self, chain: Option<Rc<str>>) -> Self {
+        if let Some(c) = chain {
+            let mut new_chain = Vector::new();
+            new_chain.push_back(c);
+            self.selector_chain = new_chain;
+                    }
+        self
+    }
 
     pub fn with_load_paths(mut self, paths: Vec<PathBuf>) -> Self {
         self.load_paths = paths;

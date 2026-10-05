@@ -6,7 +6,7 @@
 use crate::css::node::CssNode;
 use crate::eval::scope::Scope;
 use crate::parse::ast::*;
-use imbl::{HashMap, HashSet};
+use imbl::{HashMap, HashSet, Vector};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -82,11 +82,18 @@ pub struct Env {
     pub(crate) depth: usize,
     pub(crate) extends: Rc<Vec<(String, String, bool, Option<PathBuf>)>>,
     pub(crate) current_selector: Option<String>,
-    /// 选择器嵌套链（用于 @content 内 & 引用捕获）。
-    /// 格式：".a .b .c"（空格分隔的后代链）。
+    /// 选择器嵌套链段（用于 @content 内 & 引用捕获）。
     /// 与 `current_selector` 区别：后者是当前规则的 immediate 选择器（用于 extend、combine），
     /// selector_chain 是完整嵌套路径（用于 & 引用展开）。
-    pub(crate) selector_chain: Option<String>,
+    ///
+    /// ## 性能优化：持久化 Vector<Rc<str>> 消除嵌套 O(n²)
+    ///
+    /// 每个段是独立的 Rc<str>（如 [".a", ".b", ".c"]）。
+    /// `with_chain` 时 push 新段（`push_back` O(log n) + Rc 原子递增），
+    /// 而非每次都 format! 整个链（O(n) 堆复制 → N 层嵌套 O(n²)）。
+    /// Vector clone 为结构共享（O(log n)），无堆数据复制。
+    /// 仅在最终需要 `&str` 输出时才 join（O(n)，但只发生一次而非每层）。
+    pub(crate) selector_chain: Vector<Rc<str>>,
     pub(crate) load_paths: Vec<PathBuf>,
     pub(crate) loaded_modules: Rc<HashSet<PathBuf>>,
     pub(crate) module_cache: Rc<HashMap<PathBuf, ModuleExports>>,
@@ -113,6 +120,8 @@ impl Clone for Env {
             depth: self.depth,
             extends: self.extends.clone(),
             current_selector: self.current_selector.clone(),
+            // Vector clone 是 O(log n) 结构共享；Rc clone 是 O(1) 原子递增。
+            // O(log n) vs O(n) format! 每层嵌套——这是消除 O(n²) 关键。
             selector_chain: self.selector_chain.clone(),
             load_paths: self.load_paths.clone(),
             loaded_modules: self.loaded_modules.clone(),

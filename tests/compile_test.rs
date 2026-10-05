@@ -572,3 +572,65 @@ fn test_compile_incompatible_units_add_calc() {
         "expected round(calc(...), calc(...)), got: {css}"
     );
 }
+
+// ── CSS normalize 后处理测试（B1/C1/D1） ──
+
+#[test]
+fn test_normalize_var_null_expanded() {
+    let css = compile_expanded("a { color: var(--x, null); }").expect("compile failed");
+    assert!(
+        css.contains("var(--x, )") && !css.contains("null"),
+        "var(--x, null) 应规范化为 var(--x, ), got: {css}"
+    );
+}
+
+#[test]
+fn test_normalize_var_null_compressed() {
+    let css = sasspile::compile("a { color: var(--x, null); }", OutputStyle::Compressed).expect("compile failed");
+    assert!(
+        css.contains("var(--x,)") && !css.contains("null"),
+        "compressed: var(--x, null) 应规范化为 var(--x,), got: {css}"
+    );
+}
+
+#[test]
+fn test_normalize_moz_appearance_expanded() {
+    let css = compile_expanded(".a { appearance: none; }").expect("compile failed");
+    assert!(
+        css.contains("-moz-appearance: none") && css.contains("appearance: none"),
+        "应插入 -moz-appearance: none, got: {css}"
+    );
+    // 确保顺序：-moz-appearance 在 appearance 之前
+    let moz_pos = css.find("-moz-appearance").expect("-moz-appearance 不存在");
+    let app_pos = css.find("appearance: none").expect("appearance 不存在");
+    assert!(moz_pos < app_pos, "-moz-appearance 应在 appearance 之前");
+}
+
+#[test]
+fn test_normalize_moz_appearance_compressed() {
+    let css = sasspile::compile(".a { appearance: none; }", OutputStyle::Compressed).expect("compile failed");
+    assert!(
+        css.contains("-moz-appearance:none") && css.contains("appearance:none"),
+        "compressed: 应插入 -moz-appearance:none, got: {css}"
+    );
+    assert!(css.find("-moz-appearance").unwrap() < css.find("appearance:none").unwrap(),
+        "compressed: -moz-appearance 应在 appearance 之前");
+}
+
+#[test]
+fn test_normalize_not_multi_arg_expanded() {
+    let css = compile_expanded(".a:not(.b, .c) { color: red; }").expect("compile failed");
+    assert!(
+        css.contains(":not(:is(.b, .c))"),
+        ":not(.b, .c) 应包装为 :not(:is(.b, .c)), got: {css}"
+    );
+}
+
+#[test]
+fn test_normalize_not_multi_arg_compressed() {
+    let css = sasspile::compile(".a:not(.b, .c) { color: red; }", OutputStyle::Compressed).expect("compile failed");
+    assert!(
+        css.contains(":not(:is(.b,.c)))") || css.contains(":not(:is(.b, .c))"),
+        "compressed: :not(.b, .c) 应包装, got: {css}"
+    );
+}

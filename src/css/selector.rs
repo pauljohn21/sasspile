@@ -49,8 +49,31 @@ pub(super) enum SelToken {
 }
 
 /// 净化选择器——处理占位符 `%xxx` 在伪类中的移除 + 组合器验证 + 相邻复合选择器规范化。
+///
+/// 性能关键路径：绝大大部分选择器不含 `[` `%` `::` 等复杂结构。
+/// 快速路径按特征字符分流,避免不必要的全串遍历分配。
 pub(super) fn sanitize_selector(selector: &str) -> String {
-    // 先规范化属性选择器（引号去除、修饰符空格）
+    // 快速路径:无属性选择器、无占位符、无双冒号伪元素 → 仅 trim + bogus 检查
+    let has_complex = selector.contains('[')
+        || selector.contains('%')
+        || selector.contains("::")
+        || selector.contains(":is(")
+        || selector.contains(":not(")
+        || selector.contains(":where(")
+        || selector.contains(":matches(");
+    if !has_complex {
+        let trimmed = selector.trim_end_matches([',', ' ']);
+        if has_bogus_combinators(trimmed) {
+            return String::new();
+        }
+        // 仅当确实有尾随字符被 trim 时才分配
+        if trimmed.len() == selector.len() {
+            return selector.to_string();
+        }
+        return trimmed.to_string();
+    }
+
+    // 完整路径:规范化属性选择器（引号去除、修饰符空格）
     let selector = normalize_attr_selectors(selector);
     // 处理相邻复合选择器（[a]b → [a] b）
     let selector = normalize_adjacent_compounds(&selector);
@@ -131,6 +154,14 @@ pub(super) fn sanitize_selector(selector: &str) -> String {
 /// - :is/:where/:not/matches 内：禁止任何前导组合器（只能有完整选择器）
 /// - 所有上下文：禁止连续组合器和尾部组合器
 pub(super) fn has_bogus_combinators(selector: &str) -> bool {
+    // 快速路径:不含 > + ~ 且无明显组合器空格分隔 → 必然合法
+    if !selector.contains(['>', '+', '~']) {
+        // 检查是否有两个以上空格分隔的部分（后代组合器: 单空格 OK, 但头部空格或尾部 + 多空格不行）
+        let trimmed = selector.trim();
+        if !trimmed.starts_with(' ') && !trimmed.ends_with(' ') && !trimmed.contains("  ") {
+            return false;
+        }
+    }
     check_bogus_in_selector(selector, true)
 }
 
@@ -290,12 +321,31 @@ fn tokens_have_bogus(tokens: &[SelToken], allow_leading_combinator: bool) -> boo
 /// 例如：`[a]b` → `[a] b`（属性选择器后紧跟类型选择器/通配符需加空格）
 /// 但 `[a].b` `[a]#b` `[a]:hover` 不需要加空格（单复合选择器内）
 fn normalize_adjacent_compounds(selector: &str) -> String {
+    // 快速路径:不含 ] 的必然无需处理
+    if !selector.contains(']') {
+        return selector.to_string();
+    }
+    // 快速路径扫描:检查是否存在需要插入空格的模式
+    let bytes = selector.as_bytes();
+    let mut needs_space = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b']' && i + 1 < bytes.len() {
+            let next = bytes[i + 1];
+            if next != b' ' && next != b'\t' && next != b'\n' && (next == b'*' || next.is_ascii_alphabetic()) {
+                needs_space = true;
+                break;
+            }
+        }
+    }
+    if !needs_space {
+        return selector.to_string();
+    }
+    // 完整路径:重建字符串并插入空格
     let chars: Vec<char> = selector.chars().collect();
-    let mut result = String::new();
+    let mut result = String::with_capacity(selector.len() + 1);
     let mut i = 0;
     while i < chars.len() {
         result.push(chars[i]);
-        // 检查是否需要插入空格
         if i + 1 < chars.len() {
             let curr = chars[i];
             let next = chars[i + 1];
@@ -311,8 +361,12 @@ fn normalize_adjacent_compounds(selector: &str) -> String {
 /// 规范化属性选择器——去除合法标识符的引号，在修饰符前加空格。
 /// 例如：`[a="b"i]` → `[a=b i]`
 fn normalize_attr_selectors(selector: &str) -> String {
+    // 快速路径:不含 [ 则无属性选择器,直接返回
+    if !selector.contains('[') {
+        return selector.to_string();
+    }
     let chars: Vec<char> = selector.chars().collect();
-    let mut result = String::new();
+    let mut result = String::with_capacity(selector.len());
     let mut i = 0;
     while i < chars.len() {
         match chars[i] {

@@ -109,6 +109,9 @@ impl Evaluator {
         let (css, env) = nodes.iter().try_fold(
             (Vec::new(), env),
             |(mut css, env), node| -> Result<(Vec<CssNode>, Env)> {
+                // 注意：selector_chain 是 Rc<str>，get_selector_chain() 返回 &str。
+                // 收集为 String 是为了满足所有权（borrow 不能跨越 move 点）。
+                // 这些是 chain_trace 级别的 diag，仅在 RUST_LOG=chain_trace 时激活。
                 let env_chain_before = env.get_selector_chain().map(String::from);
                 let (out, new_env) = Self::eval_node(node, env).map_err(|e| {
                     crate::__tracing::error!(error = %e, node_type = ?std::mem::discriminant(node), "eval_node failed");
@@ -268,26 +271,31 @@ fn eval_content(env: Env) -> Result<(Vec<CssNode>, Env)> {
             // 解决 mixin b() 中 @content 触发时 $B 尚未来得及通过 exec_mixin 回传的问题
             let mut writes = HashMap::new();
             collect_global_writes(&env.current, &mut writes);
+            // content_chain: 从 env 读取 selector_chain（Rc<str>）。
+            // or_else 可能 fallback 到 current_selector（String），转换成 Rc<str>。
+            // Rc::clone / Rc::from 都是 O(1)——没有堆复制。
             let content_chain = env
                 .get_selector_chain()
-                .or_else(|| env.get_selector())
-                .map(String::from);
+                .map(Rc::from)
+                .or_else(|| env.get_selector().map(Rc::from));
             let content_env = writes
                 .into_iter()
                 .fold(content_env.clone(), |acc, (k, v)| {
                     acc.add_global_write(k, v)
                 })
                 .with_selector(
-                    // BEM NESTING FIX: 使用 selector_chain（完整嵌套链）而非 immediate selector。
-                    // 对于 @at-root { .outer { .inner { @content } } } 场景，
-                    // immediate selector = ".inner"，但 & 应展开为 ".outer .inner"。
-                    // selector_chain 记录的正是这个完整路径。
-                    content_chain
-                        .as_deref()
-                        .unwrap_or_default()
-                        .to_string(),
+                    // EP BEM CHAIN FIX: 使用 immediate selector（而非完整 chain）作为 current_selector。
+                    // eval_at_root（None 分支）用 env.get_selector() 推导 parent_sel，
+                    // 如果这里把 chain 设成 current_selector，则 e(arrow) mixin 内部的
+                    // @content → @include when(active) 调用链中，when() 的 at-root
+                    // 会把 parent_sel 解析为完整 descendant chain 而非 immediate selector。
+                    // & 的展开已由 combine_selectors(&env.get_selector_chain(), "&.is-active")
+                    // 正确处理——chain 仍在 selector_chain 字段中保留。
+                    env.get_selector().unwrap_or_default().to_string(),
                 )
-                .with_chain_opt(content_chain.as_deref());
+                // content_chain: Option<Rc<str>>. as_deref() 返回 Option<&str>。
+                // 匹配 with_chain_opt 签名。
+                .with_chain_opt(content_chain);
             let content_nodes = content_nodes.to_vec();
             Evaluator::eval_nodes(&content_nodes, content_env)
         }
@@ -403,7 +411,9 @@ mod module;
 mod module_helpers;
 mod module_use;
 mod rule;
+pub mod rule_builder;
 mod scope;
+pub mod selector_combine;
 pub mod reactor;
 pub mod reactor_types;
 pub mod value;

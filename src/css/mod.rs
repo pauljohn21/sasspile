@@ -40,6 +40,8 @@ impl Serializer {
             OutputStyle::Expanded => Self::serialize_expanded(&merged, 0),
             OutputStyle::Compressed => Self::serialize_compressed(&merged),
         };
+        // 后处理规范化：var() null fallback、appearance 前缀、:not() 多参包装
+        let css = Self::normalize_css(&css);
         // 当输出包含非 ASCII 字符时，SCSS 规范要求 expanded 模式下添加 @charset 前缀
         match css.is_ascii() {
             true => css,

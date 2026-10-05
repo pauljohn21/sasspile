@@ -465,8 +465,14 @@ Reactor<StateSerialized>.finish()  → Result<String>
 - 写操作通过 `Rc::try_unwrap` 获取 scope 所有权（引用计数为 1 时零 clone）
 - 变量查找沿 scope 链向上搜索（`Scope::lookup`）
 - flow control（`@if`/`@for`/`@each`）不创建新 scope — 符合 SCSS 规范
+- `selector_chain: Vector<Rc<str>>`（`imbl::Vector`）— 持久化数据结构，O(log n) 结构共享
+  - `with_chain(immediate)` 走快速 push 路径（`push_back` O(log n)，无堆复制）
+  - `get_selector_chain()` 仅在最终输出时 join（O(n)，一次而非每层）
+  - 与旧实现（每层 `format!("{parent} {immediate}")` O(n) → N 层 O(n²)）相比彻底消除嵌套平方复杂度
+  - `Env::clone()` 中 `selector_chain.clone()` 为 Vector 结构共享（O(log n)），无堆数据复制
 - **禁止** `env.clone()`（除 `@content` 上下文快照）
 - **禁止** `Rc::make_mut`
+- **禁止**每层嵌套调用 `get_selector_chain()`（应在 `with_chain` 中直接 push 段）
 - 源文件：`scope.rs`（Scope 结构 + 方法）、`env.rs`（Env/ModuleExports/MixinDef/FunctionDef 类型定义）、`env_impl.rs`（Env 方法实现）
 
 ## 验证清单（修复后必跑）
@@ -492,7 +498,8 @@ RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --features otel --test s
 SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 ```
 
-**通过标准**：46/46 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 121/121 + 9/9 = 241/241
+**通过标准**：70/70 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 25/25 + 1/1 + 1/1 = 162/162
+（compile_test + reactor_test + stage_test + ast_test + common_test + interp_test + bs_spec + selector_combine_test + ep_full + ep_normalized_test）
 **sass-spec 基线**：7877/12133 = 64.9%（含 color 目录，跳过 libsass 不支持目录）
 **ep_full**：121/121 = 100%
 **ep_normalized**：101/121 = 83.5%（Phase 8 目标 121/121）
@@ -536,7 +543,9 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
 ## 🔄 归档记录
 
-- **ep-bem-atroot-chain-fix**（2026-10-04）：BEM 嵌套链传播修复 — with_chain 去重 + & 解析用 chain + eval_content 传播 chain + push_atroot_direct child 去重 — EP normalized 78/121→101/121 (+23)
+- **comprehensive-ep-bugfix**（2026-10-05）：EP 全量编译性能 + CSS 序列化修复 — selector_chain 改用 imbl::Vector<Rc<str>> 持久化数据结构消除嵌套 O(n²)（Env::clone 零堆复制）；normalize_css 系列函数引入 chars 快速路径（O(n²)→O(n)）；rule.rs 拆分为 rule_builder.rs（状态机累积器）+ selector_combine.rs（纯函数：& 替换/前缀检测/逗号安全拆分）；eval_rule 使用 RuleBuilder + combine_selectors + has_descendant_prefix 实现 BEM 嵌套链正确传播；eval_content 使用 immediate selector 而非完整 chain 作为 current_selector 修复 arrow 场景；新增 appearance -moz- 前缀、var() null fallback、:not() 多参包装 — ep_full 121/121 全通过，release 模式耗时 ~2s
+- **ep-bem-atroot-chain-fix**（2026-10-05）：BEM 嵌套 @at-root chain 修复 — outer_only 子 Rule 检测 + 无条件 reset_selector + eval_content 用 immediate selector 替代 chain — EP sasspile-bug 37→27 (-10)，dialog/collapse 场景修复
+- **ep-rule-refactor-and-bugfix**（2026-10-04）：BEM 嵌套链传播修复 — with_chain 去重 + & 解析用 chain + eval_content 传播 chain + push_atroot_direct child 去重 — EP normalized 78/121→101/121 (+23)
 - **ep-consistency-boost**（2026-09-22）：EP 一致性 Phase 1-6 — AtRootDirect 优化、@at-root/@content 顺序、@extend %placeholder 选择器分组（含单/多 extender + mixin 传播增量快照 + 后缀匹配 + 指数膨胀 bug）、eval_at_rule @media 参数提前求值、var() fallback 求值、calc() 内函数求值 — EP 一致性 45/121→73/121 (+28)，sass-spec 7975→8003 (+28)
 
 更早的归档记录详见 `openspec/changes/archive/` 目录。
@@ -767,6 +776,31 @@ codegraph query <search>       # 搜索符号
   3. index 冲突（`dir/_index.scss` 和 `dir/index.scss` 同时存在）
   4. import-only 冲突（`file.import.scss` 和 `file.import.sass`）
 - `module_helpers.rs` 统一承载 `bind_exports`（含 values_eq + Display 后备检查）、`merge_module_cache`、`BindMode`、`FilterConfig` 等 pub(crate) 辅助函数
+
+## 选择器组合架构（selector_combine.rs + rule_builder.rs）
+
+### selector_combine.rs（纯函数模块）
+
+- `combine_selectors(parent, child)` — 笛卡尔积组合：child 含 `&` → 替换；不含 `&` → descendant combine。括号安全（`:not(.a, .b)` 内逗号不分拆）
+- `has_descendant_prefix(parent, child)` — 检测 child 是否已包含 parent 前缀（compound / descendant / 嵌套链三种模式），防止双前缀
+- `starts_with_compound_prefix(parent, child)` — compound 前缀检测（分隔符 `.:#[>+~_-`）
+- `split_selectors_respecting_parens(s)` — 逗号安全拆分（跟踪括号深度）
+- `nest_rule_in_children(parent, children)` — 父选择器传播到子节点（递归 `&` 展开 + keyframes 保护）
+- `resolve_ampersand_in_nodes(parent, nodes)` — 仅替换字面 `&`，不对完整路径添加前缀
+
+### rule_builder.rs（规则构建状态机）
+
+- `RuleBuilder` 封装 `eval_rule` 累积器状态（result / current_decls / root_nodes / resolved_self）
+- `push(CssNode)` — 核心 dispatch：Declaration 累积、AtRoot 语义解析（without: media/supports/all, with: rule）、AtRootDirect 嵌套组合
+- `build()` — 消费构建器，按 dart-sass 顺序 hoist @at-root 节点（父声明块之后、嵌套子规则之前）
+- `eval_rule` 调用链：解析 `&` → `RuleBuilder::new(sel)` → 遍历 body 累加 → `builder.build()` 输出
+
+## CSS 序列化优化（serialize.rs normalize_css）
+
+- `normalize_css(css)` — 三种规范化：var() null fallback、appearance -moz- 前缀、:not() 多参包装
+- `normalize_var_null` — chars 快速路径（`chars[i..].starts_with(&['v','a','r','('])`），避免每字符 String 分配（O(n²)→O(n)）
+- `normalize_not_multi_arg` — char_byte 索引映射解决 UTF-8 char/byte 索引混淆
+- `normalize_moz_appearance` — 逐行扫描，在 `appearance: none;` 前插入 `-moz-appearance: none;`（去重）
 
 ## ✅ 自检清单
 

@@ -1,4 +1,5 @@
 use super::*;
+use super::selector_combine::{combine_selectors, nest_rule_in_children, resolve_ampersand_in_nodes};
 use crate::css::node::CssNode;
 use crate::error::{Result, SassError};
 
@@ -427,6 +428,8 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         body: &[Node],
         env: Env,
     ) -> Result<(Vec<CssNode>, Env)> {
+        // incoming_chain: 在移动 env 前借用 chain——用于调试和后续 @at-root 逻辑。
+        // Rc<str> 的 get_selector_chain() 返回 &str；此处收集为 String 仅用于 cross-move 生存期。
         let incoming_chain = env.get_selector_chain().map(String::from);
         let incoming_sel = env.get_selector().map(String::from);
         tracing::debug!(target: "chain_trace", ?query, ?selector, ?incoming_chain, ?incoming_sel, "eval_at_root enter");
@@ -442,19 +445,29 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                 match interpolated.contains('&') {
                     true => {
                         let parent = env.get_selector().unwrap_or("").to_string();
-                        Self::combine_selectors(&parent, &interpolated)
+                        combine_selectors(&parent, &interpolated)
                     }
                     false => interpolated,
                 }
             }
-            None => env.get_selector().map(String::from).unwrap_or_default(),
+            None => incoming_chain.clone().unwrap_or(
+                env.get_selector().map(String::from).unwrap_or_default(),
+            ),
         };
 
-        // @at-root 语义：选择器链从 at-root 选择器重新开始（脱离外层作用域链）。
-        // 使用 reset_selector 而非 with_selector，避免将外层 chain 累加进 at-root body。
-        let env = match selector {
-            Some(_) => env.reset_selector(parent_sel.clone()),
-            None => env,
+        // @at-root chain 处理：
+        // - 有显式 selector 时：reset_selector 脱离外层 chain（真正 @at-root 语义）。
+        // - 无显式 selector 时（e/m/when mixin 通过 @at-root 嵌套生成）：
+        //   保留 incoming_chain 而非仅 immediate selector——chain 用于 body 内 & 解析。
+        //   否则 e(item) 在 e(list) 的 @content 内展开时，e(item) 的 $selector: & 只能
+        //   看到 immediate selector（如 .el-anchor__list），hitAllSpecialNestRule 返回
+        //   false（无 --），走 else 分支丢失 __list 前缀。
+        let env = if selector.is_some() {
+            env.reset_selector(parent_sel.clone())
+        } else {
+            // 保留 chain（用于 body 内 & 解析），仅更新 current_selector 为 parent_sel
+            env.with_selector(parent_sel.clone())
+                .with_chain_opt(Some(Rc::from(parent_sel.as_str())))
         };
 
         // EP BEM FIX：当 body 首个 Rule 的选择器与 at-root selector 或当前
@@ -469,8 +482,13 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                 let parent_trimmed = parent_sel.trim_end_matches(',').trim();
                 let at_root_match = selector.as_ref().is_some_and(|s| first_trimmed == s);
                 let outer_only = selector.is_none() && !parent_trimmed.is_empty() && first_trimmed == parent_trimmed;
-                tracing::debug!(target: "chain_trace", first_trimmed, parent_trimmed, at_root_match, outer_only, "wrapper_check");
-                if at_root_match || outer_only {
+                // EP BEM NESTING FIX：当 outer_only 且 first_body 包含子 Rule 时，
+                // 不 unwrap wrapper，而是让 eval_rule 正确处理嵌套结构。
+                // unwrap 会丢失 wrapper 作为前缀的语义（详见 dialog.scss bug）。
+                let has_rule_children = first_body.iter().any(|n| matches!(n, Node::Rule { .. }));
+                let should_unwrap = at_root_match || (outer_only && !has_rule_children);
+                tracing::debug!(target: "chain_trace", first_trimmed, parent_trimmed, at_root_match, outer_only, has_rule_children, should_unwrap, "wrapper_check");
+                if should_unwrap {
                     // 仅当 env 当前无链式时（从 exec_mixin 等混合路径进入），才注入
                     // wrapper selector 作为初始链。否则 children 会看到重复前缀。
                     let env_for_children = match env.get_selector_chain().is_some() {
@@ -482,9 +500,9 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
                     // - 修饰符上下文（selector 含 "--"）：子元素需前缀修饰符 → ".__info" → ".el-descriptions--large .__info"
                     // - 基础块上下文：元素本身即顶层输出 → ".__info" 保持平坦（避免 .el-descriptions .el-descriptions__info）
                     let prefixed_css = if parent_trimmed.contains("--") {
-                        Self::nest_rule_in_children(&parent_sel, child_css)
+                        nest_rule_in_children(&parent_sel, child_css)
                     } else {
-                        Self::resolve_ampersand_in_nodes(&parent_sel, &child_css)
+                        resolve_ampersand_in_nodes(&parent_sel, &child_css)
                     };
                     (prefixed_css, child_env)
                 } else {
@@ -497,7 +515,7 @@ match !name.contains('.') && env.star_conflict(name).is_some() {
         // 对 body 顶层节点中仍含 `&` 的选择器做最终解析——
         // eval_rule 内部虽对 `&` 做了 combine 处理，但返回的 CssNode::Rule 仍可能含字面 &，
         // 需在这里用 parent_sel（at-root 最终父上下文）替换。
-        let css = Self::resolve_ampersand_in_nodes(&parent_sel, &css);
+        let css = resolve_ampersand_in_nodes(&parent_sel, &css);
 
         Ok((vec![CssNode::AtRoot(css, query.clone())], new_env))
     }

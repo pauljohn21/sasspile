@@ -67,13 +67,6 @@ fn strip_autoprefixer(css: &str) -> String {
     lines.join(";")
 }
 
-/// 移除 lightningcss 管线产物（translate → translate3d 化简等）
-fn strip_lightningcss_artifacts(css: &str) -> String {
-    // lightningcss 会将 translate(0,0) → translate(0) 等
-    // 这里只记录差异，不做移除（因为需要更精细分析）
-    css.to_string()
-}
-
 #[test]
 fn test_classify_ep_diffs() {
     sasspile::init_tracing();
