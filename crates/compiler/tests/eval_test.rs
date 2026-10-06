@@ -1,7 +1,6 @@
 //! Tests for the evaluator (SassOp dispatch) and pre-analysis.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use rxrust::prelude::*;
 
@@ -12,64 +11,65 @@ use lightforger::reactive::{
 #[test]
 fn variable_decl_emits_bind_event() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus.clone(), 0));
+    let ctx = Arc::new(EvalContext::new(bus.clone(), 0));
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
     bus.var_events().subscribe(move |evt| {
         if let ValueEvent::Bind { scope_id, name, value } = evt {
-            c.borrow_mut().push((scope_id, name, value));
+            c.lock().unwrap().push((scope_id, name, value));
         }
     });
 
-    // Create a stream with a VariableDecl node and evaluate it
     let stream: lightforger::reactive::AstStream =
-        Local::of(AstNode::VariableDecl {
+        Shared::of(AstNode::VariableDecl {
             name: "$color".to_string(),
             value: Value::Number(42.0),
         })
-        .box_it_clone();
+        .box_it();
 
     let evaluated = evaluate_to_css(stream, ctx);
 
-    // Subscribe to the output to drive the pipeline
     let _ = evaluated.subscribe(|_: CssStmt| {});
 
-    assert_eq!(collected.borrow().len(), 1);
-    assert_eq!(collected.borrow()[0], (0, "$color".to_string(), 42));
+    assert_eq!(collected.lock().unwrap().len(), 1);
+    assert_eq!(collected.lock().unwrap()[0], (0, "$color".to_string(), 42));
 }
 
 #[test]
 fn style_decl_emits_css_stmt() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::StyleDecl {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::StyleDecl {
         property: "color".to_string(),
         value: "red".to_string(),
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
     css_stream.subscribe(move |stmt| {
         if let CssStmt::Decl { property, value } = stmt {
-            c.borrow_mut().push((property, value));
+            c.lock().unwrap().push((property, value));
         }
     });
 
-    assert_eq!(collected.borrow().len(), 1);
-    assert_eq!(collected.borrow()[0], ("color".to_string(), "red".to_string()));
+    assert_eq!(collected.lock().unwrap().len(), 1);
+    assert_eq!(
+        collected.lock().unwrap()[0],
+        ("color".to_string(), "red".to_string())
+    );
 }
 
 #[test]
 fn ruleset_basic_two_declarations() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::RuleSet {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::RuleSet {
         selector: ".foo".to_string(),
         inner: vec![
             AstNode::StyleDecl {
@@ -82,15 +82,15 @@ fn ruleset_basic_two_declarations() {
             },
         ],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    let stmts = collected.borrow();
+    let stmts = collected.lock().unwrap();
     assert_eq!(stmts.len(), 1, "Should produce exactly one CssStmt::Rule");
 
     match &stmts[0] {
@@ -107,9 +107,9 @@ fn ruleset_basic_two_declarations() {
 #[test]
 fn if_true_first_clause() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::If {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::If {
         cond: Box::new(AstNode::VariableDecl {
             name: "$cond".to_string(),
             value: Value::Number(1.0),
@@ -123,17 +123,17 @@ fn if_true_first_clause() {
             value: "red".to_string(),
         }],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    assert_eq!(collected.borrow().len(), 1);
+    assert_eq!(collected.lock().unwrap().len(), 1);
     assert!(matches!(
-        &collected.borrow()[0],
+        &collected.lock().unwrap()[0],
         CssStmt::Decl { property, value } if property == "color" && value == "blue"
     ));
 }
@@ -141,9 +141,9 @@ fn if_true_first_clause() {
 #[test]
 fn if_false_else_branch() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::If {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::If {
         cond: Box::new(AstNode::Placeholder), // treated as false
         then_branch: vec![AstNode::StyleDecl {
             property: "color".to_string(),
@@ -154,17 +154,17 @@ fn if_false_else_branch() {
             value: "red".to_string(),
         }],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    assert_eq!(collected.borrow().len(), 1);
+    assert_eq!(collected.lock().unwrap().len(), 1);
     assert!(matches!(
-        &collected.borrow()[0],
+        &collected.lock().unwrap()[0],
         CssStmt::Decl { property, value } if property == "color" && value == "red"
     ));
 }
@@ -172,9 +172,9 @@ fn if_false_else_branch() {
 #[test]
 fn for_through_3_iterations() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::For {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::For {
         var: "$i".to_string(),
         from: 1.0,
         through: 3.0,
@@ -183,16 +183,16 @@ fn for_through_3_iterations() {
             value: "iter".to_string(),
         }],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    assert_eq!(collected.borrow().len(), 3, "Should produce 3 CssStmt::Decl");
-    for stmt in collected.borrow().iter() {
+    assert_eq!(collected.lock().unwrap().len(), 3, "Should produce 3 CssStmt::Decl");
+    for stmt in collected.lock().unwrap().iter() {
         assert!(matches!(
             stmt,
             CssStmt::Decl { property, value } if property == "content" && value == "iter"
@@ -203,9 +203,9 @@ fn for_through_3_iterations() {
 #[test]
 fn media_wraps_inner_css() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::Media {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::Media {
         query: "screen and (min-width: 768px)".to_string(),
         inner: vec![
             AstNode::StyleDecl {
@@ -218,15 +218,15 @@ fn media_wraps_inner_css() {
             },
         ],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    let stmts = collected.borrow();
+    let stmts = collected.lock().unwrap();
     assert_eq!(stmts.len(), 1);
 
     match &stmts[0] {
@@ -241,24 +241,24 @@ fn media_wraps_inner_css() {
 #[test]
 fn supports_wraps_inner_css() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::Supports {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::Supports {
         query: "(display: grid)".to_string(),
         inner: vec![AstNode::StyleDecl {
             property: "display".to_string(),
             value: "grid".to_string(),
         }],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    let stmts = collected.borrow();
+    let stmts = collected.lock().unwrap();
     assert_eq!(stmts.len(), 1);
 
     match &stmts[0] {
@@ -273,54 +273,50 @@ fn supports_wraps_inner_css() {
 #[test]
 fn while_loop_exits_after_first() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    // cond is Placeholder = false, so body executes 0 times
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::While {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::While {
         cond: Box::new(AstNode::Placeholder),
         body: vec![AstNode::StyleDecl {
             property: "x".to_string(),
             value: "y".to_string(),
         }],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    assert_eq!(collected.borrow().len(), 0, "While with false cond should produce no CSS");
+    assert_eq!(collected.lock().unwrap().len(), 0, "While with false cond should produce no CSS");
 }
 
 #[test]
 fn warn_t_does_not_alter_stream() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    // Wrap: StyleDecl then Warn together — should produce CssStmt::Decl unchanged
     let inner_stmt = AstNode::StyleDecl {
         property: "content".to_string(),
         value: "test".to_string(),
     };
-    let stream: lightforger::reactive::AstStream =
-        Local::from_iter(vec![
-            inner_stmt,
-            AstNode::Warn {
-                message: "test warning".to_string(),
-            },
-        ])
-        .box_it_clone();
+    let stream: lightforger::reactive::AstStream = Shared::from_iter(vec![
+        inner_stmt,
+        AstNode::Warn {
+            message: "test warning".to_string(),
+        },
+    ])
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    // Only the StyleDecl should produce a CssStmt; Warn produces none
-    let stmts = collected.borrow();
+    let stmts = collected.lock().unwrap();
     assert_eq!(stmts.len(), 1);
     assert!(matches!(
         &stmts[0],
@@ -331,34 +327,31 @@ fn warn_t_does_not_alter_stream() {
 #[test]
 fn mixin_no_css_output() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus, 0));
+    let ctx = Arc::new(EvalContext::new(bus, 0));
 
-    // Mixin decl should register and produce no CSS
-    let stream: lightforger::reactive::AstStream =
-        Local::from_iter(vec![
-            AstNode::Mixin {
-                name: "box".to_string(),
-                params: vec![],
-                body: vec![AstNode::StyleDecl {
-                    property: "border".to_string(),
-                    value: "1px solid".to_string(),
-                }],
-            },
-            AstNode::StyleDecl {
-                property: "color".to_string(),
-                value: "red".to_string(),
-            },
-        ])
-        .box_it_clone();
+    let stream: lightforger::reactive::AstStream = Shared::from_iter(vec![
+        AstNode::Mixin {
+            name: "box".to_string(),
+            params: vec![],
+            body: vec![AstNode::StyleDecl {
+                property: "border".to_string(),
+                value: "1px solid".to_string(),
+            }],
+        },
+        AstNode::StyleDecl {
+            property: "color".to_string(),
+            value: "red".to_string(),
+        },
+    ])
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    // Mixin produces 0 CSS, StyleDecl produces 1
-    let stmts = collected.borrow();
+    let stmts = collected.lock().unwrap();
     assert_eq!(stmts.len(), 1);
     assert!(matches!(
         &stmts[0],
@@ -369,9 +362,8 @@ fn mixin_no_css_output() {
 #[test]
 fn include_expands_mixin_body() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus.clone(), 0));
+    let ctx = Arc::new(EvalContext::new(bus.clone(), 0));
 
-    // First register the mixin
     bus.register_mixin(lightforger::reactive::MixinDef {
         name: "box".to_string(),
         params: vec![],
@@ -387,20 +379,19 @@ fn include_expands_mixin_body() {
         ],
     });
 
-    // Now @include it
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::MixinCall {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::MixinCall {
         name: "box".to_string(),
         args: vec![],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
-    css_stream.subscribe(move |stmt| c.borrow_mut().push(stmt));
+    css_stream.subscribe(move |stmt| c.lock().unwrap().push(stmt));
 
-    let stmts = collected.borrow();
+    let stmts = collected.lock().unwrap();
     assert_eq!(stmts.len(), 2, "@include should expand to 2 CssStmt::Decl");
     assert!(matches!(
         &stmts[0],
@@ -415,10 +406,9 @@ fn include_expands_mixin_body() {
 #[test]
 fn function_def_registers_callable() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus.clone(), 0));
+    let ctx = Arc::new(EvalContext::new(bus.clone(), 0));
 
-    // Register a function via the operator
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::FunctionDecl {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::FunctionDecl {
         name: "double".to_string(),
         params: vec!["$x".to_string()],
         body: vec![AstNode::Return {
@@ -428,14 +418,12 @@ fn function_def_registers_callable() {
             }),
         }],
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
 
-    // Drive the stream
     let _ = css_stream.subscribe(|_: CssStmt| {});
 
-    // Function should be registered
     let func = bus.lookup_fn("double");
     assert!(func.is_some(), "function should be registered");
     let func = func.unwrap();
@@ -446,27 +434,27 @@ fn function_def_registers_callable() {
 #[test]
 fn use_rule_emits_module_load() {
     let bus = CompilerBus::new();
-    let ctx = Rc::new(EvalContext::new(bus.clone(), 0));
+    let ctx = Arc::new(EvalContext::new(bus.clone(), 0));
 
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
     let c = collected.clone();
     bus.module_events().subscribe(move |evt| {
         let lightforger::reactive::ModuleEvent::Load { name } = evt else {
-            unreachable!("ModuleEvent::Load irrefutable");
+            unreachable!()
         };
-        c.borrow_mut().push(name.clone());
+        c.lock().unwrap().push(name.clone());
     });
 
-    let stream: lightforger::reactive::AstStream = Local::of(AstNode::UseRule {
+    let stream: lightforger::reactive::AstStream = Shared::of(AstNode::UseRule {
         path: "theme".to_string(),
     })
-    .box_it_clone();
+    .box_it();
 
     let css_stream = evaluate_to_css(stream, ctx);
     let _ = css_stream.subscribe(|_: CssStmt| {});
 
-    assert_eq!(collected.borrow().len(), 1);
-    assert_eq!(collected.borrow()[0], "theme");
+    assert_eq!(collected.lock().unwrap().len(), 1);
+    assert_eq!(collected.lock().unwrap()[0], "theme");
 }
 
 #[test]
@@ -521,11 +509,8 @@ fn scope_id_nested_for_if() {
     let mut counter = 0;
     let result = pre_analysis(items, 0, &mut counter);
 
-    // Verify scope structure: outer @for gets scope_id=1, nested @if inside
-    // gets scope_id=1002, trailing ruleset gets scope_id=2
     match &result[0] {
         AstNode::For { body, .. } => {
-            // @if inside @for should have a deeper scope path
             assert!(
                 matches!(&body[0], AstNode::If { .. }),
                 "Expected If node inside For body"
@@ -541,7 +526,5 @@ fn scope_id_nested_for_if() {
         other => panic!("Expected RuleSet, got {:?}", other),
     }
 
-    // Counter tracks top-level scope-creating nodes: @for + @RuleSet = 2
-    // The @if is counted by inner_counter (nested scope), not the outer counter
     assert_eq!(counter, 2);
 }

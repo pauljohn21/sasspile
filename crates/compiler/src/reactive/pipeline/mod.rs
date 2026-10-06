@@ -1,5 +1,6 @@
 //! Reactive compilation pipeline entry points.
 
 pub mod compile;
+pub mod serializer;
 
-pub use compile::{compile_ast, from_string, from_string_ast};
+pub use serializer::{serialize, serialize_to_string, Options, OutputStyle};

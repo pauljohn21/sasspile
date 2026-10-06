@@ -3,7 +3,7 @@
 use std::fmt;
 
 /// Compiler error type — covers all stages of the pipeline.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     /// Lexer error (invalid character, unterminated string, etc.)
     LexerError(String),
@@ -66,5 +66,10 @@ impl Error {
     /// Create a serializer error.
     pub fn serializer(msg: impl Into<String>) -> Self {
         Self::SerializerError(msg.into())
+    }
+
+    /// Create an IO error.
+    pub fn io(msg: impl Into<String>) -> Self {
+        Self::Msg(format!("io error: {}", msg.into()))
     }
 }

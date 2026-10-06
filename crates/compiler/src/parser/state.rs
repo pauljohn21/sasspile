@@ -78,4 +78,14 @@ impl ParserState {
     pub fn tokens_len(&self) -> usize {
         self.tokens.len()
     }
+
+    /// 遍历所有 token（包括已消费的），对每个 token 调用闭包
+    pub fn scan_tokens<F>(&self, mut f: F)
+    where
+        F: FnMut(&Token),
+    {
+        for tok in &self.tokens {
+            f(tok);
+        }
+    }
 }

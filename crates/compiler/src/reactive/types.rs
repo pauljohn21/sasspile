@@ -3,7 +3,7 @@
 use rxrust::prelude::*;
 use std::convert::Infallible;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::reactive::{CompilerBus, ValueEvent};
 
@@ -36,11 +36,13 @@ impl CssStmt {
 }
 
 /// Simplified Sass value type for the reactive pipeline.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     String(String),
     List(Vec<Value>),
+    /// Map literal: key-value pairs
+    Map(Vec<(String, Value)>),
     Null,
 }
 
@@ -57,11 +59,11 @@ pub enum ScopeKind {
     Control,
 }
 
-/// Type-erased local observable for AST nodes (cloneable).
-pub type AstStream = LocalBoxedObservableClone<'static, AstNode, Infallible>;
+/// Type-erased shared observable for AST nodes (Send + Sync).
+pub type AstStream = SharedBoxedObservable<'static, AstNode, Infallible>;
 
-/// Type-erased local observable for CSS statements (cloneable).
-pub type CssStream = LocalBoxedObservableClone<'static, CssStmt, Infallible>;
+/// Type-erased shared observable for CSS statements (Send + Sync).
+pub type CssStream = SharedBoxedObservable<'static, CssStmt, Infallible>;
 
 /// Compiler evaluation context.
 ///
@@ -95,12 +97,12 @@ impl EvalContext {
     pub fn ver(
         &self,
         _name: &str,
-    ) -> LocalBoxedObservableClone<'static, ValueEvent, Infallible> {
+    ) -> SharedBoxedObservable<'static, ValueEvent, Infallible> {
         let current = self.scope_id;
         self.bus
             .var_events()
             .filter(move |evt| matches!(evt, ValueEvent::Bind { scope_id, .. } if *scope_id <= current))
-            .box_it_clone()
+            .box_it()
     }
 }
 
@@ -114,15 +116,12 @@ impl fmt::Debug for EvalContext {
 
 /// Trait implemented by each AST node that acts as a directive operator.
 ///
-/// The operator signature is `AstNode → AstNode` (intermediate), not directly
-/// `AstNode → CssStmt`, because directives like `@for` may need multiple
-/// expansion passes.
+/// Each operator consumes `self` and returns an `Observable<AstNode>` native
+/// operator built via `Observable::create`, wiring directly into rxrust
+/// scheduling / backpressure / cancellation.
 pub trait SassOp {
-    /// Consume `self` and produce a boxed operator function.
-    fn into_operator(
-        self,
-        ctx: Rc<EvalContext>,
-    ) -> Box<dyn Fn(AstStream) -> AstStream>;
+    /// Consume `self` and produce an `Observable<AstNode>` native operator.
+    fn into_operator(self, ctx: Arc<EvalContext>) -> AstStream;
 }
 
 /// An AST node in the reactive pipeline.

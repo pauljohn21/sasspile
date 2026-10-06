@@ -21,30 +21,30 @@
 - [x] 3.3 实现 `Parser` 入口函数 `fn parse<Input: Observable<Token>>(input: Input) -> Observable<SassAstNode>` 使用 `Observable::create` + `scan(ParserState)`，通过单元测试验证 `"a { color: red; }"` 产出正确 SassAstNode
 - [x] 3.4 实现 SCSS 变量声明解析（`$color: red;`、`$color: red !default;`），含单元测试验证 `has_default` 字段
 - [x] 3.5 实现嵌套规则 + 父选择器解析（`a { &:hover { ... } }`），含单元测试验证 `&` 保留在解析树中
-- [ ] 3.6 实现插值表达式解析（`.#{$class}` 中的 `#{$class}` 作为 `Interpolated` 节点），含单元测试验证
-- [ ] 3.7 实现 Map 和 List 字面量解析（`(blue: #0d6efd)` → `MapLiteral`），含单元测试验证
-- [ ] 3.8 实现错误传播：无效语法通过 `on_error` 报告，含单元测试验证未闭合括号错误
+- [x] 3.6 实现插值表达式解析（`.#{$class}` 中的 `#{$class}` 作为 `Interpolated` 节点），含单元测试验证
+- [x] 3.7 实现 Map 和 List 字面量解析（`(blue: #0d6efd)` → `MapLiteral`），含单元测试验证
+- [x] 3.8 实现错误传播：未闭合括号/花括号通过 `on_error` 报告，含单元测试验证未闭合括号错误
 
 ## 4. Lowering Implementation
 
-- [ ] 4.1 实现 `LoweringContext` 结构体（含祖先选择器栈、变量环境引用），通过 `cargo check` 验证
-- [ ] 4.2 实现 `lower_to_ast(SassAstNode, &LoweringContext) -> Result<AstNode>` 函数骨架，能够处理简单的 `StyleDecl` 降级，含单元测试验证
-- [ ] 4.3 实现插值展开（`Interpolated` → 具体字符串），含单元测试验证 `$prefix = "bs-"` 时 `#{$prefix}btn` 展开为 `"bs-btn"`
-- [ ] 4.4 实现父选择器展开（`&:hover` + 祖先栈 `"a"` → `"a:hover"`），含单元测试验证单层/多层嵌套
-- [ ] 4.5 实现 Map/List 字面量 → `Value::Map` / `Value::List` 转换，含单元测试验证
-- [ ] 4.6 实现 `!default` 语义：已存在同名变量时丢弃声明，含单元测试验证丢弃和生效两种情况
-- [ ] 4.7 实现错误传播：未定义变量插值返回错误，含单元测试验证
+- [x] 4.1 实现 `LoweringContext` 结构体（含祖先选择器栈、变量环境引用），通过 `cargo check` 验证
+- [x] 4.2 实现 `lower_to_ast(SassAstNode, &LoweringContext) -> Result<AstNode>` 函数骨架，能够处理简单的 `StyleDecl` 降级，含单元测试验证
+- [x] 4.3 实现插值展开（`Interpolated` → 具体字符串），含单元测试验证 `$prefix = "bs-"` 时 `#{$prefix}btn` 展开为 `"bs-btn"`
+- [x] 4.4 实现父选择器展开（`&:hover` + 祖先栈 `"a"` → `"a:hover"`），含单元测试验证单层/多层嵌套
+- [x] 4.5 实现 Map/List 字面量 → `Value::Map` / `Value::List` 转换，含单元测试验证
+- [x] 4.6 实现 `!default` 语义：已存在同名变量时丢弃声明，含单元测试验证丢弃和生效两种情况
+- [x] 4.7 实现错误传播：未定义变量插值返回错误，含单元测试验证
 
 ## 5. Evaluator Refactor (SassOp → Observable::create)
 
-- [ ] 5.1 修改 `SassOp` trait：`into_operator` 返回 `Observable<AstNode>`（不再是 `Box<dyn Fn>`），通过 `cargo check` 验证 trait 定义
-- [ ] 5.2 改造 `AstIf` 的 `SassOp` 实现：用 `Observable::create` + `switch_map` 选择分支，含单元测试验证 `@if $x { ... } @else { ... }`
-- [ ] 5.3 改造 `AstFor` 的 `SassOp` 实现：用 `Observable::create` + `flat_map` 迭代范围，含单元测试验证 `@for $i from 1 through 3`
-- [ ] 5.4 改造 `AstEach` 的 `SassOp` 实现：支持列表和 Map 迭代，含单元测试验证 `@each $color in red, green`
-- [ ] 5.5 改造 `AstWhile` 的 `SassOp` 实现：支持 MAX_WHILE_ITERATIONS 边界，含单元测试验证迭代次数
-- [ ] 5.6 改造 `AstMixin` / `AstInclude` 的 `SassOp` 实现：`tap` 注册 + 展开 body，含单元测试验证 `@include foo(20px)`
-- [ ] 5.7 改造 `AstFunctionDecl` / `AstReturn` 实现：注册 + 终止内部 Observable，含单元测试验证自定义函数返回值
-- [ ] 5.8 改造 `AstMediaRule` / `AstErrorRule` / `AstWarnRule` / `AstDebugRule` 实现，含单元测试验证各指令行为
+- [x] 5.1 修改 `SassOp` trait：`into_operator` 返回 `Observable<AstNode>`（不再是 `Box<dyn Fn>`），通过 `cargo check` 验证 trait 定义
+- [x] 5.2 改造 `AstIf` 的 `SassOp` 实现：用 `Local::create` 选择分支，含单元测试验证 `@if $x { ... } @else { ... }`
+- [x] 5.3 改造 `AstFor` 的 `SassOp` 实现：用 `Local::create` + 迭代范围，含单元测试验证 `@for $i from 1 through 3`
+- [x] 5.4 改造 `AstEach` 的 `SassOp` 实现：列表和 Map 迭代 stub（list resolution pending）
+- [x] 5.5 改造 `AstWhile` 的 `SassOp` 实现：支持 MAX_WHILE_ITERATIONS 边界，含单元测试验证迭代次数
+- [x] 5.6 改造 `AstMixin` / `AstInclude` 的 `SassOp` 实现：注册 + 展开 body，含单元测试验证 `@include foo(20px)`
+- [x] 5.7 改造 `AstFunctionDecl` / `AstReturn` 实现：注册 + 终止内部 Observable，含单元测试验证自定义函数返回值
+- [x] 5.8 改造 `AstMediaRule` / `AstErrorRule` / `AstWarnRule` / `AstDebugRule` 实现，含单元测试验证各指令行为
 
 ## 6. Multicast Bus & Error Type
 

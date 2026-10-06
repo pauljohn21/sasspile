@@ -1,47 +1,48 @@
 //! Evaluator — dispatches AST nodes to their `SassOp` implementations.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rxrust::prelude::*;
 use tracing::info_span;
 
-use crate::reactive::{
-    AstNode, AstStream, CssStream, EvalContext, SassOp, ScopeId,
-};
+use crate::reactive::{AstNode, AstStream, CssStream, EvalContext, SassOp, ScopeId};
 
 /// Evaluate an AST stream by dispatching each node to its `SassOp`.
 ///
+/// `flat_map` merges each node's operator output into a single `AstStream`.
 /// After dispatch, remaining `AstNode::Css` variants are extracted into a
-/// `CssStream` for downstream consumption.
-pub fn evaluate(stream: AstStream, ctx: Rc<EvalContext>) -> AstStream {
+/// `CssStream` for downstream consumption via `lower_to_css`.
+pub fn evaluate(stream: AstStream, ctx: Arc<EvalContext>) -> AstStream {
     let span = info_span!("evaluator", scope_id = ctx.scope_id);
     let _guard = span.enter();
 
-    stream.flat_map(move |node| {
-        let node_span = info_span!("visit", scope_id = ctx.scope_id);
-        let _guard = node_span.enter();
-
-        let node_for_op = node.clone();
-        let op = node.into_operator(ctx.clone());
-        let single: AstStream = Local::of(node_for_op).box_it_clone();
-        op(single)
-    }).box_it_clone()
+    stream
+        .flat_map(move |node| {
+            let node_span = info_span!("visit", scope_id = ctx.scope_id);
+            let _guard = node_span.enter();
+            let _ = node_span;
+            let op = node.into_operator(ctx.clone());
+            op
+        })
+        .box_it()
 }
 
 /// Lower an evaluated `AstStream` to a `CssStream`.
 ///
-/// Filters out non-CSS nodes (std::cell intermediate forms like remaining
+/// Filters out non-CSS nodes (intermediate forms like remaining
 /// `AstNode::VariableDecl` or block nodes that have been processed) and
 /// unwraps `AstNode::Css(stmt)` into `stmt`.
 pub fn lower_to_css(stream: AstStream) -> CssStream {
-    stream.filter_map(move |node| match node {
-        AstNode::Css(stmt) => Some(stmt),
-        _ => None,
-    }).box_it_clone()
+    stream
+        .filter_map(move |node| match node {
+            AstNode::Css(stmt) => Some(stmt),
+            _ => None,
+        })
+        .box_it()
 }
 
 /// Convenience: evaluate + lower in one step.
-pub fn evaluate_to_css(stream: AstStream, ctx: Rc<EvalContext>) -> CssStream {
+pub fn evaluate_to_css(stream: AstStream, ctx: Arc<EvalContext>) -> CssStream {
     lower_to_css(evaluate(stream, ctx))
 }
 

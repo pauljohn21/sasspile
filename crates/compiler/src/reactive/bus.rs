@@ -1,18 +1,20 @@
 //! CompilerBus — multicast event bus for reactive compilation.
 //!
-//! Provides three multicast channels:
+//! Provides three multicast channels (all `SharedSubject` for Send + Sync):
 //! - `var_events`: Value bind/update notifications
 //! - `module_events`: Module load and member registration
 //! - `css_scope_subject`: CSS scope open/close boundaries
 //!
-//! Plus shared registries (Rc<RefCell<>>) for mixins and functions.
+//! Mixin and function registries are stored in `Arc<Mutex<HashMap>>` so they
+//! can be shared across threads. Registrations are also broadcast via
+//! `SharedSubject` so any subscriber can react to new definitions appearing.
 
-use rxrust::prelude::*;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+
+use rxrust::prelude::*;
 
 use crate::reactive::AstNode;
 
@@ -20,11 +22,7 @@ use crate::reactive::AstNode;
 #[derive(Debug, Clone)]
 pub enum ValueEvent {
     /// A new variable binding: scope_id, name, value
-    Bind {
-        scope_id: u64,
-        name: String,
-        value: u64,
-    },
+    Bind { scope_id: u64, name: String, value: u64 },
 }
 
 /// Events emitted when modules are loaded or members registered.
@@ -59,7 +57,7 @@ pub struct FnDef {
     pub body: Vec<AstNode>,
 }
 
-/// Inner shared state for registries.
+/// Inner shared state for registries (thread-safe via Arc<Mutex>).
 #[derive(Default)]
 struct BusInner {
     mixins: HashMap<String, MixinDef>,
@@ -67,66 +65,71 @@ struct BusInner {
 }
 
 /// Multicast event bus shared across all pipeline stages.
+///
+/// Uses `SharedSubject` for all event channels so that events can be
+/// broadcast across thread boundaries. Registries use `Arc<Mutex<HashMap>>`
+/// for thread-safe access.
 #[derive(Clone)]
 pub struct CompilerBus {
-    var_events: LocalSubject<'static, ValueEvent, Infallible>,
-    module_events: LocalSubject<'static, ModuleEvent, Infallible>,
-    css_scope_subject: LocalSubject<'static, ScopeEvent, Infallible>,
-    inner: Rc<RefCell<BusInner>>,
+    var_events: SharedSubject<'static, ValueEvent, Infallible>,
+    module_events: SharedSubject<'static, ModuleEvent, Infallible>,
+    css_scope_subject: SharedSubject<'static, ScopeEvent, Infallible>,
+    inner: Arc<Mutex<BusInner>>,
 }
 
 impl CompilerBus {
     /// Create a new `CompilerBus` with fresh multicast subjects.
     pub fn new() -> Self {
         Self {
-            var_events: Local::subject(),
-            module_events: Local::subject(),
-            css_scope_subject: Local::subject(),
-            inner: Rc::new(RefCell::new(BusInner::default())),
+            var_events: Shared::subject(),
+            module_events: Shared::subject(),
+            css_scope_subject: Shared::subject(),
+            inner: Arc::new(Mutex::new(BusInner::default())),
         }
     }
 
     /// Subscribe to variable bind events.
-    pub fn var_events(&self) -> LocalSubject<'static, ValueEvent, Infallible> {
+    pub fn var_events(&self) -> SharedSubject<'static, ValueEvent, Infallible> {
         self.var_events.clone()
     }
 
     /// Subscribe to module events.
-    pub fn module_events(&self) -> LocalSubject<'static, ModuleEvent, Infallible> {
+    pub fn module_events(&self) -> SharedSubject<'static, ModuleEvent, Infallible> {
         self.module_events.clone()
     }
 
     /// Subscribe to CSS scope events.
-    pub fn css_scope(&self) -> LocalSubject<'static, ScopeEvent, Infallible> {
+    pub fn css_scope(&self) -> SharedSubject<'static, ScopeEvent, Infallible> {
         self.css_scope_subject.clone()
     }
 
-    /// Register a mixin definition.
+    /// Register a mixin definition (thread-safe).
     pub fn register_mixin(&self, def: MixinDef) {
-        self.inner.borrow_mut().mixins.insert(def.name.clone(), def);
+        self.inner.lock().unwrap().mixins.insert(def.name.clone(), def);
     }
 
-    /// Look up a mixin by name.
+    /// Look up a mixin by name (thread-safe).
     pub fn lookup_mixin(&self, name: &str) -> Option<MixinDef> {
-        self.inner.borrow().mixins.get(name).cloned()
+        self.inner.lock().unwrap().mixins.get(name).cloned()
     }
 
-    /// Register a function definition.
+    /// Register a function definition (thread-safe).
     pub fn register_fn(&self, def: FnDef) {
-        self.inner.borrow_mut().functions.insert(def.name.clone(), def);
+        self.inner.lock().unwrap().functions.insert(def.name.clone(), def);
     }
 
-    /// Look up a function by name.
+    /// Look up a function by name (thread-safe).
     pub fn lookup_fn(&self, name: &str) -> Option<FnDef> {
-        self.inner.borrow().functions.get(name).cloned()
+        self.inner.lock().unwrap().functions.get(name).cloned()
     }
 }
 
 impl fmt::Debug for CompilerBus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let inner = self.inner.lock().unwrap();
         f.debug_struct("CompilerBus")
-            .field("mixins", &self.inner.borrow().mixins.len())
-            .field("functions", &self.inner.borrow().functions.len())
+            .field("mixins", &inner.mixins.len())
+            .field("functions", &inner.functions.len())
             .finish_non_exhaustive()
     }
 }

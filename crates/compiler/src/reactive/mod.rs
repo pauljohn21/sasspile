@@ -17,6 +17,7 @@ mod types;
 pub use bus::{CompilerBus, FnDef, MixinDef, ModuleEvent, ScopeEvent, ValueEvent};
 pub use eval::{evaluate, evaluate_to_css, lower_to_css, pre_analysis};
 pub use pipeline::compile::{compile_ast, from_string, from_string_ast};
+pub use pipeline::serializer::{serialize, serialize_to_string, Options, OutputStyle};
 pub use types::{
     AstNode, AstStream, CssStmt, CssStream, EvalContext, SassOp, ScopeId, ScopeKind, Value,
 };

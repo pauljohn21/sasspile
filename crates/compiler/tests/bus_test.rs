@@ -1,22 +1,22 @@
 //! Tests for CompilerBus and variable lookup.
 
+use std::sync::{Arc, Mutex};
+
 use rxrust::prelude::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 use lightforger::reactive::{CompilerBus, ValueEvent};
 
 #[test]
 fn subscribe_receives_post_sub_events() {
     let bus = CompilerBus::new();
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
 
     let c = collected.clone();
     bus.var_events().subscribe(move |evt| {
         let ValueEvent::Bind { scope_id, name, value } = evt else {
             unreachable!()
         };
-        c.borrow_mut().push((scope_id, name, value));
+        c.lock().unwrap().push((scope_id, name, value));
     });
 
     bus.var_events().next(ValueEvent::Bind {
@@ -25,9 +25,9 @@ fn subscribe_receives_post_sub_events() {
         value: 100,
     });
 
-    assert_eq!(collected.borrow().len(), 1);
+    assert_eq!(collected.lock().unwrap().len(), 1);
     assert_eq!(
-        collected.borrow()[0],
+        collected.lock().unwrap()[0],
         (0, "$size".to_string(), 100)
     );
 }
@@ -36,14 +36,14 @@ fn subscribe_receives_post_sub_events() {
 fn clone_subscriptions_shared() {
     let bus = CompilerBus::new();
     let bus2 = bus.clone();
-    let collected = Rc::new(RefCell::new(Vec::new()));
+    let collected = Arc::new(Mutex::new(Vec::new()));
 
     let c = collected.clone();
     bus.var_events().subscribe(move |evt| {
         let ValueEvent::Bind { value, .. } = evt else {
             unreachable!()
         };
-        c.borrow_mut().push(value);
+        c.lock().unwrap().push(value);
     });
 
     bus2.var_events().next(ValueEvent::Bind {
@@ -52,5 +52,5 @@ fn clone_subscriptions_shared() {
         value: 99,
     });
 
-    assert_eq!(*collected.borrow(), vec![99]);
+    assert_eq!(*collected.lock().unwrap(), vec![99]);
 }
