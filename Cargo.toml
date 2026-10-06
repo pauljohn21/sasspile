@@ -1,0 +1,15 @@
+[package]
+name = "rx-scss"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+description = "Reactive SCSS compiler built with rxrust — Observable multithreading, multicast, zero GC-style"
+license = "MIT"
+
+[dependencies]
+rxrust = "1.0.0-rc.5"
+tracing = "0.1"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+similar = "2"

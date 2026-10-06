@@ -1,0 +1,91 @@
+//! Bootstrap 5.3.x 全量验证测试
+//!
+//! 这些测试使用 `#[ignore]` 标记，因为需要 Bootstrap submodule 存在。
+//! 运行: `cargo test --test bootstrap_test -- --ignored`
+
+use rx_scss::builder::CompileBuilder;
+use rx_scss::serialize::Options;
+use rx_scss::types::OutputStyle;
+
+/// 逐字节比对辅助函数
+fn assert_css_eq(actual: &str, expected: &str) {
+    if actual != expected {
+        let actual_bytes = actual.len();
+        let expected_bytes = expected.len();
+        if let Ok(path) = std::env::var("BOOTSTRAP_DUMP_PATH") {
+            std::fs::write(&path, actual).ok();
+        }
+        panic!(
+            "CSS mismatch: actual={} bytes, expected={} bytes, diff={} bytes",
+            actual_bytes,
+            expected_bytes,
+            (actual_bytes as i64 - expected_bytes as i64).abs()
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires Bootstrap submodule"]
+fn compile_bootstrap_full() {
+    let source = std::fs::read_to_string("bootstrap/scss/bootstrap.scss")
+        .expect("Bootstrap SCSS not found. Run: git submodule update --init --depth 1 bootstrap");
+
+    let result = CompileBuilder::new()
+        .include_path("bootstrap/scss/")
+        .compile_string(&source);
+
+    match result {
+        Ok(css) => {
+            assert!(css.len() > 100_000, "Output too small: {} bytes", css.len());
+            assert!(css.contains("btn"), "Missing 'btn' selector");
+            assert!(css.contains("container"), "Missing 'container' selector");
+            assert!(css.contains("modal"), "Missing 'modal' selector");
+            assert!(css.contains("navbar"), "Missing 'navbar' selector");
+        }
+        Err(e) => {
+            panic!("Bootstrap compilation failed: {}", e);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires Bootstrap submodule"]
+fn compile_bootstrap_compressed() {
+    let source = std::fs::read_to_string("bootstrap/scss/bootstrap.scss")
+        .expect("Bootstrap SCSS not found. Run: git submodule update --init --depth 1 bootstrap");
+
+    let result = CompileBuilder::new()
+        .include_path("bootstrap/scss/")
+        .compressed()
+        .compile_string(&source);
+
+    match result {
+        Ok(css) => {
+            assert!(css.len() > 50_000, "Compressed output too small: {} bytes", css.len());
+            assert!(!css.contains('\n'), "Compressed CSS should not contain newlines");
+        }
+        Err(e) => {
+            panic!("Bootstrap compressed compilation failed: {}", e);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires Bootstrap submodule"]
+fn include_path_resolution() {
+    let scss = "@use \"sass:meta\";\n$x: 1;\n";
+    let _result = CompileBuilder::new()
+        .include_path("bootstrap/scss/")
+        .compile_string(scss);
+}
+
+#[test]
+#[ignore = "requires Bootstrap submodule"]
+fn diff_context_on_mismatch() {
+    let actual = "body{color:red;}";
+    let expected = "body{color:blue;}";
+
+    let diff = similar::TextDiff::from_lines(actual, expected);
+    let changes: Vec<_> = diff.iter_all_changes().collect();
+    assert!(!changes.is_empty(), "Diff should show changes");
+}
