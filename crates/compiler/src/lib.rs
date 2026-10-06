@@ -8,5 +8,15 @@
 
 pub mod error;
 pub mod reactive;
+pub mod lexer;
+pub mod parser;
+pub mod lowering;
+pub mod builtin;
 
 pub use error::{Error, Result};
+
+/// Scope stub — 模块系统占位
+#[derive(Debug, Default)]
+pub struct Scope {
+    // TODO: implement scope
+}
