@@ -44,6 +44,7 @@ enum EvalEvent {
 /// 每层 frame 累积该 scope 的 CssStmt 列表
 #[derive(Clone)]
 struct Frame {
+    #[allow(dead_code)]
     kind: FrameKind,
     selector: Option<String>,
     query: Option<String>,
@@ -82,7 +83,7 @@ fn eval_nodes_pipeline(
     ctx: Arc<EvalContext>,
     bus: CompilerBus,
 ) -> CssStream {
-    let mut output: SharedSubject<'static, CssStmt, Infallible> = Shared::subject();
+    let output: SharedSubject<'static, CssStmt, Infallible> = Shared::subject();
     let mut out_ref = output.clone();
 
     // Phase 1: 响应式展开 — AST 节点 → 事件流

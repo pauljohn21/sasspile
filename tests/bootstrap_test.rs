@@ -5,9 +5,9 @@
 
 use rx_scss::builder::CompileBuilder;
 use rx_scss::serialize::Options;
-use rx_scss::types::OutputStyle;
 
 /// 逐字节比对辅助函数
+#[allow(dead_code)]
 fn assert_css_eq(actual: &str, expected: &str) {
     if actual != expected {
         let actual_bytes = actual.len();
@@ -30,12 +30,33 @@ fn compile_bootstrap_full() {
     let source = std::fs::read_to_string("bootstrap/scss/bootstrap.scss")
         .expect("Bootstrap SCSS not found. Run: git submodule update --init --depth 1 bootstrap");
 
-    let result = CompileBuilder::new()
-        .include_path("bootstrap/scss/")
-        .compile_string(&source);
+    // Bootstrap compiles with deep recursion — use larger stack
+    let handle = std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(move || {
+            CompileBuilder::new()
+                .include_path("bootstrap/scss/")
+                .compile_string(&source)
+        })
+        .expect("failed to spawn thread");
+
+    // Use a timeout to diagnose slow compilations
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if handle.is_finished() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    if !handle.is_finished() {
+        panic!("Bootstrap compilation timed out after 30s — likely incomplete feature set");
+    }
+    let result = handle.join().expect("thread panicked");
 
     match result {
         Ok(css) => {
+            eprintln!("Bootstrap compiled: {} bytes", css.len());
+            std::fs::write("/tmp/bootstrap_dump.css", &css).ok();
             assert!(css.len() > 100_000, "Output too small: {} bytes", css.len());
             assert!(css.contains("btn"), "Missing 'btn' selector");
             assert!(css.contains("container"), "Missing 'container' selector");
