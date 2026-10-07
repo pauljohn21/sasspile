@@ -220,7 +220,16 @@ pub(crate) fn resolve_property(segments: &[PropSegment], ctx: &EvalContext) -> S
 }
 
 pub(crate) fn value_to_string(v: &Value) -> String {
-    v.to_string()
+    match v {
+        // CSS 列表中的 null 项应被过滤（例如 `solid null` → `solid`）
+        Value::List(items) => items
+            .iter()
+            .filter(|item| **item != Value::Null)
+            .map(|item| item.to_string())
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => v.to_string(),
+    }
 }
 
 pub(crate) fn value_to_number(v: &Value) -> f64 {

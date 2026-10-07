@@ -143,9 +143,15 @@ fn expand_nodes_to_events(
                 AstNode::StyleDecl { property, value } => {
                     let val = eval_expr(&value, ctx, bus);
                     let prop_name = resolve_property(&property, ctx);
+                    let val_str = value_to_string(&val);
+                    // null 值显示为 "null" 的声明不输出到 CSS（Bootstrap 中 null 是占位符）
+                    // 覆盖 Value::Null、List([Null])、String("null") 等衍生情况
+                    if val_str == "null" || prop_name.contains("null") {
+                        continue;
+                    }
                     events.push(EvalEvent::Terminal(CssStmt::Decl {
                         property: prop_name,
-                        value: value_to_string(&val),
+                        value: val_str,
                     }));
                 }
                 AstNode::Rule { selector, inner } => {

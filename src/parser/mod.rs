@@ -181,12 +181,31 @@ fn parse_variable_decl(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
     if !matches!(ps.peek(), Some(Token::Colon)) {
         return None;
     }
-    ps.next_token();
-    let value = parse_value(ps)?;
+    ps.next_token(); // consume `:`
+    // SCSS 变量赋值支持逗号分隔的列表：`$a: x, y, z` → ListLiteral([x, y, z])
+    // 不能仅用 parse_value，因为它遇到逗号就停止。
+    let value = parse_list_or_expr(ps)?;
     if matches!(ps.peek(), Some(Token::Semicolon)) {
         ps.next_token();
     }
     Some(AstNode::VariableDecl { name, value: Box::new(value), scope_id })
+}
+
+/// Parse comma-separated list (for variable decls) or a single expression.
+fn parse_list_or_expr(ps: &mut ParserState) -> Option<AstNode> {
+    let first = parse_expression(ps, 0)?;
+    skip_whitespace(ps);
+    if !matches!(ps.peek(), Some(Token::Comma)) {
+        return Some(first);
+    }
+    let mut items = vec![first];
+    while matches!(ps.peek(), Some(Token::Comma)) {
+        ps.next_token(); // consume comma
+        skip_whitespace(ps);
+        items.push(parse_expression(ps, 0)?);
+        skip_whitespace(ps);
+    }
+    Some(AstNode::ListLiteral(items))
 }
 
 fn parse_value(ps: &mut ParserState) -> Option<AstNode> {
@@ -324,6 +343,14 @@ fn parse_atom(ps: &mut ParserState) -> Option<AstNode> {
                 }
                 _ => Some(AstNode::Literal(Value::String(s))),
             }
+        }
+        Token::HashId(s) => {
+            // Hex color: #fff, #ffffff, #ffff → Value::Color
+            let hex = s.clone();
+            ps.next_token();
+            parse_hex_color(&hex)
+                .map(AstNode::Literal)
+                .or(Some(AstNode::Literal(Value::String(format!("#{}", hex)))))
         }
         Token::Dollar => {
             ps.next_token();
