@@ -623,59 +623,6 @@ $w: 768px;
     }
 
     #[test]
-    #[ignore = "kept for ad-hoc debugging of nested @each patterns"]
-    fn diag_nested_each_isolate() {
-        // Progressive isolation of the three-level nested @each issue
-        use rx_scss::builder::CompileBuilder;
-
-        // Case 1: Simple @each over a map
-        let scss1 = "$map: (a: 1, b: 2);\n@each $k, $v in $map { .#{$k} { val: $v; } }\n";
-        let r1 = CompileBuilder::new().expanded().compile_string(scss1);
-        eprintln!("Case 1 (simple @each map):\n{}", r1.as_deref().unwrap_or("(error)"));
-        assert!(r1.is_ok(), "Case 1 should compile");
-
-        // Case 2: Nested @each without @if
-        let scss2 = "$utils: (margin: (values: (1: 0, 2: 1rem)));\n@each $key, $utility in $utils { $values: map-get($utility, values); @each $vk, $vv in $values { .util-#{$key}-#{$vk} { val: $vv; } } }\n";
-        let r2 = CompileBuilder::new().expanded().compile_string(scss2);
-        eprintln!("Case 2 (nested @each, no @if):\n{}", r2.as_deref().unwrap_or("(error)"));
-
-        // Case 3: Wrap in @if
-        let scss3 = "$utils: (margin: (values: (1: 0, 2: 1rem)));\n@each $key, $utility in $utils { @if type-of($utility) == \"map\" { $values: map-get($utility, values); @each $vk, $vv in $values { .u-#{$key}-#{$vk} { val: $vv; } } } }\n";
-        let r3 = CompileBuilder::new().expanded().compile_string(scss3);
-        eprintln!("Case 3 (with @if type-of):\n{}", r3.as_deref().unwrap_or("(error)"));
-
-        // Case 4: Does @each variable survive into the body via direct rule?
-        let scss4 = "$k: outer; @each $k in a, b { .#{$k}-test { color: red; } }\n";
-        let r4 = CompileBuilder::new().expanded().compile_string(scss4);
-        eprintln!("Case 4 (simple @each + selector interp):\n{}", r4.as_deref().unwrap_or("(error)"));
-
-        // Case 5: Two-level @each without selector
-        let scss5 = "@each $k in a, b { @each $v in x, y { .#{$k}-#{$v} { val: 1; } } }\n";
-        let r5 = CompileBuilder::new().expanded().compile_string(scss5);
-        eprintln!("Case 5 (two-level simple @each):\n{}", r5.as_deref().unwrap_or("(error)"));
-
-        // Case 6: Even simpler - single variable single level
-        let scss6 = "@each $k in a, b { .#{$k} { color: red; } }\n";
-        let r6 = CompileBuilder::new().expanded().compile_string(scss6);
-        eprintln!("Case 6:\n---\n{}\n---", r6.as_deref().unwrap_or("(error)"));
-
-        // Case 7: Simple variable as selector inside @each (to test scope chain)
-        let scss7 = "@each $k in a, b { $k { color: red; } }\n";
-        let r7 = CompileBuilder::new().expanded().compile_string(scss7);
-        eprintln!("Case 7 ($k as selector, no dot):\n---\n{}\n---", r7.as_deref().unwrap_or("(error)"));
-
-        // Case 8: Dot + $k without interpolation syntax
-        let scss8 = ".static { .nested { color: red; } }\n";
-        let r8 = CompileBuilder::new().expanded().compile_string(scss8);
-        eprintln!("Case 8 (static nested rules):\n---\n{}\n---", r8.as_deref().unwrap_or("(error)"));
-
-        // Case 9: What does .#{$k} actually parse as?
-        let scss9 = "$k: test; .#{$k} { color: red; }\n";
-        let r9 = CompileBuilder::new().expanded().compile_string(scss9);
-        eprintln!("Case 9 (.hash-k outside @each):\n---\n{}\n---", r9.as_deref().unwrap_or("(error)"));
-    }
-
-    #[test]
     fn ast_node_variable_decl() {
         let node = AstNode::VariableDecl {
         name: "primary".into(),
