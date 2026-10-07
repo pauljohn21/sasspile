@@ -53,8 +53,14 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
                 } else { ps.next_token(); }
             }
             Token::Dot | Token::HashId(_) | Token::Ampersand |
-            Token::LBracket | Token::Colon | Token::Star => {
-                if let Some(node) = parse_rule(ps, scope_id) {
+            Token::LBracket | Token::Colon | Token::Star |
+            Token::Minus => {
+                // Minus 可能是 CSS 自定义属性 --#{$prefix}name: value 的开头
+                if is_style_decl(ps) {
+                    if let Some(node) = parse_style_decl(ps) {
+                        result.push(node);
+                    } else { ps.next_token(); }
+                } else if let Some(node) = parse_rule(ps, scope_id) {
                     result.push(node);
                 } else { ps.next_token(); }
             }
@@ -65,20 +71,96 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
     result
 }
 
+/// Forward state machine: check if current tokens form a property-name chain
+/// that ends with a Colon (i.e. a CSS declaration).
+///
+/// Handles: `prop:`, `prop-name:`, `--#{$prefix}prop-name:`, `--prop:`, `#{$name}:`,
+///           `-webkit-prop:`, `-#{$prefix}prop:`
 fn is_style_decl(ps: &ParserState) -> bool {
-    if matches!(ps.peek(), Some(Token::Ident(_))) {
-        matches!(ps.peek_n(1), Some(Token::Colon))
-    } else {
-        false
+    // 接受 Ident 或 Minus 开头（CSS 自定义属性以 -- 开头，vendor 前缀以 - 开头）
+    if !matches!(ps.peek(), Some(Token::Ident(_) | Token::Minus)) {
+        return false;
     }
+    let mut i = 1;
+    loop {
+        match ps.peek_n(i) {
+            Some(Token::Colon) => return true,
+            // 跳过 #{...} 整个插值块（包括内部 Dollar/Ident/etc.）
+            Some(Token::InterpolationStart) => {
+                let mut depth = 1;
+                i += 1;
+                while depth > 0 {
+                    match ps.peek_n(i) {
+                        Some(Token::InterpolationStart) => { depth += 1; i += 1; }
+                        Some(Token::InterpolationEnd) => { depth -= 1; i += 1; }
+                        Some(_) => i += 1,
+                        None => return false,
+                    }
+                }
+            }
+            Some(Token::Ident(_) | Token::Minus | Token::Number(..)) => i += 1,
+            _ => return false,
+        }
+    }
+}
+
+/// Read a property name that may contain interpolations (--#{$prefix}name).
+/// Returns segments that eval can resolve to produce the final property name.
+///
+/// each segment is either a literal string part or a variable reference `$var`.
+/// at eval time, variable references are replaced by their values (strings).
+///
+/// example: `--#{$prefix}body-font-family` →
+///   [Literal("--"), Var("prefix"), Literal("body-font-family")]
+fn parse_property_name(ps: &mut ParserState) -> Option<Vec<PropSegment>> {
+    let mut segments: Vec<PropSegment> = Vec::new();
+    loop {
+        match ps.peek() {
+            Some(Token::Ident(n)) => {
+                let s = n.clone();
+                ps.next_token();
+                if let Some(PropSegment::Literal(last)) = segments.last_mut() {
+                    last.push_str(&s);
+                } else {
+                    segments.push(PropSegment::Literal(s));
+                }
+            }
+            Some(Token::InterpolationStart) => {
+                ps.next_token(); // #{
+                if matches!(ps.peek(), Some(Token::Dollar)) {
+                    ps.next_token(); // $
+                    if let Some(Token::Ident(var)) = ps.peek() {
+                        let v = var.clone();
+                        ps.next_token();
+                        segments.push(PropSegment::Var(v));
+                    }
+                } else {
+                    // Skip unknown expr
+                    while !matches!(ps.peek(), Some(Token::InterpolationEnd)) {
+                        ps.next_token();
+                    }
+                }
+                if matches!(ps.peek(), Some(Token::InterpolationEnd)) {
+                    ps.next_token(); // }
+                }
+            }
+            Some(Token::Minus) => {
+                ps.next_token();
+                if let Some(PropSegment::Literal(last)) = segments.last_mut() {
+                    last.push('-');
+                } else {
+                    segments.push(PropSegment::Literal("-".into()));
+                }
+            }
+            _ => break,
+        }
+    }
+    if segments.is_empty() { None } else { Some(segments) }
 }
 
 fn parse_style_decl(ps: &mut ParserState) -> Option<AstNode> {
     skip_whitespace(ps);
-    let property = match ps.next_token() {
-        Some(Token::Ident(n)) => n,
-        _ => return None,
-    };
+    let property = parse_property_name(ps)?;
     if !matches!(ps.peek(), Some(Token::Colon)) {
         return None;
     }

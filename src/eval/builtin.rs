@@ -400,7 +400,14 @@ fn color_rgb_rgba(args: &[Value], fn_name: &str) -> Option<Value> {
 /// Returns the CSS var() expression as a raw string so it can be embedded
 /// in other CSS functions like rgba(var(--name), alpha).
 fn var_function(args: &[Value]) -> Option<Value> {
-    let name = args.first()?.to_string();
+    let raw = args.first()?.to_string();
+    // CSS 自定义属性名（--xxx）不能有空格；如果输入是 "--" + $var + "suffix"
+    // 通过 ListLiteral 格式化为 "-- bs- suffix"，需把空格移除。
+    let name = if raw.starts_with("--") {
+        raw.replace(' ', "")
+    } else {
+        raw
+    };
     if args.len() >= 2 {
         let fallback = args.get(1)?.to_string();
         Some(Value::String(format!("var({}, {})", name, fallback)))

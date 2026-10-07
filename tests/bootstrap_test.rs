@@ -57,7 +57,7 @@ fn compile_bootstrap_full() {
 
     match result {
         Ok(css) => {
-            eprintln!("Bootstrap compiled: {} bytes", css.len());
+            tracing::info!(bytes = css.len(), "Bootstrap compiled");
             std::fs::write("/tmp/bootstrap_dump.css", &css).ok();
             assert!(css.len() > 100_000, "Output too small: {} bytes", css.len());
             assert!(css.contains("btn"), "Missing 'btn' selector");
@@ -116,11 +116,11 @@ fn test_bootstrap_dist_alignment() {
         0.0
     };
 
-    eprintln!(
-        "Bootstrap dist alignment: coverage={:.2}% (missing={}/{} lines)",
-        coverage * 100.0,
-        check.missing_count,
-        check.reference_line_count
+    tracing::info!(
+        coverage_pct = coverage * 100.0,
+        missing = check.missing_count,
+        total = check.reference_line_count,
+        "Bootstrap dist alignment"
     );
 
     assert!(

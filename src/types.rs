@@ -207,7 +207,7 @@ pub enum AstNode {
     ListLiteral(Vec<AstNode>),
     MapLiteral(Vec<(String, AstNode)>),
     VariableDecl { name: String, value: Box<AstNode>, scope_id: u64 },
-    StyleDecl { property: String, value: Box<AstNode> },
+    StyleDecl { property: Vec<PropSegment>, value: Box<AstNode> },
     Rule { selector: String, inner: Vec<AstNode> },
     If { cond: Box<AstNode>, then_branch: Vec<AstNode>, else_branch: Option<Vec<AstNode>> },
     For { var: String, from: Box<AstNode>, to: Box<AstNode>, inclusive: bool, body: Vec<AstNode> },
@@ -249,6 +249,17 @@ impl Param {
     pub fn with_default(name: impl Into<String>, default: AstNode) -> Self {
         Self { name: name.into(), default_value: Some(Box::new(default)) }
     }
+}
+
+/// A segment of a CSS property name that may contain interpolation.
+/// Used for `--#{$prefix}body-font-family` where the parser must
+/// preserve variable references for eval-time resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PropSegment {
+    /// Literal string part (e.g. "--", "-", "body-font-family")
+    Literal(String),
+    /// Variable reference (e.g. "prefix" for `#{$prefix}`)
+    Var(String),
 }
 
 // ── Aliases ───────────────────────────────────────────────────────────────

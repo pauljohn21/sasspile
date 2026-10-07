@@ -39,17 +39,17 @@ pub fn bootstrap_dist_check() -> Option<BootstrapDistCheck> {
         .map(|l| l.to_string())
         .collect();
 
-    eprintln!(
-        "Bootstrap dist check: actual={} lines, reference={} lines, missing={}, extra={}",
-        actual_lines.len(),
-        reference_lines.len(),
-        missing.len(),
-        extra.len()
+    tracing::info!(
+        actual_lines = actual_lines.len(),
+        reference_lines = reference_lines.len(),
+        missing = missing.len(),
+        extra = extra.len(),
+        "Bootstrap dist check"
     );
 
     let show_count = 50.min(missing.len());
     for (i, line) in missing.iter().take(show_count).enumerate() {
-        eprintln!("  missing[{}]: {}", i, line.trim());
+        tracing::debug!(line = %line.trim(), index = i, "missing line");
     }
 
     Some(BootstrapDistCheck {

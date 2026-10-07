@@ -10,7 +10,7 @@ mod expr;
 
 // Re-export for internal use + tests
 pub use expr::eval_expr;
-use expr::{combine_selectors, resolve_selector, truthy, value_to_number, value_to_string};
+use expr::{combine_selectors, resolve_property, resolve_selector, truthy, value_to_number, value_to_string};
 
 // ── RxRust 求值器: 响应式流算子替代递归 ─────────────────────────────────
 //
@@ -142,8 +142,9 @@ fn expand_nodes_to_events(
                 match node {
                 AstNode::StyleDecl { property, value } => {
                     let val = eval_expr(&value, ctx, bus);
+                    let prop_name = resolve_property(&property, ctx);
                     events.push(EvalEvent::Terminal(CssStmt::Decl {
-                        property,
+                        property: prop_name,
                         value: value_to_string(&val),
                     }));
                 }

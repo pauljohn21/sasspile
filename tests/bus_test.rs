@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use rxrust::prelude::*;
 use rx_scss::bus::{CompilerBus, FnDef, MixinDef, ModuleDef};
-use rx_scss::types::{AstNode, Param, Value};
+use rx_scss::types::{AstNode, Param, PropSegment, Value};
 
 #[test]
 fn set_and_get_var() {
@@ -19,7 +19,7 @@ fn register_and_lookup_mixin() {
         name: "box".into(),
         params: vec![Param::new("color")],
         body: vec![AstNode::StyleDecl {
-            property: "border".into(),
+            property: vec![PropSegment::Literal("border".into())],
             value: Box::new(AstNode::Literal(Value::String("red".into()))),
         }],
     };

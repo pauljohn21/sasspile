@@ -198,6 +198,27 @@ pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
     result
 }
 
+/// Resolve a style declaration property from segments to a final string.
+///
+/// `Var` segments are looked up in the eval context — the variable's value
+/// is Display-ed (numbers drop trailing `.0`, strings preserved verbatim).
+/// Literal segments are passed through unchanged.
+///
+/// Uses iterator fold — grows a String by pushing each resolved segment.
+#[tracing::instrument(skip(ctx), fields(segments = ?segments))]
+pub(crate) fn resolve_property(segments: &[PropSegment], ctx: &EvalContext) -> String {
+    segments.iter().fold(String::with_capacity(32), |mut acc, seg| {
+        match seg {
+            PropSegment::Literal(s) => acc.push_str(s),
+            PropSegment::Var(name) => {
+                let val = ctx.var(name).unwrap_or(Value::Null);
+                acc.push_str(&val.to_string());
+            }
+        }
+        acc
+    })
+}
+
 pub(crate) fn value_to_string(v: &Value) -> String {
     v.to_string()
 }
