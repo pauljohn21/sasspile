@@ -34,14 +34,7 @@ pub fn eval_expr(expr: &AstNode, ctx: &EvalContext, bus: &CompilerBus) -> Value 
                 for (p, a) in func.params.iter().zip(evaled_args.iter()) {
                     child_ctx.bind_var(&p.name, a.clone());
                 }
-                let mut ret_val = Value::Null;
-                for n in &func.body {
-                    if let AstNode::Return(val) = n {
-                        ret_val = eval_expr(val, &child_ctx, bus);
-                        break;
-                    }
-                }
-                ret_val
+                eval_function_body(&func.body, &child_ctx, bus)
             } else {
                 Value::Null
             }
@@ -153,6 +146,8 @@ pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
 }
 
 /// Resolve selector interpolation: replace $var references with their values.
+/// Variable names are scanned as `[a-zA-Z0-9_-]+`. If the full name is undefined,
+/// progressively shorten at `-` boundaries so `#{$key}-y` resolves `$key` then `-y`.
 pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
     if !selector.contains('$') {
         return selector.to_string();
@@ -168,10 +163,29 @@ pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
                 end += 1;
             }
             if end > start {
-                let var_name: String = chars[start..end].iter().collect();
-                let val = ctx.var(&var_name).unwrap_or(Value::Null);
+                let full_name: String = chars[start..end].iter().collect();
+                // Try the full name first; if undefined, shorten at `-` boundaries
+                let val = ctx.var(&full_name)
+                    .or_else(|| {
+                        // Backward search: $key-y → try $key
+                        full_name.rfind('-').and_then(|idx| {
+                            if idx > 0 {
+                                ctx.var(&full_name[..idx])
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .unwrap_or(Value::Null);
                 result.push_str(&val.to_string());
-                i = end;
+                // Only consume the chars that were resolved as a variable
+                if ctx.var(&full_name).is_some() {
+                    i = end;
+                } else if full_name.rfind('-').is_some_and(|idx| idx > 0) && ctx.var(&full_name[..full_name.rfind('-').unwrap()]).is_some() {
+                    i = start + full_name.rfind('-').unwrap();
+                } else {
+                    i = end;
+                }
             } else {
                 result.push(chars[i]);
                 i += 1;
@@ -196,4 +210,25 @@ pub(crate) fn value_to_number(v: &Value) -> f64 {
         Value::Bool(false) => 0.0,
         _ => 0.0,
     }
+}
+
+/// Evaluate a user-defined function body.
+/// Handles intermediate variable declarations (side effects) and returns the @return value.
+fn eval_function_body(body: &[AstNode], ctx: &EvalContext, bus: &CompilerBus) -> Value {
+    body.iter()
+        .find_map(|node| match node {
+            AstNode::Return(val) => Some(eval_expr(val, ctx, bus)),
+            AstNode::VariableDecl { name, value, .. } => {
+                let val = eval_expr(value, ctx, bus);
+                ctx.bind_var(name, val);
+                None
+            }
+            AstNode::If { cond, then_branch, else_branch } => {
+                let cond_val = eval_expr(cond, ctx, bus);
+                let branch = if truthy(&cond_val) { then_branch } else { else_branch.as_ref().map(|b| b.as_slice()).unwrap_or(&[]) };
+                eval_function_body(branch, ctx, bus).into()
+            }
+            _ => None,
+        })
+        .unwrap_or(Value::Null)
 }

@@ -162,7 +162,8 @@ fn expand_nodes_to_events(
                 }
                 AstNode::Media { query, inner } => {
                     let child_ctx = ctx.child_scope(2);
-                    events.push(EvalEvent::EnterMedia(query.clone()));
+                    let resolved_query = resolve_query(&query, ctx);
+                    events.push(EvalEvent::EnterMedia(resolved_query));
                     queue.push(Work::LeaveMedia);
                     for n in inner.iter().rev() {
                         queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
@@ -170,7 +171,8 @@ fn expand_nodes_to_events(
                 }
                 AstNode::Supports { query, inner } => {
                     let child_ctx = ctx.child_scope(3);
-                    events.push(EvalEvent::EnterSupports(query.clone()));
+                    let resolved_query = resolve_query(&query, ctx);
+                    events.push(EvalEvent::EnterSupports(resolved_query));
                     queue.push(Work::LeaveSupports);
                     for n in inner.iter().rev() {
                         queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
@@ -204,7 +206,6 @@ fn expand_nodes_to_events(
                             };
                             child_ctx.bind_var(&p.name, val);
                         }
-                        // Expand mixin body: replace @content with caller's content block
                         let expanded = expand_body_with_content(&mixin.body, &content);
                         for n in expanded.iter().rev() {
                             queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
@@ -294,6 +295,40 @@ fn expand_nodes_to_events(
     }
 
     events
+}
+
+/// Resolve variable references in a media/supports query string.
+/// The parser produces queries like "(min-width: $w)" or "(min-width: $min)".
+/// This substitutes $var with its current runtime value.
+fn resolve_query(query: &str, ctx: &EvalContext) -> String {
+    if !query.contains('$') {
+        return query.to_string();
+    }
+    let mut result = String::new();
+    let mut chars = query.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '$' {
+            // Collect variable name (alphanumeric + hyphen + underscore)
+            let mut var_name = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_alphanumeric() || c == '_' || c == '-' {
+                    var_name.push(c);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if !var_name.is_empty() {
+                let val = ctx.var(&var_name).unwrap_or(Value::Null);
+                result.push_str(&value_to_string(&val));
+            } else {
+                result.push('$');
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 /// Expand mixin body: replace any `AstNode::Content` markers with the caller's content block.

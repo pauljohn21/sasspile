@@ -697,15 +697,49 @@ fn parse_at_query(ps: &mut ParserState) -> String {
             Token::Whitespace => { ps.next_token(); }
             Token::And => { parts.push("and".into()); ps.next_token(); }
             Token::Or => { parts.push("or".into()); ps.next_token(); }
-            Token::LParen | Token::RParen | Token::Colon | Token::Minus => {
+            Token::Dollar => {
+                // Variable reference in query: $var-name
+                let mut var_ref = String::from("$");
+                ps.next_token();
+                if let Some(Token::Ident(var_name)) = ps.peek() {
+                    var_ref.push_str(var_name);
+                    ps.next_token();
+                }
+                parts.push(var_ref);
+            }
+            Token::HashId(s) => {
+                parts.push(format!("#{}", s));
+                ps.next_token();
+            }
+            Token::Plus => { parts.push("+".into()); ps.next_token(); }
+            Token::Star => { parts.push("*".into()); ps.next_token(); }
+            Token::Slash => { parts.push("/".into()); ps.next_token(); }
+            Token::Dot => { parts.push(".".into()); ps.next_token(); }
+            Token::Comma => { parts.push(",".into()); ps.next_token(); }
+            Token::Percent => { parts.push("%".into()); ps.next_token(); }
+            Token::Bang => { parts.push("!".into()); ps.next_token(); }
+            Token::Gt | Token::Lt | Token::Eq | Token::Ge | Token::Le | Token::Ne => {
                 let s = format!("{:?}", tok);
-                // Clean up debug format: Token::LParen -> '('
+                parts.push(s);
+                ps.next_token();
+            }
+            Token::LParen | Token::RParen | Token::Colon | Token::Minus | Token::Semicolon => {
                 let clean = match tok {
                     Token::LParen => "(",
                     Token::RParen => ")",
                     Token::Colon => ":",
                     Token::Minus => "-",
-                    _ => &s,
+                    Token::Semicolon => ";",
+                    _ => "",
+                };
+                parts.push(clean.into());
+                ps.next_token();
+            }
+            Token::LBracket | Token::RBracket => {
+                let clean = match tok {
+                    Token::LBracket => "[",
+                    Token::RBracket => "]",
+                    _ => "",
                 };
                 parts.push(clean.into());
                 ps.next_token();

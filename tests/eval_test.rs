@@ -563,7 +563,67 @@ $utils: (
     }
 
     #[test]
-    #[ignore = "diagnostic: enable to test individual nested @each patterns"]
+    fn regression_media_query_with_variable() {
+        // SCSS spec: media queries with variable references must interpolate at eval time
+        use rx_scss::builder::CompileBuilder;
+        let scss = r#"
+$w: 768px;
+@mixin var-mq {
+  @media (min-width: $w) {
+    @content;
+  }
+}
+@include var-mq {
+  .test { color: red; }
+}
+"#;
+        let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
+        assert!(css.contains("min-width : 768px"), "variable in media query should be resolved: {}", css);
+        assert!(css.contains(".test"), "rule inside @content should be in output: {}", css);
+        assert!(!css.contains("$w"), "no unresolved $w should remain in output: {}", css);
+    }
+
+    #[test]
+    fn regression_media_query_with_function_call() {
+        // Mixin body calling a user-defined function, used as media query value
+        use rx_scss::builder::CompileBuilder;
+        let scss = r#"
+@function calc-bp($bp, $map) {
+  $val: map-get($map, $bp);
+  @return $val;
+}
+@mixin media-breakpoint-up($name) {
+  $min: calc-bp($name, (sm: 576px, md: 768px));
+  @media (min-width: $min) {
+    @content;
+  }
+}
+@include media-breakpoint-up(md) {
+  .test { color: red; }
+}
+"#;
+        let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
+        assert!(css.contains("min-width : 768px"), "function result in media query should be resolved: {}", css);
+        assert!(css.contains(".test"), "content block should be expanded: {}", css);
+    }
+
+    #[test]
+    fn regression_function_body_with_intermediate_vars() {
+        // User-defined function with intermediate variable assignments
+        use rx_scss::builder::CompileBuilder;
+        let scss = r#"
+@function add-one($x) {
+  $result: $x + 1;
+  @return $result;
+}
+.test { val: add-one(5); }
+"#;
+        let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
+        assert!(css.contains("val: 6"), "function with intermediate var should return correct value: {}", css);
+    }
+
+    #[test]
+    #[ignore = "kept for ad-hoc debugging of nested @each patterns"]
     fn diag_nested_each_isolate() {
         // Progressive isolation of the three-level nested @each issue
         use rx_scss::builder::CompileBuilder;
