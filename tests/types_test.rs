@@ -89,7 +89,7 @@ fn param_creation() {
     assert_eq!(p.name, "color");
     assert!(p.default_value.is_none());
 
-    let p2 = Param::with_default("size", AstNode::Literal(Value::Number(10.0)));
+    let p2 = Param::with_default("size", AstNode::Literal(Value::Number(10.0, None)));
     assert_eq!(p2.name, "size");
     assert!(p2.default_value.is_some());
 }

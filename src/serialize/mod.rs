@@ -61,8 +61,28 @@ pub fn serialize(stmts: &[CssStmt], opts: &Options) -> String {
         }
     }
 
-    serialize_stmts(stmts, opts, &mut output, 0);
+    // Separate @at-root rules (marked with "/*@at-root*/ " prefix) for hoisting
+    let (atroot_stmts, normal_stmts): (Vec<_>, Vec<_>) = stmts.iter()
+        .cloned()
+        .partition(|s| is_at_root(s));
+
+    // Normal statements first, then @at-root hoisted to top level
+    serialize_stmts(&normal_stmts, opts, &mut output, 0);
+    serialize_stmts(&atroot_stmts, opts, &mut output, 0);
     output
+}
+
+/// Check if a CssStmt is an @at-root marker (selector starts with /*@at-root*/).
+fn is_at_root(stmt: &CssStmt) -> bool {
+    match stmt {
+        CssStmt::Rule { selector, .. } => selector.starts_with("/*@at-root*/ "),
+        _ => false,
+    }
+}
+
+/// Strip the /*@at-root*/ marker prefix from a selector.
+fn strip_at_root_marker(selector: &str) -> String {
+    selector.strip_prefix("/*@at-root*/ ").unwrap_or(selector).to_string()
 }
 
 fn serialize_stmts(stmts: &[CssStmt], opts: &Options, out: &mut String, indent_level: usize) {
@@ -93,6 +113,7 @@ fn serialize_stmt(stmt: &CssStmt, opts: &Options, out: &mut String, indent_level
             }
         }
         CssStmt::Rule { selector, inner } => {
+            let selector = strip_at_root_marker(selector);
             match opts.style {
                 OutputStyle::Expanded => {
                     let indent = "  ".repeat(indent_level);

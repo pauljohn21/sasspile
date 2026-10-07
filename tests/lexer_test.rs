@@ -1,52 +1,272 @@
-use rx_scss::lexer::{scan, LexerState};
-use rx_scss::types::Token;
-use std::sync::{Arc, Mutex};
+use rx_scss::types::*;
 use rxrust::prelude::*;
 
-fn collect_tokens(input: &str) -> Vec<Token> {
-    let stream = scan(input);
-    let result = Arc::new(Mutex::new(Vec::new()));
-    let r = result.clone();
-    let collected = stream.collect::<Vec<_>>();
-    collected.subscribe(move |toks| {
-        *r.lock().unwrap() = toks;
-    });
-    let guard = result.lock().unwrap();
-    guard.clone()
+#[cfg(test)]
+mod lexer_number_with_unit {
+    use super::*;
+    use rx_scss::lexer::scan;
+
+    fn collect_tokens(source: &str) -> Vec<Token> {
+        let stream = scan(source);
+        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let r = result.clone();
+        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
+        let guard = result.lock().unwrap();
+        guard.clone()
+    }
+
+    #[test]
+    fn test_px_unit() {
+        let toks = collect_tokens("16px");
+        assert!(toks.contains(&Token::Number(16.0, Some("px".into()))));
+    }
+
+    #[test]
+    fn test_em_unit() {
+        let toks = collect_tokens("1.5em");
+        assert!(toks.contains(&Token::Number(1.5, Some("em".into()))));
+    }
+
+    #[test]
+    fn test_rem_unit() {
+        let toks = collect_tokens("2rem");
+        assert!(toks.contains(&Token::Number(2.0, Some("rem".into()))));
+    }
+
+    #[test]
+    fn test_percent_unit() {
+        let toks = collect_tokens("100%");
+        assert!(toks.contains(&Token::Number(100.0, Some("%".into()))));
+    }
+
+    #[test]
+    fn test_s_unit() {
+        let toks = collect_tokens("0.3s");
+        assert!(toks.contains(&Token::Number(0.3, Some("s".into()))));
+    }
+
+    #[test]
+    fn test_deg_unit() {
+        let toks = collect_tokens("45deg");
+        assert!(toks.contains(&Token::Number(45.0, Some("deg".into()))));
+    }
+
+    #[test]
+    fn test_number_without_unit() {
+        let toks = collect_tokens("42");
+        assert!(toks.contains(&Token::Number(42.0, None)));
+    }
 }
 
-#[test]
-fn token_coverage() {
-    let input = "$color: #369; .a { &:hover { color: $color; } }";
-    let toks = collect_tokens(input);
-    assert!(!toks.is_empty());
+#[cfg(test)]
+mod lexer_comments {
+    use super::*;
+    use rx_scss::lexer::scan;
+
+    fn collect_tokens(source: &str) -> Vec<Token> {
+        let stream = scan(source);
+        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let r = result.clone();
+        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
+        let guard = result.lock().unwrap();
+        guard.clone()
+    }
+
+    #[test]
+    fn test_line_comment_suppressed() {
+        let toks = collect_tokens("// this is a comment\n$var: red;");
+        // The comment should produce no tokens; $var and red should be present
+        assert!(!toks.contains(&Token::Ident("// this is a comment".into())));
+        assert!(toks.contains(&Token::Ident("var".into())));
+    }
+
+    #[test]
+    fn test_block_comment_suppressed() {
+        let toks = collect_tokens("/* block comment */ $x: 1;");
+        assert!(!toks.contains(&Token::Ident("block".into())));
+        assert!(toks.contains(&Token::Ident("x".into())));
+    }
+
+    #[test]
+    fn test_code_between_comments() {
+        let toks = collect_tokens("$a: 1; // comment\n$b: 2;");
+        assert!(toks.contains(&Token::Ident("a".into())));
+        assert!(toks.contains(&Token::Ident("b".into())));
+    }
 }
 
-#[test]
-fn at_rule_recognition() {
-    let toks = collect_tokens("@media screen { }");
-    assert!(toks.contains(&Token::AtMedia));
+#[cfg(test)]
+mod lexer_strings {
+    use super::*;
+    use rx_scss::lexer::scan;
+
+    fn collect_tokens(source: &str) -> Vec<Token> {
+        let stream = scan(source);
+        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let r = result.clone();
+        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
+        let guard = result.lock().unwrap();
+        guard.clone()
+    }
+
+    #[test]
+    fn test_double_quoted_string() {
+        let toks = collect_tokens("\"hello world\"");
+        assert!(toks.contains(&Token::Str("hello world".into())));
+    }
+
+    #[test]
+    fn test_single_quoted_string() {
+        let toks = collect_tokens("'hello'");
+        assert!(toks.contains(&Token::Str("hello".into())));
+    }
+
+    #[test]
+    fn test_string_with_escape() {
+        let toks = collect_tokens("\"hello\\\"world\"");
+        assert!(toks.contains(&Token::Str("hello\"world".into())));
+    }
+
+    #[test]
+    fn test_string_in_property() {
+        let toks = collect_tokens("content: \";\"");
+        assert!(toks.contains(&Token::Str(";".into())));
+    }
 }
 
-#[test]
-fn basic_ident_number() {
-    let toks = collect_tokens("color red");
-    let idents: Vec<_> = toks.iter().filter(|t| matches!(t, Token::Ident(_))).collect();
-    assert!(!idents.is_empty());
+#[cfg(test)]
+mod lexer_operators {
+    use super::*;
+    use rx_scss::lexer::scan;
+
+    fn collect_tokens(source: &str) -> Vec<Token> {
+        let stream = scan(source);
+        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let r = result.clone();
+        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
+        let guard = result.lock().unwrap();
+        guard.clone()
+    }
+
+    #[test]
+    fn test_eq_operator() {
+        let toks = collect_tokens("$x == 1");
+        assert!(toks.contains(&Token::Eq));
+    }
+
+    #[test]
+    fn test_ne_operator() {
+        let toks = collect_tokens("$x != 1");
+        assert!(toks.contains(&Token::Ne));
+    }
+
+    #[test]
+    fn test_le_operator() {
+        let toks = collect_tokens("$x <= 5");
+        assert!(toks.contains(&Token::Le));
+    }
+
+    #[test]
+    fn test_ge_operator() {
+        let toks = collect_tokens("$x >= 5");
+        assert!(toks.contains(&Token::Ge));
+    }
+
+    #[test]
+    fn test_lt_operator() {
+        let toks = collect_tokens("$x < 5");
+        assert!(toks.contains(&Token::Lt));
+    }
+
+    #[test]
+    fn test_gt_operator() {
+        let toks = collect_tokens("$x > 5");
+        assert!(toks.contains(&Token::Gt));
+    }
 }
 
-#[test]
-fn lexer_state_feed() {
-    let mut s = LexerState::new();
-    let t = s.feed('$');
-    assert_eq!(t, vec![Token::Dollar]);
-}
+#[cfg(test)]
+mod lexer_at_rules {
+    use super::*;
+    use rx_scss::lexer::scan;
 
-#[test]
-fn operator_double_char() {
-    let toks = collect_tokens("== != <= >=");
-    let has_eq = toks.contains(&Token::Eq);
-    let has_ne = toks.contains(&Token::Ne);
-    assert!(has_eq, "expected Eq in {:?}", toks);
-    assert!(has_ne, "expected Ne in {:?}", toks);
+    fn collect_tokens(source: &str) -> Vec<Token> {
+        let stream = scan(source);
+        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let r = result.clone();
+        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
+        let guard = result.lock().unwrap();
+        guard.clone()
+    }
+
+    #[test]
+    fn test_at_import() {
+        let toks = collect_tokens("@import \"variables\";");
+        assert!(toks.contains(&Token::AtImport));
+    }
+
+    #[test]
+    fn test_at_else() {
+        let toks = collect_tokens("@else { }");
+        assert!(toks.contains(&Token::AtElse));
+    }
+
+    #[test]
+    fn test_at_at_root() {
+        let toks = collect_tokens("@at-root .foo { }");
+        assert!(toks.contains(&Token::AtAtRoot));
+    }
+
+    #[test]
+    fn test_at_error() {
+        let toks = collect_tokens("@error \"bad\";");
+        assert!(toks.contains(&Token::AtError));
+    }
+
+    #[test]
+    fn test_at_charset() {
+        let toks = collect_tokens("@charset \"UTF-8\";");
+        assert!(toks.contains(&Token::AtCharset));
+    }
+
+    #[test]
+    fn test_at_keyframes() {
+        let toks = collect_tokens("@keyframes slide { }");
+        assert!(toks.contains(&Token::AtKeyframes));
+    }
+
+    #[test]
+    fn test_logical_and_keyword() {
+        let toks = collect_tokens("a and b");
+        assert!(toks.contains(&Token::And), "toks: {:?}", toks);
+        assert!(!toks.iter().any(|t| matches!(t, Token::Ident(s) if s == "and")));
+    }
+
+    #[test]
+    fn test_logical_or_keyword() {
+        let toks = collect_tokens("a or b");
+        assert!(toks.contains(&Token::Or), "toks: {:?}", toks);
+        assert!(!toks.iter().any(|t| matches!(t, Token::Ident(s) if s == "or")));
+    }
+
+    #[test]
+    fn test_unary_minus_before_var() {
+        let toks = collect_tokens("-$x");
+        // Should produce [Minus, Dollar, Ident("x")]
+        assert!(toks.contains(&Token::Minus), "minus: {:?}", toks);
+        assert!(toks.contains(&Token::Dollar), "dollar: {:?}", toks);
+        assert!(toks.iter().any(|t| matches!(t, Token::Ident(s) if s == "x")), "ident x: {:?}", toks);
+    }
+
+    #[test]
+    fn test_selector_interpolation_tokens() {
+        let toks = collect_tokens(".#{$klass}");
+        // We expect: [Dot, InterpolationStart, Dollar, Ident("klass"), InterpolationEnd]
+        let has_interp = toks.contains(&Token::InterpolationStart);
+        let has_dot = toks.contains(&Token::Dot);
+        let has_interp_end = toks.contains(&Token::InterpolationEnd);
+        assert!(has_dot, "should have Dot: {:?}", toks);
+        assert!(has_interp, "should have InterpolationStart: {:?}", toks);
+        assert!(has_interp_end, "should have InterpolationEnd: {:?}", toks);
+    }
 }

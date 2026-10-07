@@ -22,20 +22,23 @@ pub enum Token {
     RBrace,
     LBracket,
     RBracket,
-    Eq,
-    Ne,
-    Le,
-    Ge,
-    Lt,
-    Gt,
+    Eq,          // ==
+    Ne,          // !=
+    Le,          // <=
+    Ge,          // >=
+    Lt,          // <
+    Gt,          // >
     Plus,
     Minus,
     Slash,
     Star,
     Percent,
+    Bang,        // !
+    Question,    // ?
     AtMedia,
     AtSupports,
     AtIf,
+    AtElse,
     AtFor,
     AtEach,
     AtWhile,
@@ -45,11 +48,24 @@ pub enum Token {
     AtReturn,
     AtUse,
     AtForward,
+    AtImport,
     AtExtend,
+    AtAtRoot,
+    AtContent,
     AtWarn,
     AtDebug,
+    AtError,
+    AtCharset,
+    AtNamespace,
+    AtKeyframes,
+    AtFontFace,
+    AtPage,
+    AtCustomMedia,
+    AtCustomSelector,
     InterpolationStart,
     InterpolationEnd,
+    And,         // 'and' keyword
+    Or,          // 'or' keyword
     AtName,
     IdentAt(String),
     Whitespace,
@@ -57,18 +73,17 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn pos(&self) -> u32 {
-        0
-    }
+    pub fn pos(&self) -> u32 { 0 }
 }
 
 // ── Value ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Number(f64),
+    Number(f64, Option<String>),
     String(String),
     Color(u8, u8, u8, u8),
+    Calc(String),
     List(Vec<Value>),
     Map(Vec<(String, Value)>),
     Bool(bool),
@@ -78,13 +93,18 @@ pub enum Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Number(n) => {
-                if *n == n.trunc() {
-                    write!(f, "{}", *n as i64)
+            Value::Number(n, unit) => {
+                let num_str = if *n == n.trunc() {
+                    format!("{}", *n as i64)
                 } else {
-                    write!(f, "{}", n)
+                    format!("{}", n)
+                };
+                match unit {
+                    Some(u) => write!(f, "{}{}", num_str, u),
+                    None => write!(f, "{}", num_str),
                 }
             }
+            Value::Calc(expr) => write!(f, "calc({})", expr),
             Value::String(s) => write!(f, "{}", s),
             Value::Color(r, g, b, a) => {
                 if *a == 255 {
@@ -101,8 +121,8 @@ impl fmt::Display for Value {
                     .iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "({})", inner)
+                    .join(" ");
+                write!(f, "{}", inner)
             }
             Value::Map(entries) => {
                 let inner = entries
@@ -119,7 +139,7 @@ impl fmt::Display for Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::Number(a, ua), Value::Number(b, ub)) => a == b && ua == ub,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Color(r1, g1, b1, a1), Value::Color(r2, g2, b2, a2)) => {
                 r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
@@ -194,7 +214,7 @@ pub enum AstNode {
     Each { vars: Vec<String>, list: Box<AstNode>, body: Vec<AstNode> },
     While { cond: Box<AstNode>, body: Vec<AstNode> },
     MixinDecl { name: String, params: Vec<Param>, body: Vec<AstNode> },
-    MixinCall { name: String, args: Vec<AstNode> },
+    MixinCall { name: String, args: Vec<AstNode>, content: Vec<AstNode> },
     FunctionDecl { name: String, params: Vec<Param>, body: Vec<AstNode> },
     Return(Box<AstNode>),
     Media { query: String, inner: Vec<AstNode> },
@@ -202,6 +222,8 @@ pub enum AstNode {
     Warn(Box<AstNode>),
     Debug(Box<AstNode>),
     Css(CssStmt),
+    Import(Vec<AstNode>),
+    Content,
 }
 
 // ── Operators ──────────────────────────────────────────────────────────────
@@ -238,18 +260,20 @@ pub type OutputStream = SharedBoxedObservable<'static, String, Infallible>;
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InputSyntax { Scss, Css, Sass }
-
-impl Default for InputSyntax {
-    fn default() -> Self { InputSyntax::Scss }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InputSyntax {
+    #[default]
+    Scss,
+    Css,
+    Sass,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputStyle { Expanded, Compressed, Nested }
-
-impl Default for OutputStyle {
-    fn default() -> Self { OutputStyle::Expanded }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputStyle {
+    #[default]
+    Expanded,
+    Compressed,
+    Nested,
 }
 
 // ── CompileError ───────────────────────────────────────────────────────────

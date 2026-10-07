@@ -4,31 +4,37 @@ use rx_scss::runtime::{create_runtime, EvalContext};
 use rx_scss::types::Value;
 
 #[test]
-fn child_scope_arithmetic_derive() {
+fn child_scope_monotonic_ids() {
     let bus = Arc::new(CompilerBus::new());
     let root = EvalContext::new(bus.clone(), 1);
 
-    let child = root.child_scope(5);
-    assert_eq!(child.scope_id(), 1 * 1000 + 5);
+    // With monotonic counter, child scope_ids are unique and increasing
+    let child1 = root.child_scope(5);
+    let child2 = root.child_scope(7);
+    assert_ne!(child1.scope_id(), root.scope_id(), "child must differ from root");
+    assert_ne!(child2.scope_id(), root.scope_id(), "child must differ from root");
+    assert_ne!(child1.scope_id(), child2.scope_id(), "siblings must differ");
 
-    let grandchild = child.child_scope(3);
-    assert_eq!(grandchild.scope_id(), (1 * 1000 + 5) * 1000 + 3);
+    // Grandchild has its own unique id
+    let grandchild = child1.child_scope(3);
+    assert_ne!(grandchild.scope_id(), child1.scope_id());
+    assert_ne!(grandchild.scope_id(), root.scope_id());
 }
 
 #[test]
 fn variable_scope_isolation() {
     let bus = Arc::new(CompilerBus::new());
     let root = EvalContext::new(bus.clone(), 1);
-    root.bind_var("x", Value::Number(100.0));
+    root.bind_var("x", Value::Number(100.0, None));
 
     let child = root.child_scope(1);
     // child should inherit from parent
-    assert_eq!(child.var("x"), Some(Value::Number(100.0)));
+    assert_eq!(child.var("x"), Some(Value::Number(100.0, None)));
 
     // child's variable should not affect parent
-    child.bind_var("x", Value::Number(200.0));
-    assert_eq!(child.var("x"), Some(Value::Number(200.0)));
-    assert_eq!(root.var("x"), Some(Value::Number(100.0)));
+    child.bind_var("x", Value::Number(200.0, None));
+    assert_eq!(child.var("x"), Some(Value::Number(200.0, None)));
+    assert_eq!(root.var("x"), Some(Value::Number(100.0, None)));
 }
 
 #[test]

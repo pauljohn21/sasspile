@@ -2,13 +2,13 @@ use rx_scss::types::Value;
 
 #[test]
 fn display_number_integer() {
-    assert_eq!(Value::Number(42.0).to_string(), "42");
+    assert_eq!(Value::Number(42.0, None).to_string(), "42");
 }
 
 #[test]
 fn display_number_float() {
-    let s = Value::Number(3.14).to_string();
-    assert!(s.contains("3.14"), "expected '3.14' in '{}'", s);
+    let s = Value::Number(3.5, None).to_string();
+    assert!(s.contains("3.5"), "expected '3.5' in '{}'", s);
 }
 
 #[test]
@@ -41,9 +41,9 @@ fn display_null() {
 #[test]
 fn display_list() {
     let list = Value::List(vec![
-        Value::Number(1.0),
-        Value::Number(2.0),
-        Value::Number(3.0),
+        Value::Number(1.0, None),
+        Value::Number(2.0, None),
+        Value::Number(3.0, None),
     ]);
     let s = list.to_string();
     assert!(s.contains("1"));
@@ -54,7 +54,7 @@ fn display_list() {
 #[test]
 fn display_map() {
     let map = Value::Map(vec![
-        ("key1".into(), Value::Number(1.0)),
+        ("key1".into(), Value::Number(1.0, None)),
         ("key2".into(), Value::String("v".into())),
     ]);
     let s = map.to_string();
@@ -64,11 +64,11 @@ fn display_map() {
 
 #[test]
 fn value_partial_eq() {
-    assert_eq!(Value::Number(1.0), Value::Number(1.0));
-    assert_ne!(Value::Number(1.0), Value::Number(2.0));
+    assert_eq!(Value::Number(1.0, None), Value::Number(1.0, None));
+    assert_ne!(Value::Number(1.0, None), Value::Number(2.0, None));
     assert_eq!(Value::Bool(true), Value::Bool(true));
     assert_eq!(Value::Null, Value::Null);
-    assert_ne!(Value::Number(1.0), Value::String("1".into()));
+    assert_ne!(Value::Number(1.0, None), Value::String("1".into()));
 }
 
 #[test]

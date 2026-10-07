@@ -52,6 +52,7 @@ struct BusInner {
     functions: HashMap<String, FnDef>,
     modules: HashMap<String, ModuleDef>,
     variables: HashMap<(u64, String), Value>,
+    parent_map: HashMap<u64, u64>,
 }
 
 #[derive(Clone)]
@@ -93,14 +94,29 @@ impl CompilerBus {
         let mut subj = self.var_subject.clone();
         subj.next(ev);
     }
-    pub fn get_var(&self, scope_id: u64, name: &str) -> Option<Value> {
+    pub fn bind_var_silent(&self, scope_id: u64, name: String, value: Value) {
+        let mut g = self.inner.lock().unwrap();
+        g.variables.insert((scope_id, name), value);
+    }
+    pub fn register_parent(&self, child: u64, parent: u64) {
+        let mut g = self.inner.lock().unwrap();
+        g.parent_map.insert(child, parent);
+    }
+    pub fn get_var(&self, ctx: &crate::runtime::EvalContext, name: &str) -> Option<Value> {
         let g = self.inner.lock().unwrap();
-        let mut s = scope_id;
-        loop {
+        // Walk parent chain: scope_id → parent_id → ...
+        let mut current_id = Some(ctx.scope_id());
+        while let Some(s) = current_id {
             if let Some(v) = g.variables.get(&(s, name.into())) { return Some(v.clone()); }
-            if s <= 1 { return None; }
-            s /= 1000;
+            current_id = g.parent_map.get(&s).copied();
         }
+        None
+    }
+
+    /// Look up a variable in a specific scope without walking parent chain.
+    pub fn get_var_by_id(&self, scope_id: u64, name: &str) -> Option<Value> {
+        let g = self.inner.lock().unwrap();
+        g.variables.get(&(scope_id, name.into())).cloned()
     }
     pub fn register_mixin(&self, d: MixinDef) { self.inner.lock().unwrap().mixins.insert(d.name.clone(), d); }
     pub fn lookup_mixin(&self, n: &str) -> Option<MixinDef> { self.inner.lock().unwrap().mixins.get(n).cloned() }

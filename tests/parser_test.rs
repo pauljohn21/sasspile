@@ -167,9 +167,10 @@ fn parse_include_call() {
     let nodes = collect_ast(tokens_to_stream(tokens));
     assert!(!nodes.is_empty(), "include: {:?}", nodes);
     match &nodes[0] {
-        AstNode::MixinCall { name, args } => {
+        AstNode::MixinCall { name, args, content } => {
             assert_eq!(name, "box");
             assert_eq!(args.len(), 1);
+            assert!(content.is_empty(), "no content block in this test");
         }
         other => panic!("expected MixinCall, got {:?}", other),
     }
@@ -311,5 +312,221 @@ fn parse_supports_at_rule() {
             assert!(query.contains("display"), "query: {}", query);
         }
         other => panic!("expected Supports, got {:?}", other),
+    }
+}
+
+// ── Pratt expression parser tests ──
+
+#[test]
+fn parse_binop_addition() {
+    // $x: 1 + 2;
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Number(1.0, None), Token::Whitespace,
+        Token::Plus, Token::Whitespace, Token::Number(2.0, None),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    assert!(!nodes.is_empty(), "binop: {:?}", nodes);
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => {
+            assert!(matches!(value.as_ref(), AstNode::BinOp { op: BinOp::Add, .. }), "got: {:?}", value);
+        }
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_mul_higher_prec_than_add() {
+    // $x: 1 + 2 * 3;  should be 1 + (2 * 3)
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Number(1.0, None), Token::Whitespace,
+        Token::Plus, Token::Whitespace, Token::Number(2.0, None), Token::Whitespace,
+        Token::Star, Token::Whitespace, Token::Number(3.0, None),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => match value.as_ref() {
+            AstNode::BinOp { op: BinOp::Add, right, .. } => {
+                assert!(matches!(right.as_ref(), AstNode::BinOp { op: BinOp::Mul, .. }), "right should be Mul: {:?}", right);
+            }
+            other => panic!("expected Add at top, got: {:?}", other),
+        },
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_comparison_operators() {
+    // $x: 5 > 3;
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Number(5.0, None), Token::Whitespace,
+        Token::Gt, Token::Whitespace, Token::Number(3.0, None),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => {
+            assert!(matches!(value.as_ref(), AstNode::BinOp { op: BinOp::Gt, .. }), "got: {:?}", value);
+        }
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_equality_operators() {
+    // $x: a == b;
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Ident("a".into()), Token::Whitespace,
+        Token::Eq, Token::Whitespace, Token::Ident("b".into()),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => {
+            assert!(matches!(value.as_ref(), AstNode::BinOp { op: BinOp::Eq, .. }), "got: {:?}", value);
+        }
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_logical_and_or() {
+    // $x: a and b or c;
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Ident("a".into()), Token::Whitespace,
+        Token::And, Token::Whitespace, Token::Ident("b".into()), Token::Whitespace,
+        Token::Or, Token::Whitespace, Token::Ident("c".into()),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => match value.as_ref() {
+            // Should be (a and b) or c — Or at top, And on left
+            AstNode::BinOp { op: BinOp::Or, left, .. } => {
+                assert!(matches!(left.as_ref(), AstNode::BinOp { op: BinOp::And, .. }), "left should be And: {:?}", left);
+            }
+            other => panic!("expected Or at top, got: {:?}", other),
+        },
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_function_call() {
+    // $x: rgba(255, 0, 0, 0.5);
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Ident("rgba".into()), Token::LParen,
+        Token::Number(255.0, None), Token::Comma,
+        Token::Number(0.0, None), Token::Comma,
+        Token::Number(0.0, None), Token::Comma,
+        Token::Number(0.5, None), Token::RParen,
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => match value.as_ref() {
+            AstNode::FunctionCall { name, args } => {
+                assert_eq!(name, "rgba");
+                assert_eq!(args.len(), 4);
+            }
+            other => panic!("expected FunctionCall, got: {:?}", other),
+        },
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_unary_minus() {
+    // $x: -5px;
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::Minus, Token::Number(5.0, Some("px".into())),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => match value.as_ref() {
+            AstNode::UnaryOp { op: UnaryOp::Neg, expr } => {
+                assert!(matches!(expr.as_ref(), AstNode::Literal(Value::Number(5.0, Some(_)))), "expr: {:?}", expr);
+            }
+            other => panic!("expected UnaryOp(Neg), got: {:?}", other),
+        },
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_paren_grouping() {
+    // $x: (1 + 2) * 3;  should be (1+2) * 3
+    let tokens = vec![
+        Token::Dollar, Token::Ident("x".into()), Token::Colon,
+        Token::Whitespace, Token::LParen, Token::Number(1.0, None),
+        Token::Plus, Token::Number(2.0, None), Token::RParen, Token::Whitespace,
+        Token::Star, Token::Whitespace, Token::Number(3.0, None),
+        Token::Semicolon, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    match &nodes[0] {
+        AstNode::VariableDecl { value, .. } => match value.as_ref() {
+            AstNode::BinOp { op: BinOp::Mul, left, .. } => {
+                assert!(matches!(left.as_ref(), AstNode::BinOp { op: BinOp::Add, .. }), "left should be Add: {:?}", left);
+            }
+            other => panic!("expected Mul at top, got: {:?}", other),
+        },
+        other => panic!("expected VariableDecl, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_selector_interpolation() {
+    // .#{$klass} { color: red; }
+    let tokens = vec![
+        Token::Dot,
+        Token::InterpolationStart,
+        Token::Dollar, Token::Ident("klass".into()),
+        Token::InterpolationEnd,
+        Token::Whitespace, Token::LBrace,
+        Token::Ident("color".into()), Token::Colon, Token::Whitespace,
+        Token::Ident("red".into()), Token::Semicolon,
+        Token::RBrace, Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    assert!(!nodes.is_empty(), "interp rule: {:?}", nodes);
+    match &nodes[0] {
+        AstNode::Rule { selector, .. } => {
+            assert!(selector.contains("$klass"), "selector: {}", selector);
+        }
+        other => panic!("expected Rule, got {:?}", other),
+    }
+}
+
+#[test]
+fn parse_if_else_chain() {
+    // @if x { } @else if y { } @else { }
+    // simplified: just test @else if handling
+    let tokens = vec![
+        Token::AtIf,
+        Token::Whitespace, Token::Ident("true".into()),
+        Token::Whitespace, Token::LBrace, Token::RBrace,
+        Token::AtElse,
+        Token::AtIf,
+        Token::Whitespace, Token::Ident("false".into()),
+        Token::Whitespace, Token::LBrace, Token::RBrace,
+        Token::Eof,
+    ];
+    let nodes = collect_ast(tokens_to_stream(tokens));
+    assert!(!nodes.is_empty(), "if/else: {:?}", nodes);
+    match &nodes[0] {
+        AstNode::If { else_branch, .. } => {
+            assert!(else_branch.is_some(), "should have else branch");
+        }
+        other => panic!("expected If, got {:?}", other),
     }
 }

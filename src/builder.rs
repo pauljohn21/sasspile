@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use crate::pipeline::{from_path, from_string};
-use crate::serialize::{self, Options};
+use crate::serialize::Options;
 use crate::types::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,7 +104,7 @@ impl CompileBuilder {
             style: self.serialize_style,
             suppress_charset: false,
         };
-        from_string(source, &options)
+        crate::pipeline::from_string_with_paths(source, &options, self.include_paths.clone())
     }
 
     pub fn compile_file(&self, path: impl AsRef<std::path::Path>) -> Result<String, CompileError> {
@@ -116,6 +116,7 @@ impl CompileBuilder {
     }
 }
 
+#[allow(dead_code)]
 pub struct CompileSession {
     pub(crate) syntax: InputSyntax,
     pub(crate) include_paths: Vec<PathBuf>,

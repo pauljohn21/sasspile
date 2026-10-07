@@ -3,6 +3,8 @@
 //! 这些测试使用 `#[ignore]` 标记，因为需要 Bootstrap submodule 存在。
 //! 运行: `cargo test --test bootstrap_test -- --ignored`
 
+mod common;
+
 use rx_scss::builder::CompileBuilder;
 use rx_scss::serialize::Options;
 
@@ -98,6 +100,35 @@ fn include_path_resolution() {
     let _result = CompileBuilder::new()
         .include_path("bootstrap/scss/")
         .compile_string(scss);
+}
+
+/// Bootstrap dist alignment test — compares compiled output against dist CSS.
+/// Will be enabled (remove #[ignore]) once coverage >= 99% is achieved (task 6.1).
+#[test]
+#[ignore = "bootstrap dist alignment coverage < 99% — enabled after all features implemented"]
+fn test_bootstrap_dist_alignment() {
+    let check = crate::common::bootstrap_dist::bootstrap_dist_check()
+        .expect("Bootstrap submodule not found — run: git submodule update --init --depth 1");
+
+    let coverage = if check.reference_line_count > 0 {
+        (check.reference_line_count - check.missing_count) as f64 / check.reference_line_count as f64
+    } else {
+        0.0
+    };
+
+    eprintln!(
+        "Bootstrap dist alignment: coverage={:.2}% (missing={}/{} lines)",
+        coverage * 100.0,
+        check.missing_count,
+        check.reference_line_count
+    );
+
+    assert!(
+        coverage >= 0.99,
+        "Bootstrap dist alignment coverage {:.2}% < 99% (missing {} lines)",
+        coverage * 100.0,
+        check.missing_count
+    );
 }
 
 #[test]
