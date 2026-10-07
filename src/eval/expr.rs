@@ -137,15 +137,41 @@ pub(crate) fn truthy(v: &Value) -> bool {
 }
 
 /// Combine parent and child selectors following Sass nested rules semantics.
+/// If child contains `&`, replace it with parent. Otherwise, determine the
+/// combinator: pseudo-class (`:`), pseudo-element (`::`), class (`.`), ID (`#`),
+/// attribute (`[`), or sibling (`+`/`~`) combinators attach directly (compound),
+/// while type selectors and others use descendant combinator (space).
+/// Supports comma-separated multi-selector parent/child combinations (cartesian product).
 pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
     if child.contains('&') {
-        child.replace('&', parent)
-    } else {
-        format!("{} {}", parent, child)
+        return child.replace('&', parent);
     }
+    // Compound selector: starts with pseudo/element/class/ID/attribute — these attach directly
+    // Combinators (+, >, ~) need spaces around them: `.a + .btn` not `.a+ .btn`
+    let is_compound = child.starts_with(':')
+        || child.starts_with('.')
+        || child.starts_with('#')
+        || child.starts_with('[');
+    // Split parents by comma and combine each with child (cartesian product)
+    let parents: Vec<&str> = parent.split(',').map(str::trim).collect();
+    let children: Vec<&str> = child.split(',').map(str::trim).collect();
+    parents.iter().flat_map(|p| {
+        children.iter().map(move |c| {
+            // Handle & replacement within each child
+            if c.contains('&') {
+                return c.replace('&', p);
+            }
+            if is_compound {
+                format!("{}{}", p, c)
+            } else {
+                format!("{} {}", p, c)
+            }
+        })
+    }).collect::<Vec<_>>().join(", ")
 }
 
-/// Resolve selector interpolation: replace $var references with their values.
+/// Resolve selector interpolation: replace `#{$var}` and `$var` references with their values.
+/// Handles both `#{$var}` (interpolation) and `$var` (variable reference) forms.
 /// Variable names are scanned as `[a-zA-Z0-9_-]+`. If the full name is undefined,
 /// progressively shorten at `-` boundaries so `#{$key}-y` resolves `$key` then `-y`.
 pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
@@ -156,6 +182,23 @@ pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
     let chars: Vec<char> = selector.chars().collect();
     let mut i = 0;
     while i < chars.len() {
+        // Handle `#{$var}` interpolation: skip the `#{` prefix
+        if chars[i] == '#' && i + 1 < chars.len() && chars[i + 1] == '{' {
+            // Find the closing `}`
+            let close = chars[i + 2..].iter().position(|&c| c == '}').map(|p| i + 2 + p);
+            if let Some(end) = close {
+                let var_chars = &chars[i + 2..end];
+                // Skip leading $ if present
+                let var_start = if !var_chars.is_empty() && var_chars[0] == '$' { 1 } else { 0 };
+                let var_name: String = var_chars[var_start..].iter().collect();
+                if !var_name.is_empty() {
+                    let val = ctx.var(&var_name).unwrap_or(Value::Null);
+                    result.push_str(&val.to_string());
+                }
+                i = end + 1;
+                continue;
+            }
+        }
         if chars[i] == '$' {
             let start = i + 1;
             let mut end = start;

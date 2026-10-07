@@ -54,8 +54,8 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
             }
             Token::Dot | Token::HashId(_) | Token::Ampersand |
             Token::LBracket | Token::Colon | Token::Star |
-            Token::Minus => {
-                // Minus 可能是 CSS 自定义属性 --#{$prefix}name: value 的开头
+            Token::Minus | Token::Plus | Token::Gt => {
+                // Minus/Plus/Gt 可能是 CSS 组合器（+, >）或自定义属性 --name 的开头
                 if is_style_decl(ps) {
                     if let Some(node) = parse_style_decl(ps) {
                         result.push(node);
@@ -185,6 +185,13 @@ fn parse_variable_decl(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
     // SCSS 变量赋值支持逗号分隔的列表：`$a: x, y, z` → ListLiteral([x, y, z])
     // 不能仅用 parse_value，因为它遇到逗号就停止。
     let value = parse_list_or_expr(ps)?;
+    // Skip `!default` flag if present (Bootstrap 变量大量使用)
+    if matches!(ps.peek(), Some(Token::Bang)) {
+        ps.next_token(); // consume !
+        if matches!(ps.peek(), Some(Token::Ident(s)) if s == "default") {
+            ps.next_token(); // consume `default`
+        }
+    }
     if matches!(ps.peek(), Some(Token::Semicolon)) {
         ps.next_token();
     }
@@ -505,16 +512,68 @@ fn parse_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
 
 fn parse_selector(ps: &mut ParserState) -> Option<String> {
     let mut parts = Vec::new();
+    let mut prev_was_combinator = false;
     loop {
         match ps.peek() {
-            Some(Token::LBrace) => break,
-            Some(Token::Ident(s)) => { parts.push(s.clone()); ps.next_token(); }
-            Some(Token::Dot) => { parts.push(".".into()); ps.next_token(); }
-            Some(Token::HashId(s)) => { parts.push(format!("#{}", s)); ps.next_token(); }
-            Some(Token::Ampersand) => { parts.push("&".into()); ps.next_token(); }
-            Some(Token::Colon) => { parts.push(":".into()); ps.next_token(); }
-            Some(Token::Star) => { parts.push("*".into()); ps.next_token(); }
-            Some(Token::Minus) => { parts.push("-".into()); ps.next_token(); }
+            Some(Token::LBrace) | Some(Token::Semicolon) | Some(Token::Eof) => break,
+            // Whitespace (descendant combinator) — preserve in output, don't break
+            Some(Token::Whitespace) => {
+                parts.push(" ".into());
+                ps.next_token();
+                prev_was_combinator = false;
+                continue;
+            }
+            Some(Token::Comma) => {
+                parts.push(",".into());
+                ps.next_token();
+                prev_was_combinator = false;
+            }
+            Some(Token::Plus) => {
+                // Adjacent sibling combinator: + (with spaces around if not already)
+                let needs_space = !prev_was_combinator
+                    && !parts.last().is_some_and(|p: &String| p.ends_with(' '));
+                if needs_space {
+                    parts.push(" + ".to_string());
+                } else {
+                    parts.push("+".into());
+                }
+                ps.next_token();
+                prev_was_combinator = true;
+            }
+            Some(Token::Gt) => {
+                let needs_space = !prev_was_combinator
+                    && !parts.last().is_some_and(|p: &String| p.ends_with(' '));
+                if needs_space {
+                    parts.push(" > ".to_string());
+                } else {
+                    parts.push(">".into());
+                }
+                ps.next_token();
+                prev_was_combinator = true;
+            }
+            // General sibling combinator ~ (tokenized as Minus in some cases, but check for actual ~)
+            Some(Token::Minus) if parts.is_empty() => {
+                // Leading minus — could be custom property prefix or selector part
+                parts.push("-".into());
+                ps.next_token();
+                prev_was_combinator = false;
+            }
+            Some(Token::Minus) => {
+                // Middle of selector: could be hyphen in name or custom property
+                parts.push("-".into());
+                ps.next_token();
+                prev_was_combinator = false;
+            }
+            Some(Token::Ident(s)) => {
+                parts.push(s.clone());
+                ps.next_token();
+                prev_was_combinator = false;
+            }
+            Some(Token::Dot) => { parts.push(".".into()); ps.next_token(); prev_was_combinator = false; }
+            Some(Token::HashId(s)) => { parts.push(format!("#{}", s)); ps.next_token(); prev_was_combinator = false; }
+            Some(Token::Ampersand) => { parts.push("&".into()); ps.next_token(); prev_was_combinator = false; }
+            Some(Token::Colon) => { parts.push(":".into()); ps.next_token(); prev_was_combinator = false; }
+            Some(Token::Star) => { parts.push("*".into()); ps.next_token(); prev_was_combinator = false; }
             Some(Token::LBracket) => {
                 parts.push("[".into());
                 ps.next_token();
@@ -579,6 +638,7 @@ fn parse_selector(ps: &mut ParserState) -> Option<String> {
                     parts.push("]".into());
                     ps.next_token();
                 }
+                prev_was_combinator = false;
             }
             Some(Token::InterpolationStart) => {
                 // #{...} interpolation in selector
@@ -598,13 +658,12 @@ fn parse_selector(ps: &mut ParserState) -> Option<String> {
                 if matches!(ps.peek(), Some(Token::InterpolationEnd)) {
                     ps.next_token(); // consume }
                 }
+                prev_was_combinator = false;
             }
-            Some(Token::Semicolon) => break,
             _ => break,
         }
-        skip_whitespace(ps);
     }
-    if parts.is_empty() { None } else { Some(parts.join("")) }
+    if parts.is_empty() { None } else { Some(parts.join("").trim().to_string()) }
 }
 
 fn skip_whitespace(ps: &mut ParserState) {
@@ -1010,7 +1069,7 @@ fn resolve_import_nodes(ps: &mut ParserState, path: &str) -> Vec<AstNode> {
             }
         }
         None => {
-            tracing::warn!("@import path not found: {}", path);
+            tracing::warn!("@import path not found: {} (include_paths={:?})", path, ps.include_paths);
             Vec::new()
         }
     }

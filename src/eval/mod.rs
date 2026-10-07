@@ -159,12 +159,25 @@ fn expand_nodes_to_events(
                     let resolved = resolve_selector(&selector, ctx);
                     let combined = match &parent_sel {
                         Some(p) => combine_selectors(p, &resolved),
-                        None => resolved,
+                        // 无父级时，剥掉 `&`（顶层 mixin body 中的 `&:hover` → `:hover`）
+                        None => resolved.replace('&', ""),
                     };
-                    events.push(EvalEvent::EnterRule(combined.clone()));
-                    queue.push(Work::LeaveRule);
-                    for n in inner.iter().rev() {
-                        queue.push(Work::Node(n.clone(), Some(combined.clone()), Arc::new(child_ctx.clone())));
+                    // 分离 rule 节点和非 rule 节点
+                    // CSS 展平：嵌套规则（扁平输出）vs 声明（保留在父规则内）
+                    let (nested_rules, declarations): (Vec<_>, Vec<_>) = inner.iter()
+                        .cloned()
+                        .partition(|n| matches!(n, AstNode::Rule { .. }));
+                    // 有声明输出 EnterRule + 声明 + LeaveRule
+                    if !declarations.is_empty() {
+                        events.push(EvalEvent::EnterRule(combined.clone()));
+                        queue.push(Work::LeaveRule);
+                        for n in declarations.iter().rev() {
+                            queue.push(Work::Node(n.clone(), Some(combined.clone()), Arc::new(child_ctx.clone())));
+                        }
+                    }
+                    // 嵌套规则作为兄弟节点展开（在 LeaveRule 之后处理）
+                    for n in nested_rules {
+                        queue.push(Work::Node(n, Some(combined.clone()), Arc::new(ctx.clone())));
                     }
                 }
                 AstNode::Media { query, inner } => {
