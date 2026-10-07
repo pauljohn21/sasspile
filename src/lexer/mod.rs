@@ -15,9 +15,12 @@ pub fn scan(source: &str) -> TokenStream {
                 }
             }
         }
-        // flush remaining buf
+        // flush remaining buf, then resolve any trailing pending_slash as Slash
         let mut final_toks = Vec::new();
         st.flush_buf_checked(&mut final_toks);
+        if st.take_pending_slash() {
+            final_toks.push(Token::Slash);
+        }
         for t in final_toks {
             if !matches!(t, Token::Whitespace) {
                 subscriber.next(t);

@@ -253,17 +253,26 @@ fn parse_atom(ps: &mut ParserState) -> Option<AstNode> {
         Token::LParen => {
             // Parenthesized expression, list literal, or map literal
             ps.next_token();
+            // Handle empty parens (): return empty list literal
+            if matches!(ps.peek(), Some(Token::RParen)) {
+                ps.next_token();
+                return Some(AstNode::ListLiteral(vec![]));
+            }
             let inner = parse_expression(ps, 0)?;
             if matches!(ps.peek(), Some(Token::RParen)) {
                 ps.next_token();
                 Some(inner)
             } else if matches!(ps.peek(), Some(Token::Colon)) {
-                // Map literal: ("key": value, "key2": value2)
+                // Map literal: ("key": value, "key2": value2) — supports trailing comma
                 ps.next_token(); // consume ':'
                 let val = parse_expression(ps, 0)?;
                 let mut entries = vec![(key_to_string(&inner)?, val)];
                 while matches!(ps.peek(), Some(Token::Comma)) {
-                    ps.next_token();
+                    ps.next_token(); // consume ','
+                    // Trailing comma support: break if next token closes the group
+                    if matches!(ps.peek(), Some(Token::RParen)) {
+                        break;
+                    }
                     let k_expr = parse_expression(ps, 0)?;
                     if matches!(ps.peek(), Some(Token::Colon)) {
                         ps.next_token();
@@ -276,10 +285,14 @@ fn parse_atom(ps: &mut ParserState) -> Option<AstNode> {
                 }
                 Some(AstNode::MapLiteral(entries))
             } else {
-                // List literal: (a, b, c)
+                // List literal: (a, b, c) — supports trailing comma
                 let mut items = vec![inner];
                 while matches!(ps.peek(), Some(Token::Comma)) {
-                    ps.next_token();
+                    ps.next_token(); // consume ','
+                    // Trailing comma support: break if next token closes the group
+                    if matches!(ps.peek(), Some(Token::RParen)) {
+                        break;
+                    }
                     items.push(parse_expression(ps, 0)?);
                 }
                 if matches!(ps.peek(), Some(Token::RParen)) {
@@ -308,11 +321,12 @@ fn parse_atom(ps: &mut ParserState) -> Option<AstNode> {
 }
 
 /// Convert an AST expression to a map key string.
-/// Accepts String literals, Number literals, or VariableRefs (use name).
+/// Accepts String literals, Number literals, null, or VariableRefs (use name).
 fn key_to_string(expr: &AstNode) -> Option<String> {
     match expr {
         AstNode::Literal(Value::String(s)) => Some(s.clone()),
         AstNode::Literal(Value::Number(n, _)) => Some(format!("{}", n)),
+        AstNode::Literal(Value::Null) => Some("null".into()),
         AstNode::VariableRef { name, .. } => Some(name.clone()),
         _ => None,
     }
@@ -396,10 +410,61 @@ fn parse_selector(ps: &mut ParserState) -> Option<String> {
                 parts.push("[".into());
                 ps.next_token();
                 while !matches!(ps.peek(), Some(Token::RBracket)) {
-                    if let Some(tok) = ps.peek() {
-                        parts.push(format!("{:?}", tok));
-                        ps.next_token();
-                    } else { break; }
+                    match ps.peek() {
+                        Some(Token::Ident(s)) => { parts.push(s.clone()); ps.next_token(); }
+                        Some(Token::Str(s)) => { parts.push(s.clone()); ps.next_token(); }
+                        Some(Token::HashId(s)) => { parts.push(format!("#{}", s)); ps.next_token(); }
+                        Some(Token::Number(n, u)) => {
+                            parts.push(if let Some(unit) = u { format!("{}{}", n, unit) } else { format!("{}", n) });
+                            ps.next_token();
+                        }
+                        Some(Token::Dollar) => {
+                            ps.next_token();
+                            if let Some(Token::Ident(var)) = ps.peek() {
+                                parts.push(format!("${}", var));
+                                ps.next_token();
+                            }
+                        }
+                        Some(Token::InterpolationStart) => {
+                            ps.next_token();
+                            if let Some(Token::Dollar) = ps.peek() {
+                                ps.next_token();
+                                if let Some(Token::Ident(var)) = ps.peek() {
+                                    parts.push(format!("${}", var));
+                                    ps.next_token();
+                                }
+                            }
+                            while !matches!(ps.peek(), Some(Token::InterpolationEnd)) {
+                                ps.next_token();
+                            }
+                            if matches!(ps.peek(), Some(Token::InterpolationEnd)) {
+                                ps.next_token();
+                            }
+                        }
+                        Some(Token::Eq) => { parts.push("=".into()); ps.next_token(); }
+                        Some(Token::Ne) => { parts.push("!=".into()); ps.next_token(); }
+                        Some(Token::Le) => { parts.push("<=".into()); ps.next_token(); }
+                        Some(Token::Ge) => { parts.push(">=".into()); ps.next_token(); }
+                        Some(Token::Lt) => { parts.push("<".into()); ps.next_token(); }
+                        Some(Token::Gt) => { parts.push(">".into()); ps.next_token(); }
+                        Some(Token::Plus) => { parts.push("+".into()); ps.next_token(); }
+                        Some(Token::Minus) => { parts.push("-".into()); ps.next_token(); }
+                        Some(Token::Star) => { parts.push("*".into()); ps.next_token(); }
+                        Some(Token::Slash) => { parts.push("/".into()); ps.next_token(); }
+                        Some(Token::Dot) => { parts.push(".".into()); ps.next_token(); }
+                        Some(Token::Colon) => { parts.push(":".into()); ps.next_token(); }
+                        Some(Token::Comma) => { parts.push(",".into()); ps.next_token(); }
+                        Some(Token::Percent) => { parts.push("%".into()); ps.next_token(); }
+                        Some(Token::Bang) => { parts.push("!".into()); ps.next_token(); }
+                        Some(Token::Ampersand) => { parts.push("&".into()); ps.next_token(); }
+                        Some(Token::Question) => { parts.push("?".into()); ps.next_token(); }
+                        Some(Token::Whitespace) => { ps.next_token(); }
+                        _ => {
+                            // Unknown token inside [...] — skip it
+                            // Always advance to prevent infinite loop or parser misalignment
+                            ps.next_token();
+                        }
+                    }
                 }
                 if matches!(ps.peek(), Some(Token::RBracket)) {
                     parts.push("]".into());

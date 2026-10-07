@@ -9,6 +9,13 @@ enum PendingOp {
     Ne, // saw '!', waiting for next char to decide !=
 }
 
+/// Pending slash state: saw '/', waiting for next char to decide:
+/// '//' → line comment, '/*' → block comment, otherwise division operator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PendingSlash {
+    Slash,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct LexerState {
     pub pos: u32,
@@ -21,6 +28,7 @@ pub struct LexerState {
     pub prev_char: Option<char>,
     pub escaped: bool,
     pending_op: Option<PendingOp>,
+    pending_slash: Option<PendingSlash>,
 }
 
 impl LexerState {
@@ -37,13 +45,39 @@ impl LexerState {
         self.prev_char = None;
         self.escaped = false;
         self.pending_op = None;
+        self.pending_slash = None;
+    }
+
+    /// Take a pending slash state, returning true if there was one pending.
+    pub fn take_pending_slash(&mut self) -> bool {
+        self.pending_slash.take().is_some()
     }
 
     pub fn feed(&mut self, ch: char) -> Vec<Token> {
         self.pos += 1;
         let mut out = Vec::new();
 
-        // Drain pending operator first (lookahead from previous char)
+        // Drain pending slash first: decide if '/' is comment start or division
+        if self.pending_slash.is_some() {
+            self.pending_slash = None;
+            if ch == '/' {
+                // Line comment: discard the pending '/' and enter comment mode
+                self.in_line_comment = true;
+                self.prev_char = None;
+                return out;
+            } else if ch == '*' {
+                // Block comment: discard the pending '/' and enter comment mode
+                self.in_block_comment = true;
+                self.prev_char = None;
+                return out;
+            } else {
+                // Division operator: emit the pending Slash token, then process current char
+                out.push(Token::Slash);
+                // Fall through to process `ch` below (don't return)
+            }
+        }
+
+        // Drain pending operator (lookahead from previous char)
         if let Some(pending) = self.pending_op.take() {
             let consumed = self.resolve_pending(pending, ch, &mut out);
             if consumed {
@@ -114,16 +148,13 @@ impl LexerState {
                 self.in_double_quote = true;
                 self.escaped = false;
             }
-            '/' if self.prev_char == Some('/') => {
-                self.in_line_comment = true;
-                self.prev_char = None;
+            '/' => {
+                // Defer slash to next char: divide vs // line comment vs /* block comment
+                self.pending_slash = Some(PendingSlash::Slash);
+                self.prev_char = Some(ch);
                 return out;
             }
-            '*' if self.prev_char == Some('/') => {
-                self.in_block_comment = true;
-                self.prev_char = None;
-                return out;
-            }
+            '*' => out.push(Token::Star),
             '{' => out.push(Token::LBrace),
             '}' => {
                 if self.interp_depth > 0 {
@@ -171,8 +202,6 @@ impl LexerState {
                 return out;
             }
             '?' => out.push(Token::Question),
-            '/' => out.push(Token::Slash),
-            '*' => out.push(Token::Star),
             '#' => {
                 self.buf.push('#');
                 self.prev_char = Some(ch);
@@ -415,9 +444,17 @@ fn accumulates(ch: char, buf: &str) -> bool {
         if buf.contains('.') { return false; }
         return buf.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(true);
     }
-    // '%' accumulates only when buf starts with digit (percent unit like 100%)
+    // '%' accumulates only when buf starts with digit or '-' followed by digit
+    // (percent unit like 100% or -50%)
     if ch == '%' {
-        return buf.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false);
+        let mut chars = buf.chars();
+        let first = chars.next();
+        let is_percent_number = match first {
+            None => false,
+            Some('-') | Some('+') => chars.next().map(|c| c.is_ascii_digit()).unwrap_or(false),
+            Some(c) => c.is_ascii_digit(),
+        };
+        return is_percent_number;
     }
     // '#' starts/continues a hex color
     if ch == '#' { return true; }
