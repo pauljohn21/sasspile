@@ -191,14 +191,22 @@ fn expand_nodes_to_events(
                 AstNode::FunctionDecl { name, params, body } => {
                     bus.register_fn(FnDef { name, params, body });
                 }
-                AstNode::MixinCall { name, args } => {
+                AstNode::MixinCall { name, args, content } => {
                     if let Some(mixin) = bus.lookup_mixin(&name) {
                         let child_ctx = ctx.child_scope(8);
-                        for (p, a) in mixin.params.iter().zip(args.iter()) {
-                            let val = eval_expr(a, ctx, bus);
+                        for (i, p) in mixin.params.iter().enumerate() {
+                            let val = if let Some(a) = args.get(i) {
+                                eval_expr(a, ctx, bus)
+                            } else if let Some(default) = &p.default_value {
+                                eval_expr(default, ctx, bus)
+                            } else {
+                                Value::Null
+                            };
                             child_ctx.bind_var(&p.name, val);
                         }
-                        for n in mixin.body.iter().rev() {
+                        // Expand mixin body: replace @content with caller's content block
+                        let expanded = expand_body_with_content(&mixin.body, &content);
+                        for n in expanded.iter().rev() {
                             queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
                         }
                     }
@@ -215,9 +223,9 @@ fn expand_nodes_to_events(
                 AstNode::For { var, from, to, inclusive, body } => {
                     let from_n = value_to_number(&eval_expr(&from, ctx, bus)) as i64;
                     let to_n = value_to_number(&eval_expr(&to, ctx, bus)) as i64;
-                    let child_ctx = ctx.child_scope(5);
                     let mut i = from_n;
                     while if inclusive { i <= to_n } else { i < to_n } {
+                        let child_ctx = ctx.child_scope(5);
                         child_ctx.bind_var(&var, Value::Number(i as f64, None));
                         for n in body.iter().rev() {
                             queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
@@ -229,12 +237,28 @@ fn expand_nodes_to_events(
                     let list_val = eval_expr(&list, ctx, bus);
                     let items = match list_val {
                         Value::List(items) => items,
+                        Value::Map(entries) => entries.into_iter()
+                            .map(|(k, v)| Value::List(vec![Value::String(k), v]))
+                            .collect(),
                         v => vec![v],
                     };
-                    let child_ctx = ctx.child_scope(6);
                     for item_val in items {
-                        if vars.len() == 1 {
-                            child_ctx.bind_var(&vars[0], item_val);
+                        let child_ctx = ctx.child_scope(6);
+                        match vars.len() {
+                            1 => child_ctx.bind_var(&vars[0], item_val),
+                            2 => {
+                                if let Value::List(pair) = &item_val {
+                                    if let Some(key) = pair.first() {
+                                        child_ctx.bind_var(&vars[0], key.clone());
+                                    }
+                                    if let Some(val) = pair.get(1) {
+                                        child_ctx.bind_var(&vars[1], val.clone());
+                                    }
+                                } else {
+                                    child_ctx.bind_var(&vars[0], item_val);
+                                }
+                            }
+                            _ => child_ctx.bind_var(&vars[0], item_val),
                         }
                         for n in body.iter().rev() {
                             queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
@@ -257,6 +281,9 @@ fn expand_nodes_to_events(
                 AstNode::Css(stmt) => {
                     events.push(EvalEvent::Terminal(stmt));
                 }
+                AstNode::Content => {
+                    // @content without a surrounding @include — no-op at top level
+                }
                 AstNode::Warn(val) => { let _ = eval_expr(&val, ctx, bus); }
                 AstNode::Debug(val) => { let _ = eval_expr(&val, ctx, bus); }
                 AstNode::Return(_) => {}
@@ -267,6 +294,44 @@ fn expand_nodes_to_events(
     }
 
     events
+}
+
+/// Expand mixin body: replace any `AstNode::Content` markers with the caller's content block.
+/// Handles nested structures (Content inside Rule, Media, etc.) recursively.
+fn expand_body_with_content(nodes: &[AstNode], content: &[AstNode]) -> Vec<AstNode> {
+    nodes.iter()
+        .flat_map(|node| expand_node_with_content(node, content))
+        .collect()
+}
+
+/// Expand a single AstNode: if it's Content, return the content block;
+/// otherwise recurse into container nodes. Returns a Vec because Content
+/// expands to 0..N nodes.
+fn expand_node_with_content(node: &AstNode, content: &[AstNode]) -> Vec<AstNode> {
+    if matches!(node, AstNode::Content) {
+        return content.to_vec();
+    }
+    // Recurse into container nodes that have inner children
+    match node {
+        AstNode::Rule { selector, inner } => {
+            let expanded = expand_body_with_content(inner, content);
+            vec![AstNode::Rule { selector: selector.clone(), inner: expanded }]
+        }
+        AstNode::Media { query, inner } => {
+            let expanded = expand_body_with_content(inner, content);
+            vec![AstNode::Media { query: query.clone(), inner: expanded }]
+        }
+        AstNode::Supports { query, inner } => {
+            let expanded = expand_body_with_content(inner, content);
+            vec![AstNode::Supports { query: query.clone(), inner: expanded }]
+        }
+        AstNode::If { cond, then_branch, else_branch } => {
+            let then_expanded = expand_body_with_content(then_branch, content);
+            let else_expanded = else_branch.as_ref().map(|eb| expand_body_with_content(eb, content));
+            vec![AstNode::If { cond: cond.clone(), then_branch: then_expanded, else_branch: else_expanded }]
+        }
+        _ => vec![node.clone()],
+    }
 }
 
 /// scan 累积: 消费事件，维护 frame 栈，当 scope 关闭时 emit CssStmt

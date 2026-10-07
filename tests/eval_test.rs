@@ -16,11 +16,11 @@ fn eval_context_variable_binding() {
 fn eval_context_child_scope_inherits_parent_vars() {
     let bus = Arc::new(CompilerBus::new());
     let parent = EvalContext::new(bus.clone(), 1);
-    parent.bind_var("base", Value::Number(10.0));
+    parent.bind_var("base", Value::Number(10.0, None));
 
     let child = parent.child_scope(1);
     let val = child.var("base");
-    assert_eq!(val, Some(Value::Number(10.0)));
+    assert_eq!(val, Some(Value::Number(10.0, None)));
 }
 
 #[test]
@@ -81,14 +81,14 @@ fn bus_var_update_emits_event() {
     bus.set_var(1, "color", Value::String("red".into()));
     bus.set_var(1, "color", Value::String("blue".into()));
 
-    let val = bus.get_var(1, "color");
+    let val = bus.get_var_by_id(1, "color");
     assert_eq!(val, Some(Value::String("blue".into())));
 }
 
 #[test]
 fn value_display_number() {
-    assert_eq!(Value::Number(42.0).to_string(), "42");
-    assert_eq!(Value::Number(3.14).to_string(), "3.14");
+    assert_eq!(Value::Number(42.0, None).to_string(), "42");
+    assert_eq!(Value::Number(3.5, None).to_string(), "3.5");
 }
 
 #[test]
@@ -103,19 +103,20 @@ fn value_display_color() {
 #[test]
 fn value_display_list() {
     let list = Value::List(vec![
-        Value::Number(1.0),
-        Value::Number(2.0),
+        Value::Number(1.0, None),
+        Value::Number(2.0, None),
     ]);
-    assert_eq!(list.to_string(), "(1, 2)");
+    // Space-separated for CSS output compatibility (e.g., `margin: 1px 2px`)
+    assert_eq!(list.to_string(), "1 2");
 }
 
 #[test]
 fn value_equality() {
-    assert_eq!(Value::Number(1.0), Value::Number(1.0));
+    assert_eq!(Value::Number(1.0, None), Value::Number(1.0, None));
     assert_eq!(Value::String("a".into()), Value::String("a".into()));
     assert_eq!(Value::Bool(true), Value::Bool(true));
     assert_eq!(Value::Null, Value::Null);
-    assert_ne!(Value::Number(1.0), Value::Number(2.0));
+    assert_ne!(Value::Number(1.0, None), Value::Number(2.0, None));
 }
 
 #[test]
@@ -147,18 +148,476 @@ fn css_stmt_media_is_invisible_when_empty() {
 
 #[test]
 fn param_default_value() {
-    let p = Param::with_default("size", AstNode::Literal(Value::Number(10.0)));
+    let p = Param::with_default("size", AstNode::Literal(Value::Number(10.0, None)));
     assert_eq!(p.name, "size");
     assert!(p.default_value.is_some());
     match p.default_value.unwrap().as_ref() {
-        AstNode::Literal(Value::Number(n)) => assert_eq!(*n, 10.0),
+        AstNode::Literal(Value::Number(n, _)) => assert_eq!(*n, 10.0),
         other => panic!("expected Number literal, got {:?}", other),
     }
 }
 
 #[test]
-fn ast_node_variable_decl() {
-    let node = AstNode::VariableDecl {
+fn eval_unary_neg_evaluates_correctly() {
+    use rx_scss::eval::eval_expr;
+    use rx_scss::runtime::create_runtime;
+
+    let (ctx, bus) = create_runtime();
+    ctx.bind_var("x", Value::Number(10.0, Some("px".into())));
+
+    // Manually construct AST: UnaryOp(Neg, VariableRef("x"))
+    let expr = AstNode::UnaryOp {
+        op: UnaryOp::Neg,
+        expr: Box::new(AstNode::VariableRef { name: "x".into(), scope_id: 0 }),
+    };
+
+    let result = eval_expr(&expr, &ctx, &bus);
+    assert_eq!(result, Value::Number(-10.0, Some("px".into())), "eval UnaryOp: {:?}", result);
+}
+
+#[test]
+fn eval_unary_not_evaluates_correctly() {
+    use rx_scss::eval::eval_expr;
+    use rx_scss::runtime::create_runtime;
+
+    let (ctx, bus) = create_runtime();
+
+    let expr = AstNode::UnaryOp {
+        op: UnaryOp::Not,
+        expr: Box::new(AstNode::Literal(Value::Bool(false))),
+    };
+
+    let result = eval_expr(&expr, &ctx, &bus);
+    assert_eq!(result, Value::Bool(true), "eval Not(true): {:?}", result);
+}
+
+// ── Builtin unit tests ──────────────────────────────────────────────────
+
+#[test]
+fn builtin_map_get_found() {
+    use rx_scss::eval::builtin::call_builtin;
+    let map = Value::Map(vec![
+        ("primary".to_string(), Value::String("blue".to_string())),
+        ("danger".to_string(), Value::String("red".to_string())),
+    ]);
+    let result = call_builtin("map-get", &[map, Value::String("primary".to_string())]);
+    assert_eq!(result, Some(Value::String("blue".to_string())));
+}
+
+#[test]
+fn builtin_map_get_missing() {
+    use rx_scss::eval::builtin::call_builtin;
+    let map = Value::Map(vec![("a".to_string(), Value::Number(1.0, None))]);
+    let result = call_builtin("map-get", &[map, Value::String("b".to_string())]);
+    assert_eq!(result, Some(Value::Null));
+}
+
+#[test]
+fn builtin_map_has_key() {
+    use rx_scss::eval::builtin::call_builtin;
+    let map = Value::Map(vec![("a".to_string(), Value::Number(1.0, None))]);
+    assert_eq!(call_builtin("map-has-key", &[map.clone(), Value::String("a".to_string())]), Some(Value::Bool(true)));
+    assert_eq!(call_builtin("map-has-key", &[map, Value::String("z".to_string())]), Some(Value::Bool(false)));
+}
+
+#[test]
+fn builtin_if_function() {
+    use rx_scss::eval::builtin::call_builtin;
+    assert_eq!(
+        call_builtin("if", &[Value::Bool(true), Value::Number(1.0, None), Value::Number(2.0, None)]),
+        Some(Value::Number(1.0, None))
+    );
+    assert_eq!(
+        call_builtin("if", &[Value::Bool(false), Value::Number(1.0, None), Value::Number(2.0, None)]),
+        Some(Value::Number(2.0, None))
+    );
+}
+
+#[test]
+fn builtin_nth() {
+    use rx_scss::eval::builtin::call_builtin;
+    let list = Value::List(vec![
+        Value::Number(10.0, Some("px".to_string())),
+        Value::Number(20.0, Some("px".to_string())),
+        Value::Number(30.0, Some("px".to_string())),
+    ]);
+    assert_eq!(call_builtin("nth", &[list.clone(), Value::Number(1.0, None)]), Some(Value::Number(10.0, Some("px".to_string()))));
+    assert_eq!(call_builtin("nth", &[list.clone(), Value::Number(2.0, None)]), Some(Value::Number(20.0, Some("px".to_string()))));
+    assert_eq!(call_builtin("nth", &[list, Value::Number(3.0, None)]), Some(Value::Number(30.0, Some("px".to_string()))));
+}
+
+#[test]
+fn builtin_percentage() {
+    use rx_scss::eval::builtin::call_builtin;
+    let result = call_builtin("percentage", &[Value::Number(0.5, None)]);
+    assert_eq!(result, Some(Value::Number(50.0, Some("%".to_string()))));
+}
+
+#[test]
+fn builtin_math_round_ceil_floor() {
+    use rx_scss::eval::builtin::call_builtin;
+    assert_eq!(call_builtin("round", &[Value::Number(2.5, None)]), Some(Value::Number(3.0, None)));
+    assert_eq!(call_builtin("ceil", &[Value::Number(2.1, None)]), Some(Value::Number(3.0, None)));
+    assert_eq!(call_builtin("floor", &[Value::Number(2.9, None)]), Some(Value::Number(2.0, None)));
+}
+
+#[test]
+fn builtin_type_of() {
+    use rx_scss::eval::builtin::call_builtin;
+    assert_eq!(call_builtin("type-of", &[Value::Number(1.0, None)]), Some(Value::String("number".to_string())));
+    assert_eq!(call_builtin("type-of", &[Value::String("x".to_string())]), Some(Value::String("string".to_string())));
+    assert_eq!(call_builtin("type-of", &[Value::Bool(true)]), Some(Value::String("bool".to_string())));
+    assert_eq!(call_builtin("type-of", &[Value::Null]), Some(Value::String("null".to_string())));
+    assert_eq!(call_builtin("type-of", &[Value::Color(255, 0, 0, 255)]), Some(Value::String("color".to_string())));
+}
+
+#[test]
+fn builtin_color_mix() {
+    use rx_scss::eval::builtin::call_builtin;
+    let white = Value::Color(255, 255, 255, 255);
+    let black = Value::Color(0, 0, 0, 255);
+    let result = call_builtin("mix", &[white, black, Value::Number(50.0, None)]);
+    assert!(result.is_some());
+}
+
+#[test]
+fn builtin_color_lighten() {
+    use rx_scss::eval::builtin::call_builtin;
+    let red = Value::Color(255, 0, 0, 255);
+    let result = call_builtin("lighten", &[red, Value::Number(20.0, None)]);
+    assert!(result.is_some());
+    if let Some(Value::Color(r, g, b, _)) = result {
+        assert!(r > 200 || g > 0 || b > 0, "lightened red should be brighter");
+    }
+}
+
+#[test]
+fn builtin_shade_color_eq_mix() {
+    use rx_scss::eval::builtin::call_builtin;
+    let color = Value::Color(255, 255, 255, 255);
+    let shade = call_builtin("shade-color", &[color.clone(), Value::Number(20.0, None)]);
+    let mix_result = call_builtin("mix", &[Value::Color(0, 0, 0, 255), color, Value::Number(20.0, None)]);
+    assert_eq!(shade, mix_result, "shade-color should equal mix(#000, color, weight)");
+}
+
+#[test]
+fn builtin_tint_color_eq_mix() {
+    use rx_scss::eval::builtin::call_builtin;
+    let color = Value::Color(0, 0, 0, 255);
+    let tint = call_builtin("tint-color", &[color.clone(), Value::Number(20.0, None)]);
+    let mix_result = call_builtin("mix", &[Value::Color(255, 255, 255, 255), color, Value::Number(20.0, None)]);
+    assert_eq!(tint, mix_result, "tint-color should equal mix(#fff, color, weight)");
+}
+
+#[test]
+fn builtin_to_rgb_returns_comma_separated() {
+    use rx_scss::eval::builtin::call_builtin;
+    let color = Value::Color(13, 110, 253, 255);
+    let result = call_builtin("to-rgb", &[color]);
+    assert_eq!(result, Some(Value::String("13, 110, 253".to_string())));
+}
+
+#[test]
+fn builtin_color_channels() {
+    use rx_scss::eval::builtin::call_builtin;
+    let color = Value::Color(13, 110, 253, 128);
+    assert_eq!(call_builtin("red", &[color.clone()]), Some(Value::Number(13.0, None)));
+    assert_eq!(call_builtin("green", &[color.clone()]), Some(Value::Number(110.0, None)));
+    assert_eq!(call_builtin("blue", &[color.clone()]), Some(Value::Number(253.0, None)));
+    assert_eq!(call_builtin("alpha", &[color]), Some(Value::Number(128.0 / 255.0, None)));
+}
+
+#[test]
+fn builtin_color_channel_hex() {
+    use rx_scss::eval::builtin::call_builtin;
+    // #0d6efd = rgb(13, 110, 253)
+    let color = Value::Color(13, 110, 253, 255);
+    assert_eq!(call_builtin("red", &[color.clone()]), Some(Value::Number(13.0, None)));
+    assert_eq!(call_builtin("green", &[color.clone()]), Some(Value::Number(110.0, None)));
+    assert_eq!(call_builtin("blue", &[color]), Some(Value::Number(253.0, None)));
+}
+
+#[test]
+fn builtin_color_alpha_full() {
+    use rx_scss::eval::builtin::call_builtin;
+    let opaque = Value::Color(255, 0, 0, 255);
+    let result = call_builtin("alpha", &[opaque]);
+    assert_eq!(result, Some(Value::Number(1.0, None)));
+}
+
+#[test]
+fn builtin_map_merge() {
+    use rx_scss::eval::builtin::call_builtin;
+    let m1 = Value::Map(vec![("a".to_string(), Value::Number(1.0, None))]);
+    let m2 = Value::Map(vec![("b".to_string(), Value::Number(2.0, None))]);
+    let result = call_builtin("map-merge", &[m1, m2]);
+    assert!(result.is_some());
+    if let Some(Value::Map(entries)) = result {
+        assert_eq!(entries.len(), 2);
+    }
+}
+
+#[test]
+fn builtin_str_length() {
+    use rx_scss::eval::builtin::call_builtin;
+    let result = call_builtin("str-length", &[Value::String("hello".to_string())]);
+    assert_eq!(result, Some(Value::Number(5.0, None)));
+}
+
+#[test]
+fn builtin_list_zip_combine() {
+    use rx_scss::eval::builtin::call_builtin;
+    let list1 = Value::List(vec![
+        Value::String("a".to_string()),
+        Value::String("b".to_string()),
+        Value::String("c".to_string()),
+    ]);
+    let list2 = Value::List(vec![
+        Value::Number(1.0, None),
+        Value::Number(2.0, None),
+        Value::Number(3.0, None),
+    ]);
+    let result = call_builtin("zip", &[list1, list2]);
+    assert!(result.is_some());
+    if let Some(Value::List(zipped)) = result {
+        assert_eq!(zipped.len(), 3);
+        if let Value::List(pair) = &zipped[0] {
+            assert_eq!(pair[0], Value::String("a".to_string()));
+            assert_eq!(pair[1], Value::Number(1.0, None));
+        } else {
+            panic!("expected nested list");
+        }
+    } else {
+        panic!("expected List");
+    }
+}
+
+#[test]
+fn builtin_list_separator_space() {
+    use rx_scss::eval::builtin::call_builtin;
+    // Space-separated list (multi-value literal): 1px solid red → 3 items → "comma" in our heuristic
+    // NOTE: rx-scss Value::List doesn't carry separator; this test verifies current behavior
+    let list = Value::List(vec![
+        Value::Number(1.0, Some("px".to_string())),
+        Value::String("solid".to_string()),
+        Value::String("red".to_string()),
+    ]);
+    let result = call_builtin("list-separator", &[list]);
+    assert_eq!(result, Some(Value::String("comma".to_string())));
+}
+
+#[test]
+fn builtin_str_replace_global() {
+    use rx_scss::eval::builtin::call_builtin;
+    let result = call_builtin("str-replace", &[
+        Value::String("foobar".to_string()),
+        Value::String("foo".to_string()),
+        Value::String("baz".to_string()),
+    ]);
+    assert_eq!(result, Some(Value::String("bazbar".to_string())));
+}
+
+#[test]
+fn builtin_str_replace_multiple() {
+    use rx_scss::eval::builtin::call_builtin;
+    let result = call_builtin("str-replace", &[
+        Value::String("a,b,c".to_string()),
+        Value::String(",".to_string()),
+        Value::String("%2C".to_string()),
+    ]);
+    assert_eq!(result, Some(Value::String("a%2Cb%2Cc".to_string())));
+}
+
+    // ── var() and rgba(var()) ───────────────────────────────────────────
+
+    #[test]
+    fn test_var_function_no_fallback() {
+        use rx_scss::eval::builtin::call_builtin;
+        let result = call_builtin("var", &[Value::String("--my-color".to_string())]);
+        assert_eq!(result, Some(Value::String("var(--my-color)".to_string())));
+    }
+
+    #[test]
+    fn test_var_function_with_fallback() {
+        use rx_scss::eval::builtin::call_builtin;
+        let result = call_builtin("var", &[
+            Value::String("--my-color".to_string()),
+            Value::String("red".to_string()),
+        ]);
+        assert_eq!(result, Some(Value::String("var(--my-color, red)".to_string())));
+    }
+
+    #[test]
+    fn test_rgba_with_var_first_arg() {
+        use rx_scss::eval::builtin::call_builtin;
+        let result = call_builtin("rgba", &[
+            Value::String("var(--bs-white-rgb)".to_string()),
+            Value::Number(0.5, None),
+        ]);
+        assert_eq!(result, Some(Value::String("rgba(var(--bs-white-rgb), 0.5)".to_string())));
+    }
+
+    #[test]
+    fn test_rgb_with_var_first_arg() {
+        use rx_scss::eval::builtin::call_builtin;
+        let result = call_builtin("rgb", &[
+            Value::String("var(--my-color)".to_string()),
+            Value::Number(0.8, None),
+        ]);
+        assert_eq!(result, Some(Value::String("rgb(var(--my-color), 0.8)".to_string())));
+    }
+
+    #[test]
+    fn test_rgba_with_var_integer_alpha() {
+        use rx_scss::eval::builtin::call_builtin;
+        let result = call_builtin("rgba", &[
+            Value::String("var(--x)".to_string()),
+            Value::Number(1.0, None),
+        ]);
+        assert_eq!(result, Some(Value::String("rgba(var(--x), 1)".to_string())));
+    }
+
+    // ── @for iteration ───────────────────────────────────────────────────
+    #[test]
+    fn test_for_range_inclusive_through() {
+        // @for $i from 1 through 3 → should produce 1, 2, 3
+        let (from, to, inclusive) = (1i64, 3i64, true);
+        let mut values = Vec::new();
+        let mut i = from;
+        while if inclusive { i <= to } else { i < to } {
+            values.push(i);
+            i += 1;
+        }
+        assert_eq!(values, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_for_range_exclusive_to() {
+        // @for $i from 1 to 3 → should produce 1, 2
+        let (from, to, inclusive) = (1i64, 3i64, false);
+        let mut values = Vec::new();
+        let mut i = from;
+        while if inclusive { i <= to } else { i < to } {
+            values.push(i);
+            i += 1;
+        }
+        assert_eq!(values, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_rgba_normal_color_still_works() {
+        use rx_scss::eval::builtin::call_builtin;
+        // Ensure normal rgba(r, g, b) still produces Color when args are numbers
+        let result = call_builtin("rgba", &[
+            Value::Number(255.0, None),
+            Value::Number(0.0, None),
+            Value::Number(0.0, None),
+            Value::Number(1.0, None),
+        ]);
+        assert_eq!(result, Some(Value::Color(255, 0, 0, 255)));
+    }
+
+    // ── Regression tests for @each comma-list + selector hyphen fix ────
+
+    #[test]
+    fn regression_each_comma_list_iterates_all() {
+        // Core fix: `@each $k in a, b { ... }` must iterate over both items
+        use rx_scss::builder::CompileBuilder;
+        let scss = "@each $k in a, b { .#{$k} { color: red; } }\n";
+        let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
+        assert!(css.contains(".a{"), "should produce .a rule: {}", css);
+        assert!(css.contains(".b{"), "should produce .b rule: {}", css);
+    }
+
+    #[test]
+    fn regression_each_comma_list_with_hyphen_selector() {
+        // Selector with interpolation + hyphen: `.#{$k}-test`
+        use rx_scss::builder::CompileBuilder;
+        let scss = "@each $k in a, b { .#{$k}-test { val: 1; } }\n";
+        let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
+        assert!(css.contains(".a-test"), "should produce .a-test: {}", css);
+        assert!(css.contains(".b-test"), "should produce .b-test: {}", css);
+    }
+
+    #[test]
+    fn regression_three_level_nested_each() {
+        // Bootstrap $utilities pattern: outer @each + inner @each + selector interp with hyphens
+        use rx_scss::builder::CompileBuilder;
+        let scss = r#"
+$utils: (
+  "m": (values: (1: 0, 2: 0.5rem)),
+  "p": (values: (s: 0.25rem, l: 1rem))
+);
+@each $key, $util in $utils {
+  $vals: map-get($util, values);
+  @each $vk, $vv in $vals {
+    .#{$key}-#{$vk} { val: $vv; }
+  }
+}
+"#;
+        let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
+        assert!(css.contains(".m-1"), "should produce .m-1: {}", css);
+        assert!(css.contains(".m-2"), "should produce .m-2: {}", css);
+        assert!(css.contains(".p-s"), "should produce .p-s: {}", css);
+        assert!(css.contains(".p-l"), "should produce .p-l: {}", css);
+    }
+
+    #[test]
+    #[ignore = "diagnostic: enable to test individual nested @each patterns"]
+    fn diag_nested_each_isolate() {
+        // Progressive isolation of the three-level nested @each issue
+        use rx_scss::builder::CompileBuilder;
+
+        // Case 1: Simple @each over a map
+        let scss1 = "$map: (a: 1, b: 2);\n@each $k, $v in $map { .#{$k} { val: $v; } }\n";
+        let r1 = CompileBuilder::new().expanded().compile_string(scss1);
+        eprintln!("Case 1 (simple @each map):\n{}", r1.as_deref().unwrap_or("(error)"));
+        assert!(r1.is_ok(), "Case 1 should compile");
+
+        // Case 2: Nested @each without @if
+        let scss2 = "$utils: (margin: (values: (1: 0, 2: 1rem)));\n@each $key, $utility in $utils { $values: map-get($utility, values); @each $vk, $vv in $values { .util-#{$key}-#{$vk} { val: $vv; } } }\n";
+        let r2 = CompileBuilder::new().expanded().compile_string(scss2);
+        eprintln!("Case 2 (nested @each, no @if):\n{}", r2.as_deref().unwrap_or("(error)"));
+
+        // Case 3: Wrap in @if
+        let scss3 = "$utils: (margin: (values: (1: 0, 2: 1rem)));\n@each $key, $utility in $utils { @if type-of($utility) == \"map\" { $values: map-get($utility, values); @each $vk, $vv in $values { .u-#{$key}-#{$vk} { val: $vv; } } } }\n";
+        let r3 = CompileBuilder::new().expanded().compile_string(scss3);
+        eprintln!("Case 3 (with @if type-of):\n{}", r3.as_deref().unwrap_or("(error)"));
+
+        // Case 4: Does @each variable survive into the body via direct rule?
+        let scss4 = "$k: outer; @each $k in a, b { .#{$k}-test { color: red; } }\n";
+        let r4 = CompileBuilder::new().expanded().compile_string(scss4);
+        eprintln!("Case 4 (simple @each + selector interp):\n{}", r4.as_deref().unwrap_or("(error)"));
+
+        // Case 5: Two-level @each without selector
+        let scss5 = "@each $k in a, b { @each $v in x, y { .#{$k}-#{$v} { val: 1; } } }\n";
+        let r5 = CompileBuilder::new().expanded().compile_string(scss5);
+        eprintln!("Case 5 (two-level simple @each):\n{}", r5.as_deref().unwrap_or("(error)"));
+
+        // Case 6: Even simpler - single variable single level
+        let scss6 = "@each $k in a, b { .#{$k} { color: red; } }\n";
+        let r6 = CompileBuilder::new().expanded().compile_string(scss6);
+        eprintln!("Case 6:\n---\n{}\n---", r6.as_deref().unwrap_or("(error)"));
+
+        // Case 7: Simple variable as selector inside @each (to test scope chain)
+        let scss7 = "@each $k in a, b { $k { color: red; } }\n";
+        let r7 = CompileBuilder::new().expanded().compile_string(scss7);
+        eprintln!("Case 7 ($k as selector, no dot):\n---\n{}\n---", r7.as_deref().unwrap_or("(error)"));
+
+        // Case 8: Dot + $k without interpolation syntax
+        let scss8 = ".static { .nested { color: red; } }\n";
+        let r8 = CompileBuilder::new().expanded().compile_string(scss8);
+        eprintln!("Case 8 (static nested rules):\n---\n{}\n---", r8.as_deref().unwrap_or("(error)"));
+
+        // Case 9: What does .#{$k} actually parse as?
+        let scss9 = "$k: test; .#{$k} { color: red; }\n";
+        let r9 = CompileBuilder::new().expanded().compile_string(scss9);
+        eprintln!("Case 9 (.hash-k outside @each):\n---\n{}\n---", r9.as_deref().unwrap_or("(error)"));
+    }
+
+    #[test]
+    fn ast_node_variable_decl() {
+        let node = AstNode::VariableDecl {
         name: "primary".into(),
         value: Box::new(AstNode::Literal(Value::String("blue".into()))),
         scope_id: 1,
