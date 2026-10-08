@@ -93,11 +93,11 @@ fn value_display_number() {
 
 #[test]
 fn value_display_color() {
-    let color = Value::Color(255, 0, 0, 255);
+    let color = Value::Color(255, 0, 0, 1.0);
     assert_eq!(color.to_string(), "#ff0000");
 
-    let color_with_alpha = Value::Color(255, 0, 0, 128);
-    assert_eq!(color_with_alpha.to_string(), "#ff000080");
+    let color_with_alpha = Value::Color(255, 0, 0, 128.0 / 255.0);
+    assert_eq!(color_with_alpha.to_string(), "rgba(255, 0, 0, 0.502)");
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn value_display_list() {
     let list = Value::List(vec![
         Value::Number(1.0, None),
         Value::Number(2.0, None),
-    ]);
+    ], ListSeparator::Space);
     // Space-separated for CSS output compatibility (e.g., `margin: 1px 2px`)
     assert_eq!(list.to_string(), "1 2");
 }
@@ -240,7 +240,7 @@ fn builtin_nth() {
         Value::Number(10.0, Some("px".to_string())),
         Value::Number(20.0, Some("px".to_string())),
         Value::Number(30.0, Some("px".to_string())),
-    ]);
+    ], ListSeparator::Space);
     assert_eq!(call_builtin("nth", &[list.clone(), Value::Number(1.0, None)]), Some(Value::Number(10.0, Some("px".to_string()))));
     assert_eq!(call_builtin("nth", &[list.clone(), Value::Number(2.0, None)]), Some(Value::Number(20.0, Some("px".to_string()))));
     assert_eq!(call_builtin("nth", &[list, Value::Number(3.0, None)]), Some(Value::Number(30.0, Some("px".to_string()))));
@@ -268,14 +268,14 @@ fn builtin_type_of() {
     assert_eq!(call_builtin("type-of", &[Value::String("x".to_string())]), Some(Value::String("string".to_string())));
     assert_eq!(call_builtin("type-of", &[Value::Bool(true)]), Some(Value::String("bool".to_string())));
     assert_eq!(call_builtin("type-of", &[Value::Null]), Some(Value::String("null".to_string())));
-    assert_eq!(call_builtin("type-of", &[Value::Color(255, 0, 0, 255)]), Some(Value::String("color".to_string())));
+    assert_eq!(call_builtin("type-of", &[Value::Color(255, 0, 0, 1.0)]), Some(Value::String("color".to_string())));
 }
 
 #[test]
 fn builtin_color_mix() {
     use rx_scss::eval::builtin::call_builtin;
-    let white = Value::Color(255, 255, 255, 255);
-    let black = Value::Color(0, 0, 0, 255);
+    let white = Value::Color(255, 255, 255, 1.0);
+    let black = Value::Color(0, 0, 0, 1.0);
     let result = call_builtin("mix", &[white, black, Value::Number(50.0, None)]);
     assert!(result.is_some());
 }
@@ -283,7 +283,7 @@ fn builtin_color_mix() {
 #[test]
 fn builtin_color_lighten() {
     use rx_scss::eval::builtin::call_builtin;
-    let red = Value::Color(255, 0, 0, 255);
+    let red = Value::Color(255, 0, 0, 1.0);
     let result = call_builtin("lighten", &[red, Value::Number(20.0, None)]);
     assert!(result.is_some());
     if let Some(Value::Color(r, g, b, _)) = result {
@@ -294,25 +294,25 @@ fn builtin_color_lighten() {
 #[test]
 fn builtin_shade_color_eq_mix() {
     use rx_scss::eval::builtin::call_builtin;
-    let color = Value::Color(255, 255, 255, 255);
+    let color = Value::Color(255, 255, 255, 1.0);
     let shade = call_builtin("shade-color", &[color.clone(), Value::Number(20.0, None)]);
-    let mix_result = call_builtin("mix", &[Value::Color(0, 0, 0, 255), color, Value::Number(20.0, None)]);
+    let mix_result = call_builtin("mix", &[Value::Color(0, 0, 0, 1.0), color, Value::Number(20.0, None)]);
     assert_eq!(shade, mix_result, "shade-color should equal mix(#000, color, weight)");
 }
 
 #[test]
 fn builtin_tint_color_eq_mix() {
     use rx_scss::eval::builtin::call_builtin;
-    let color = Value::Color(0, 0, 0, 255);
+    let color = Value::Color(0, 0, 0, 1.0);
     let tint = call_builtin("tint-color", &[color.clone(), Value::Number(20.0, None)]);
-    let mix_result = call_builtin("mix", &[Value::Color(255, 255, 255, 255), color, Value::Number(20.0, None)]);
+    let mix_result = call_builtin("mix", &[Value::Color(255, 255, 255, 1.0), color, Value::Number(20.0, None)]);
     assert_eq!(tint, mix_result, "tint-color should equal mix(#fff, color, weight)");
 }
 
 #[test]
 fn builtin_to_rgb_returns_comma_separated() {
     use rx_scss::eval::builtin::call_builtin;
-    let color = Value::Color(13, 110, 253, 255);
+    let color = Value::Color(13, 110, 253, 1.0);
     let result = call_builtin("to-rgb", &[color]);
     assert_eq!(result, Some(Value::String("13, 110, 253".to_string())));
 }
@@ -320,7 +320,7 @@ fn builtin_to_rgb_returns_comma_separated() {
 #[test]
 fn builtin_color_channels() {
     use rx_scss::eval::builtin::call_builtin;
-    let color = Value::Color(13, 110, 253, 128);
+    let color = Value::Color(13, 110, 253, 128.0 / 255.0);
     assert_eq!(call_builtin("red", &[color.clone()]), Some(Value::Number(13.0, None)));
     assert_eq!(call_builtin("green", &[color.clone()]), Some(Value::Number(110.0, None)));
     assert_eq!(call_builtin("blue", &[color.clone()]), Some(Value::Number(253.0, None)));
@@ -331,7 +331,7 @@ fn builtin_color_channels() {
 fn builtin_color_channel_hex() {
     use rx_scss::eval::builtin::call_builtin;
     // #0d6efd = rgb(13, 110, 253)
-    let color = Value::Color(13, 110, 253, 255);
+    let color = Value::Color(13, 110, 253, 1.0);
     assert_eq!(call_builtin("red", &[color.clone()]), Some(Value::Number(13.0, None)));
     assert_eq!(call_builtin("green", &[color.clone()]), Some(Value::Number(110.0, None)));
     assert_eq!(call_builtin("blue", &[color]), Some(Value::Number(253.0, None)));
@@ -340,7 +340,7 @@ fn builtin_color_channel_hex() {
 #[test]
 fn builtin_color_alpha_full() {
     use rx_scss::eval::builtin::call_builtin;
-    let opaque = Value::Color(255, 0, 0, 255);
+    let opaque = Value::Color(255, 0, 0, 1.0);
     let result = call_builtin("alpha", &[opaque]);
     assert_eq!(result, Some(Value::Number(1.0, None)));
 }
@@ -371,17 +371,17 @@ fn builtin_list_zip_combine() {
         Value::String("a".to_string()),
         Value::String("b".to_string()),
         Value::String("c".to_string()),
-    ]);
+    ], ListSeparator::Space);
     let list2 = Value::List(vec![
         Value::Number(1.0, None),
         Value::Number(2.0, None),
         Value::Number(3.0, None),
-    ]);
+    ], ListSeparator::Space);
     let result = call_builtin("zip", &[list1, list2]);
     assert!(result.is_some());
-    if let Some(Value::List(zipped)) = result {
+    if let Some(Value::List(zipped, _)) = result {
         assert_eq!(zipped.len(), 3);
-        if let Value::List(pair) = &zipped[0] {
+        if let Value::List(pair, _) = &zipped[0] {
             assert_eq!(pair[0], Value::String("a".to_string()));
             assert_eq!(pair[1], Value::Number(1.0, None));
         } else {
@@ -401,7 +401,7 @@ fn builtin_list_separator_space() {
         Value::Number(1.0, Some("px".to_string())),
         Value::String("solid".to_string()),
         Value::String("red".to_string()),
-    ]);
+    ], ListSeparator::Space);
     let result = call_builtin("list-separator", &[list]);
     assert_eq!(result, Some(Value::String("comma".to_string())));
 }
@@ -514,7 +514,7 @@ fn builtin_str_replace_multiple() {
             Value::Number(0.0, None),
             Value::Number(1.0, None),
         ]);
-        assert_eq!(result, Some(Value::Color(255, 0, 0, 255)));
+        assert_eq!(result, Some(Value::Color(255, 0, 0, 1.0)));
     }
 
     // ── Regression tests for @each comma-list + selector hyphen fix ────
@@ -525,8 +525,9 @@ fn builtin_str_replace_multiple() {
         use rx_scss::builder::CompileBuilder;
         let scss = "@each $k in a, b { .#{$k} { color: red; } }\n";
         let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
-        assert!(css.contains(".a{"), "should produce .a rule: {}", css);
-        assert!(css.contains(".b{"), "should produce .b rule: {}", css);
+        // Note: Bootstrap-aligned serializer outputs " {" (space before brace)
+        assert!(css.contains(".a {"), "should produce .a rule: {}", css);
+        assert!(css.contains(".b {"), "should produce .b rule: {}", css);
     }
 
     #[test]

@@ -140,7 +140,7 @@ fn expand_nodes_to_events(
                 // 在当前 work item 的上下文中处理（mixin/rule body 有自己的 scope）
                 let ctx: &EvalContext = &work_ctx;
                 match node {
-                AstNode::StyleDecl { property, value } => {
+                AstNode::StyleDecl { property, value, important } => {
                     let val = eval_expr(&value, ctx, bus);
                     let prop_name = resolve_property(&property, ctx);
                     let val_str = value_to_string(&val);
@@ -149,9 +149,15 @@ fn expand_nodes_to_events(
                     if val_str == "null" || prop_name.contains("null") {
                         continue;
                     }
+                    // Append ` !important` when the SCSS source had `!important` flag
+                    let final_val = if important {
+                        format!("{} !important", val_str)
+                    } else {
+                        val_str
+                    };
                     events.push(EvalEvent::Terminal(CssStmt::Decl {
                         property: prop_name,
-                        value: val_str,
+                        value: final_val,
                     }));
                 }
                 AstNode::Rule { selector, inner } => {
@@ -257,9 +263,9 @@ fn expand_nodes_to_events(
                 AstNode::Each { vars, list, body } => {
                     let list_val = eval_expr(&list, ctx, bus);
                     let items = match list_val {
-                        Value::List(items) => items,
+                        Value::List(items, _) => items,
                         Value::Map(entries) => entries.into_iter()
-                            .map(|(k, v)| Value::List(vec![Value::String(k), v]))
+                            .map(|(k, v)| Value::List(vec![Value::String(k), v], ListSeparator::Comma))
                             .collect(),
                         v => vec![v],
                     };
@@ -268,7 +274,7 @@ fn expand_nodes_to_events(
                         match vars.len() {
                             1 => child_ctx.bind_var(&vars[0], item_val),
                             2 => {
-                                if let Value::List(pair) = &item_val {
+                                if let Value::List(pair, _) = &item_val {
                                     if let Some(key) = pair.first() {
                                         child_ctx.bind_var(&vars[0], key.clone());
                                     }

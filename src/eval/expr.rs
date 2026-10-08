@@ -50,7 +50,7 @@ pub fn eval_expr(expr: &AstNode, ctx: &EvalContext, bus: &CompilerBus) -> Value 
             }
         }
         AstNode::ListLiteral(items) => {
-            Value::List(items.iter().map(|i| eval_expr(i, ctx, bus)).collect())
+            Value::List(items.iter().map(|i| eval_expr(i, ctx, bus)).collect(), ListSeparator::Comma)
         }
         AstNode::MapLiteral(entries) => {
             Value::Map(entries.iter().map(|(k, v)| (k.clone(), eval_expr(v, ctx, bus))).collect())
@@ -131,7 +131,7 @@ pub(crate) fn truthy(v: &Value) -> bool {
         Value::Null => false,
         Value::Number(n, _) => *n != 0.0,
         Value::String(s) => !s.is_empty(),
-        Value::List(items) => !items.is_empty(),
+        Value::List(items, _) => !items.is_empty(),
         _ => true,
     }
 }
@@ -146,12 +146,10 @@ pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
     if child.contains('&') {
         return child.replace('&', parent);
     }
-    // Compound selector: starts with pseudo/element/class/ID/attribute — these attach directly
-    // Combinators (+, >, ~) need spaces around them: `.a + .btn` not `.a+ .btn`
-    let is_compound = child.starts_with(':')
-        || child.starts_with('.')
-        || child.starts_with('#')
-        || child.starts_with('[');
+    // Compound selector: only pseudo-classes/elements (e.g., :hover, ::before, :not())
+    // attach directly to parent without space. All other selectors (.class, #id, [attr], tag)
+    // produce descendant combinator when nested (Sass spec: `.card { .title }` → `.card .title`)
+    let is_compound = child.starts_with(':');
     // Split parents by comma and combine each with child (cartesian product)
     let parents: Vec<&str> = parent.split(',').map(str::trim).collect();
     let children: Vec<&str> = child.split(',').map(str::trim).collect();
@@ -265,7 +263,7 @@ pub(crate) fn resolve_property(segments: &[PropSegment], ctx: &EvalContext) -> S
 pub(crate) fn value_to_string(v: &Value) -> String {
     match v {
         // CSS 列表中的 null 项应被过滤（例如 `solid null` → `solid`）
-        Value::List(items) => items
+        Value::List(items, _) => items
             .iter()
             .filter(|item| **item != Value::Null)
             .map(|item| item.to_string())

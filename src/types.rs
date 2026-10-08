@@ -2,6 +2,27 @@ use std::convert::Infallible;
 use std::fmt;
 use rxrust::prelude::*;
 
+/// Format an alpha value (0.0-1.0) to a CSS-friendly string.
+/// Trims trailing zeros while preserving meaningful precision.
+fn format_alpha(alpha: f64) -> String {
+    let s = format!("{:.3}", alpha);
+    let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+    trimmed.to_string()
+}
+
+/// Check if a string value needs quoting (contains spaces or special chars).
+fn list_item_needs_quotes(s: &str) -> bool {
+    s.contains(' ') || s.contains(',')
+}
+
+/// List separator: space (e.g., `margin: 1px 2px`) vs comma (e.g., `font-family: Arial, sans-serif`).
+/// In Sass, the separator is determined by list construction syntax.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListSeparator {
+    Space,
+    Comma,
+}
+
 // ── Token ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,9 +103,9 @@ impl Token {
 pub enum Value {
     Number(f64, Option<String>),
     String(String),
-    Color(u8, u8, u8, u8),
+    Color(u8, u8, u8, f64),
     Calc(String),
-    List(Vec<Value>),
+    List(Vec<Value>, ListSeparator),
     Map(Vec<(String, Value)>),
     Bool(bool),
     Null,
@@ -107,21 +128,30 @@ impl fmt::Display for Value {
             Value::Calc(expr) => write!(f, "calc({})", expr),
             Value::String(s) => write!(f, "{}", s),
             Value::Color(r, g, b, a) => {
-                if *a == 255 {
+                if *a >= 1.0 {
                     write!(f, "#{:02x}{:02x}{:02x}", r, g, b)
+                } else if *a <= 0.0 {
+                    write!(f, "rgba({}, {}, {}, 0)", r, g, b)
                 } else {
-                    write!(f, "#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
+                    write!(f, "rgba({}, {}, {}, {})", r, g, b, format_alpha(*a))
                 }
             }
             Value::Bool(true) => write!(f, "true"),
             Value::Bool(false) => write!(f, "false"),
             Value::Null => write!(f, "null"),
-            Value::List(items) => {
+            Value::List(items, sep) => {
+                let separator = match sep {
+                    ListSeparator::Space => " ",
+                    ListSeparator::Comma => ", ",
+                };
                 let inner = items
                     .iter()
-                    .map(|v| v.to_string())
+                    .map(|v| match v {
+                        Value::String(s) if list_item_needs_quotes(s) => format!("\"{}\"", s),
+                        _ => v.to_string(),
+                    })
                     .collect::<Vec<_>>()
-                    .join(" ");
+                    .join(separator);
                 write!(f, "{}", inner)
             }
             Value::Map(entries) => {
@@ -142,9 +172,9 @@ impl PartialEq for Value {
             (Value::Number(a, ua), Value::Number(b, ub)) => a == b && ua == ub,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Color(r1, g1, b1, a1), Value::Color(r2, g2, b2, a2)) => {
-                r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
+                r1 == r2 && g1 == g2 && b1 == b2 && (a1 - a2).abs() < f64::EPSILON
             }
-            (Value::List(a), Value::List(b)) => a == b,
+            (Value::List(a, _), Value::List(b, _)) => a == b,
             (Value::Map(a), Value::Map(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Null, Value::Null) => true,
@@ -207,7 +237,7 @@ pub enum AstNode {
     ListLiteral(Vec<AstNode>),
     MapLiteral(Vec<(String, AstNode)>),
     VariableDecl { name: String, value: Box<AstNode>, scope_id: u64 },
-    StyleDecl { property: Vec<PropSegment>, value: Box<AstNode> },
+    StyleDecl { property: Vec<PropSegment>, value: Box<AstNode>, important: bool },
     Rule { selector: String, inner: Vec<AstNode> },
     If { cond: Box<AstNode>, then_branch: Vec<AstNode>, else_branch: Option<Vec<AstNode>> },
     For { var: String, from: Box<AstNode>, to: Box<AstNode>, inclusive: bool, body: Vec<AstNode> },

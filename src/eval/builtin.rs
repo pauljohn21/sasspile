@@ -1,4 +1,4 @@
-use crate::types::Value;
+use crate::types::{ListSeparator, Value};
 
 /// Dispatch a built-in function call by name.
 /// Returns Some(Value) if the function was handled, None if unknown.
@@ -118,18 +118,22 @@ fn map_merge(args: &[Value]) -> Option<Value> {
 fn map_keys(args: &[Value]) -> Option<Value> {
     let map = args.first()?;
     match map {
-        Value::Map(entries) => {
-            Some(Value::List(entries.iter().map(|(k, _)| Value::String(k.clone())).collect()))
-        }
-        _ => Some(Value::List(Vec::new())),
+        Value::Map(entries) => Some(Value::List(
+            entries.iter().map(|(k, _)| Value::String(k.clone())).collect(),
+            ListSeparator::Comma,
+        )),
+        _ => Some(Value::List(Vec::new(), ListSeparator::Comma)),
     }
 }
 
 fn map_values(args: &[Value]) -> Option<Value> {
     let map = args.first()?;
     match map {
-        Value::Map(entries) => Some(Value::List(entries.iter().map(|(_, v)| v.clone()).collect())),
-        _ => Some(Value::List(Vec::new())),
+        Value::Map(entries) => Some(Value::List(
+            entries.iter().map(|(_, v)| v.clone()).collect(),
+            ListSeparator::Comma,
+        )),
+        _ => Some(Value::List(Vec::new(), ListSeparator::Comma)),
     }
 }
 
@@ -156,7 +160,7 @@ fn nth(args: &[Value]) -> Option<Value> {
         return Some(Value::Null);
     }
     match list {
-        Value::List(items) => Some(items.get(n_val - 1).cloned().unwrap_or(Value::Null)),
+        Value::List(items, _) => Some(items.get(n_val - 1).cloned().unwrap_or(Value::Null)),
         _ => Some(list.clone()),
     }
 }
@@ -169,7 +173,7 @@ fn list_join(args: &[Value]) -> Option<Value> {
     let items2 = list_to_items(list2);
     let mut all = items1;
     all.extend(items2);
-    Some(Value::List(all))
+    Some(Value::List(all, ListSeparator::Comma))
 }
 
 fn list_append(args: &[Value]) -> Option<Value> {
@@ -178,13 +182,13 @@ fn list_append(args: &[Value]) -> Option<Value> {
     let items = list_to_items(list);
     let mut result = items;
     result.push(val.clone());
-    Some(Value::List(result))
+    Some(Value::List(result, ListSeparator::Comma))
 }
 
 fn list_length(args: &[Value]) -> Option<Value> {
     let list = args.first()?;
     match list {
-        Value::List(items) => Some(Value::Number(items.len() as f64, None)),
+        Value::List(items, _) => Some(Value::Number(items.len() as f64, None)),
         Value::Map(entries) => Some(Value::Number(entries.len() as f64, None)),
         _ => Some(Value::Number(1.0, None)),
     }
@@ -194,9 +198,9 @@ fn list_separator(args: &[Value]) -> Option<Value> {
     let list = args.first()?;
     match list {
         // Empty list or single item → "space" (default Sass behavior)
-        Value::List(items) if items.len() <= 1 => Some(Value::String("space".to_string())),
+        Value::List(items, _) if items.len() <= 1 => Some(Value::String("space".to_string())),
         // Multi-item list → "comma" (most common in Bootstrap SCSS)
-        Value::List(_) => Some(Value::String("comma".to_string())),
+        Value::List(_, _) => Some(Value::String("comma".to_string())),
         // Map with entries acts as comma-separated list
         Value::Map(entries) if !entries.is_empty() => Some(Value::String("comma".to_string())),
         _ => Some(Value::String("space".to_string())),
@@ -206,7 +210,7 @@ fn list_separator(args: &[Value]) -> Option<Value> {
 /// list-zip($lists...) — combine multiple lists into nested lists by position
 fn list_zip(args: &[Value]) -> Option<Value> {
     if args.is_empty() {
-        return Some(Value::List(Vec::new()));
+        return Some(Value::List(Vec::new(), ListSeparator::Comma));
     }
     // Convert each arg into a list of items
     let lists: Vec<Vec<Value>> = args.iter().map(list_to_items).collect();
@@ -214,9 +218,9 @@ fn list_zip(args: &[Value]) -> Option<Value> {
     let min_len = lists.iter().map(|l| l.len()).min().unwrap_or(0);
     // Build nested lists
     let zipped: Vec<Value> = (0..min_len)
-        .map(|i| Value::List(lists.iter().map(|l| l[i].clone()).collect()))
+        .map(|i| Value::List(lists.iter().map(|l| l[i].clone()).collect(), ListSeparator::Comma))
         .collect();
-    Some(Value::List(zipped))
+    Some(Value::List(zipped, ListSeparator::Comma))
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -298,7 +302,7 @@ fn color_mix(args: &[Value]) -> Option<Value> {
             let r = mix_channel(*r1, *r2, w);
             let g = mix_channel(*g1, *g2, w);
             let b = mix_channel(*b1, *b2, w);
-            let a = mix_channel(*a1, *a2, w);
+            let a = mix_alpha(*a1, *a2, w);
             Some(Value::Color(r, g, b, a))
         }
         _ => Some(Value::Null),
@@ -413,7 +417,7 @@ fn color_rgb_rgba(args: &[Value], fn_name: &str) -> Option<Value> {
     let r = args.first().map(|v| value_to_int(v) as u8).unwrap_or(0);
     let g = args.get(1).map(|v| value_to_int(v) as u8).unwrap_or(0);
     let b = args.get(2).map(|v| value_to_int(v) as u8).unwrap_or(0);
-    let a = args.get(3).map(|v| (value_to_number(v) * 255.0) as u8).unwrap_or(255);
+            let a = args.get(3).map(value_to_number).unwrap_or(1.0);
     Some(Value::Color(r, g, b, a))
 }
 
@@ -422,10 +426,12 @@ fn color_rgb_rgba(args: &[Value], fn_name: &str) -> Option<Value> {
 /// in other CSS functions like rgba(var(--name), alpha).
 fn var_function(args: &[Value]) -> Option<Value> {
     let raw = args.first()?.to_string();
-    // CSS 自定义属性名（--xxx）不能有空格；如果输入是 "--" + $var + "suffix"
-    // 通过 ListLiteral 格式化为 "-- bs- suffix"，需把空格移除。
+    // CSS custom property names (--xxx) must not contain spaces or commas.
+    // When the input is assembled from PropSegment parts via List display,
+    // it becomes "--, bs-, suffix" (comma-separated after our list format change).
+    // Strip both spaces and commas to produce the correct "--bssuffix" form.
     let name = if raw.starts_with("--") {
-        raw.replace(' ', "")
+        raw.replace(' ', "").replace(',', "")
     } else {
         raw
     };
@@ -442,7 +448,7 @@ fn color_transparentize(args: &[Value]) -> Option<Value> {
     let amount = args.get(1).map(value_to_number).unwrap_or(0.0);
     match color {
         Value::Color(r, g, b, a) => {
-            let a_new = (*a as f64 * (1.0 - amount / 100.0)) as u8;
+            let a_new = *a * (1.0 - amount / 100.0);
             Some(Value::Color(*r, *g, *b, a_new))
         }
         _ => Some(color.clone()),
@@ -454,7 +460,7 @@ fn color_opacify(args: &[Value]) -> Option<Value> {
     let amount = args.get(1).map(value_to_number).unwrap_or(0.0);
     match color {
         Value::Color(r, g, b, a) => {
-            let a_new = ((*a as f64) + (amount / 100.0 * 255.0)).min(255.0) as u8;
+            let a_new = (*a + amount / 100.0).min(1.0);
             Some(Value::Color(*r, *g, *b, a_new))
         }
         _ => Some(color.clone()),
@@ -491,7 +497,7 @@ fn color_complement(args: &[Value]) -> Option<Value> {
 fn color_shade(args: &[Value]) -> Option<Value> {
     let color = args.first()?.clone();
     let weight = args.get(1).map(value_to_number).unwrap_or(50.0);
-    let black = Value::Color(0, 0, 0, 255);
+    let black = Value::Color(0, 0, 0, 1.0);
     color_mix(&[black, color, Value::Number(weight, Some("%".to_string()))])
 }
 
@@ -499,7 +505,7 @@ fn color_shade(args: &[Value]) -> Option<Value> {
 fn color_tint(args: &[Value]) -> Option<Value> {
     let color = args.first()?.clone();
     let weight = args.get(1).map(value_to_number).unwrap_or(50.0);
-    let white = Value::Color(255, 255, 255, 255);
+    let white = Value::Color(255, 255, 255, 1.0);
     color_mix(&[white, color, Value::Number(weight, Some("%".to_string()))])
 }
 
@@ -520,7 +526,7 @@ fn color_channel(args: &[Value], channel: &str) -> Option<Value> {
             "red" => Some(Value::Number(*r as f64, None)),
             "green" => Some(Value::Number(*g as f64, None)),
             "blue" => Some(Value::Number(*b as f64, None)),
-            "alpha" => Some(Value::Number(*a as f64 / 255.0, None)),
+            "alpha" => Some(Value::Number(*a, None)),
             _ => Some(Value::Null),
         },
         _ => Some(Value::Null),
@@ -538,7 +544,7 @@ fn type_of(args: &[Value]) -> Option<Value> {
         Value::String(_) => "string",
         Value::Color(_, _, _, _) => "color",
         Value::Calc(_) => "string",
-        Value::List(_) => "list",
+        Value::List(_, _) => "list",
         Value::Map(_) => "map",
         Value::Bool(_) => "bool",
         Value::Null => "null",
@@ -640,9 +646,9 @@ fn value_to_int(v: &Value) -> usize {
 /// Convert a Value to a list of items.
 fn list_to_items(v: &Value) -> Vec<Value> {
     match v {
-        Value::List(items) => items.clone(),
+        Value::List(items, _) => items.clone(),
         Value::Map(entries) => entries.iter().map(|(k, v)| {
-            Value::List(vec![Value::String(k.clone()), v.clone()])
+            Value::List(vec![Value::String(k.clone()), v.clone()], ListSeparator::Comma)
         }).collect(),
         Value::Null => Vec::new(),
         other => vec![other.clone()],
@@ -660,6 +666,11 @@ fn mix_channel(a: u8, b: u8, w: f64) -> u8 {
 /// Mix channel toward a target value by weight
 fn mix_channel_255(val: u8, target: u8, w: f64) -> u8 {
     mix_channel(val, target, w)
+}
+
+/// Mix two alpha values (0.0-1.0) by weight 0.0..1.0
+fn mix_alpha(a: f64, b: f64, w: f64) -> f64 {
+    a + (b - a) * w
 }
 
 /// Shift channel toward max value (for saturate)

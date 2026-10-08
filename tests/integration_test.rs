@@ -370,9 +370,10 @@ $klass: "foo";
         result
     );
     // Ensure the rule is properly wrapped with .foo selector (selector interpolation resolved)
+    // Bootstrap-aligned serializer outputs " {" (space before brace)
     assert!(
-        result.contains(".foo{"),
-        "should contain .foo{{ rule: {:?}",
+        result.contains(".foo {"),
+        "should contain .foo {{ rule: {:?}",
         result
     );
 }

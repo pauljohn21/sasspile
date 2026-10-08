@@ -1,4 +1,4 @@
-use rx_scss::types::Value;
+use rx_scss::types::{ListSeparator, Value};
 
 #[test]
 fn display_number_integer() {
@@ -18,13 +18,13 @@ fn display_string() {
 
 #[test]
 fn display_color_rgb() {
-    assert_eq!(Value::Color(255, 0, 0, 255).to_string(), "#ff0000");
+    assert_eq!(Value::Color(255, 0, 0, 1.0).to_string(), "#ff0000");
 }
 
 #[test]
 fn display_color_rgba() {
-    let s = Value::Color(255, 0, 0, 128).to_string();
-    assert_eq!(s, "#ff000080");
+    let s = Value::Color(255, 0, 0, 128.0 / 255.0).to_string();
+    assert_eq!(s, "rgba(255, 0, 0, 0.502)");
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn display_list() {
         Value::Number(1.0, None),
         Value::Number(2.0, None),
         Value::Number(3.0, None),
-    ]);
+    ], ListSeparator::Space);
     let s = list.to_string();
     assert!(s.contains("1"));
     assert!(s.contains("2"));
@@ -73,6 +73,6 @@ fn value_partial_eq() {
 
 #[test]
 fn value_color_eq() {
-    assert_eq!(Value::Color(1, 2, 3, 4), Value::Color(1, 2, 3, 4));
-    assert_ne!(Value::Color(1, 2, 3, 4), Value::Color(1, 2, 3, 5));
+    assert_eq!(Value::Color(1, 2, 3, 4.0), Value::Color(1, 2, 3, 4.0));
+    assert_ne!(Value::Color(1, 2, 3, 4.0), Value::Color(1, 2, 3, 5.0));
 }
