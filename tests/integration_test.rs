@@ -1255,19 +1255,19 @@ fn compile_bootstrap_full() {
             let missing = diff_lines(&css, &reference);
             // Coverage calculation
             let coverage = crate::common::bootstrap_dist::bootstrap_dist_coverage().unwrap_or(0.0);
-            eprintln!(
-                "compile_bootstrap_full: actual={} lines, reference={} lines, missing={} lines, coverage={:.2}%",
-                actual_lines.len(),
-                ref_lines.len(),
-                missing.len(),
-                coverage * 100.0
+            tracing::info!(
+                actual_lines = actual_lines.len(),
+                ref_lines = ref_lines.len(),
+                missing_lines = missing.len(),
+                coverage_pct = coverage * 100.0,
+                "Bootstrap dist alignment results"
             );
             for (i, line) in missing.iter().take(30).enumerate() {
-                eprintln!("  missing[{}]: {}", i, line.trim());
+                tracing::debug!("missing line[{}]: {}", i, line.trim());
             }
         }
         Err(e) => {
-            eprintln!("bootstrap.scss compile error: {:?}", e);
+            tracing::error!(?e, "bootstrap.scss compile error");
         }
     }
 }

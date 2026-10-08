@@ -83,70 +83,45 @@ pub fn serialize(stmts: &[CssStmt], opts: &Options) -> String {
 }
 
 /// 展平嵌套 CSS 规则为扁平结构。
-/// parent 参数用于组合选择器（".parent" + " " + ".child" → ".parent .child"）。
+/// 注意：evaluator 已经完成了选择器组合（combine_selectors），
+/// 所以 CssStmt::Rule 中的 selector 已经是最终形式，无需再次组合。
+/// parent 参数仅用于在非顶层 Media/Supports 上下文中包裹 Decl 节点。
 fn flatten_stmts(stmts: &[CssStmt], parent: &str) -> Vec<CssStmt> {
     let mut result = Vec::new();
     for stmt in stmts {
         match stmt {
             CssStmt::Rule { selector, inner } => {
                 let selector = strip_at_root_marker(selector);
-                // 组合父选择器
-                let combined = combine_selectors(parent, &selector);
                 // 分离声明和嵌套规则
                 let (decls, nested): (Vec<_>, Vec<_>) = inner.iter().cloned().partition(|s| matches!(s, CssStmt::Decl { .. }));
-                // 输出当前规则的声明
+                // 输出当前规则的声明（选择器已是最终形式，直接使用）
                 if !decls.is_empty() {
                     result.push(CssStmt::Rule {
-                        selector: combined.clone(),
+                        selector: selector.clone(),
                         inner: decls,
                     });
                 }
-                // 递归展平嵌套规则
-                let nested_flat = flatten_stmts(&nested, &combined);
+                // 递归展平嵌套规则（selector 已是最终组合结果，传空 parent 避免重复组合）
+                let nested_flat = flatten_stmts(&nested, "");
                 result.extend(nested_flat);
             }
             CssStmt::Media { query, inner } => {
-                // @media 内部的规则也需要展平。
-                // 非顶层上下文中，需要将 Decl 包裹进父选择器 Rule
-                // 否则 Decl 在 flatten 时被丢弃（parent 非空）
-                let normalized = if parent.is_empty() {
-                    inner.clone()
-                } else {
-                    inner.iter().cloned().map(|s| match s {
-                        CssStmt::Decl { .. } => CssStmt::Rule {
-                            selector: parent.to_string(),
-                            inner: vec![s],
-                        },
-                        _ => s,
-                    }).collect()
-                };
-                let flat_inner = flatten_stmts(&normalized, parent);
+                // @media 内部：evaluator 已组合选择器，直接展平子规则
+                let flat_inner = flatten_stmts(inner, "");
                 result.push(CssStmt::Media {
                     query: query.clone(),
                     inner: flat_inner,
                 });
             }
             CssStmt::Supports { query, inner } => {
-                let normalized = if parent.is_empty() {
-                    inner.clone()
-                } else {
-                    inner.iter().cloned().map(|s| match s {
-                        CssStmt::Decl { .. } => CssStmt::Rule {
-                            selector: parent.to_string(),
-                            inner: vec![s],
-                        },
-                        _ => s,
-                    }).collect()
-                };
-                let flat_inner = flatten_stmts(&normalized, parent);
+                let flat_inner = flatten_stmts(inner, "");
                 result.push(CssStmt::Supports {
                     query: query.clone(),
                     inner: flat_inner,
                 });
             }
-            // 顶层声明（无父选择器包裹）— 直接传递
-            // 非顶层上下文中的 Decl 进不到这里（已由 Media/Supports 的包裹逻辑处理）
             CssStmt::Decl { .. } => {
+                // 顶层声明直接输出；非顶层 Decl 已在 evaluator 层被 Rule 包裹
                 if parent.is_empty() {
                     result.push(stmt.clone());
                 }
@@ -157,23 +132,6 @@ fn flatten_stmts(stmts: &[CssStmt], parent: &str) -> Vec<CssStmt> {
         }
     }
     result
-}
-
-/// 组合父选择器与子选择器。
-fn combine_selectors(parent: &str, child: &str) -> String {
-    if parent.is_empty() {
-        return child.to_string();
-    }
-    if let Some(stripped) = child.strip_prefix('&') {
-        // &.class → parentclass（移除 & 并直接拼接）
-        format!("{}{}", parent, stripped)
-    } else if child.starts_with(':') || child.starts_with('[') {
-        // :pseudo 或 [attr] → 直接拼接
-        format!("{}{}", parent, child)
-    } else {
-        // 默认：后代选择器
-        format!("{} {}", parent, child)
-    }
 }
 
 /// Check if a CssStmt is an @at-root marker.

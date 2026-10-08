@@ -240,7 +240,8 @@ fn expand_nodes_to_events(
                 }
                 AstNode::If { cond, then_branch, else_branch } => {
                     let cond_val = eval_expr(&cond, ctx, bus);
-                    let branch = if truthy(&cond_val) {
+                    let is_truthy = truthy(&cond_val);
+                    let branch = if is_truthy {
                         then_branch
                     } else if let Some(eb) = else_branch { eb } else { vec![] };
                     for n in branch.iter().rev() {
