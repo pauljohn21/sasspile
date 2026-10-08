@@ -61,18 +61,17 @@ pub fn serialize(stmts: &[CssStmt], opts: &Options) -> String {
         }
     }
 
-    // Separate @at-root rules (marked with "/*@at-root*/ " prefix) for hoisting
+    // Separate @at-root rules for hoisting
     let (atroot_stmts, normal_stmts): (Vec<_>, Vec<_>) = stmts.iter()
         .cloned()
         .partition(|s| is_at_root(s));
 
-    // Normal statements first, then @at-root hoisted to top level
     serialize_stmts(&normal_stmts, opts, &mut output, 0);
     serialize_stmts(&atroot_stmts, opts, &mut output, 0);
     output
 }
 
-/// Check if a CssStmt is an @at-root marker (selector starts with /*@at-root*/).
+/// Check if a CssStmt is an @at-root marker.
 fn is_at_root(stmt: &CssStmt) -> bool {
     match stmt {
         CssStmt::Rule { selector, .. } => selector.starts_with("/*@at-root*/ "),
@@ -83,6 +82,21 @@ fn is_at_root(stmt: &CssStmt) -> bool {
 /// Strip the /*@at-root*/ marker prefix from a selector.
 fn strip_at_root_marker(selector: &str) -> String {
     selector.strip_prefix("/*@at-root*/ ").unwrap_or(selector).to_string()
+}
+
+/// Format comma-separated selectors for Expanded/Nested style.
+/// Always prepends the base_indent (Bootstrap format: indented selectors inside @media).
+/// Multi-selectors are separated by ",\n" with each on its own indented line.
+fn format_selectors_expanded(selector: &str, indent_level: usize) -> String {
+    let base_indent = "  ".repeat(indent_level);
+    let parts: Vec<&str> = selector.split(',').collect();
+    let formatted: Vec<String> = parts.iter()
+        .map(|s| format!("{}{}", base_indent, s.trim()))
+        .collect();
+    if parts.len() <= 1 {
+        return formatted[0].clone();
+    }
+    format!("{},\n{}", formatted[0], formatted[1..].join(",\n"))
 }
 
 fn serialize_stmts(stmts: &[CssStmt], opts: &Options, out: &mut String, indent_level: usize) {
@@ -100,11 +114,11 @@ fn serialize_stmt(stmt: &CssStmt, opts: &Options, out: &mut String, indent_level
         CssStmt::Decl { property, value } => {
             match opts.style {
                 OutputStyle::Expanded => {
-                    let indent = "  ".repeat(indent_level + 1);
+                    let indent = "  ".repeat(indent_level);
                     out.push_str(&format!("{}{}: {};\n", indent, property, value));
                 }
                 OutputStyle::Nested => {
-                    let indent = "  ".repeat(indent_level + 1);
+                    let indent = "  ".repeat(indent_level);
                     out.push_str(&format!("{}{}: {};\n", indent, property, value));
                 }
                 OutputStyle::Compressed => {
@@ -117,13 +131,15 @@ fn serialize_stmt(stmt: &CssStmt, opts: &Options, out: &mut String, indent_level
             match opts.style {
                 OutputStyle::Expanded => {
                     let indent = "  ".repeat(indent_level);
-                    out.push_str(&format!("{}{{\n", selector));
+                    let formatted = format_selectors_expanded(&selector, indent_level);
+                    out.push_str(&format!("{} {{\n", formatted));
                     serialize_stmts(inner, opts, out, indent_level + 1);
                     out.push_str(&format!("{}}}\n", indent));
                 }
                 OutputStyle::Nested => {
                     let indent = "  ".repeat(indent_level);
-                    out.push_str(&format!("{}{{\n", selector));
+                    let formatted = format_selectors_expanded(&selector, indent_level);
+                    out.push_str(&format!("{} {{\n", formatted));
                     serialize_stmts(inner, opts, out, indent_level + 1);
                     out.push_str(&format!("{}}}\n", indent));
                 }
@@ -234,5 +250,13 @@ mod serialize_tests {
             inner: vec![CssStmt::Decl { property: "z".into(), value: "1".into() }],
         };
         assert!(!non_empty.is_invisible());
+    }
+
+    #[test]
+    fn test_format_selectors_expanded() {
+        assert_eq!(format_selectors_expanded(":root", 0), ":root");
+        let multi = format_selectors_expanded(":root, [data-bs-theme=light]", 0);
+        assert!(multi.contains(":root,"));
+        assert!(multi.contains("[data-bs-theme=light]"));
     }
 }

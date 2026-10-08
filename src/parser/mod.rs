@@ -166,10 +166,22 @@ fn parse_style_decl(ps: &mut ParserState) -> Option<AstNode> {
     }
     ps.next_token();
     let value = parse_value(ps)?;
+    // Detect `!important` flag after value: `prop: value !important;`
+    let important = if matches!(ps.peek(), Some(Token::Bang)) {
+        ps.next_token(); // consume !
+        if matches!(ps.peek(), Some(Token::Ident(s)) if s == "important") {
+            ps.next_token(); // consume `important`
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
     if matches!(ps.peek(), Some(Token::Semicolon)) {
         ps.next_token();
     }
-    Some(AstNode::StyleDecl { property, value: Box::new(value) })
+    Some(AstNode::StyleDecl { property, value: Box::new(value), important })
 }
 
 fn parse_variable_decl(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
@@ -498,7 +510,7 @@ fn parse_hex_color(hex: &str) -> Option<Value> {
         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
         let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-        Some(Value::Color(r, g, b, 255))
+        Some(Value::Color(r, g, b, 1.0))
     } else { None }
 }
 
@@ -924,7 +936,21 @@ fn parse_at_query(ps: &mut ParserState) -> String {
             Token::Ident(s) => { parts.push(s.clone()); ps.next_token(); }
             Token::Str(s) => { parts.push(s.clone()); ps.next_token(); }
             Token::Number(n, u) => {
-                parts.push(if let Some(unit) = u { format!("{}{}", n, unit) } else { format!("{}", n) });
+                let num_str = if let Some(unit) = u {
+                    // Format number without trailing .0
+                    if *n == n.trunc() {
+                        format!("{}{}", *n as i64, unit)
+                    } else {
+                        format!("{}{}", n, unit)
+                    }
+                } else {
+                    if *n == n.trunc() {
+                        format!("{}", *n as i64)
+                    } else {
+                        format!("{}", n)
+                    }
+                };
+                parts.push(num_str);
                 ps.next_token();
             }
             Token::Whitespace => { ps.next_token(); }
@@ -980,7 +1006,27 @@ fn parse_at_query(ps: &mut ParserState) -> String {
             _ => break,
         }
     }
-    parts.join(" ")
+    // Smart join:
+    // - No space after '(' or before ')'
+    // - No space before ':' but space AFTER it (min-width: 768px)
+    // - No space around ',' (comma-separated)
+    let mut result = String::new();
+    for (i, part) in parts.iter().enumerate() {
+        if i == 0 {
+            result.push_str(part);
+        } else {
+            let prev = &parts[i - 1];
+            let no_space_before = part.starts_with(')') || part.starts_with(':') || part.starts_with(',');
+            let no_space_after = prev.ends_with('(') || prev.ends_with(',');
+            if no_space_before || no_space_after {
+                result.push_str(part);
+            } else {
+                result.push(' ');
+                result.push_str(part);
+            }
+        }
+    }
+    result
 }
 
 fn expect_token(ps: &mut ParserState, expected: &Token) -> Option<()> {

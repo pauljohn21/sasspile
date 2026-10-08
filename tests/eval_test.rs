@@ -579,7 +579,8 @@ $w: 768px;
 }
 "#;
         let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
-        assert!(css.contains("min-width : 768px"), "variable in media query should be resolved: {}", css);
+        // Bootstrap format: space AFTER colon but not before
+        assert!(css.contains("min-width: 768px"), "variable in media query should be resolved: {}", css);
         assert!(css.contains(".test"), "rule inside @content should be in output: {}", css);
         assert!(!css.contains("$w"), "no unresolved $w should remain in output: {}", css);
     }
@@ -604,7 +605,8 @@ $w: 768px;
 }
 "#;
         let css = CompileBuilder::new().expanded().compile_string(scss).expect("compile failed");
-        assert!(css.contains("min-width : 768px"), "function result in media query should be resolved: {}", css);
+        // Bootstrap format: space AFTER colon but not before
+        assert!(css.contains("min-width: 768px"), "function result in media query should be resolved: {}", css);
         assert!(css.contains(".test"), "content block should be expanded: {}", css);
     }
 
