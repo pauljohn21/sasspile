@@ -18,10 +18,11 @@ fn register_and_lookup_mixin() {
     let mixin = MixinDef {
         name: "box".into(),
         params: vec![Param::new("color")],
-        body: vec![AstNode::StyleDecl {
-            property: vec![PropSegment::Literal("border".into())],
-            value: Box::new(AstNode::Literal(Value::String("red".into()))),
-        }],
+body: vec![AstNode::StyleDecl {
+    property: vec![PropSegment::Literal("border".into())],
+    value: Box::new(AstNode::Literal(Value::String("red".into()))),
+    important: false,
+}],
     };
     bus.register_mixin(mixin);
     let found = bus.lookup_mixin("box");

@@ -250,14 +250,19 @@ fn expand_nodes_to_events(
                 AstNode::For { var, from, to, inclusive, body } => {
                     let from_n = value_to_number(&eval_expr(&from, ctx, bus)) as i64;
                     let to_n = value_to_number(&eval_expr(&to, ctx, bus)) as i64;
-                    let mut i = from_n;
-                    while if inclusive { i <= to_n } else { i < to_n } {
+                    // `to` 是排他的（不包含），`through` 是包含的
+                    let effective_to = if inclusive { to_n } else { to_n - 1 };
+                    // 反向迭代：stack 是 LIFO，反向 push 才能正向 pop
+                    let mut i = effective_to;
+                    loop {
+                        if i < from_n { break; }
                         let child_ctx = ctx.child_scope(5);
                         child_ctx.bind_var(&var, Value::Number(i as f64, None));
                         for n in body.iter().rev() {
                             queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
                         }
-                        i += 1;
+                        if i == from_n { break; }
+                        i -= 1;
                     }
                 }
                 AstNode::Each { vars, list, body } => {
@@ -269,7 +274,8 @@ fn expand_nodes_to_events(
                             .collect(),
                         v => vec![v],
                     };
-                    for item_val in items {
+                    // 反向迭代 items：stack 是 LIFO，反向 push 才能正向 pop
+                    for item_val in items.into_iter().rev() {
                         let child_ctx = ctx.child_scope(6);
                         match vars.len() {
                             1 => child_ctx.bind_var(&vars[0], item_val),
@@ -293,16 +299,22 @@ fn expand_nodes_to_events(
                     }
                 }
                 AstNode::While { cond, body } => {
-                    let child_ctx = ctx.child_scope(7);
+                    // 收集所有迭代产生的 work items，然后反向 push
+                    let mut work_items: Vec<Work> = Vec::new();
                     let mut iterations = 0;
                     loop {
                         let cond_val = eval_expr(&cond, ctx, bus);
                         if !truthy(&cond_val) { break; }
+                        let child_ctx = ctx.child_scope(7);
                         for n in body.iter().rev() {
-                            queue.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
+                            work_items.push(Work::Node(n.clone(), parent_sel.clone(), Arc::new(child_ctx.clone())));
                         }
                         iterations += 1;
                         if iterations > 10000 { break; }
+                    }
+                    // 反向 push 到 queue，确保正向 pop 顺序
+                    for work in work_items.into_iter().rev() {
+                        queue.push(work);
                     }
                 }
                 AstNode::Css(stmt) => {

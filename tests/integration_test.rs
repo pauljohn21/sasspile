@@ -1242,6 +1242,8 @@ fn compile_bootstrap_full() {
                 "full compile should produce substantial CSS: got {} bytes",
                 css.len()
             );
+            // Dump for analysis
+            std::fs::write("/tmp/rx_scss_bootstrap_output.css", &css).ok();
             // Compare against Bootstrap dist reference
             let reference = std::fs::read_to_string(format!(
                 "{}/bootstrap/dist/css/bootstrap.css",
@@ -1648,6 +1650,33 @@ $data-theme: "dark";
     assert!(
         result.contains("color-scheme: dark"),
         "declaration should be present: {}",
+        result
+    );
+}
+
+#[test]
+fn compile_vendor_prefixed_property() {
+    let input = r#"
+body {
+  -webkit-text-size-adjust: 100%;
+  -moz-appearance: none;
+  color: red;
+}
+"#;
+    let result = from_string(input, &Options::expanded()).expect("compilation failed");
+    assert!(
+        result.contains("-webkit-text-size-adjust: 100%"),
+        "should contain -webkit-text-size-adjust: {}",
+        result
+    );
+    assert!(
+        result.contains("-moz-appearance: none"),
+        "should contain -moz-appearance: {}",
+        result
+    );
+    assert!(
+        result.contains("color: red"),
+        "should contain color: red: {}",
         result
     );
 }

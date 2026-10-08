@@ -64,11 +64,116 @@ pub fn serialize(stmts: &[CssStmt], opts: &Options) -> String {
     // Separate @at-root rules for hoisting
     let (atroot_stmts, normal_stmts): (Vec<_>, Vec<_>) = stmts.iter()
         .cloned()
-        .partition(|s| is_at_root(s));
+        .partition(is_at_root);
 
-    serialize_stmts(&normal_stmts, opts, &mut output, 0);
-    serialize_stmts(&atroot_stmts, opts, &mut output, 0);
+    // Expanded 模式：展平嵌套规则以匹配标准 CSS 输出
+    match opts.style {
+        OutputStyle::Expanded => {
+            let flat = flatten_stmts(&normal_stmts, "");
+            serialize_stmts(&flat, opts, &mut output, 0);
+            let flat_atroot = flatten_stmts(&atroot_stmts, "");
+            serialize_stmts(&flat_atroot, opts, &mut output, 0);
+        }
+        _ => {
+            serialize_stmts(&normal_stmts, opts, &mut output, 0);
+            serialize_stmts(&atroot_stmts, opts, &mut output, 0);
+        }
+    }
     output
+}
+
+/// 展平嵌套 CSS 规则为扁平结构。
+/// parent 参数用于组合选择器（".parent" + " " + ".child" → ".parent .child"）。
+fn flatten_stmts(stmts: &[CssStmt], parent: &str) -> Vec<CssStmt> {
+    let mut result = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            CssStmt::Rule { selector, inner } => {
+                let selector = strip_at_root_marker(selector);
+                // 组合父选择器
+                let combined = combine_selectors(parent, &selector);
+                // 分离声明和嵌套规则
+                let (decls, nested): (Vec<_>, Vec<_>) = inner.iter().cloned().partition(|s| matches!(s, CssStmt::Decl { .. }));
+                // 输出当前规则的声明
+                if !decls.is_empty() {
+                    result.push(CssStmt::Rule {
+                        selector: combined.clone(),
+                        inner: decls,
+                    });
+                }
+                // 递归展平嵌套规则
+                let nested_flat = flatten_stmts(&nested, &combined);
+                result.extend(nested_flat);
+            }
+            CssStmt::Media { query, inner } => {
+                // @media 内部的规则也需要展平。
+                // 非顶层上下文中，需要将 Decl 包裹进父选择器 Rule
+                // 否则 Decl 在 flatten 时被丢弃（parent 非空）
+                let normalized = if parent.is_empty() {
+                    inner.clone()
+                } else {
+                    inner.iter().cloned().map(|s| match s {
+                        CssStmt::Decl { .. } => CssStmt::Rule {
+                            selector: parent.to_string(),
+                            inner: vec![s],
+                        },
+                        _ => s,
+                    }).collect()
+                };
+                let flat_inner = flatten_stmts(&normalized, parent);
+                result.push(CssStmt::Media {
+                    query: query.clone(),
+                    inner: flat_inner,
+                });
+            }
+            CssStmt::Supports { query, inner } => {
+                let normalized = if parent.is_empty() {
+                    inner.clone()
+                } else {
+                    inner.iter().cloned().map(|s| match s {
+                        CssStmt::Decl { .. } => CssStmt::Rule {
+                            selector: parent.to_string(),
+                            inner: vec![s],
+                        },
+                        _ => s,
+                    }).collect()
+                };
+                let flat_inner = flatten_stmts(&normalized, parent);
+                result.push(CssStmt::Supports {
+                    query: query.clone(),
+                    inner: flat_inner,
+                });
+            }
+            // 顶层声明（无父选择器包裹）— 直接传递
+            // 非顶层上下文中的 Decl 进不到这里（已由 Media/Supports 的包裹逻辑处理）
+            CssStmt::Decl { .. } => {
+                if parent.is_empty() {
+                    result.push(stmt.clone());
+                }
+            }
+            CssStmt::Comment(_) | CssStmt::Charset => {
+                result.push(stmt.clone());
+            }
+        }
+    }
+    result
+}
+
+/// 组合父选择器与子选择器。
+fn combine_selectors(parent: &str, child: &str) -> String {
+    if parent.is_empty() {
+        return child.to_string();
+    }
+    if let Some(stripped) = child.strip_prefix('&') {
+        // &.class → parentclass（移除 & 并直接拼接）
+        format!("{}{}", parent, stripped)
+    } else if child.starts_with(':') || child.starts_with('[') {
+        // :pseudo 或 [attr] → 直接拼接
+        format!("{}{}", parent, child)
+    } else {
+        // 默认：后代选择器
+        format!("{} {}", parent, child)
+    }
 }
 
 /// Check if a CssStmt is an @at-root marker.

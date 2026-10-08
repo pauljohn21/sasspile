@@ -10,6 +10,7 @@ pub fn call_builtin(name: &str, args: &[Value]) -> Option<Value> {
         "map-merge" => map_merge(args),
         "map-keys" => map_keys(args),
         "map-values" => map_values(args),
+        "map-loop" => map_loop(args),
 
         // ── Conditional ────────────────────────────────────────────────────
         "if" => if_fn(args),
@@ -63,6 +64,8 @@ pub fn call_builtin(name: &str, args: &[Value]) -> Option<Value> {
         "quote" => quote(args),
         "unquote" => unquote(args),
         "str-length" => str_length(args),
+        "str-index" => str_index(args),
+        "str-slice" => str_slice(args),
         "str-replace" => str_replace(args),
         "to-upper-case" => to_upper_case(args),
         "to-lower-case" => to_lower_case(args),
@@ -137,6 +140,39 @@ fn map_values(args: &[Value]) -> Option<Value> {
     }
 }
 
+/// map-loop($map, $func, $args...): 遍历 map，对每个 value 调用指定函数，返回新 map
+/// $args 中 "$key" 替换为键名，"$value" 替换为值，其余参数原样传递
+fn map_loop(args: &[Value]) -> Option<Value> {
+    let map = args.first()?;
+    let func_name = args.get(1)?.to_string();
+    let extra_args = &args[2..];
+    match map {
+        Value::Map(entries) => {
+            let mut result = Vec::new();
+            for (key, value) in entries {
+                // 构建实际参数列表：替换 "$key" 和 "$value"
+                let call_args: Vec<Value> = extra_args.iter().map(|arg| {
+                    let s = arg.to_string();
+                    if s == "$key" {
+                        Value::String(key.clone())
+                    } else if s == "$value" {
+                        value.clone()
+                    } else {
+                        arg.clone()
+                    }
+                }).collect();
+                if let Some(func_result) = call_builtin(&func_name, &call_args) {
+                    result.push((key.clone(), func_result));
+                } else {
+                    result.push((key.clone(), value.clone()));
+                }
+            }
+            Some(Value::Map(result))
+        }
+        _ => Some(Value::Map(Vec::new())),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Conditional
 // ─────────────────────────────────────────────────────────────────────────
@@ -161,6 +197,11 @@ fn nth(args: &[Value]) -> Option<Value> {
     }
     match list {
         Value::List(items, _) => Some(items.get(n_val - 1).cloned().unwrap_or(Value::Null)),
+        // For maps, convert to list of [key, value] pairs and pick the nth
+        Value::Map(entries) => {
+            let pair = entries.get(n_val - 1)?;
+            Some(Value::List(vec![Value::String(pair.0.clone()), pair.1.clone()], ListSeparator::Comma))
+        }
         _ => Some(list.clone()),
     }
 }
@@ -296,7 +337,8 @@ fn color_mix(args: &[Value]) -> Option<Value> {
     let c1 = args.first()?;
     let c2 = args.get(1)?;
     let weight = args.get(2).map(value_to_number).unwrap_or(50.0);
-    let w = (weight / 100.0).clamp(0.0, 1.0);
+    // weight 是 c1 的占比；mix_channel(a, b, w) 中 w 是 b 的权重，所以需要反转
+    let w = 1.0 - (weight / 100.0).clamp(0.0, 1.0);
     match (c1, c2) {
         (Value::Color(r1, g1, b1, a1), Value::Color(r2, g2, b2, a2)) => {
             let r = mix_channel(*r1, *r2, w);
@@ -314,6 +356,8 @@ fn color_lighten(args: &[Value]) -> Option<Value> {
     let amount = args.get(1).map(value_to_number).unwrap_or(0.0);
     match color {
         Value::Color(r, g, b, a) => {
+            // lighten($color, 20%) = mix(white, $color, 20%) = 20% white + 80% color
+            // mix_channel_255(r, 255, t) 中 t 是 255(white) 的权重 = amount/100
             let t = (amount / 100.0).clamp(0.0, 1.0);
             Some(Value::Color(
                 mix_channel_255(*r, 255, t),
@@ -331,7 +375,9 @@ fn color_darken(args: &[Value]) -> Option<Value> {
     let amount = args.get(1).map(value_to_number).unwrap_or(0.0);
     match color {
         Value::Color(r, g, b, a) => {
-            let t = 1.0 - (amount / 100.0).clamp(0.0, 1.0);
+            // darken($color, 20%) = mix(black, $color, 20%) = 20% black + 80% color
+            // mix_channel_255(r, 0, t) 中 t 是 0(black) 的权重 = amount/100
+            let t = (amount / 100.0).clamp(0.0, 1.0);
             Some(Value::Color(
                 mix_channel_255(*r, 0, t),
                 mix_channel_255(*g, 0, t),
@@ -587,7 +633,34 @@ fn unquote(args: &[Value]) -> Option<Value> {
 
 fn str_length(args: &[Value]) -> Option<Value> {
     let v = args.first()?;
-    Some(Value::Number(v.to_string().len() as f64, None))
+    Some(Value::Number(v.to_string().chars().count() as f64, None))
+}
+
+/// str-index($string, $substring) - 1-based index of first occurrence, or null
+fn str_index(args: &[Value]) -> Option<Value> {
+    let s = args.first()?.to_string();
+    let search = args.get(1)?.to_string();
+    if search.is_empty() {
+        return Some(Value::Null);
+    }
+    s.find(&search).map(|pos| Value::Number((pos + 1) as f64, None))
+}
+
+/// str-slice($string, $start, $end) - substring from start (1-based) to end (1-based, inclusive)
+fn str_slice(args: &[Value]) -> Option<Value> {
+    let s = args.first()?.to_string();
+    let start = args.get(1).map(value_to_int).unwrap_or(1);
+    let end = args.get(2).map(value_to_int).unwrap_or_else(|| s.chars().count());
+    if start < 1 || start > end {
+        return Some(Value::String(String::new()));
+    }
+    let chars: Vec<char> = s.chars().collect();
+    if start as usize > chars.len() {
+        return Some(Value::String(String::new()));
+    }
+    let actual_end = (end as usize).min(chars.len());
+    let sliced: String = chars[(start - 1)..actual_end].iter().collect();
+    Some(Value::String(sliced))
 }
 
 /// str-replace($string, $search, $replacement) — global substring replacement

@@ -112,7 +112,19 @@ impl CompileBuilder {
             style: self.serialize_style,
             suppress_charset: false,
         };
-        from_path(path.as_ref(), &options)
+        // Build include paths: file's parent dir first, then user-specified paths
+        let mut include_paths = self.include_paths.clone();
+        if let Some(parent) = path.as_ref().parent() {
+            let parent_buf = parent.to_path_buf();
+            if !include_paths.contains(&parent_buf) {
+                include_paths.push(parent_buf);
+            }
+        }
+        crate::pipeline::from_string_with_paths(
+            &std::fs::read_to_string(path.as_ref()).map_err(|e| CompileError::Io(e.to_string()))?,
+            &options,
+            include_paths,
+        )
     }
 }
 

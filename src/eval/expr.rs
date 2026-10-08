@@ -188,25 +188,29 @@ fn resolve_selector_recursive(selector: &str, ctx: &EvalContext, depth: usize) -
     let chars: Vec<char> = selector.chars().collect();
     let mut i = 0;
     while i < chars.len() {
-        // Handle `#{$var}` interpolation: skip the `#{` prefix
+        // Handle `#{...}` interpolation in selector
         if chars[i] == '#' && i + 1 < chars.len() && chars[i + 1] == '{' {
-            // Find the closing `}`
-            let close = chars[i + 2..].iter().position(|&c| c == '}').map(|p| i + 2 + p);
-            if let Some(end) = close {
-                let var_chars = &chars[i + 2..end];
-                // Skip leading $ if present
-                let var_start = if !var_chars.is_empty() && var_chars[0] == '$' { 1 } else { 0 };
-                let var_name: String = var_chars[var_start..].iter().collect();
-                if !var_name.is_empty() {
-                    let val = ctx.var(&var_name).unwrap_or(Value::Null);
-                    // Recursively resolve the value if it contains variable references
-                    let val_str = val.to_string();
-                    if val_str.contains('$') {
-                        result.push_str(&resolve_selector_recursive(&val_str, ctx, depth + 1));
-                    } else {
-                        result.push_str(&val_str);
+            // Find the closing `}` respecting nested braces
+            let mut depth_brace = 1i32;
+            let mut end = None;
+            for j in (i + 2)..chars.len() {
+                if chars[j] == '#' && j + 1 < chars.len() && chars[j + 1] == '{' {
+                    depth_brace += 1;
+                } else if chars[j] == '}' {
+                    depth_brace -= 1;
+                    if depth_brace == 0 {
+                        end = Some(j);
+                        break;
                     }
                 }
+            }
+            if let Some(end) = end {
+                let inner: String = chars[i + 2..end].iter().collect();
+                // Evaluate the interpolation expression:
+                // Replace all $var references with their values, then
+                // handle string concatenation (+) and nested interpolation.
+                let resolved = eval_interp_expression(&inner, ctx, depth + 1);
+                result.push_str(&resolved);
                 i = end + 1;
                 continue;
             }
@@ -257,6 +261,135 @@ fn resolve_selector_recursive(selector: &str, ctx: &EvalContext, depth: usize) -
         }
     }
     result
+}
+
+/// Evaluate an interpolation expression like `$a + $b + $c` or `$class`.
+/// Handles: simple $var, $var + $var (string concat), nested #{...}, and literal strings.
+fn eval_interp_expression(expr: &str, ctx: &EvalContext, depth: usize) -> String {
+    // Split on + (string concatenation) at top level
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut brace_depth = 0i32;
+    let mut pound_brace = false;
+    for ch in expr.chars() {
+        if pound_brace {
+            pound_brace = false;
+            if ch == '{' {
+                brace_depth += 1;
+                current.push('#');
+                current.push('{');
+                continue;
+            } else {
+                current.push('#');
+            }
+        }
+        if ch == '#' && brace_depth == 0 {
+            pound_brace = true;
+            continue;
+        }
+        if ch == '{' && brace_depth > 0 {
+            brace_depth += 1;
+            current.push(ch);
+            continue;
+        }
+        if ch == '}' && brace_depth > 0 {
+            brace_depth -= 1;
+            current.push(ch);
+            continue;
+        }
+        if ch == '+' && brace_depth == 0 {
+            parts.push(current.trim().to_string());
+            current = String::new();
+            continue;
+        }
+        current.push(ch);
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    if parts.is_empty() {
+        return String::new();
+    }
+    // Evaluate each part and concatenate
+    parts.iter()
+        .map(|part| eval_interp_part(part, ctx, depth))
+        .collect()
+}
+
+/// Evaluate a single part of an interpolation expression.
+/// Handles: $var, "literal", #{...}, function calls, and nested expressions.
+fn eval_interp_part(part: &str, ctx: &EvalContext, depth: usize) -> String {
+    let trimmed = part.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    // Literal string
+    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+        return trimmed[1..trimmed.len() - 1].to_string();
+    }
+    // Recursive #{...}
+    if trimmed.starts_with("#{") && trimmed.ends_with('}') {
+        let inner = &trimmed[2..trimmed.len() - 1];
+        return eval_interp_expression(inner, ctx, depth + 1);
+    }
+    // Function call: funcname(arg1, arg2, ...)
+    if let Some(rest) = trimmed.strip_suffix(')') {
+        if let Some(paren_pos) = rest.find('(') {
+            let func_name = rest[..paren_pos].trim();
+            let args_str = rest[paren_pos + 1..].trim();
+            if !func_name.is_empty() && is_identifier(func_name) {
+                return eval_interp_function_call(func_name, args_str, ctx, depth);
+            }
+        }
+    }
+    // $var reference: handle the case where $var might appear standalone
+    if let Some(var_name) = trimmed.strip_prefix('$') {
+        if !var_name.contains(' ') && !var_name.contains('#') {
+            let val = ctx.var(var_name).unwrap_or(Value::Null);
+            let val_str = val.to_string();
+            if val_str.contains('$') {
+                return resolve_selector_recursive(&val_str, ctx, depth);
+            }
+            return val_str;
+        }
+    }
+    // Fallback: try resolving the whole thing as a selector (handles inline $var+... cases)
+    resolve_selector_recursive(trimmed, ctx, depth)
+}
+
+/// Check if a string is a valid identifier (for function names).
+fn is_identifier(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Evaluate a function call in interpolation context: funcname(arg1, arg2, ...)
+fn eval_interp_function_call(func_name: &str, args_str: &str, ctx: &EvalContext, depth: usize) -> String {
+    // Split arguments by comma (respecting nested parens would need a real parser)
+    let arg_parts: Vec<&str> = args_str.split(',').map(str::trim).collect();
+    let evaled_args: Vec<Value> = arg_parts.iter().map(|arg| {
+        // Each argument can be a $var, a nested function call, or a literal
+        let arg = arg.trim();
+        if let Some(var_name) = arg.strip_prefix('$') {
+            ctx.var(var_name).unwrap_or(Value::Null)
+        } else if arg.ends_with(')') && arg.contains('(') {
+            // Nested function call — evaluate and convert result to value
+            let result = eval_interp_part(arg, ctx, depth);
+            Value::String(result)
+        } else {
+            // Try as number or string literal
+            if let Ok(n) = arg.parse::<f64>() {
+                Value::Number(n, None)
+            } else {
+                Value::String(arg.to_string())
+            }
+        }
+    }).collect();
+
+    if let Some(result) = builtin::call_builtin(func_name, &evaled_args) {
+        result.to_string()
+    } else {
+        String::new()
+    }
 }
 
 /// Resolve a style declaration property from segments to a final string.
