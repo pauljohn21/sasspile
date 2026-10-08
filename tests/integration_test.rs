@@ -5,6 +5,15 @@ use rx_scss::pipeline::from_string;
 use rx_scss::serialize::Options;
 use rx_scss::types::OutputStyle;
 use rxrust::prelude::*;
+use std::sync::Once;
+
+static INIT_TRACING: Once = Once::new();
+
+fn ensure_test_tracing() {
+    INIT_TRACING.call_once(|| {
+        rx_scss::telemetry::init_test_tracing();
+    });
+}
 
 #[test]
 fn compile_simple_variable_and_rule() {
@@ -1237,6 +1246,7 @@ fn compile_bootstrap_full() {
     // With the eval depth guard, this should now complete without stack overflow.
     match result {
         Ok(css) => {
+            ensure_test_tracing();
             assert!(
                 css.len() > 100,
                 "full compile should produce substantial CSS: got {} bytes",
@@ -1697,9 +1707,19 @@ fn diff_lines(actual: &str, expected: &str) -> Vec<String> {
 
 #[test]
 fn bootstrap_dist_check_test() {
-    let _ = crate::common::bootstrap_dist::bootstrap_dist_check();
+    ensure_test_tracing();
+    let check = crate::common::bootstrap_dist::bootstrap_dist_check()
+        .expect("Bootstrap submodule not found");
+    let coverage = if check.reference_line_count > 0 {
+        (check.reference_line_count - check.missing_count) as f64 / check.reference_line_count as f64
+    } else {
+        0.0
+    };
+    tracing::info!(
+        coverage_pct = coverage * 100.0,
+        missing = check.missing_count,
+        total = check.reference_line_count,
+        "Bootstrap dist alignment (test)"
+    );
 }
-
-
-
 

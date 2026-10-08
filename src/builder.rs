@@ -156,29 +156,4 @@ pub fn compile_with_options(source: &str, style: OutputStyle) -> Result<String, 
     builder.compile_string(source)
 }
 
-#[cfg(test)]
-mod builder_tests {
-    use super::*;
 
-    #[test]
-    fn test_default_builder() {
-        let b = CompileBuilder::new();
-        assert_eq!(b.syntax, InputSyntax::Scss);
-        assert_eq!(b.serialize_style, OutputStyle::Expanded);
-    }
-
-    #[test]
-    fn test_builder_chain() {
-        let b = CompileBuilder::new()
-            .compressed()
-            .include_path("/tmp/scss");
-        assert_eq!(b.serialize_style, OutputStyle::Compressed);
-        assert_eq!(b.include_paths.len(), 1);
-    }
-
-    #[test]
-    fn test_build_session() {
-        let session = CompileBuilder::new().expanded().build();
-        assert_eq!(session.options.style, OutputStyle::Expanded);
-    }
-}

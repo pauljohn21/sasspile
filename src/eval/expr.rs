@@ -12,12 +12,23 @@ pub fn eval_expr(expr: &AstNode, ctx: &EvalContext, bus: &CompilerBus) -> Value 
     match expr {
         AstNode::Literal(v) => v.clone(),
         AstNode::VariableRef { name, scope_id } => {
-            if *scope_id != 0 {
-                if let Some(direct) = ctx.bus().get_var_by_id(*scope_id, name) {
-                    return direct;
-                }
+            if *scope_id != 0
+                && let Some(direct) = ctx.bus().get_var_by_id(*scope_id, name)
+            {
+                return direct;
             }
-            ctx.var(name).unwrap_or(Value::Null)
+            // 变量解析: 先尝试作用域链查找；未找到时 fallback 到 `var(--name)` 保留 CSS 级联引用
+            // （而非 Value::Null）。这确保 Bootstrap 3-5 级变量链（如 --bs-dark-text-emphasis → $gray-700 → #292b2c）
+            // 中间层缺失时不破坏整个链。
+            ctx.var(name).unwrap_or_else(|| {
+                // 仅对 CSS 自定义属性格式的变量生成 var() 引用
+                if name.starts_with("--") {
+                    tracing::debug!(var_name = %name, "unresolved var fallback to var() reference");
+                    Value::String(format!("var({})", name))
+                } else {
+                    Value::Null
+                }
+            })
         }
         AstNode::BinOp { op, left, right } => {
             let l = eval_expr(left, ctx, bus);
@@ -333,25 +344,25 @@ fn eval_interp_part(part: &str, ctx: &EvalContext, depth: usize) -> String {
         return eval_interp_expression(inner, ctx, depth + 1);
     }
     // Function call: funcname(arg1, arg2, ...)
-    if let Some(rest) = trimmed.strip_suffix(')') {
-        if let Some(paren_pos) = rest.find('(') {
-            let func_name = rest[..paren_pos].trim();
-            let args_str = rest[paren_pos + 1..].trim();
-            if !func_name.is_empty() && is_identifier(func_name) {
-                return eval_interp_function_call(func_name, args_str, ctx, depth);
-            }
+    if let Some(rest) = trimmed.strip_suffix(')')
+        && let Some(paren_pos) = rest.find('(')
+    {
+        let func_name = rest[..paren_pos].trim();
+        let args_str = rest[paren_pos + 1..].trim();
+        if !func_name.is_empty() && is_identifier(func_name) {
+            return eval_interp_function_call(func_name, args_str, ctx, depth);
         }
     }
     // $var reference: handle the case where $var might appear standalone
-    if let Some(var_name) = trimmed.strip_prefix('$') {
-        if !var_name.contains(' ') && !var_name.contains('#') {
-            let val = ctx.var(var_name).unwrap_or(Value::Null);
-            let val_str = val.to_string();
-            if val_str.contains('$') {
-                return resolve_selector_recursive(&val_str, ctx, depth);
-            }
-            return val_str;
+    if let Some(var_name) = trimmed.strip_prefix('$')
+        && !var_name.contains(' ') && !var_name.contains('#')
+    {
+        let val = ctx.var(var_name).unwrap_or(Value::Null);
+        let val_str = val.to_string();
+        if val_str.contains('$') {
+            return resolve_selector_recursive(&val_str, ctx, depth);
         }
+        return val_str;
     }
     // Fallback: try resolving the whole thing as a selector (handles inline $var+... cases)
     resolve_selector_recursive(trimmed, ctx, depth)

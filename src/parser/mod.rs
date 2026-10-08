@@ -9,13 +9,14 @@ pub fn parse_stream(token_stream: TokenStream, scope_id: u64) -> AstStream {
 }
 
 pub fn parse_stream_with_paths(token_stream: TokenStream, scope_id: u64, include_paths: Vec<std::path::PathBuf>) -> AstStream {
-    let source = Arc::new(std::sync::Mutex::new(Vec::<Token>::new()));
-    let src = source.clone();
-    let collected = token_stream.collect::<Vec<_>>();
-    collected.subscribe(move |toks| { *src.lock().unwrap() = toks; });
-    let guard = source.lock().unwrap();
-    let tokens = guard.clone();
-    drop(guard);
+    // rxrust collect 算子: TokenStream → Vec<Token>
+    // collect 返回 SharedBoxedObservable<'static, Vec<Token>, Infallible>；
+    // Arc<Mutex> 仅作为 Shared 上下文 'static 约束下的值提取通道（非 GC 模式）。
+    let result = Arc::new(Mutex::new(Vec::<Token>::new()));
+    let r = result.clone();
+    token_stream.collect::<Vec<_>>().subscribe(move |v| { *r.lock().unwrap() = v; });
+    let tokens = Arc::try_unwrap(result).unwrap().into_inner().unwrap();
+
     let mut ps = ParserState::with_include_paths(include_paths);
     for t in tokens { ps.push_token(t); }
     let nodes = parse_all_nodes(&mut ps, scope_id);

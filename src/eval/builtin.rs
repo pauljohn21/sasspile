@@ -428,36 +428,36 @@ fn color_desaturate(args: &[Value]) -> Option<Value> {
 fn color_rgb_rgba(args: &[Value], fn_name: &str) -> Option<Value> {
     // Special case 1: when first arg is a var() expression (string starting with "var("),
     // emit fn_name(var(--name), alpha) instead of trying to resolve to a concrete Color.
-    if let Some(Value::String(s)) = args.first() {
-        if s.starts_with("var(") {
-            // Alpha might also be a var() — preserve its string form
-            let alpha_val = args.get(1);
-            let alpha_str = match alpha_val {
-                Some(Value::String(a)) if a.starts_with("var(") => a.clone(),
-                _ => {
-                    let alpha = alpha_val.map(value_to_number).unwrap_or(1.0);
-                    if alpha == alpha.trunc() {
-                        format!("{}", alpha as i64)
-                    } else {
-                        format!("{}", alpha)
-                    }
+    if let Some(Value::String(s)) = args.first()
+        && s.starts_with("var(")
+    {
+        // Alpha might also be a var() — preserve its string form
+        let alpha_val = args.get(1);
+        let alpha_str = match alpha_val {
+            Some(Value::String(a)) if a.starts_with("var(") => a.clone(),
+            _ => {
+                let alpha = alpha_val.map(value_to_number).unwrap_or(1.0);
+                if alpha == alpha.trunc() {
+                    format!("{}", alpha as i64)
+                } else {
+                    format!("{}", alpha)
                 }
-            };
-            return Some(Value::String(format!("{}({}, {})", fn_name, s, alpha_str)));
-        }
+            }
+        };
+        return Some(Value::String(format!("{}({}, {})", fn_name, s, alpha_str)));
     }
     // Special case 2: rgba($color, $alpha) — 2 args, first is a Color
-    if args.len() == 2 {
-        if let Some(Value::Color(r, g, b, _)) = args.first() {
-            let alpha = args.get(1).map(value_to_number).unwrap_or(1.0);
-            // CSS output: rgba(r, g, b, alpha) instead of hex — preserves transparency
-            let alpha_str = if alpha == alpha.trunc() {
-                format!("{}", alpha as i64)
-            } else {
-                format!("{}", alpha)
-            };
-            return Some(Value::String(format!("{}({}, {}, {}, {})", fn_name, *r, *g, *b, alpha_str)));
-        }
+    if args.len() == 2
+        && let Some(Value::Color(r, g, b, _)) = args.first()
+    {
+        let alpha = args.get(1).map(value_to_number).unwrap_or(1.0);
+        // CSS output: rgba(r, g, b, alpha) instead of hex — preserves transparency
+        let alpha_str = if alpha == alpha.trunc() {
+            format!("{}", alpha as i64)
+        } else {
+            format!("{}", alpha)
+        };
+        return Some(Value::String(format!("{}({}, {}, {}, {})", fn_name, *r, *g, *b, alpha_str)));
     }
     // Standard 4-arg form: rgba(r, g, b, a) or rgb(r, g, b)
     let r = args.first().map(|v| value_to_int(v) as u8).unwrap_or(0);
@@ -477,7 +477,7 @@ fn var_function(args: &[Value]) -> Option<Value> {
     // it becomes "--, bs-, suffix" (comma-separated after our list format change).
     // Strip both spaces and commas to produce the correct "--bssuffix" form.
     let name = if raw.starts_with("--") {
-        raw.replace(' ', "").replace(',', "")
+        raw.replace([' ', ','], "")
     } else {
         raw
     };
@@ -655,10 +655,10 @@ fn str_slice(args: &[Value]) -> Option<Value> {
         return Some(Value::String(String::new()));
     }
     let chars: Vec<char> = s.chars().collect();
-    if start as usize > chars.len() {
+    if start > chars.len() {
         return Some(Value::String(String::new()));
     }
-    let actual_end = (end as usize).min(chars.len());
+    let actual_end = end.min(chars.len());
     let sliced: String = chars[(start - 1)..actual_end].iter().collect();
     Some(Value::String(sliced))
 }
