@@ -172,8 +172,16 @@ pub(crate) fn combine_selectors(parent: &str, child: &str) -> String {
 /// Handles both `#{$var}` (interpolation) and `$var` (variable reference) forms.
 /// Variable names are scanned as `[a-zA-Z0-9_-]+`. If the full name is undefined,
 /// progressively shorten at `-` boundaries so `#{$key}-y` resolves `$key` then `-y`.
+///
+/// Recursively resolves variable values that themselves contain `$var` or `#{$var}` references.
 pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
-    if !selector.contains('$') {
+    resolve_selector_recursive(selector, ctx, 0)
+}
+
+/// Recursive helper with depth limit to prevent infinite loops from circular references.
+fn resolve_selector_recursive(selector: &str, ctx: &EvalContext, depth: usize) -> String {
+    const MAX_DEPTH: usize = 5;
+    if !selector.contains('$') || depth >= MAX_DEPTH {
         return selector.to_string();
     }
     let mut result = String::new();
@@ -191,7 +199,13 @@ pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
                 let var_name: String = var_chars[var_start..].iter().collect();
                 if !var_name.is_empty() {
                     let val = ctx.var(&var_name).unwrap_or(Value::Null);
-                    result.push_str(&val.to_string());
+                    // Recursively resolve the value if it contains variable references
+                    let val_str = val.to_string();
+                    if val_str.contains('$') {
+                        result.push_str(&resolve_selector_recursive(&val_str, ctx, depth + 1));
+                    } else {
+                        result.push_str(&val_str);
+                    }
                 }
                 i = end + 1;
                 continue;
@@ -218,7 +232,13 @@ pub(crate) fn resolve_selector(selector: &str, ctx: &EvalContext) -> String {
                         })
                     })
                     .unwrap_or(Value::Null);
-                result.push_str(&val.to_string());
+                let val_str = val.to_string();
+                // Recursively resolve the value if it contains variable references
+                if val_str.contains('$') {
+                    result.push_str(&resolve_selector_recursive(&val_str, ctx, depth + 1));
+                } else {
+                    result.push_str(&val_str);
+                }
                 // Only consume the chars that were resolved as a variable
                 if ctx.var(&full_name).is_some() {
                     i = end;
