@@ -19,10 +19,10 @@ Cargo.toml 必须有 `edition = "2024"`。
 [dependencies]
 rxrust = "1.0.0-rc.5"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "2"
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 similar = "2"
 ```
 
@@ -142,6 +142,7 @@ String (CSS 输出)
 | Serializer | `serialize/mod.rs` | CSS 树 → 字符串 | 纯函数，无流 |
 | Runtime | `runtime.rs` | 作用域 + 总线 | `Arc<EvalContext>` + `CompilerBus` |
 | Bus | `bus.rs` | Mixin/Function/Var 注册表 | `SharedSubject` 广播 |
+| Telemetry | `telemetry.rs` | Tracing 初始化 | `tracing-subscriber` + `EnvFilter` |
 
 ### 类型别名（核心）
 
@@ -431,6 +432,16 @@ stream
     .flat_map(|x| /* ... */)
 ```
 
+### Telemetry 初始化
+
+```rust
+// 生产环境：stdout + 行号信息
+rx_scss::telemetry::init_tracing();
+
+// 测试环境：stderr + --nocapture 支持
+rx_scss::telemetry::init_test_tracing();
+```
+
 ### Span 字段 sigil
 
 | Sigil | 含义 | 示例 |
@@ -464,6 +475,7 @@ stream
 | `runtime_test.rs` | 运行时上下文 |
 | `integration_test.rs` | 集成测试 |
 | `bootstrap_test.rs` | Bootstrap 兼容性 |
+| `telemetry_test.rs` | Tracing/Telemetry 集成 |
 | `debug_utility.rs` ~ `debug_utility6.rs` | 调试辅助 |
 | `diag_custom_prop.rs` | 自定义属性诊断 |
 
@@ -485,6 +497,7 @@ cargo test --test bootstrap_test
 # tracing 调试
 RUST_LOG=debug cargo test test_name 2>&1 | head -100
 RUST_LOG=error cargo test --test integration_test -- --nocapture
+RUST_LOG=debug cargo test --test telemetry_test -- --nocapture
 ```
 
 ---
@@ -537,5 +550,6 @@ RUST_LOG=error cargo test --test integration_test -- --nocapture
 
 ## 📚 参考
 
-- **rxrust 完整参考**：`.claude/skills/rxrust/SKILL.md`
+- **rxrust 完整参考（含 OTel）**：`.claude/skills/rxrust/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
+- **telemetry 模块**：`src/telemetry.rs`

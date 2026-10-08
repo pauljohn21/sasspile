@@ -7,6 +7,7 @@ pub mod parser;
 pub mod pipeline;
 pub mod runtime;
 pub mod serialize;
+pub mod telemetry;
 pub mod types;
 
 pub use builder::CompileBuilder;

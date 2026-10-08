@@ -1,6 +1,6 @@
 ---
 name: rxrust
-description: Use when working with rxrust reactive streams, Observable patterns, or designing data processing pipelines. Covers Observable/Observer/Subscription triad, Local vs Shared context, operators (map, filter, flat_map, expand, scan, merge), type erasure (box_it), and Subscription lifecycle. Use when the user mentions rxrust, reactive streams, Observable, SharedSubject, or when designing stream-based data pipelines in Rust.
+description: Use when working with rxrust reactive streams, Observable patterns, or designing data processing pipelines. Covers Observable/Observer/Subscription triad, Local vs Shared context, operators (map, filter, flat_map, expand, scan, merge), type erasure (box_it), Subscription lifecycle, and OpenTelemetry tracing integration via tracing-subscriber. Use when the user mentions rxrust, reactive streams, Observable, SharedSubject, or when designing stream-based data pipelines in Rust.
 ---
 
 # RxRust Skill
@@ -119,6 +119,54 @@ ast_stream
 
 This replaces deep recursion with bounded stream processing — no stack overflow.
 
+## OpenTelemetry Tracing Integration
+
+rx-scss uses `tracing` + `tracing-subscriber` for structured telemetry. Initialize in your entry point or test:
+
+```rust
+// Production: stdout with line numbers
+rx_scss::telemetry::init_tracing();
+
+// Test: stderr output with --nocapture support
+rx_scss::telemetry::init_test_tracing();
+```
+
+### Span Creation Patterns
+
+```rust
+// Preferred: #[instrument] on functions
+#[tracing::instrument(skip(bus), fields(node_count = nodes.len()))]
+fn eval_nodes(nodes: Vec<AstNode>, bus: &CompilerBus) -> Result<Vec<CssStmt>> {
+    // ...
+}
+
+// Alternative: inline span with .entered()
+let _span = tracing::info_span!("parse_at_if").entered();
+// ... logic ...
+// _span drops → exit logged
+
+// Debug event inside span
+tracing::debug!(?cond_val, is_truthy, "condition evaluated");
+```
+
+### Span Field Sigils
+
+| Sigil | Format | Use For |
+|-------|--------|---------|
+| `?` | Debug | Complex types like `Value`, `AstNode` |
+| `%` | Display | User-facing strings like selectors |
+| (none) | Value trait | Primitive types (bool, u32, etc.) |
+
+### Environment Configuration
+
+```bash
+# Filter spans via RUST_LOG
+RUST_LOG=debug cargo test --test telemetry_test -- --nocapture
+RUST_LOG=rx_scss=trace cargo run -- input.scss
+
+# Available levels: error, warn, info, debug, trace
+```
+
 ## Pattern: Subject as Channel
 
 Use `SharedSubject` for cross-component communication (events, state changes):
@@ -145,7 +193,8 @@ var_subject.filter_map(|e| { ... }).box_it()
 | Manual callback hell | Declarative operator chain |
 | Holding Observable without subscribing | Subscribe to activate (lazy) |
 | Collecting entire stream into Vec | Stream processing (filter, map, fold) |
-| `println!` inside stream ops | `tap` operator for side effects |
+| `println!` inside stream ops | `tap` operator for side effects + tracing `debug!` |
+| `std::fs::write` for debug logs | `tracing::debug!` with `RUST_LOG=debug` |
 
 ## Quick Reference: rx-scss Pipeline
 

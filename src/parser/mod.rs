@@ -767,6 +767,7 @@ fn parse_at_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
             Some(AstNode::Media { query, inner })
         }
         Token::AtIf => {
+            let _span = tracing::info_span!("parse_at_if").entered();
             skip_whitespace(ps);
             let cond = parse_value(ps)?;
             skip_whitespace(ps);
@@ -776,14 +777,59 @@ fn parse_at_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
             let else_branch = match ps.peek() {
                 Some(Token::AtElse) => {
                     ps.next_token();
-                    if matches!(ps.peek(), Some(Token::AtIf)) {
-                        let else_if_node = parse_at_rule(ps, scope_id)?;
-                        Some(vec![else_if_node])
-                    } else {
-                        expect_token(ps, &Token::LBrace)?;
-                        let eb = parse_all_nodes(ps, scope_id);
-                        expect_token(ps, &Token::RBrace)?;
-                        Some(eb)
+                    // Handle both @else if (AtIf) and @else { ... } cases
+                    // Also handle the case where lexer produces Ident("if") instead of AtIf
+                    match ps.peek() {
+                        Some(Token::AtIf) => {
+                            let else_if_node = parse_at_rule(ps, scope_id)?;
+                            Some(vec![else_if_node])
+                        }
+                        Some(Token::Ident(s)) if s == "if" => {
+                            // Lexer produced Ident("if") instead of AtIf - consume and parse manually
+                            ps.next_token(); // consume "if"
+                            skip_whitespace(ps);
+                            let else_cond = parse_value(ps)?;
+                            skip_whitespace(ps);
+                            expect_token(ps, &Token::LBrace)?;
+                            let else_then = parse_all_nodes(ps, scope_id);
+                            expect_token(ps, &Token::RBrace)?;
+                            // Handle nested @else if
+                            let else_else = match ps.peek() {
+                                Some(Token::AtElse) => {
+                                    ps.next_token();
+                                    match ps.peek() {
+                                        Some(Token::AtIf) => {
+                                            let nested_node = parse_at_rule(ps, scope_id)?;
+                                            Some(vec![nested_node])
+                                        }
+                                        Some(Token::Ident(ident)) if ident == "if" => {
+                                            ps.next_token(); // consume "if"
+                                            skip_whitespace(ps);
+                                            let nested_cond = parse_value(ps)?;
+                                            skip_whitespace(ps);
+                                            expect_token(ps, &Token::LBrace)?;
+                                            let nested_then = parse_all_nodes(ps, scope_id);
+                                            expect_token(ps, &Token::RBrace)?;
+                                            Some(vec![AstNode::If { cond: Box::new(nested_cond), then_branch: nested_then, else_branch: None }])
+                                        }
+                                        _ => {
+                                            expect_token(ps, &Token::LBrace)?;
+                                            let eb = parse_all_nodes(ps, scope_id);
+                                            expect_token(ps, &Token::RBrace)?;
+                                            Some(eb)
+                                        }
+                                    }
+                                }
+                                _ => None,
+                            };
+                            Some(vec![AstNode::If { cond: Box::new(else_cond), then_branch: else_then, else_branch: else_else }])
+                        }
+                        _ => {
+                            expect_token(ps, &Token::LBrace)?;
+                            let eb = parse_all_nodes(ps, scope_id);
+                            expect_token(ps, &Token::RBrace)?;
+                            Some(eb)
+                        }
                     }
                 }
                 _ => None,
@@ -966,7 +1012,7 @@ fn parse_at_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
         }
         Token::AtCharset | Token::AtNamespace | Token::AtCustomMedia |
         Token::AtCustomSelector | Token::AtPage | Token::AtFontFace |
-        Token::AtKeyframes | Token::AtElse => {
+        Token::AtKeyframes => {
             skip_whitespace(ps);
             // Consume until semicolon or block
             while !matches!(ps.peek(), Some(Token::Semicolon | Token::LBrace | Token::Eof)) {
@@ -974,6 +1020,16 @@ fn parse_at_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
             }
             if matches!(ps.peek(), Some(Token::Semicolon)) { ps.next_token(); }
             None // Phase 1: these produce deferred/unsupported CSS
+        }
+        Token::AtElse => {
+            // @else should be handled by the @if parser, not here.
+            // If we reach here, it means @else appears without a matching @if.
+            skip_whitespace(ps);
+            while !matches!(ps.peek(), Some(Token::Semicolon | Token::LBrace | Token::Eof)) {
+                ps.next_token();
+            }
+            if matches!(ps.peek(), Some(Token::Semicolon)) { ps.next_token(); }
+            None
         }
         Token::AtWarn => {
             skip_whitespace(ps);
