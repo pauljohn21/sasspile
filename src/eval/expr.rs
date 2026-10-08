@@ -422,6 +422,8 @@ pub(crate) fn value_to_string(v: &Value) -> String {
             .map(|item| item.to_string())
             .collect::<Vec<_>>()
             .join(" "),
+        // Maps used directly as CSS values serialize as null (Sass behavior)
+        Value::Map(_) => "null".to_string(),
         _ => v.to_string(),
     }
 }
