@@ -43,7 +43,7 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
                     result.push(node);
                 } else { ps.next_token(); }
             }
-            Token::Ident(_) => {
+            Token::Ident(_) | Token::InterpolationStart => {
                 if is_style_decl(ps) {
                     if let Some(node) = parse_style_decl(ps) {
                         result.push(node);
@@ -77,11 +77,35 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
 /// Handles: `prop:`, `prop-name:`, `--#{$prefix}prop-name:`, `--prop:`, `#{$name}:`,
 ///           `-webkit-prop:`, `-#{$prefix}prop:`
 fn is_style_decl(ps: &ParserState) -> bool {
-    // 接受 Ident 或 Minus 开头（CSS 自定义属性以 -- 开头，vendor 前缀以 - 开头）
-    if !matches!(ps.peek(), Some(Token::Ident(_) | Token::Minus)) {
+    // 接受 Ident、Minus 或 InterpolationStart 开头
+    // （CSS 自定义属性以 -- 开头，vendor 前缀以 - 开头，属性名插值以 #{ 开头）
+    let first = ps.peek();
+    let starting_interp = matches!(first, Some(Token::InterpolationStart));
+    if !matches!(first, Some(Token::Ident(_) | Token::Minus | Token::InterpolationStart)) {
         return false;
     }
-    let mut i = 1;
+    // 如果开头是插值（#{$var}:），先跳过整个插值块，然后检查后面是否有冒号
+    let mut i = 0;
+    if starting_interp {
+        // 跳过第一个插值块
+        let mut depth = 1;
+        i += 1; // skip InterpolationStart
+        while depth > 0 {
+            match ps.peek_n(i) {
+                Some(Token::InterpolationStart) => { depth += 1; i += 1; }
+                Some(Token::InterpolationEnd) => { depth -= 1; i += 1; }
+                Some(_) => i += 1,
+                None => return false,
+            }
+        }
+        // After skipping interpolation — check what follows
+        // #{$prop}: → after interp should be Colon
+        // #{$prop}-suffix: → after interp could be Minus
+        return matches!(ps.peek_n(i), Some(Token::Colon))
+            || matches!(ps.peek_n(i), Some(Token::Minus));
+    }
+    // 非插值开头：正常遍历
+    i = 1;
     loop {
         match ps.peek_n(i) {
             Some(Token::Colon) => return true,
@@ -653,23 +677,71 @@ fn parse_selector(ps: &mut ParserState) -> Option<String> {
                 prev_was_combinator = false;
             }
             Some(Token::InterpolationStart) => {
-                // #{...} interpolation in selector
+                // #{...} interpolation in selector — collect the full #{...}
+                // verbatim so that resolve_selector can recursively resolve
+                // $var references and complex expressions like #{$a + $b + $c}
+                let mut interp = String::from("#{");
                 ps.next_token(); // consume #{
-                // Parse the inner expression — for selectors, typically a variable
-                if let Some(Token::Dollar) = ps.peek() {
-                    ps.next_token(); // consume $
-                    if let Some(Token::Ident(var)) = ps.next_token() {
-                        parts.push(format!("${}", var));
-                    }
-                } else {
-                    // Skip unknown content until InterpolationEnd
-                    while !matches!(ps.peek(), Some(Token::InterpolationEnd)) {
-                        ps.next_token();
+                let mut depth = 1usize;
+                while depth > 0 {
+                    match ps.peek() {
+                        Some(Token::InterpolationStart) => {
+                            depth += 1;
+                            interp.push_str("#{");
+                            ps.next_token();
+                        }
+                        Some(Token::InterpolationEnd) => {
+                            depth -= 1;
+                            interp.push('}');
+                            ps.next_token();
+                        }
+                        Some(Token::Dollar) => {
+                            interp.push('$');
+                            ps.next_token();
+                            if let Some(Token::Ident(v)) = ps.peek() {
+                                interp.push_str(v);
+                                ps.next_token();
+                            }
+                        }
+                        Some(Token::Ident(s)) => { interp.push_str(s); ps.next_token(); }
+                        Some(Token::Number(n, u)) => {
+                            interp.push_str(&if let Some(unit) = u {
+                                format!("{}{}", n, unit)
+                            } else {
+                                format!("{}", n)
+                            });
+                            ps.next_token();
+                        }
+                        Some(Token::Str(s)) => { interp.push_str(s); ps.next_token(); }
+                        Some(Token::Plus) => { interp.push('+'); ps.next_token(); }
+                        Some(Token::Minus) => { interp.push('-'); ps.next_token(); }
+                        Some(Token::Star) => { interp.push('*'); ps.next_token(); }
+                        Some(Token::Slash) => { interp.push('/'); ps.next_token(); }
+                        Some(Token::Percent) => { interp.push('%'); ps.next_token(); }
+                        Some(Token::Dot) => { interp.push('.'); ps.next_token(); }
+                        Some(Token::Comma) => { interp.push(','); ps.next_token(); }
+                        Some(Token::Colon) => { interp.push(':'); ps.next_token(); }
+                        Some(Token::Semicolon) => { interp.push(';'); ps.next_token(); }
+                        Some(Token::LParen) => { interp.push('('); ps.next_token(); }
+                        Some(Token::RParen) => { interp.push(')'); ps.next_token(); }
+                        Some(Token::LBracket) => { interp.push('['); ps.next_token(); }
+                        Some(Token::RBracket) => { interp.push(']'); ps.next_token(); }
+                        Some(Token::HashId(s)) => { interp.push_str(&format!("#{}", s)); ps.next_token(); }
+                        Some(Token::Eq) => { interp.push_str("=="); ps.next_token(); }
+                        Some(Token::Ne) => { interp.push_str("!="); ps.next_token(); }
+                        Some(Token::Lt) => { interp.push('<'); ps.next_token(); }
+                        Some(Token::Gt) => { interp.push('>'); ps.next_token(); }
+                        Some(Token::Le) => { interp.push_str("<="); ps.next_token(); }
+                        Some(Token::Ge) => { interp.push_str(">="); ps.next_token(); }
+                        Some(Token::Bang) => { interp.push('!'); ps.next_token(); }
+                        Some(Token::Ampersand) => { interp.push('&'); ps.next_token(); }
+                        Some(Token::Question) => { interp.push('?'); ps.next_token(); }
+                        Some(Token::Whitespace) => { interp.push(' '); ps.next_token(); }
+                        None => break,
+                        Some(_) => { ps.next_token(); }
                     }
                 }
-                if matches!(ps.peek(), Some(Token::InterpolationEnd)) {
-                    ps.next_token(); // consume }
-                }
+                parts.push(interp);
                 prev_was_combinator = false;
             }
             _ => break,
