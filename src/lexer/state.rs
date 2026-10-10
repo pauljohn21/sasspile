@@ -29,6 +29,10 @@ pub struct LexerState {
     pub escaped: bool,
     pending_op: Option<PendingOp>,
     pending_slash: Option<PendingSlash>,
+    /// When interpolation #{...} starts inside a quoted string, remembers
+    /// which quote character ('"' or '\'') to re-enter string mode after '}'
+    /// closes the interpolation.
+    pending_string_return: Option<char>,
 }
 
 impl LexerState {
@@ -46,6 +50,7 @@ impl LexerState {
         self.escaped = false;
         self.pending_op = None;
         self.pending_slash = None;
+        self.pending_string_return = None;
     }
 
     /// Take a pending slash state, returning true if there was one pending.
@@ -161,6 +166,14 @@ impl LexerState {
                     self.interp_depth -= 1;
                     out.push(Token::InterpolationEnd);
                     // The '}' is the interpolation terminator — do NOT also emit RBrace
+                    // If interpolation was inside a string, re-enter string mode
+                    if let Some(quote) = self.pending_string_return.take() {
+                        if quote == '"' {
+                            self.in_double_quote = true;
+                        } else {
+                            self.in_single_quote = true;
+                        }
+                    }
                 } else {
                     out.push(Token::RBrace);
                 }
@@ -274,12 +287,33 @@ impl LexerState {
         if self.escaped {
             self.buf.push(ch);
             self.escaped = false;
-            self.prev_char = Some(ch);
+            // Reset prev_char so that an escaped '#' doesn't trigger interpolation
+            self.prev_char = None;
             return;
         }
         if ch == '\\' {
             self.escaped = true;
             self.prev_char = Some(ch);
+            return;
+        }
+        // Detect #{ interpolation start inside a string
+        if ch == '{' && self.prev_char == Some('#') {
+            // Strip the trailing '#' from buf
+            let prefix = if self.buf.ends_with('#') {
+                self.buf[..self.buf.len() - 1].to_string()
+            } else {
+                String::new()
+            };
+            self.buf.clear();
+            out.push(Token::Str(prefix));
+            out.push(Token::InterpolationStart);
+            self.interp_depth += 1;
+            // Exit string mode, remember quote char for re-entry after '}'
+            let quote = if self.in_double_quote { '"' } else { '\'' };
+            self.pending_string_return = Some(quote);
+            self.in_double_quote = false;
+            self.in_single_quote = false;
+            self.prev_char = Some('{');
             return;
         }
         let quote = if self.in_double_quote { '"' } else { '\'' };
@@ -320,6 +354,12 @@ impl LexerState {
         // because their leading letter arrives while buf == "-" and accumulates.
         if raw == "-" {
             out.push(Token::Minus);
+            return;
+        }
+
+        // Lone '.' is a Dot token (e.g. rest argument $args..., float 1.5 handled via parse_number_with_unit)
+        if raw == "." {
+            out.push(Token::Dot);
             return;
         }
 

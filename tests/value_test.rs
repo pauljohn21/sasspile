@@ -35,7 +35,8 @@ fn display_bool() {
 
 #[test]
 fn display_null() {
-    assert_eq!(Value::Null.to_string(), "null");
+    // Sass spec: null renders as empty string in CSS output
+    assert_eq!(Value::Null.to_string(), "");
 }
 
 #[test]

@@ -18,8 +18,8 @@ rxrust 通过 **Context** trait 区分两种执行环境：
 let local_stream = Local::of(42).map(|x| x * 2);
 
 // Shared: 跨线程，广播
-let shared_subject = Shared::subject::<i32, Infallible>();
-shared_subject.clone().subscribe(|v| println!("thread A: {}", v));
+let shared_subject = Shared::subject::<i32, CompileError>();
+shared_subject.clone().subscribe(|v| tracing::info!("thread A: {}", v));
 // 在另一个线程:
 shared_subject.next(1); // thread A 会收到
 ```
@@ -107,10 +107,10 @@ where
 
 ```rust
 // 需要初始值，新订阅者会立即收到最新值
-let bhv = Local::behavior_subject::<i32, Infallible>(0);
-bhv.clone().subscribe(|v| println!("got: {}", v)); // 立即打印 "got: 0"
+let bhv = Local::behavior_subject::<i32, CompileError>(0);
+bhv.clone().subscribe(|v| tracing::info!("got: {}", v)); // 立即打印 "got: 0"
 bhv.next(42);
-bhv.clone().subscribe(|v| println!("got: {}", v)); // 立即打印 "got: 42"
+bhv.clone().subscribe(|v| tracing::info!("got: {}", v)); // 立即打印 "got: 42"
 ```
 
 ## 3. Subject（多播）
@@ -125,7 +125,7 @@ bhv.clone().subscribe(|v| println!("got: {}", v)); // 立即打印 "got: 42"
 ### 3.2 Subject API
 
 ```rust
-let subject = Shared::subject::<MyEvent, Infallible>();
+let subject = Shared::subject::<MyEvent, CompileError>();
 
 // subscribe 返回 Subscription 句柄
 let sub = subject.clone().subscribe(|evt| { /* ... */ });
@@ -195,7 +195,7 @@ stream
 
 ```rust
 stream
-    .tap(|x| println!("debug: {}", x)) // 不改变流，仅用于副作用
+    .tap(|x| tracing::debug!("debug: {}", x)) // 不改变流，仅用于副作用
     .finalize(|| cleanup())            // 完成或错误时执行清理
 ```
 
@@ -214,37 +214,30 @@ stream.with_latest_from(other)               // 从流使用主流触发
 
 算子链（如 `flat_map` 后的 `filter_map`）产生嵌套泛型类型。函数边界需要统一类型时，必须擦除。
 
-### 5.2 四种 Boxed 类型
+### 5.2 Boxed 类型
 
-| 类型别名 | Context | 可变引用 | Clone |
-|----------|---------|----------|-------|
-| `LocalBoxedObservable` | Local | ❌ | ❌ |
-| `LocalBoxedObservableClone` | Local | ❌ | ✅ |
-| `SharedBoxedObservable` | Shared | ❌ | ❌ |
-| `SharedBoxedObservableClone` | Shared | ❌ | ✅ |
-| `LocalBoxedObservableMutRef` | Local | ✅ | ❌ |
-| `SharedBoxedObservableMutRef` | Shared | ✅ | ❌ |
+| 类型别名 | Context | Clone |
+|----------|---------|-------|
+| `LocalBoxedObservable` | Local | ❌ |
+| `LocalBoxedObservableClone` | Local | ✅ |
+| `SharedBoxedObservable` | Shared | ❌ |
+| `SharedBoxedObservableClone` | Shared | ✅ |
 
 ```rust
 // 定义类型别名时使用
-pub type AstStream = SharedBoxedObservable<'static, AstNode, Infallible>;
-// 等价于:
-// Shared<BoxedCoreObservableSend<'static, AstNode, Infallible, SharedScheduler>>
-// = Shared<Box<dyn DynCoreObservable<SharedCtx<...>> + Send + 'static>>
+pub type AstStream = SharedBoxedObservable<'static, AstNode, CompileError>;
 ```
 
 ### 5.3 `box_it()` vs `box_it_clone()`
 
 ```rust
 // .box_it() — 转换为非 Clone 的 boxed 类型
-// 适用于：算子链后不需要 Clone 的场景
-let boxed: SharedBoxedObservable<AstNode, Infallible> =
+let boxed: SharedBoxedObservable<AstNode, CompileError> =
     stream.flat_map(|x| Shared::of(x)).box_it();
 
 // .box_it_clone() — 转换为 Clone 的 boxed 类型
-// 适用于：需要多次订阅同一流
-// ⚠️ 但算子链后不能直接 .box_it_clone()，见下文
-let boxed: SharedBoxedObservableClone<AstNode, Infallible> =
+// ⚠️ 算子链后不能直接 .box_it_clone()
+let boxed: SharedBoxedObservableClone<AstNode, CompileError> =
     Shared::of(node).box_it_clone();
 ```
 
@@ -252,63 +245,39 @@ let boxed: SharedBoxedObservableClone<AstNode, Infallible> =
 
 ```rust
 // ❌ 编译失败：FlatMap<Box<dyn ... + Send>, F, Inner> 不满足 Clone
-let result: SharedBoxedObservableClone<AstNode, Infallible> =
+let result: SharedBoxedObservableClone<AstNode, CompileError> =
     stream.flat_map(|x| Shared::of(x)).box_it_clone();  // ERROR!
 
 // ✅ 正确：使用 .box_it() + SharedBoxedObservable
-let result: SharedBoxedObservable<AstNode, Infallible> =
+let result: SharedBoxedObservable<AstNode, CompileError> =
     stream.flat_map(|x| Shared::of(x)).box_it();        // OK
-
-// ✅ 或者不做类型擦除，直接传递具体类型（如果函数签名允许）
-let result = stream.flat_map(|x| Shared::of(x));         // OK, 具体类型
 ```
-
-**根因**：`Box<dyn DynCoreObservableClone<'static, _> + Send>` 的 `Clone` impl 只覆盖 `+ 'a` 不覆盖 `+ Send + 'a`。
 
 ## 6. 订阅模式
 
 ### 6.1 基本订阅
 
 ```rust
-// subscribe 消费 observer 闭包
 stream.subscribe(|value| {
-    println!("got: {}", value);
+    tracing::info!("got: {}", value);
 });
-// 返回值是 Subscription（unit 或 boxed），可 drop 取消
 ```
 
-### 6.2 同步收集结果
+### 6.2 同步收集结果 — 使用 collect 算子
 
 ```rust
-use std::sync::{Arc, Mutex};
-
-// Shared 上下文用 Arc<Mutex>
-let result = Arc::new(Mutex::new(None));
-let r = result.clone();
-collected.subscribe(move |stmts| {
-    *r.lock().unwrap() = Some(stmts);
-});
-// 提取结果
-let data = Arc::try_unwrap(result).unwrap().into_inner().unwrap();
-```
-
-```rust
-// Local 上下文用 Rc<RefCell>
-use std::rc::Rc;
-use std::cell::RefCell;
-
-let result = Rc::new(RefCell::new(None));
-let r = result.clone();
-collected.subscribe(move |stmts| {
-    *r.borrow_mut() = Some(stmts);
-});
-let data = Rc::try_unwrap(result).unwrap().into_inner();
+// ✅ 正确: 使用 collect 终止算子 + extract
+let nodes: Vec<AstNode> = ast_stream
+    .collect::<Vec<_>>()
+    .into_iter()
+    .next()
+    .unwrap_or_default();
 ```
 
 ### 6.3 带生命周期的 Subject 订阅
 
 ```rust
-let subject = Shared::subject::<MyEvent, Infallible>();
+let subject = Shared::subject::<MyEvent, CompileError>();
 let sub = subject.clone().subscribe(|evt| {
     handle_event(evt);
 });
@@ -369,33 +338,32 @@ let stream = Shared::create(move |emitter| {
 
 ## 9. 设计模式
 
-### 9.1 在 create 内手动转发流（用于非标准管道）
+### 9.1 Shared::create 桥接上游流（正确模式）
+
+当需要从上游 Observable 桥接并转换数据到下游时，`Shared::create` 是标准做法：
 
 ```rust
-fn parse_tokens(input: TokenStream) -> AstStream {
+fn bridge_stream(input: TokenStream) -> AstStream {
     Shared::create(move |subscriber| {
-        // 构建内部管道，手动订阅并转发
-        let collected = input
-            .scan_map(ParserState::new(), |s, tok| { /* ... */ })
-            .flat_map(|nodes| Shared::from_iter(nodes))
-            .collect::<Vec<_>>();
-
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        let buf = buffer.clone();
-        collected.subscribe(move |v| {
-            *buf.lock().unwrap() = v;
-        });
-
-        let nodes = Arc::try_unwrap(buffer)
-            .unwrap().into_inner().unwrap();
-        for node in nodes {
-            subscriber.next(node);
-        }
-        subscriber.complete();
-    })
-    .box_it()
+        input.subscribe_all(
+            move |tok| {
+                for node in parser_feed(&mut state, tok) {
+                    subscriber.next(node);
+                }
+            },
+            move |err| { subscriber.error(err); },
+            move || { subscriber.complete(); },
+        );
+        ()  // empty Subscription
+    }).box_it()
 }
 ```
+
+**要点**:
+- `subscribe_all` 的 `on_next` 调用 `subscriber.next()` 转发数据
+- `on_error` 调用 `subscriber.error()` 传播错误
+- `on_complete` 调用 `subscriber.complete()` 或检查最终状态后 error
+- `box_it()` 仅在最终边界调用一次
 
 ### 9.2 同步有界迭代优先用 `Shared::from_iter`
 
@@ -417,12 +385,11 @@ Shared::create(|s| { s.complete(); }).box_it()
 
 ```rust
 // types.rs — 定义统一的流类型
-pub type AstStream = SharedBoxedObservable<'static, AstNode, Infallible>;
-pub type CssStream = SharedBoxedObservable<'static, CssStmt, Infallible>;
+pub type AstStream = SharedBoxedObservable<'static, AstNode, CompileError>;
+pub type CssStream = SharedBoxedObservable<'static, CssStmt, CompileError>;
 
 // 所有地方使用统一类型，避免泛型爆炸
-pub fn evaluate(stream: AstStream, ctx: Arc<EvalContext>) -> AstStream { ... }
-pub fn lower_to_css(stream: AstStream) -> CssStream { ... }
+pub fn evaluate(stream: AstStream, ctx: Arc<EvalContext>) -> CssStream { ... }
 ```
 
 ## 10. 调试技巧
@@ -440,7 +407,7 @@ stream
 ```rust
 stream
     .scan_map(ParserState::new(), |state, token| {
-        tracing::span!(TRACE, "parse_token", token = ?token);
+        tracing::debug!(token = ?token, "parse step");
         state.feed(token);
         state.try_parse()
     })
@@ -451,17 +418,15 @@ stream
 ```rust
 use tracing::{debug_span, info_span};
 
-impl SassOp for AstNode {
-    fn into_operator(self, ctx: Arc<EvalContext>) -> AstStream {
-        let span = info_span!("sass_op", node = ?self, scope_id = ctx.scope_id);
-        let _guard = span.enter();
+fn process_node(node: AstNode, ctx: Arc<EvalContext) -> CssStream {
+    let span = info_span!("process_node", node = ?node, scope_id = ctx.scope_id);
+    let _guard = span.entered();
 
-        match self {
-            AstNode::RuleSet { selector, inner } => {
-                let span = debug_span!("rule_set", %selector);
-                let _guard = span.enter();
-                // ...
-            }
+    match node {
+        AstNode::Rule { selector, inner } => {
+            let span = debug_span!("rule_set", %selector);
+            let _guard = span.entered();
+            // ...
         }
     }
 }
@@ -474,30 +439,104 @@ impl SassOp for AstNode {
 | `Box<dyn DynCoreObservableClone + Send>: Clone` 未满足 | 算子链后使用 `.box_it_clone()` | 改用 `.box_it()` + `SharedBoxedObservable` |
 | `Rc<RefCell<T>>` 不能跨线程安全发送 | Shared 上下文使用了非 Send 类型 | 改用 `Arc<Mutex<T>>` |
 | `expected SharedCtx, found LocalCtx` | Local 和 Shared 类型混用 | 统一为 `Shared::`（多播场景） |
-| `Infallible` 未找到 | 缺少 import | `use std::convert::Infallible;` |
 | `Local::(())` 语法错误 | 无参构造 | 改用 `Local::of(())` 或 `Local::create(\|_\| ())` |
 | `Observable::create` 不存在 | API 改名 | 使用 `Local::create` / `Shared::create` |
+| `Infallible` 不再使用 | 错误通道已迁移到 `CompileError` | 替换为 `CompileError` |
 
-## 13. 与 OpenSpec / 编译器架构的关系
+## 13. rx-scss 反模式防御（2026-10 更新）
 
-本项目使用 rxrust 作为响应式编译管道的核心：
+### 13.1 禁止 subscribe-collect GC 模式
+
+```rust
+// ❌ 禁止: Arc<Mutex<Vec>> + subscribe(push) = GC thinking + lock overhead
+let result = Arc::new(Mutex::new(None));
+let r = result.clone();
+collected.subscribe(move |stmts| { *r.lock().unwrap() = Some(stmts); });
+
+// ✅ 必须: 使用 collect 终止算子
+let nodes: Vec<AstNode> = ast_stream
+    .collect::<Vec<_>>()
+    .into_iter()
+    .next()
+    .unwrap_or_default();
+```
+
+### 13.2 禁止命令式模拟 rxrust 算子
+
+```rust
+// ❌ 禁止: 手动 queue + while pop（非响应式）
+let mut queue: Vec<Work> = ...;
+while let Some(work) = queue.pop() {
+    match work { /* 手动展开 recursive */ }
+}
+
+// ✅ 必须: 算子链
+Shared::from_iter(ast_nodes)
+    .expand(emit_eval_events)              // 递归展开 AST 树
+    .scan_map(EvalState::root(), fold)     // &mut 零 clone 状态累积
+    .filter_map(emit_completed)           // 过滤 + 映射
+    .box_it();
+```
+
+### 13.3 禁止 box_it() 滥用
+
+```rust
+// ❌ 禁止: 每个节点都 box_it
+fn emit_events(node: AstNode) -> CssStream {
+    let mut events = Vec::new();
+    collect_events(node, &mut events);
+    events.reverse();
+    Shared::from_iter(events).box_it()  // 每个 AST 节点一次擦除!
+}
+
+// ✅ 正确: flat_map/expand 闭包返回 lazy Observable，只在最终边界 box_it
+fn emit_events(node: AstNode) -> impl Observable<Item = EvalEvent> {
+    // ... lazy observable
+}
+```
+
+**原则**: `box_it()` 只在以下位置调用：
+1. 函数最终返回 `SharedBoxedObservable` 类型边界处
+2. `from_iter([a, b, c])` 内嵌套用统一异构 Observable
+3. 存储到 `Vec<BoxedObs>` 时
+
+### 13.4 禁止 src/ 内联测试
+
+所有测试放在 `tests/` 目录，`src/` 保持纯生产代码。
+
+### 13.5 clone 使用红线
+
+优先使用 owned 数据、构造新的 child_scope、将 value move 进 enum。避免不必要的 `clone()`。
+
+## 14. 与 rx-scss 编译器架构的关系
+
+本项目的目标架构（全链路响应式管线，规划中）：
 
 ```
-Lexer TokenStream
-    ↓
-Parser (scan_map + flat_map + collect) → SassAstNode 流
-    ↓
-Lowering → AstNode 流 (SharedBoxedObservable)
-    ↓
-Evaluator (flat_map + SassOp dispatch) → AstNode 流
-    ↓
-lower_to_css (filter_map) → CssStmt 流
-    ↓
-collect + serialize → String
+Source(String)
+    │
+    ▼ Shared::create (lexer)
+TokenStream (SharedBoxedObservable<'static, Token, CompileError>)
+    │
+    ▼ Shared::create 桥接 (parser) — subscribe_all 逐 token 增量解析
+AstStream (SharedBoxedObservable<'static, AstNode, CompileError>)
+    │
+    ▼ expand + scan_map + filter_map (eval)
+CssStream (SharedBoxedObservable<'static, CssStmt, CompileError>)
+    │
+    ▼ fold + map (serialize) — 累积后 render
+OutputStream (SharedBoxedObservable<'static, String, CompileError>)
+    │
+    ▼ collect_boxed (终端收集)
+String (CSS 输出)
 ```
 
-关键设计决策：
-- 整个管道基于 `Shared`（而非 `Local`），使 `@mixin` 注册和 `@use` 模块加载可以通过 `SharedSubject` 跨订阅者广播
-- `AstStream = SharedBoxedObservable<'static, AstNode, Infallible>` 提供统一类型边界
-- `EvalContext` 持有 `Arc<Self>` + `CompilerBus`（而非 `Rc`），支持克隆后跨算子传递
-- Mixin/Function 注册表使用 `Arc<Mutex<HashMap>>`，线程安全共享
+**关键设计决策**:
+- 整个管线基于 `Shared`（而非 `Local`），使 `@mixin` 注册和 `@use` 模块加载可以通过 `SharedSubject` 跨订阅者广播
+- 错误类型统一为 `CompileError`（从 `Infallible` 迁移）
+- `expand` 替代 `flat_map` 做 AST 递归展开（深度优先语义正确）
+- `scan_map(&mut)` 替代 `scan` 做帧栈累积（每帧 clone → 零 clone）
+- `fold` 替代中间 `collect + serialize`
+- `box_it()` 仅在阶段边界调用一次
+
+**⚠️ 注意**: 当前代码库（截至 2026-10-10）仍处于 `Infallible` 阶段，openspec `full-reactive-pipeline` 是规划中的重构目标。

@@ -1,4 +1,4 @@
-use crate::types::*;
+use crate::Token;
 use std::mem;
 use std::path::PathBuf;
 

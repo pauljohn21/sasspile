@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
-use rxrust::prelude::*;
 use rx_scss::bus::{CompilerBus, FnDef, MixinDef, ModuleDef};
 use rx_scss::types::{AstNode, Param, PropSegment, Value};
 
@@ -55,28 +54,6 @@ fn register_and_lookup_module() {
     bus.register_module(module);
     assert!(bus.lookup_module("variables").is_some());
     assert!(bus.lookup_module("missing").is_none());
-}
-
-#[test]
-fn multicast_var_event() {
-    let bus = CompilerBus::new();
-    let received = Arc::new(Mutex::new(Vec::new()));
-    let r = received.clone();
-
-    let subj = bus.var_events();
-    let subj2 = bus.var_events();
-
-    subj.subscribe(move |ev| {
-        r.lock().unwrap().push(format!("{:?}", ev));
-    });
-
-    bus.set_var(1, "test", Value::Bool(true));
-
-    // Multicast: get the same subject clone should also work
-    let _ = subj2;
-
-    let guard = received.lock().unwrap();
-    assert!(!guard.is_empty(), "var event should be received");
 }
 
 #[test]

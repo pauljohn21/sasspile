@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::fmt;
 use rxrust::prelude::*;
 
@@ -138,7 +137,7 @@ impl fmt::Display for Value {
             }
             Value::Bool(true) => write!(f, "true"),
             Value::Bool(false) => write!(f, "false"),
-            Value::Null => write!(f, "null"),
+            Value::Null => write!(f, ""),
             Value::List(items, sep) => {
                 let separator = match sep {
                     ListSeparator::Space => " ",
@@ -234,7 +233,7 @@ pub enum AstNode {
     UnaryOp { op: UnaryOp, expr: Box<AstNode> },
     Interpolation(Vec<AstNode>),
     FunctionCall { name: String, args: Vec<AstNode> },
-    ListLiteral(Vec<AstNode>),
+    ListLiteral(Vec<AstNode>, ListSeparator),
     MapLiteral(Vec<(String, AstNode)>),
     VariableDecl { name: String, value: Box<AstNode>, scope_id: u64 },
     StyleDecl { property: Vec<PropSegment>, value: Box<AstNode>, important: bool },
@@ -254,6 +253,11 @@ pub enum AstNode {
     Css(CssStmt),
     Import(Vec<AstNode>),
     Content,
+    /// Wrapper for @content expansion: inner nodes must be emitted with the caller's scope, not the mixin's scope.
+    /// The caller's scope is stored in EvalContext.content_scope.
+    ContentBlock(Vec<AstNode>),
+    /// @extend <selector> — selector inheritance (collected at parse time, applied at eval time)
+    Extend(String),
 }
 
 // ── Operators ──────────────────────────────────────────────────────────────
@@ -270,14 +274,15 @@ pub enum UnaryOp { Neg, Not }
 pub struct Param {
     pub name: String,
     pub default_value: Option<Box<AstNode>>,
+    pub is_rest: bool,
 }
 
 impl Param {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), default_value: None }
+        Self { name: name.into(), default_value: None, is_rest: false }
     }
     pub fn with_default(name: impl Into<String>, default: AstNode) -> Self {
-        Self { name: name.into(), default_value: Some(Box::new(default)) }
+        Self { name: name.into(), default_value: Some(Box::new(default)), is_rest: false }
     }
 }
 
@@ -294,10 +299,10 @@ pub enum PropSegment {
 
 // ── Aliases ───────────────────────────────────────────────────────────────
 
-pub type TokenStream = SharedBoxedObservable<'static, Token, Infallible>;
-pub type AstStream = SharedBoxedObservable<'static, AstNode, Infallible>;
-pub type CssStream = SharedBoxedObservable<'static, CssStmt, Infallible>;
-pub type OutputStream = SharedBoxedObservable<'static, String, Infallible>;
+pub type TokenStream = SharedBoxedObservable<'static, Token, CompileError>;
+pub type AstStream = SharedBoxedObservable<'static, AstNode, CompileError>;
+pub type CssStream = SharedBoxedObservable<'static, CssStmt, CompileError>;
+pub type OutputStream = SharedBoxedObservable<'static, String, CompileError>;
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 

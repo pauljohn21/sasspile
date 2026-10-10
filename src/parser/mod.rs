@@ -1,7 +1,6 @@
 mod state;
 pub use state::{ParseError, ParserState};
 use rxrust::prelude::*;
-use std::sync::{Arc, Mutex};
 use crate::types::*;
 
 pub fn parse_stream(token_stream: TokenStream, scope_id: u64) -> AstStream {
@@ -9,18 +8,20 @@ pub fn parse_stream(token_stream: TokenStream, scope_id: u64) -> AstStream {
 }
 
 pub fn parse_stream_with_paths(token_stream: TokenStream, scope_id: u64, include_paths: Vec<std::path::PathBuf>) -> AstStream {
-    // rxrust collect 算子: TokenStream → Vec<Token>
-    // collect 返回 SharedBoxedObservable<'static, Vec<Token>, Infallible>；
-    // Arc<Mutex> 仅作为 Shared 上下文 'static 约束下的值提取通道（非 GC 模式）。
-    let result = Arc::new(Mutex::new(Vec::<Token>::new()));
-    let r = result.clone();
-    token_stream.collect::<Vec<_>>().subscribe(move |v| { *r.lock().unwrap() = v; });
-    let tokens = Arc::try_unwrap(result).unwrap().into_inner().unwrap();
+    // 终端收集：TokenStream → Vec<Token>
+    let tokens: Vec<Token> = crate::collect_boxed(token_stream)
+        .unwrap_or_default();
 
     let mut ps = ParserState::with_include_paths(include_paths);
     for t in tokens { ps.push_token(t); }
     let nodes = parse_all_nodes(&mut ps, scope_id);
-    Shared::from_iter(nodes).box_it()
+    // 使用 Shared::create 创建 CompileError 类型的 Observable
+    Shared::create(move |sub| {
+        for node in nodes {
+            sub.next(node);
+        }
+        sub.complete();
+    }).box_it()
 }
 
 fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
@@ -40,9 +41,16 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
             Token::AtCharset | Token::AtNamespace | Token::AtKeyframes |
             Token::AtFontFace | Token::AtPage | Token::AtCustomMedia |
             Token::AtCustomSelector | Token::AtName | Token::IdentAt(_) => {
+                let start_pos = ps.pos;
                 if let Some(node) = parse_at_rule(ps, scope_id) {
                     result.push(node);
-                } else { ps.next_token(); }
+                } else {
+                    // 解析失败恢复：跳过到匹配的闭合花括号，防止级联崩溃
+                    if ps.pos == start_pos {
+                        ps.next_token(); // 确保至少前进一个token
+                    }
+                    skip_to_matching_brace(ps);
+                }
             }
             Token::Ident(_) | Token::InterpolationStart => {
                 if is_style_decl(ps) {
@@ -55,7 +63,7 @@ fn parse_all_nodes(ps: &mut ParserState, scope_id: u64) -> Vec<AstNode> {
             }
             Token::Dot | Token::HashId(_) | Token::Ampersand |
             Token::LBracket | Token::Colon | Token::Star |
-            Token::Minus | Token::Plus | Token::Gt => {
+            Token::Minus | Token::Plus | Token::Gt | Token::Percent => {
                 // Minus/Plus/Gt 可能是 CSS 组合器（+, >）或自定义属性 --name 的开头
                 if is_style_decl(ps) {
                     if let Some(node) = parse_style_decl(ps) {
@@ -190,7 +198,8 @@ fn parse_style_decl(ps: &mut ParserState) -> Option<AstNode> {
         return None;
     }
     ps.next_token();
-    let value = parse_value(ps)?;
+    // 样式声明值也支持逗号分隔列表（如 `box-shadow: a, b;`），使用 parse_list_or_expr
+    let value = parse_list_or_expr(ps)?;
     // Detect `!important` flag after value: `prop: value !important;`
     let important = if matches!(ps.peek(), Some(Token::Bang)) {
         ps.next_token(); // consume !
@@ -249,7 +258,7 @@ fn parse_list_or_expr(ps: &mut ParserState) -> Option<AstNode> {
         items.push(parse_expression(ps, 0)?);
         skip_whitespace(ps);
     }
-    Some(AstNode::ListLiteral(items))
+    Some(AstNode::ListLiteral(items, ListSeparator::Comma))
 }
 
 fn parse_value(ps: &mut ParserState) -> Option<AstNode> {
@@ -272,7 +281,7 @@ fn parse_each_list(ps: &mut ParserState) -> Option<AstNode> {
         items.push(parse_expression(ps, 0)?);
         skip_whitespace(ps);
     }
-    Some(AstNode::ListLiteral(items))
+    Some(AstNode::ListLiteral(items, ListSeparator::Comma))
 }
 
 /// Pratt-style expression parser with operator precedence.
@@ -283,6 +292,12 @@ fn parse_expression(ps: &mut ParserState, min_bp: u8) -> Option<AstNode> {
     // Collect space-separated atoms into an implicit space-list.
     // Example: `red green blue` → ListLiteral([red, green, blue])
     // Stop when we hit an infix operator, comma, closing paren, semicolon, etc.
+    //
+    // EXCEPTION: String interpolation context — when a Str literal is adjacent
+    // to an Interpolation (e.g., `"-#{$name}"`), they form a single interpolated
+    // string rather than a space-separated list. Only combine when an
+    // Interpolation node is present to avoid breaking plain space-separated
+    // lists like `inline block none`.
     let lhs = if is_atom_start(ps.peek()) {
         let mut items = vec![lhs];
         while is_atom_start(ps.peek()) {
@@ -291,7 +306,12 @@ fn parse_expression(ps: &mut ParserState, min_bp: u8) -> Option<AstNode> {
                 None => break,
             }
         }
-        AstNode::ListLiteral(items)
+        // Only combine when an Interpolation node is present (string interp context)
+        if items.iter().any(|n| matches!(n, AstNode::Interpolation(_))) {
+            combine_interpolation_parts(items)
+        } else {
+            AstNode::ListLiteral(items, ListSeparator::Space)
+        }
     } else {
         lhs
     };
@@ -320,6 +340,45 @@ fn parse_expression(ps: &mut ParserState, min_bp: u8) -> Option<AstNode> {
     }
 
     Some(lhs)
+}
+
+/// Combine adjacent Str literals and Interpolation nodes into a single Interpolation.
+/// Used for string interpolation context: `"-#{$name}"` → `Interpolation([Str("-"), VariableRef("name")])`
+fn combine_interpolation_parts(items: Vec<AstNode>) -> AstNode {
+    let mut parts: Vec<AstNode> = Vec::new();
+    for item in items {
+        match item {
+            AstNode::Literal(Value::String(s)) => {
+                push_string_to_parts(&mut parts, s);
+            }
+            AstNode::Interpolation(inner) => {
+                for part in inner {
+                    if let AstNode::Literal(Value::String(s)) = part {
+                        push_string_to_parts(&mut parts, s);
+                    } else {
+                        parts.push(part);
+                    }
+                }
+            }
+            other => parts.push(other),
+        }
+    }
+    // If only one string part and nothing else, return as Literal
+    if parts.len() == 1
+        && let AstNode::Literal(_) = &parts[0]
+    {
+        return parts.into_iter().next().unwrap();
+    }
+    AstNode::Interpolation(parts)
+}
+
+/// Helper: push a string value into parts, merging with trailing string if present.
+fn push_string_to_parts(parts: &mut Vec<AstNode>, s: String) {
+    if let Some(AstNode::Literal(Value::String(last))) = parts.last_mut() {
+        last.push_str(&s);
+    } else {
+        parts.push(AstNode::Literal(Value::String(s)));
+    }
 }
 
 /// Returns true if the token can start an atomic expression (same as what `parse_atom` accepts).
@@ -409,7 +468,7 @@ fn parse_atom(ps: &mut ParserState) -> Option<AstNode> {
             // Handle empty parens (): return empty list literal
             if matches!(ps.peek(), Some(Token::RParen)) {
                 ps.next_token();
-                return Some(AstNode::ListLiteral(vec![]));
+                return Some(AstNode::ListLiteral(vec![], ListSeparator::Space));
             }
             let inner = parse_expression(ps, 0)?;
             if matches!(ps.peek(), Some(Token::RParen)) {
@@ -451,7 +510,7 @@ fn parse_atom(ps: &mut ParserState) -> Option<AstNode> {
                 if matches!(ps.peek(), Some(Token::RParen)) {
                     ps.next_token();
                 }
-                Some(AstNode::ListLiteral(items))
+                Some(AstNode::ListLiteral(items, ListSeparator::Comma))
             }
         }
         Token::InterpolationStart => {
@@ -531,12 +590,40 @@ fn classify_infix(op: &Token) -> Option<(u8, u8, BinOp)> {
 }
 
 fn parse_hex_color(hex: &str) -> Option<Value> {
-    if hex.len() == 6 {
-        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-        Some(Value::Color(r, g, b, 1.0))
-    } else { None }
+    match hex.len() {
+        // 6-digit hex: #RRGGBB
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some(Value::Color(r, g, b, 1.0))
+        }
+        // 3-digit shorthand: #RGB → #RRGGBB
+        3 => {
+            let r = u8::from_str_radix(&hex[0..1], 16).ok()?;
+            let g = u8::from_str_radix(&hex[1..2], 16).ok()?;
+            let b = u8::from_str_radix(&hex[2..3], 16).ok()?;
+            // Expand: #RGB → #RRGGBB (e.g., #000 → #000000)
+            Some(Value::Color(r * 17, g * 17, b * 17, 1.0))
+        }
+        // 8-digit hex with alpha: #RRGGBBAA
+        8 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            let a = u8::from_str_radix(&hex[6..8], 16).ok()?;
+            Some(Value::Color(r, g, b, a as f64 / 255.0))
+        }
+        // 4-digit shorthand with alpha: #RGBA → #RRGGBBAA
+        4 => {
+            let r = u8::from_str_radix(&hex[0..1], 16).ok()?;
+            let g = u8::from_str_radix(&hex[1..2], 16).ok()?;
+            let b = u8::from_str_radix(&hex[2..3], 16).ok()?;
+            let a = u8::from_str_radix(&hex[3..4], 16).ok()?;
+            Some(Value::Color(r * 17, g * 17, b * 17, a as f64 / 15.0))
+        }
+        _ => None,
+    }
 }
 
 fn parse_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
@@ -611,6 +698,11 @@ fn parse_selector(ps: &mut ParserState) -> Option<String> {
             Some(Token::Ampersand) => { parts.push("&".into()); ps.next_token(); prev_was_combinator = false; }
             Some(Token::Colon) => { parts.push(":".into()); ps.next_token(); prev_was_combinator = false; }
             Some(Token::Star) => { parts.push("*".into()); ps.next_token(); prev_was_combinator = false; }
+            // Placeholder selector prefix: %name
+            Some(Token::Percent) => { parts.push("%".into()); ps.next_token(); prev_was_combinator = false; }
+            // Functional pseudo-class arguments: :not(.x), :nth-child(2n+1), :is(.a, .b)
+            Some(Token::LParen) => { parts.push("(".into()); ps.next_token(); prev_was_combinator = false; }
+            Some(Token::RParen) => { parts.push(")".into()); ps.next_token(); prev_was_combinator = false; }
             Some(Token::LBracket) => {
                 parts.push("[".into());
                 ps.next_token();
@@ -986,6 +1078,23 @@ fn parse_at_rule(ps: &mut ParserState, scope_id: u64) -> Option<AstNode> {
             if matches!(ps.peek(), Some(Token::Semicolon)) { ps.next_token(); }
             None // produce no CSS
         }
+        Token::AtExtend => {
+            // @extend <selector> [optional !optional];
+            skip_whitespace(ps);
+            let selector = parse_selector(ps).unwrap_or_default();
+            tracing::trace!(extend_target = %selector, "parsed @extend");
+            // Consume optional `!optional` flag
+            skip_whitespace(ps);
+            if matches!(ps.peek(), Some(Token::Bang)) {
+                ps.next_token();
+                skip_whitespace(ps);
+                if matches!(ps.peek(), Some(Token::Ident(s)) if s == "optional") {
+                    ps.next_token();
+                }
+            }
+            if matches!(ps.peek(), Some(Token::Semicolon)) { ps.next_token(); }
+            Some(AstNode::Extend(selector))
+        }
         Token::AtAtRoot => {
             // @at-root selector { }
             skip_whitespace(ps);
@@ -1179,7 +1288,16 @@ fn parse_param_list(ps: &mut ParserState) -> Vec<Param> {
                         ps.next_token();
                         parse_value(ps).map(Box::new)
                     } else { None };
-                    params.push(Param { name: n, default_value: default });
+                    // Rest argument syntax: $args... (three dots after param name)
+                    let is_rest = matches!(ps.peek(), Some(Token::Dot))
+                        && matches!(ps.peek_n(1), Some(Token::Dot))
+                        && matches!(ps.peek_n(2), Some(Token::Dot));
+                    if is_rest {
+                        ps.next_token();
+                        ps.next_token();
+                        ps.next_token();
+                    }
+                    params.push(Param { name: n, default_value: default, is_rest });
                 }
             }
             Some(Token::RParen) => { ps.next_token(); break; }
@@ -1266,15 +1384,8 @@ fn parse_import_source(source: &str, parent_ps: &ParserState, file_path: std::pa
 
     let tokens = crate::lexer::scan(source);
 
-    // Synchronously collect tokens via Mutex
-    let tok_store: Arc<Mutex<Vec<Token>>> = Arc::new(Mutex::new(Vec::new()));
-    let store_clone = tok_store.clone();
-    let collected = tokens.collect::<Vec<_>>();
-    collected.subscribe(move |toks| {
-        *store_clone.lock().unwrap() = toks;
-    });
-
-    let all_toks = tok_store.lock().unwrap().clone();
+    // 终端收集：TokenStream → Vec<Token>
+    let all_toks: Vec<Token> = crate::collect_boxed(tokens).unwrap_or_default();
 
     let mut child_ps = ParserState {
         include_paths: parent_ps.include_paths.clone(),
@@ -1328,4 +1439,34 @@ fn resolve_import(ps: &mut ParserState, path: &str) -> Option<AstNode> {
         Some(AstNode::Import(nodes))
     }
 }
+
+/// 跳过到匹配的闭合花括号（用于解析失败恢复）
+/// 追踪花括号深度，找到与当前深度匹配的闭合花括号。
+/// 如果找不到（解析错误），安全地跳至文件末尾。
+fn skip_to_matching_brace(ps: &mut ParserState) {
+    let mut depth = 0u32;
+    // 首先消耗当前位置到 { 之间的任何 token
+    loop {
+        match ps.peek() {
+            Some(Token::LBrace) => {
+                depth += 1;
+                ps.next_token();
+                break;
+            }
+            Some(Token::Eof) => return,
+            None => return,
+            _ => { ps.next_token(); }
+        }
+    }
+    // 现在跳至匹配的 }
+    while depth > 0 {
+        match ps.peek() {
+            Some(Token::LBrace) => { depth += 1; ps.next_token(); }
+            Some(Token::RBrace) => { depth -= 1; ps.next_token(); }
+            Some(Token::Eof) | None => return,
+            _ => { ps.next_token(); }
+        }
+    }
+}
+
 

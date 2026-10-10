@@ -13,6 +13,28 @@ const PREFIX_MAP: &[(&str, &[&str])] = &[
     ("mask-position", &["-webkit-mask-position"]),
     ("transition", &["-webkit-transition", "-moz-transition"]),
     ("appearance", &["-webkit-appearance", "-moz-appearance"]),
+    // Bootstrap 5.3 额外需要的 vendor prefix
+    ("user-select", &["-webkit-user-select", "-moz-user-select", "-ms-user-select"]),
+    ("background-clip", &["-webkit-background-clip"]),
+    ("backdrop-filter", &["-webkit-backdrop-filter"]),
+    ("text-decoration-skip-ink", &["-webkit-text-decoration-skip-ink"]),
+    ("backface-visibility", &["-webkit-backface-visibility"]),
+    ("text-size-adjust", &["-webkit-text-size-adjust"]),
+    ("tap-highlight-color", &["-webkit-tap-highlight-color"]),
+    ("overflow-scrolling", &["-webkit-overflow-scrolling"]),
+    ("user-drag", &["-webkit-user-drag"]),
+    // text-decoration 系列（Bootstrap 5.3 link utilities）
+    ("text-decoration-color", &["-webkit-text-decoration-color"]),
+    ("text-decoration", &["-webkit-text-decoration"]),
+    ("print-color-adjust", &["-webkit-print-color-adjust"]),
+    // 逻辑属性（Bootstrap 5.3 spacing utilities）
+    ("margin-end", &["-webkit-margin-end"]),
+    ("margin-start", &["-webkit-margin-start"]),
+    ("padding-end", &["-webkit-padding-end"]),
+    ("padding-start", &["-webkit-padding-start"]),
+    // mask 系列（Bootstrap 5.3 progress bar）
+    ("mask-image", &["-webkit-mask-image"]),
+    ("mask-size", &["-webkit-mask-size"]),
 ];
 
 /// 检查属性是否需要 vendor prefix 注入。

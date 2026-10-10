@@ -1,30 +1,13 @@
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::fmt;
 use std::sync::{Arc, Mutex};
-use rxrust::prelude::*;
 use crate::types::Value;
 
-#[derive(Debug, Clone)]
-pub enum VarEvent {
-    Bind { scope_id: u64, name: String, value: Value },
-    Update { scope_id: u64, name: String, value: Value },
-}
-
-#[derive(Debug, Clone)]
-pub enum ModuleEvent {
-    Loaded { name: String },
-    MemberRegistered { module: String, name: String },
-}
-
-#[derive(Debug, Clone)]
-pub enum ScopeEvent {
-    Open { scope_id: u64, kind: ScopeKind },
-    Close { scope_id: u64, kind: ScopeKind },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScopeKind { Rule, Media, Supports, Control, Function, Mixin }
+// Note: VarEvent/ModuleEvent/ScopeEvent and SharedSubject were removed because
+// they were unused in production — nobody subscribed to these events. The event
+// emission in set_var() was cloning value + name for every variable bind
+// (thousands of times during Bootstrap compilation) with zero consumers.
+// This was a GC thinking anti-pattern: creating reactive infrastructure "just in case".
 
 #[derive(Debug, Clone)]
 pub struct MixinDef {
@@ -57,42 +40,17 @@ struct BusInner {
 
 #[derive(Clone)]
 pub struct CompilerBus {
-    var_subject: SharedSubject<'static, VarEvent, Infallible>,
-    module_subject: SharedSubject<'static, ModuleEvent, Infallible>,
-    scope_subject: SharedSubject<'static, ScopeEvent, Infallible>,
     inner: Arc<Mutex<BusInner>>,
 }
 
 impl CompilerBus {
     pub fn new() -> Self {
-        Self {
-            var_subject: Shared::subject(),
-            module_subject: Shared::subject(),
-            scope_subject: Shared::subject(),
-            inner: Arc::new(Mutex::new(BusInner::default())),
-        }
+        Self { inner: Arc::new(Mutex::new(BusInner::default())) }
     }
 
-    pub fn var_events(&self) -> SharedSubject<'static, VarEvent, Infallible> {
-        self.var_subject.clone()
-    }
-    pub fn module_events(&self) -> SharedSubject<'static, ModuleEvent, Infallible> {
-        self.module_subject.clone()
-    }
-    pub fn scope_events(&self) -> SharedSubject<'static, ScopeEvent, Infallible> {
-        self.scope_subject.clone()
-    }
     pub fn set_var(&self, scope_id: u64, name: &str, value: Value) {
         let mut g = self.inner.lock().unwrap();
-        let ev = if g.variables.contains_key(&(scope_id, name.to_string())) {
-            VarEvent::Update { scope_id, name: name.into(), value: value.clone() }
-        } else {
-            VarEvent::Bind { scope_id, name: name.into(), value: value.clone() }
-        };
         g.variables.insert((scope_id, name.into()), value);
-        drop(g);
-        let mut subj = self.var_subject.clone();
-        subj.next(ev);
     }
     pub fn bind_var_silent(&self, scope_id: u64, name: String, value: Value) {
         let mut g = self.inner.lock().unwrap();
@@ -118,10 +76,10 @@ impl CompilerBus {
         let g = self.inner.lock().unwrap();
         g.variables.get(&(scope_id, name.into())).cloned()
     }
-    pub fn register_mixin(&self, d: MixinDef) { self.inner.lock().unwrap().mixins.insert(d.name.clone(), d); }
-    pub fn lookup_mixin(&self, n: &str) -> Option<MixinDef> { self.inner.lock().unwrap().mixins.get(n).cloned() }
-    pub fn register_fn(&self, d: FnDef) { self.inner.lock().unwrap().functions.insert(d.name.clone(), d); }
-    pub fn lookup_fn(&self, n: &str) -> Option<FnDef> { self.inner.lock().unwrap().functions.get(n).cloned() }
+    pub fn register_mixin(&self, d: MixinDef) { tracing::trace!(mixin_name = %d.name, "register_mixin"); self.inner.lock().unwrap().mixins.insert(d.name.clone(), d); }
+    pub fn lookup_mixin(&self, n: &str) -> Option<MixinDef> { let r = self.inner.lock().unwrap().mixins.get(n).cloned(); tracing::trace!(mixin_name = %n, found = r.is_some(), "lookup_mixin"); r }
+    pub fn register_fn(&self, d: FnDef) { tracing::trace!(fn_name = %d.name, "register_fn"); self.inner.lock().unwrap().functions.insert(d.name.clone(), d); }
+    pub fn lookup_fn(&self, n: &str) -> Option<FnDef> { let r = self.inner.lock().unwrap().functions.get(n).cloned(); tracing::trace!(fn_name = %n, found = r.is_some(), "lookup_fn"); r }
     pub fn register_module(&self, d: ModuleDef) { self.inner.lock().unwrap().modules.insert(d.path.clone(), d); }
     pub fn lookup_module(&self, p: &str) -> Option<ModuleDef> { self.inner.lock().unwrap().modules.get(p).cloned() }
 }

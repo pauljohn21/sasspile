@@ -1,29 +1,34 @@
 use rxrust::prelude::*;
 use std::sync::Arc;
-use crate::bus::{CompilerBus, FnDef, MixinDef};
 use crate::runtime::EvalContext;
 use crate::types::*;
 
 pub mod builtin;
 pub mod prefixer;
 mod expr;
+mod emit;
 
 // Re-export for internal use + tests
 pub use expr::eval_expr;
-use expr::{combine_selectors, resolve_property, resolve_selector, truthy, value_to_number, value_to_string};
+pub(crate) use emit::emit_events;
 
-// ── RxRust 求值器: 响应式流算子替代递归 ─────────────────────────────────
+// ── RxRust 求值器: 纯响应式算子链 (scan_map &mut 零 clone) ──────────────────
 //
 // 核心设计:
-//   AST 节点流 → expand(reactive recursion) → 事件流 → scan(累积折叠) → CSS 树流
+//   AST 节点流 → flat_map(emit_events) → scan_map(&mut state, fold_frame) → filter_map(extract)
 //
-// 不是"函数调用自己"，而是"emit 子节点回同一个 Observable"
-// 不是"手动栈管理"，而是"scan 算子在流上累积状态"
+// - emit_events (emit.rs): 返回 lazy Observable<EvalEvent>，递归 flat_map 让 rxrust 处理展平
+// - fold_frame: Fn(&mut EvalState, EvalEvent) -> Option<CssStmt>，scan_map 直接修改状态，零 clone
+// - filter_map: 从 scan_map 的 Output (Option<CssStmt>) 透传已完成的 CssStmt
+//
+// 关键 (基于 rxrust 源码分析):
+//   scan_map 用 &mut Acc，不像 scan 每帧 Clone 整个状态 (scan.rs L68-70)
+//   collect 是终止算子，替代 Arc<Mutex<Vec>> + subscribe 反模式
+//   box_it() 只在管线最终返回边界调用一次
 
-/// 求值事件: 在 reactive recursion 中间节点不是递归调用，
-/// 而是 emit 事件回流 — 子节点自动进入流的下游
-#[derive(Clone)]
-enum EvalEvent {
+/// 求值事件: 在响应式递归中，子节点通过 flat_map 返回 Observable 自动注入下游流
+#[derive(Clone, Debug)]
+pub(crate) enum EvalEvent {
     /// 进入一棵嵌套 Rule（selector 已 combine 完毕）
     EnterRule(String),
     /// 离开当前 Rule scope
@@ -38,444 +43,226 @@ enum EvalEvent {
     LeaveSupports,
     /// 终端 CssStmt（Decl、Comment 等）
     Terminal(CssStmt),
+    /// @extend <target_selector>: 将当前 selector 追加到 target_selector 的 selector list
+    AddSelector { target: String, source: String },
 }
 
-/// 累积 frames 栈 — scan 算子的内部状态
-/// 每层 frame 累积该 scope 的 CssStmt 列表
+/// scan_map 算子的内部状态: frame 栈 + 待处理的 @extend
+///
+/// 使用 &mut self 直接修改，无需 Clone。scan_map (scan_map.rs L65-67) 直接调用
+/// `FnMut(&mut Acc, Item) -> Output` 不产生 clone 开销。
+pub(super) struct EvalState {
+    frames: Vec<Frame>,
+    pending_extends: Vec<(String, String)>,
+}
+
+impl EvalState {
+    /// 创建 root 状态的求值器
+    pub(super) fn root() -> Self {
+        Self {
+            frames: vec![Frame::default()],
+            pending_extends: Vec::new(),
+        }
+    }
+}
+
+/// 累积 frames 栈 — scan_map 算子的内部状态
 #[derive(Clone)]
-struct Frame {
-    #[allow(dead_code)]
+pub(super) struct Frame {
     kind: FrameKind,
     selector: Option<String>,
     query: Option<String>,
     stmts: Vec<CssStmt>,
+    /// 被 @extend 引用的 selectors: Vec<source_selector>
+    extended_by: Vec<String>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum FrameKind { Root, Rule, Media, Supports }
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum FrameKind { Root, Rule, Media, Supports }
 
 impl Default for Frame {
     fn default() -> Self {
-        Self { kind: FrameKind::Root, selector: None, query: None, stmts: Vec::new() }
+        Self { kind: FrameKind::Root, selector: None, query: None, stmts: Vec::new(), extended_by: Vec::new() }
     }
 }
 
-/// 入口: 收集 AST 流 → 响应式求值管线
-///
-/// 使用 rxrust collect 算子进行流 → Vec 同步收集（非 subscribe-collect GC 模式）。
-/// collect 算子已内化收集逻辑；Arc<Mutex> 仅作为 Shared 上下文 'static 约束下的值提取通道。
-pub fn eval_stream(ast_stream: AstStream, ctx: Arc<EvalContext>) -> CssStream {
-    let bus = ctx.bus().clone();
-
-    // rxrust collect 算子: 流 → Vec（类型安全、无 GC 中间状态）
-    let result = Arc::new(std::sync::Mutex::new(Vec::<AstNode>::new()));
-    let r = result.clone();
-    ast_stream.collect::<Vec<_>>().subscribe(move |v| { *r.lock().unwrap() = v; });
-    let nodes = Arc::try_unwrap(result).unwrap().into_inner().unwrap();
-
-    // 响应式求值管线
-    eval_nodes_pipeline(&nodes, ctx, bus)
+impl Frame {
+    pub(super) fn new_rule(selector: String) -> Self {
+        Self { kind: FrameKind::Rule, selector: Some(selector), query: None, stmts: Vec::new(), extended_by: Vec::new() }
+    }
+    pub(super) fn new_media(query: String) -> Self {
+        Self { kind: FrameKind::Media, selector: None, query: Some(query), stmts: Vec::new(), extended_by: Vec::new() }
+    }
+    pub(super) fn new_supports(query: String) -> Self {
+        Self { kind: FrameKind::Supports, selector: None, query: Some(query), stmts: Vec::new(), extended_by: Vec::new() }
+    }
+    /// 检查此 frame 是否匹配给定的 extend target（精确匹配每个逗号分隔项）
+    pub(super) fn matches_target(&self, target: &str) -> bool {
+        match &self.selector {
+            Some(sel) => {
+                let entries: Vec<&str> = sel.split(',').map(str::trim).collect();
+                entries.iter().any(|e| *e == target || *e == format!("{} ", target).trim())
+            }
+            None => false,
+        }
+    }
 }
 
-/// scan 算子的内部状态: frame 栈 + 最近完成的 CssStmt
-type EvalState = (Vec<Frame>, Option<CssStmt>);
+// ── 入口函数 ─────────────────────────────────────────────────────────────────
 
-/// 响应式求值管线核心: 事件流 → scan 累积 → CSS 树
+/// 入口: 响应式求值管线 — 直接消费 AstStream
 ///
-/// 使用真正的 rxrust 算子链:
-///   Shared::from_iter(nodes).flat_map(emit_events).scan(frames, fold).filter_map(emit_completed)
+/// 纯 rxrust 算子链 (scan_map &mut 零 clone):
+///   ast_stream
+///       .flat_map(emit_events)            ← 展开 AST 节点为事件流
+///       .scan_map(EvalState::root(), fold_frame)  ← &mut EvalState, 零 clone
+///       .filter_map(|opt| opt)            ← Option<CssStmt> 透传
+///       .box_it()                         ← 唯一的类型擦除边界
 ///
-/// - flat_map: 每个 AST 节点 → 事件序列（递归展开）
-/// - scan: 事件流在 frame 栈上累积折叠
-/// - filter_map: 提取已完成的 CssStmt
-fn eval_nodes_pipeline(
-    nodes: &[AstNode],
-    ctx: Arc<EvalContext>,
-    bus: CompilerBus,
-) -> CssStream {
-    let initial_state: EvalState = (vec![Frame::default()], None);
-
-    // 算子链: nodes → flat_map(emit_events) → scan(fold_frames) → filter_map(emit_completed)
-    // 先 collect 到 Vec 以满足 Shared::from_iter 的 'static 约束
-    let owned_nodes: Vec<AstNode> = nodes.to_vec();
-    Shared::from_iter(owned_nodes)
-        .flat_map(move |node| {
-            let events = emit_node_events(&node, None, &ctx, &bus);
-            Shared::from_iter(events).box_it()
-        })
-        .scan(initial_state, fold_frames)
-        .filter_map(emit_completed)
+/// ⚠️ 消除 collect_boxed(ast_stream) 断裂点：直接消费上游 AstStream
+pub fn eval_stream(ast_stream: AstStream, ctx: Arc<EvalContext>) -> CssStream {
+    let bus = ctx.bus().clone();
+    ast_stream
+        .flat_map(move |node| emit_events(node, None, ctx.clone(), bus.clone()))
+        .scan_map(EvalState::root(), fold_frame)
+        .filter_map(|opt| opt)
         .box_it()
 }
 
-/// 纯函数: 单个 AST 节点 → 事件序列（递归展开）
-///
-/// 替代原来的 work-queue 递归: 不是"手动栈维护嵌套"，
-/// 而是"flat_map(emit_node_events) 由 rxrust 算子处理递归展开"。
-fn emit_node_events(
-    node: &AstNode,
-    parent_sel: Option<&str>,
-    ctx: &EvalContext,
-    bus: &CompilerBus,
-) -> Vec<EvalEvent> {
-    let mut events = Vec::new();
+// ── fold_frame: scan_map 闭包 (&mut EvalState, EvalEvent) -> Option<CssStmt> ──
 
-    match node {
-        AstNode::StyleDecl { property, value, important } => {
-            let val = eval_expr(value, ctx, bus);
-            let prop_name = resolve_property(property, ctx);
-            let val_str = value_to_string(&val);
-            // null 值 fallback 策略（Bootstrap dist 需要 --bs-* 变量保留在输出中）:
-            // - CSS 自定义属性 (--bs-*): 输出 `unset` 保留声明（CSS 级联回退）
-            // - 普通属性: 记录 debug warning 后跳过（null 在普通属性中应被移除）
-            let final_val = if val_str == "null" || prop_name.contains("null") {
-                if prop_name.starts_with("--") {
-                    tracing::debug!(property = %prop_name, "null fallback to unset for CSS custom property");
-                    "unset".to_string()
-                } else {
-                    tracing::debug!(property = %prop_name, "null value skipped for non-custom property");
-                    return events;
-                }
-            } else {
-                val_str
-            };
-            let final_val = if *important {
-                format!("{} !important", final_val)
-            } else {
-                final_val
-            };
-            // Vendor prefix 自动注入: 若属性需要前缀且尚未带前缀，先 emit prefix 变体
-            if !prefixer::is_prefixed(&prop_name)
-                && let Some(prefixes) = prefixer::get_vendor_prefixes(&prop_name)
-            {
-                for pref in &prefixes {
-                    events.push(EvalEvent::Terminal(CssStmt::Decl {
-                        property: pref.clone(),
-                        value: final_val.clone(),
-                    }));
-                }
-            }
-            events.push(EvalEvent::Terminal(CssStmt::Decl {
-                property: prop_name,
-                value: final_val,
-            }));
-        }
-        AstNode::Rule { selector, inner } => {
-            let resolved = resolve_selector(selector, ctx);
-            let combined = match parent_sel {
-                Some(p) => combine_selectors(p, &resolved),
-                None => resolved.replace('&', ""),
-            };
-            let (nested_rules, declarations): (Vec<_>, Vec<_>) = inner.iter()
-                .cloned()
-                .partition(|n| matches!(n, AstNode::Rule { .. }));
-            if !declarations.is_empty() {
-                events.push(EvalEvent::EnterRule(combined.clone()));
-                let child_ctx = ctx.child_scope(1);
-                for n in &declarations {
-                    events.extend(emit_node_events(n, Some(&combined), &child_ctx, bus));
-                }
-                events.push(EvalEvent::LeaveRule);
-            }
-            for n in &nested_rules {
-                events.extend(emit_node_events(n, Some(&combined), ctx, bus));
-            }
-        }
-        AstNode::Media { query, inner } => {
-            let resolved_query = resolve_query(query, ctx);
-            events.push(EvalEvent::EnterMedia(resolved_query));
-            let child_ctx = ctx.child_scope(2);
-            for n in inner {
-                events.extend(emit_node_events(n, parent_sel, &child_ctx, bus));
-            }
-            events.push(EvalEvent::LeaveMedia);
-        }
-        AstNode::Supports { query, inner } => {
-            let resolved_query = resolve_query(query, ctx);
-            events.push(EvalEvent::EnterSupports(resolved_query));
-            let child_ctx = ctx.child_scope(3);
-            for n in inner {
-                events.extend(emit_node_events(n, parent_sel, &child_ctx, bus));
-            }
-            events.push(EvalEvent::LeaveSupports);
-        }
-        AstNode::Import(inner_nodes) => {
-            for n in inner_nodes {
-                events.extend(emit_node_events(n, parent_sel, ctx, bus));
-            }
-        }
-        AstNode::VariableDecl { name, value, .. } => {
-            let val = eval_expr(value, ctx, bus);
-            ctx.bind_var(name, val);
-        }
-        AstNode::MixinDecl { name, params, body } => {
-            bus.register_mixin(MixinDef { name: name.clone(), params: params.clone(), body: body.clone() });
-        }
-        AstNode::FunctionDecl { name, params, body } => {
-            bus.register_fn(FnDef { name: name.clone(), params: params.clone(), body: body.clone() });
-        }
-        AstNode::MixinCall { name, args, content } => {
-            if let Some(mixin) = bus.lookup_mixin(name) {
-                let child_ctx = ctx.child_scope(8);
-                for (i, p) in mixin.params.iter().enumerate() {
-                    let val = if let Some(a) = args.get(i) {
-                        eval_expr(a, ctx, bus)
-                    } else if let Some(default) = &p.default_value {
-                        eval_expr(default, ctx, bus)
-                    } else {
-                        Value::Null
-                    };
-                    child_ctx.bind_var(&p.name, val);
-                }
-                let expanded = expand_body_with_content(&mixin.body, content);
-                for n in &expanded {
-                    events.extend(emit_node_events(n, parent_sel, &child_ctx, bus));
-                }
-            }
-        }
-        AstNode::If { cond, then_branch, else_branch } => {
-            let cond_val = eval_expr(cond, ctx, bus);
-            let is_truthy = truthy(&cond_val);
-            let branch = if is_truthy {
-                then_branch
-            } else if let Some(eb) = else_branch { eb } else { &vec![] };
-            for n in branch {
-                events.extend(emit_node_events(n, parent_sel, ctx, bus));
-            }
-        }
-        AstNode::For { var, from, to, inclusive, body } => {
-            let from_n = value_to_number(&eval_expr(from, ctx, bus)) as i64;
-            let to_n = value_to_number(&eval_expr(to, ctx, bus)) as i64;
-            let effective_to = if *inclusive { to_n } else { to_n - 1 };
-            let mut i = effective_to;
-            loop {
-                if i < from_n { break; }
-                let child_ctx = ctx.child_scope(5);
-                child_ctx.bind_var(var, Value::Number(i as f64, None));
-                for n in body {
-                    events.extend(emit_node_events(n, parent_sel, &child_ctx, bus));
-                }
-                if i == from_n { break; }
-                i -= 1;
-            }
-        }
-        AstNode::Each { vars, list, body } => {
-            let list_val = eval_expr(list, ctx, bus);
-            let items = match list_val {
-                Value::List(items, _) => items,
-                Value::Map(entries) => entries.into_iter()
-                    .map(|(k, v)| Value::List(vec![Value::String(k), v], ListSeparator::Comma))
-                    .collect(),
-                v => vec![v],
-            };
-            for item_val in items.into_iter().rev() {
-                let child_ctx = ctx.child_scope(6);
-                match vars.len() {
-                    1 => child_ctx.bind_var(&vars[0], item_val),
-                    2 => {
-                        if let Value::List(pair, _) = &item_val {
-                            if let Some(key) = pair.first() {
-                                child_ctx.bind_var(&vars[0], key.clone());
-                            }
-                            if let Some(val) = pair.get(1) {
-                                child_ctx.bind_var(&vars[1], val.clone());
-                            }
-                        } else {
-                            child_ctx.bind_var(&vars[0], item_val);
-                        }
-                    }
-                    _ => child_ctx.bind_var(&vars[0], item_val),
-                }
-                for n in body {
-                    events.extend(emit_node_events(n, parent_sel, &child_ctx, bus));
-                }
-            }
-        }
-        AstNode::While { cond, body } => {
-            let mut iterations = 0;
-            loop {
-                let cond_val = eval_expr(cond, ctx, bus);
-                if !truthy(&cond_val) { break; }
-                let child_ctx = ctx.child_scope(7);
-                for n in body {
-                    events.extend(emit_node_events(n, parent_sel, &child_ctx, bus));
-                }
-                iterations += 1;
-                if iterations > 10000 { break; }
-            }
-        }
-        AstNode::Css(stmt) => {
-            events.push(EvalEvent::Terminal(stmt.clone()));
-        }
-        AstNode::Content => {}
-        AstNode::Warn(val) => { let _ = eval_expr(val, ctx, bus); }
-        AstNode::Debug(val) => { let _ = eval_expr(val, ctx, bus); }
-        AstNode::Return(_) => {}
-        _ => {}
+/// scan_map 算子的折叠函数: Fn(&mut EvalState, EvalEvent) -> Option<CssStmt>
+///
+/// 替代原来的 `for event { state = fold_frames(state, ev) }` 命令式循环。
+/// scan_map 算子 (scan_map.rs L65-67) 通过 &mut self.acc 直接修改状态，零 clone。
+/// 返回 Option<CssStmt>: Some 表示顶层 frame 完成，None 表示中间状态。
+fn fold_frame(state: &mut EvalState, event: EvalEvent) -> Option<CssStmt> {
+    if matches!(event, EvalEvent::EnterRule(_) | EvalEvent::LeaveRule) {
+        tracing::trace!(?event, frames = state.frames.len(), "fold_frame");
     }
-
-    events
-}
-
-/// scan 算子的折叠函数: 消费单个事件，返回新 frame 栈
-///
-/// 替代原来的 `for event { apply_event(event, &mut frames) }` 命令式循环。
-/// 返回 (new_frames, optional_completed_stmt):
-/// - 当 scope 关闭时，返回组装好的 CssStmt
-/// - 其他情况返回 None
-fn fold_frames(state: EvalState, event: EvalEvent) -> EvalState {
-    let (mut frames, _) = state;
-    let completed = match &event {
+    match event {
         EvalEvent::EnterRule(sel) => {
-            frames.push(Frame { kind: FrameKind::Rule, selector: Some(sel.clone()), query: None, stmts: Vec::new() });
+            state.frames.push(Frame::new_rule(sel));
             None
         }
         EvalEvent::LeaveRule => {
-            let frame = frames.pop().expect("unbalanced LeaveRule");
-            let rule = CssStmt::Rule { selector: frame.selector.unwrap(), inner: frame.stmts };
-            let is_root = frames.len() == 1;
-            frames.last_mut().unwrap().stmts.push(rule.clone());
+            let frame = state.frames.pop().expect("unbalanced LeaveRule");
+            let final_selector = apply_frame_extends(state, &frame);
+            let rule = CssStmt::Rule { selector: final_selector, inner: frame.stmts };
+            let is_root = state.frames.len() == 1;
+            state.frames.last_mut().unwrap().stmts.push(rule.clone());
             if is_root { Some(rule) } else { None }
         }
         EvalEvent::EnterMedia(query) => {
-            frames.push(Frame { kind: FrameKind::Media, selector: None, query: Some(query.clone()), stmts: Vec::new() });
+            state.frames.push(Frame::new_media(query));
             None
         }
         EvalEvent::LeaveMedia => {
-            let frame = frames.pop().expect("unbalanced LeaveMedia");
+            let frame = state.frames.pop().expect("unbalanced LeaveMedia");
             let media = CssStmt::Media { query: frame.query.unwrap(), inner: frame.stmts };
-            let is_root = frames.len() == 1;
-            frames.last_mut().unwrap().stmts.push(media.clone());
+            let is_root = state.frames.len() == 1;
+            state.frames.last_mut().unwrap().stmts.push(media.clone());
             if is_root { Some(media) } else { None }
         }
         EvalEvent::EnterSupports(query) => {
-            frames.push(Frame { kind: FrameKind::Supports, selector: None, query: Some(query.clone()), stmts: Vec::new() });
+            state.frames.push(Frame::new_supports(query));
             None
         }
         EvalEvent::LeaveSupports => {
-            let frame = frames.pop().expect("unbalanced LeaveSupports");
+            let frame = state.frames.pop().expect("unbalanced LeaveSupports");
             let supports = CssStmt::Supports { query: frame.query.unwrap(), inner: frame.stmts };
-            let is_root = frames.len() == 1;
-            frames.last_mut().unwrap().stmts.push(supports.clone());
+            let is_root = state.frames.len() == 1;
+            state.frames.last_mut().unwrap().stmts.push(supports.clone());
             if is_root { Some(supports) } else { None }
         }
         EvalEvent::Terminal(stmt) => {
-            frames.last_mut().unwrap().stmts.push(stmt.clone());
+            state.frames.last_mut().unwrap().stmts.push(stmt.clone());
             // 顶层声明也作为 completed 输出
-            if frames.len() == 1 {
-                Some(stmt.clone())
-            } else {
-                None
-            }
+            if state.frames.len() == 1 { Some(stmt) } else { None }
         }
-    };
-    (frames, completed)
-}
-
-/// filter_map 提取器: 从 scan 状态中提取已完成的 CssStmt
-fn emit_completed(state: EvalState) -> Option<CssStmt> {
-    state.1
-}
-
-/// Resolve variable references in a media/supports query string.
-/// The parser produces queries like "(min-width: $w)" or "(min-width: $min)".
-/// This substitutes $var with its current runtime value.
-fn resolve_query(query: &str, ctx: &EvalContext) -> String {
-    if !query.contains('$') {
-        return query.to_string();
-    }
-    let mut result = String::new();
-    let mut chars = query.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '$' {
-            // Collect variable name (alphanumeric + hyphen + underscore)
-            let mut var_name = String::new();
-            while let Some(&c) = chars.peek() {
-                if c.is_alphanumeric() || c == '_' || c == '-' {
-                    var_name.push(c);
-                    chars.next();
-                } else {
-                    break;
+        EvalEvent::AddSelector { target, source } => {
+            // 尝试应用到当前已打开的 frame
+            let mut applied = false;
+            for frame in state.frames.iter_mut() {
+                if frame.matches_target(&target) {
+                    frame.extended_by.push(source.clone());
+                    applied = true;
                 }
             }
-            if !var_name.is_empty() {
-                let val = ctx.var(&var_name).unwrap_or(Value::Null);
-                result.push_str(&value_to_string(&val));
-            } else {
-                result.push('$');
+            if !applied {
+                // 递归搜索已关闭的规则
+                if find_and_extend_selector(&mut state.frames, &target, &source) {
+                    applied = true;
+                }
             }
-        } else {
-            result.push(ch);
+            if !applied {
+                state.pending_extends.push((target, source));
+            }
+            None
         }
     }
-    result
 }
 
-/// Expand mixin body: replace any `AstNode::Content` markers with the caller's content block.
-/// Handles nested structures (Content inside Rule, Media, etc.) recursively.
-fn expand_body_with_content(nodes: &[AstNode], content: &[AstNode]) -> Vec<AstNode> {
-    nodes.iter()
-        .flat_map(|node| expand_node_with_content(node, content))
-        .collect()
-}
-
-/// Expand a single AstNode: if it's Content, return the content block;
-/// otherwise recurse into container nodes. Returns a Vec because Content
-/// expands to 0..N nodes.
-fn expand_node_with_content(node: &AstNode, content: &[AstNode]) -> Vec<AstNode> {
-    if matches!(node, AstNode::Content) {
-        return content.to_vec();
+/// Recursively find a rule matching `target` selector in frame tree and append `source` to its selector.
+/// Returns true if found and modified.
+fn find_and_extend_selector(frames: &mut [Frame], target: &str, source: &str) -> bool {
+    tracing::trace!(target = ?target, source = %source, frames_len = frames.len(), "find_and_extend_selector");
+    for (i, frame) in frames.iter_mut().enumerate() {
+        tracing::trace!(i = i, kind = ?frame.kind, sel = ?frame.stmts.len(), "checking frame");
+        if extend_selector_in_stmts(&mut frame.stmts, target, source) {
+            return true;
+        }
     }
-    // Recurse into container nodes that have inner children
-    match node {
-        AstNode::Rule { selector, inner } => {
-            let expanded = expand_body_with_content(inner, content);
-            vec![AstNode::Rule { selector: selector.clone(), inner: expanded }]
+    tracing::trace!("find_and_extend_selector: NOT FOUND");
+    false
+}
+
+/// Recursively search stmts for a Rule matching target, append source to its selector.
+/// Uses exact match per comma-separated entry. Deduplicates: does not append `source` if already present.
+fn extend_selector_in_stmts(stmts: &mut [CssStmt], target: &str, source: &str) -> bool {
+    for stmt in stmts.iter_mut() {
+        match stmt {
+            CssStmt::Rule { selector, inner } => {
+                let entries: Vec<&str> = selector.split(',').map(str::trim).collect();
+                if entries.contains(&target) {
+                    if !entries.contains(&source) {
+                        *selector = format!("{}, {}", source, selector);
+                    }
+                    return true;
+                }
+                if extend_selector_in_stmts(inner, target, source) {
+                    return true;
+                }
+            }
+            CssStmt::Media { inner, .. } | CssStmt::Supports { inner, .. } => {
+                if extend_selector_in_stmts(inner, target, source) {
+                    return true;
+                }
+            }
+            _ => {}
         }
-        AstNode::Media { query, inner } => {
-            let expanded = expand_body_with_content(inner, content);
-            vec![AstNode::Media { query: query.clone(), inner: expanded }]
-        }
-        AstNode::Supports { query, inner } => {
-            let expanded = expand_body_with_content(inner, content);
-            vec![AstNode::Supports { query: query.clone(), inner: expanded }]
-        }
-        AstNode::If { cond, then_branch, else_branch } => {
-            let then_expanded = expand_body_with_content(then_branch, content);
-            let else_expanded = else_branch.as_ref().map(|eb| expand_body_with_content(eb, content));
-            vec![AstNode::If { cond: cond.clone(), then_branch: then_expanded, else_branch: else_expanded }]
-        }
-        _ => vec![node.clone()],
+    }
+    false
+}
+
+/// 应用 frame 的 extends，返回合并后的 selector
+fn apply_frame_extends(state: &mut EvalState, frame: &Frame) -> String {
+    let matching: Vec<String> = state.pending_extends.iter()
+        .filter(|(target, _)| frame.matches_target(target))
+        .map(|(_, source)| source.clone())
+        .collect();
+    state.pending_extends.retain(|(target, _)| !frame.matches_target(target));
+
+    let all_extends: Vec<String> = frame.extended_by.iter()
+        .chain(matching.iter())
+        .cloned()
+        .collect();
+
+    if all_extends.is_empty() {
+        frame.selector.clone().unwrap_or_default()
+    } else {
+        let mut combined = all_extends;
+        combined.push(frame.selector.clone().unwrap_or_default());
+        combined.join(", ")
     }
 }
-
-/// 同步版本: 复用 eval_nodes_pipeline 算子链，收集结果为 Vec（保持 API 兼容性）
-pub fn eval_nodes_sync(
-    nodes: &[AstNode],
-    ctx: &EvalContext,
-    bus: &CompilerBus,
-) -> Vec<CssStmt> {
-    let ctx_arc = Arc::new(ctx.clone());
-    let bus_owned = bus.clone();
-    let css_stream = eval_nodes_pipeline(nodes, ctx_arc, bus_owned);
-
-    // rxrust collect 算子: CssStream → Vec<CssStmt>（同步收集）
-    let result = Arc::new(std::sync::Mutex::new(Vec::<CssStmt>::new()));
-    let r = result.clone();
-    css_stream.collect::<Vec<_>>().subscribe(move |v| *r.lock().unwrap() = v);
-    Arc::try_unwrap(result).unwrap().into_inner().unwrap()
-}
-
-/// 同步收集 AST 流并使用 rxrust collect 算子（非 subscribe-collect GC 模式）。
-pub fn eval_ast_stream_sync(ast_stream: AstStream, ctx: Arc<EvalContext>) -> Vec<CssStmt> {
-    let bus = ctx.bus().clone();
-    let result = Arc::new(std::sync::Mutex::new(Vec::<AstNode>::new()));
-    let r = result.clone();
-    ast_stream.collect::<Vec<_>>().subscribe(move |v| { *r.lock().unwrap() = v; });
-    let nodes = Arc::try_unwrap(result).unwrap().into_inner().unwrap();
-    eval_nodes_sync(&nodes, &ctx, &bus)
-}
-
-// Expression evaluation lives in expr.rs (leaf-level, bounded depth)
-
-

@@ -1113,17 +1113,13 @@ $utilities: map-merge(
 }
 
 fn dump_utilities_ast_and_output() {
-    use std::sync::{Arc, Mutex};
     let actual = std::fs::read_to_string(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap/scss/_utilities.scss"),
     )
     .expect("read _utilities.scss");
     let tokens = rx_scss::lexer::scan(&actual);
     let ast_stream = rx_scss::parser::parse_stream(tokens, 0);
-    let store: Arc<Mutex<Vec<_>>> = Arc::new(Mutex::new(Vec::new()));
-    let s2 = store.clone();
-    ast_stream.subscribe(move |node| s2.lock().unwrap().push(node));
-    let ast_nodes = store.lock().unwrap().clone();
+    let ast_nodes = rx_scss::collect_boxed(ast_stream).expect("collect ast failed");
     // Dump AST to /tmp
     std::fs::write("/tmp/utilities_ast.txt", format!("{:#?}", &ast_nodes)).ok();
     // Also compile full output
@@ -1723,3 +1719,730 @@ fn bootstrap_dist_check_test() {
     );
 }
 
+#[test]
+fn debug_mixin_registration() {
+    // 简化：只验证 mixin 至少能被调用
+    let input2 = "@mixin hello { .hi { content: \"yes\"; } } @include hello;";
+    let result2 = from_string(input2, &Options::expanded()).expect("basic mixin failed");
+    assert!(result2.contains(".hi"), "mixin should generate .hi: {}", result2);
+    assert!(result2.contains("yes"), "mixin should propagate content: {}", result2);
+}
+
+#[test]
+fn debug_import_chain() {
+    // 测试 @_rfs.scss 是否能正确解析和注册 mixin
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("vendor/_rfs.scss"));
+    match css {
+        Ok(out) => {
+            tracing::debug!(len = out.len(), "vendor/_rfs.scss compiled");
+            // rfs file no output expected (just declarations), but compilation should succeed
+            assert!(out.len() < 1000, "unexpected output: {}", out.len());
+        }
+        Err(e) => {
+            panic!("Failed to compile vendor/_rfs.scss: {}", e);
+        }
+    }
+}
+
+#[test]
+fn debug_box_shadow_file() {
+    // 最简单的 rest argument 解析测试 — 只定义不调用
+    let input = r#"@mixin mb($v...) { .x { color: red; } }"#;
+    let result = from_string(input, &Options::expanded()).expect("rest arg mixin failed");
+    tracing::debug!(output = %result, "rest arg definition parsed");
+    // 如果 mixin 定义被正确解析，不应有垃圾输出
+    assert!(!result.contains(".."), "should not have garbage dots: {}", result);
+}
+
+#[test]
+fn debug_rest_arg_binding() {
+    // 测试 rest argument 是否正确绑定为 list (单参数)
+    let input = r#"@mixin mb($v...) { .x { content: $v; } } @include mb(1px);"#;
+    let result = from_string(input, &Options::expanded()).expect("rest arg binding failed");
+    tracing::debug!(output = %result, "rest arg binding parsed");
+    assert!(result.contains(".x"), "should generate .x: {}", result);
+    assert!(result.contains("1px"), "should have 1px: {}", result);
+}
+
+#[test]
+fn debug_rest_arg_multi() {
+    // 测试 rest argument 多参数打包为 list
+    let input = r#"@mixin mb($v...) { .x { content: $v; } } @include mb(1px, 2px, 3px);"#;
+    let result = from_string(input, &Options::expanded()).expect("rest arg multi failed");
+    tracing::debug!(output = %result, "rest arg multi parsed");
+    assert!(result.contains(".x"), "should generate .x: {}", result);
+    // list renders as space-separated (inner list already packed by parse_arg_list)
+    assert!(result.contains("1px") && result.contains("2px") && result.contains("3px"),
+        "should have all values: {}", result);
+}
+
+#[test]
+fn debug_rfs_mixin_simulation() {
+    // 测试与 rfs 类似的带条件 @if 的 mixin 定义
+    let input = r#"
+$enable: true;
+@mixin conditional($val) {
+  @if $enable {
+    .responsive { font-size: $val; }
+  }
+}
+@include conditional(2rem);
+"#;
+    let result = from_string(input, &Options::expanded()).expect("conditional mixin failed");
+    assert!(result.contains(".responsive"), "should generate .responsive: {}", result);
+    assert!(result.contains("font-size: 2rem"), "should have font-size: {}", result);
+}
+
+#[test]
+fn regression_each_order_test() {
+    // @each 迭代顺序回归：声明顺序应与列表顺序一致
+    let input = r#"
+@each $color in (red, green, blue) {
+  .text-#{$color} {
+    color: $color;
+  }
+}
+"#;
+    let result = from_string(input, &Options::expanded()).expect("compilation failed");
+
+    let red_pos = result.find(".text-red").expect(".text-red missing");
+    let green_pos = result.find(".text-green").expect(".text-green missing");
+    let blue_pos = result.find(".text-blue").expect(".text-blue missing");
+
+    assert!(
+        red_pos < green_pos,
+        "order violated: .text-red ({}) should precede .text-green ({}):\n{}",
+        red_pos, green_pos, result
+    );
+    assert!(
+        green_pos < blue_pos,
+        "order violated: .text-green ({}) should precede .text-blue ({}):\n{}",
+        green_pos, blue_pos, result
+    );
+}
+
+#[test]
+fn regression_for_order_test() {
+    // @for 迭代顺序回归：声明顺序应与计数顺序一致
+    let input = r#"
+@for $i from 1 through 3 {
+  .col-#{$i} {
+    width: #{$i * 33%};
+  }
+}
+"#;
+    let result = from_string(input, &Options::expanded()).expect("compilation failed");
+
+    let col1_pos = result.find(".col-1").expect(".col-1 missing");
+    let col2_pos = result.find(".col-2").expect(".col-2 missing");
+    let col3_pos = result.find(".col-3").expect(".col-3 missing");
+
+    assert!(
+        col1_pos < col2_pos,
+        "order violated: .col-1 ({}) should precede .col-2 ({}):\n{}",
+        col1_pos, col2_pos, result
+    );
+    assert!(
+        col2_pos < col3_pos,
+        "order violated: .col-2 ({}) should precede .col-3 ({}):\n{}",
+        col2_pos, col3_pos, result
+    );
+}
+
+#[test]
+fn debug_rfs_each_loop() {
+    ensure_test_tracing();
+    // 测试 @each 循环（rfs 函数中大量使用）
+    let input = r##"
+$val: "";
+@each $x in (a, b, c) {
+  $val: $val + " " + $x;
+}
+.test {
+  content: $val;
+}
+"##;
+    let result = from_string(input, &Options::expanded());
+    match result {
+        Ok(css) => {
+            let lines: Vec<&str> = css.lines().filter(|l| l.contains("content")).collect();
+            tracing::debug!(?lines, "rfs_each_ok");
+        }
+        Err(e) => tracing::debug!(error = %e, "rfs_each_error"),
+    }
+}
+
+#[test]
+fn debug_rfs_value_fn() {
+    ensure_test_tracing();
+    // 测试简化的 rfs-value 函数
+    let input = r##"
+@function rfs-value($values) {
+  $val: "";
+  @each $value in $values {
+    @if $value == 0 {
+      $val: $val + " 0";
+    } @else {
+      $val: $val + " " + $value;
+    }
+  }
+  @return unquote(str-slice($val, 2));
+}
+.test {
+  font-size: rfs-value(1.25rem);
+}
+"##;
+    let result = from_string(input, &Options::expanded());
+    match result {
+        Ok(css) => {
+            let lines: Vec<&str> = css.lines().filter(|l| l.contains("font-size")).collect();
+            tracing::debug!(?lines, "rfs_value_fn_ok");
+        }
+        Err(e) => tracing::debug!(error = %e, "rfs_value_fn_error"),
+    }
+}
+
+#[test]
+fn debug_rfs_builtins() {
+    ensure_test_tracing();
+    // 逐个测试 rfs 用到的内建函数
+    let test_cases = vec![
+        ("type-of", r#"$x: hello; .t { content: type-of($x); }"#),
+        ("unit", r#"$x: 1.25rem; .t { content: unit($x); }"#),
+        ("str-slice", r#"$x: hello; .t { content: str-slice($x, 2); }"#),
+        ("unquote", r#"$x: hello; .t { content: unquote($x); }"#),
+        ("string-add", r#"$x: hello; .t { content: $x + " world"; }"#),
+    ];
+    for (name, input) in test_cases {
+        let result = from_string(input, &Options::expanded());
+        match result {
+            Ok(css) => {
+                let lines: Vec<&str> = css.lines().filter(|l| l.contains("content")).collect();
+                tracing::debug!(name, ?lines, "rfs_builtin_ok");
+            }
+            Err(e) => tracing::debug!(name, error = %e, "rfs_builtin_error"),
+        }
+    }
+}
+
+#[test]
+fn debug_bootstrap_rfs_call() {
+    ensure_test_tracing();
+    // 测试完整的 rfs mixin 调用
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    // 统计 --bs-btn-font-size 是否存在
+    let has_btn_font_size = css.lines().any(|l| l.trim().starts_with("--bs-btn-font-size"));
+    // 统计 rfs 相关的变量
+    let rfs_vars: Vec<String> = css.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| l.starts_with("--bs-") && (l.contains("font-size") || l.contains("padding")))
+        .collect();
+    // 统计 clamp 出现次数（rfs mixin 应生成 clamp() 表达式）
+    let clamp_count = css.matches("clamp(").count();
+    tracing::debug!(has_btn_font_size, clamp_count, "rfs_related_output");
+    tracing::debug!(?rfs_vars, count = rfs_vars.len(), "rfs_vars_sample");
+}
+
+#[test]
+fn debug_rfs_interp_prop() {
+    ensure_test_tracing();
+    // 测试 mixin 中属性名插值: --#{$prefix}btn-font-size
+    let input = r##"
+$prefix: "bs-";
+@mixin my-mixin($value, $property: font-size) {
+  #{$property}: #{$value};
+}
+.btn {
+  @include my-mixin(1.25rem, --#{$prefix}btn-font-size);
+}
+"##;
+    let result = from_string(input, &Options::expanded());
+    match result {
+        Ok(css) => tracing::debug!(output = %css, "rfs_interp_prop_ok"),
+        Err(e) => tracing::debug!(error = %e, "rfs_interp_prop_error"),
+    }
+}
+
+#[test]
+fn debug_rfs_mixin() {
+    ensure_test_tracing();
+    // 测试 rfs mixin 是否正常工作
+    let input = r##"
+$enable-rfs: true;
+$rfs-base-value: 1.25rem;
+$rfs-unit: rem;
+$rfs-breakpoint: 1200px;
+$rfs-breakpoint-unit: px;
+$rfs-two-dimensional: false;
+$rfs-factor: 10;
+$rfs-mode: min-media-query;
+$rfs-class: false;
+$rfs-rem-value: 16;
+$rfs-safari-iframe-resize-bug-fix: false;
+$rfs-base-value-unit: unit($rfs-base-value);
+
+@function divide($dividend, $divisor, $precision: 10) {
+  $sign: if($dividend > 0 and $divisor > 0 or $dividend < 0 and $divisor < 0, 1, -1);
+  $dividend: abs($dividend);
+  $divisor: abs($divisor);
+  @if $dividend == 0 {
+    @return 0;
+  }
+  @if $divisor == 0 {
+    @error "Cannot divide by zero";
+  }
+  $result: $dividend / $divisor;
+  @return $result;
+}
+
+@mixin rfs($value, $property: font-size) {
+  #{$property}: #{$value};
+}
+
+.btn {
+  @include rfs(1.25rem, --bs-btn-font-size);
+}
+"##;
+    let result = from_string(input, &Options::expanded());
+    match result {
+        Ok(css) => tracing::debug!(output = %css, "rfs_mixin_ok"),
+        Err(e) => tracing::debug!(error = %e, "rfs_mixin_error"),
+    }
+}
+
+#[test]
+fn debug_missing_bs_vars() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    let reference_path = format!("{}/bootstrap/dist/css/bootstrap.css", manifest_dir);
+    let reference = std::fs::read_to_string(&reference_path).expect("read reference failed");
+
+    let our_set: std::collections::HashSet<String> = css.lines().map(|l| l.trim().to_string()).collect();
+    let ref_bs: Vec<String> = reference.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| l.starts_with("--bs-"))
+        .collect();
+    let our_bs: Vec<String> = css.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| l.starts_with("--bs-"))
+        .collect();
+
+    // 参考中独有的 --bs-* 行 (未在我们的输出中出现)
+    let missing_bs: Vec<String> = ref_bs.iter()
+        .filter(|l| !our_set.contains(*l))
+        .cloned()
+        .take(30)
+        .collect();
+
+    // 只取 --bs-* 变量名部分，看哪些变量名缺失或值不同
+    let ref_names: std::collections::HashSet<String> = ref_bs.iter().filter_map(|l| l.split(':').next()).map(|s| s.to_string()).collect();
+    let our_names: std::collections::HashSet<String> = our_bs.iter().filter_map(|l| l.split(':').next()).map(|s| s.to_string()).collect();
+    let missing_names: Vec<String> = ref_names.difference(&our_names).cloned().collect();
+
+    tracing::debug!(ref_bs_count = ref_bs.len(), our_bs_count = our_bs.len(), "bs_var_counts");
+    tracing::debug!(?missing_bs, count = missing_bs.len(), "missing --bs- lines samples");
+    tracing::debug!(?missing_names, count = missing_names.len(), "missing --bs- variable names (not in our output at all)");
+}
+
+#[test]
+fn debug_what_changed() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    let reference_path = format!("{}/bootstrap/dist/css/bootstrap.css", manifest_dir);
+    let reference = std::fs::read_to_string(&reference_path).expect("read reference failed");
+
+    let ref_lines: Vec<String> = reference.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+    let our_lines: Vec<String> = css.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+    let our_set: std::collections::HashSet<String> = our_lines.iter().cloned().collect();
+
+    // decl_other: missing lines that look like regular declarations
+    let changed: Vec<String> = ref_lines.iter()
+        .filter(|l| l.contains(':') && l.ends_with(';') && !l.starts_with("--bs-") && !l.starts_with(".") && !l.starts_with("#")
+            && !l.starts_with("[data-") && !l.starts_with("-webkit-") && !l.starts_with("-moz-") && !l.starts_with("-ms-"))
+        .filter(|l| !our_set.contains(*l))
+        .cloned()
+        .take(20)
+        .collect();
+    tracing::debug!(?changed, "decl_other samples missing");
+}
+
+#[test]
+fn debug_list_separator() {
+    ensure_test_tracing();
+    // 测试列表分隔符是否正确保留：逗号分隔应保留逗号
+    let input = r#"
+$white: #ffffff;
+$black: #000000;
+.test {
+  box-shadow: inset 0 1px 0 rgba($white, 0.15), 0 1px 1px rgba($black, 0.075);
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+"#;
+    let result = from_string(input, &Options::expanded()).expect("compile failed");
+    tracing::debug!(output = %result, "list_separator_result");
+}
+
+#[test]
+fn debug_btn_block() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    // Extract .btn { } block (first 40 lines)
+    let mut btn_block = Vec::new();
+    let mut in_block = false;
+    let mut depth = 0i32;
+    for line in css.lines() {
+        let t = line.trim();
+        if t == ".btn {" {
+            in_block = true;
+            depth = 0;
+        }
+        if in_block {
+            btn_block.push(t.to_string());
+            depth += t.matches('{').count() as i32 - t.matches('}').count() as i32;
+            if depth <= 0 && btn_block.len() > 1 {
+                break;
+            }
+        }
+    }
+    let preview: Vec<String> = btn_block.iter().take(40).cloned().collect();
+    tracing::debug!(?preview, total = btn_block.len(), ".btn block preview");
+}
+
+#[test]
+fn debug_compare_light_block() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    let reference_path = format!("{}/bootstrap/dist/css/bootstrap.css", manifest_dir);
+    let reference = std::fs::read_to_string(&reference_path).expect("read reference failed");
+
+    // Find [data-bs-theme=light] block (注意: 我们的输出是 [data-bs-theme=light] {)
+    let mut ref_block = Vec::new();
+    let mut in_block = false;
+    let mut depth = 0;
+    for line in reference.lines() {
+        let t = line.trim();
+        if t.starts_with("[data-bs-theme=light]") {
+            in_block = true;
+            depth = 0;
+        }
+        if in_block {
+            ref_block.push(t.to_string());
+            depth += t.matches('{').count() as i32 - t.matches('}').count() as i32;
+            if depth <= 0 && ref_block.len() > 1 {
+                break;
+            }
+        }
+    }
+
+    let mut our_block = Vec::new();
+    in_block = false;
+    depth = 0;
+    for line in css.lines() {
+        let t = line.trim();
+        if t.starts_with("[data-bs-theme=light]") {
+            in_block = true;
+            depth = 0;
+        }
+        if in_block {
+            our_block.push(t.to_string());
+            depth += t.matches('{').count() as i32 - t.matches('}').count() as i32;
+            if depth <= 0 && our_block.len() > 1 {
+                break;
+            }
+        }
+    }
+
+    // 参考中独有的 --bs-* 行
+    let our_set: std::collections::HashSet<String> = our_block.iter().cloned().collect();
+    let ref_only: Vec<String> = ref_block.iter()
+        .filter(|l| l.starts_with("--bs-"))
+        .filter(|l| !our_set.contains(*l))
+        .cloned()
+        .collect();
+    let ref_bs_count = ref_block.iter().filter(|l| l.starts_with("--bs-")).count();
+    let our_bs_count = our_block.iter().filter(|l| l.starts_with("--bs-")).count();
+    tracing::debug!(ref_bs_count, our_bs_count, ref_lines = ref_block.len(), our_lines = our_block.len(), "light_block_line_counts");
+    tracing::debug!(?ref_only, count = ref_only.len(), "ref-only --bs-* lines in light block");
+}
+
+#[test]
+fn debug_compare_dark_block() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    let reference_path = format!("{}/bootstrap/dist/css/bootstrap.css", manifest_dir);
+    let reference = std::fs::read_to_string(&reference_path).expect("read reference failed");
+
+    // Find [data-bs-theme=dark] block in reference
+    let mut ref_block = Vec::new();
+    let mut in_block = false;
+    let mut depth = 0;
+    for line in reference.lines() {
+        let t = line.trim();
+        if t.starts_with("[data-bs-theme=dark]") {
+            in_block = true;
+            depth = 0;
+        }
+        if in_block {
+            ref_block.push(t.to_string());
+            depth += t.matches('{').count() as i32 - t.matches('}').count() as i32;
+            if depth <= 0 && ref_block.len() > 1 {
+                break;
+            }
+        }
+    }
+
+    // Find [data-bs-theme=dark] block in our output
+    let mut our_block = Vec::new();
+    in_block = false;
+    depth = 0;
+    for line in css.lines() {
+        let t = line.trim();
+        if t.starts_with("[data-bs-theme=dark]") {
+            in_block = true;
+            depth = 0;
+        }
+        if in_block {
+            our_block.push(t.to_string());
+            depth += t.matches('{').count() as i32 - t.matches('}').count() as i32;
+            if depth <= 0 && our_block.len() > 1 {
+                break;
+            }
+        }
+    }
+
+    tracing::debug!(ref_lines = ref_block.len(), our_lines = our_block.len(), "dark_block_line_counts");
+    // 参考中独有的 --bs-* 行
+    let our_set: std::collections::HashSet<String> = our_block.iter().cloned().collect();
+    let ref_only: Vec<String> = ref_block.iter()
+        .filter(|l| l.starts_with("--bs-"))
+        .filter(|l| !our_set.contains(*l))
+        .cloned()
+        .collect();
+    tracing::debug!(?ref_only, count = ref_only.len(), "ref-only --bs-* lines in dark block");
+}
+
+#[test]
+fn debug_check_dark_mode_in_output() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    let has_dark = css.lines().any(|l| l.trim() == "[data-bs-theme=dark]");
+    let dark_lines: Vec<&str> = css.lines()
+        .filter(|l| l.trim().starts_with("[data-bs-theme=dark]") || l.trim() == "}")
+        .take(5)
+        .collect();
+    let bs_in_dark = css.lines()
+        .filter(|l| {
+            // crude: count --bs-* lines near [data-bs-theme=dark]
+            let mut found = false;
+            found
+        })
+        .count();
+    tracing::debug!(has_dark, ?dark_lines, "dark_mode_check");
+
+    let enable_dark = css.lines().filter(|l| l.trim().starts_with("--bs-btn-bg")).count();
+    tracing::debug!(enable_dark, "--bs-btn-bg lines");
+}
+
+#[test]
+fn debug_color_mode_if() {
+    ensure_test_tracing();
+    // 测试 @if + @include color-mode(dark) 在顶层
+    let input = r##"
+$color-mode-type: data;
+$enable-dark-mode: true;
+@mixin color-mode($mode: light) {
+  [data-bs-theme="#{$mode}"] {
+    @content;
+  }
+}
+
+@if $enable-dark-mode {
+  @include color-mode(dark) {
+    --bs-btn-bg: #fff;
+    --bs-btn-color: #000;
+  }
+}
+"##;
+    let result = from_string(input, &Options::expanded());
+    match result {
+        Ok(css) => tracing::debug!(output = %css, "color_mode_if_ok"),
+        Err(e) => tracing::debug!(error = %e, "color_mode_if_error"),
+    }
+}
+
+#[test]
+fn debug_root_in_full() {
+    ensure_test_tracing();
+    // 在完整 bootstrap 编译中检查 :root 的输出
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let bootstrap_dir = std::path::PathBuf::from(manifest_dir).join("bootstrap/scss");
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(&bootstrap_dir)
+        .compile_file(bootstrap_dir.join("bootstrap.scss"))
+        .expect("compile failed");
+
+    // 提取 :root 声明块的前 30 行
+    let mut root_lines: Vec<&str> = Vec::new();
+    let mut in_root = false;
+    let mut brace_count = 0;
+    for line in css.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(":root") {
+            in_root = true;
+            brace_count = 0;
+        }
+        if in_root {
+            root_lines.push(line);
+            brace_count += trimmed.matches('{').count() as i32 - trimmed.matches('}').count() as i32;
+            if brace_count <= 0 && root_lines.len() > 2 {
+                break;
+            }
+        }
+    }
+    let preview: Vec<&str> = root_lines.into_iter().take(30).collect();
+    tracing::debug!(?preview, ":root block in full compilation");
+
+    // 检查是否有 --bs-* 变量
+    let bs_var_count = css.lines().filter(|l| l.trim().starts_with("--bs-")).count();
+    tracing::debug!(bs_var_count, "total --bs-* lines in full output");
+
+    // 对比: 找到缺失的 --bs-* 行及其所在 selector 上下文
+    let reference_path = format!("{}/bootstrap/dist/css/bootstrap.css", manifest_dir);
+    let reference = std::fs::read_to_string(&reference_path).expect("read reference failed");
+    let actual_set: std::collections::HashSet<&str> = css.lines().collect();
+
+    let mut missing_bs_with_context: Vec<(String, String)> = Vec::new();
+    let mut last_selector = "".to_string();
+    for line in reference.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(":root") || trimmed.starts_with('.') || trimmed.starts_with('#')
+            || trimmed.starts_with('@') || trimmed.starts_with('[') {
+            if trimmed.ends_with('{') || trimmed.contains(',') {
+                last_selector = trimmed.to_string();
+            }
+        }
+        if trimmed.starts_with("--bs-") && !actual_set.contains(trimmed) {
+            missing_bs_with_context.push((last_selector.clone(), trimmed.to_string()));
+        }
+    }
+
+    // 按 selector 分组缺失的 --bs-*
+    let mut sel_groups: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for (sel, line) in &missing_bs_with_context {
+        sel_groups.entry(sel.clone()).or_default().push(line.clone());
+    }
+    let mut group_counts: Vec<(String, usize)> = sel_groups.iter()
+        .map(|(k, v)| (k.clone(), v.len()))
+        .collect();
+    group_counts.sort_by(|a, b| b.1.cmp(&a.1));
+    let top_groups: Vec<(String, usize)> = group_counts.into_iter().take(15).collect();
+    tracing::debug!(?top_groups, "missing --bs-* grouped by selector");
+}
+
+#[test]
+fn debug_missing_decl_others() {
+    ensure_test_tracing();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let reference_path = format!("{}/bootstrap/dist/css/bootstrap.css", manifest_dir);
+    let reference = std::fs::read_to_string(&reference_path).expect("read reference failed");
+    let reference_set: std::collections::HashSet<&str> = reference.lines().collect();
+
+    let css = rx_scss::builder::CompileBuilder::new()
+        .expanded()
+        .include_path(std::path::PathBuf::from(manifest_dir).join("bootstrap/scss"))
+        .compile_file(std::path::PathBuf::from(manifest_dir).join("bootstrap/scss/bootstrap.scss"))
+        .expect("compile failed");
+    let actual_set: std::collections::HashSet<&str> = css.lines().collect();
+
+    // decl_other: 非 selector、非 bs_vars、非 vendor prefix 的缺失声明
+    let missing_decl_others: Vec<&str> = reference_set.iter()
+        .copied()
+        .filter(|l| {
+            let t = l.trim();
+            !t.is_empty()
+                && !t.starts_with('.') && !t.starts_with('#') && !t.starts_with('@')
+                && *t != *"{" && !t.starts_with(':') && !t.starts_with('*')
+                && !t.starts_with("--bs-")
+                && !t.starts_with("-webkit-") && !t.starts_with("-moz-")
+                && !t.starts_with("-o-") && !t.starts_with("-ms-")
+        })
+        .filter(|l| !actual_set.contains(*l))
+        .collect();
+
+    // 提取属性名并分组
+    let mut prop_counts: Vec<(String, usize)> = {
+        let mut groups: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for line in &missing_decl_others {
+            let prop = line.trim().split(':').next().unwrap_or("").trim().to_string();
+            if !prop.is_empty() {
+                *groups.entry(prop).or_insert(0) += 1;
+            }
+        }
+        let mut v: Vec<(String, usize)> = groups.into_iter().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v
+    };
+
+    // 只保留出现次数 >= 3 的属性（共性问题的信号）
+    prop_counts.retain(|(_, c)| *c >= 3);
+    tracing::debug!(?prop_counts, "decl_other_property_counts");
+
+    // 输出全部缺失的 decl_others（用于分析）
+    let sample: Vec<&str> = missing_decl_others.iter().take(40).copied().collect();
+    tracing::debug!(?sample, total = missing_decl_others.len(), "decl_other_sample");
+}

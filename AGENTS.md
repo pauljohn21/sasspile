@@ -39,7 +39,7 @@ similar = "2"
 | `obj.copy()` 显式拷贝 | `move` 语义，无需 clone |
 | `for x in items: result.append(f(x))` | `items.into_iter().map(f).collect()` |
 | `if (x) { ... } else if (y) { ... }` | `match { x => ..., y => ..., _ => ... }` |
-| 全局可变状态 | `SharedSubject` 广播 / `scan` 累积 |
+| 全局可变状态 | `SharedSubject` 广播 / `scan_map(&mut acc, ...)` 累积 |
 | 异常传播 | `Result<T, E>` + `?` 传播 |
 | `None` 表示缺失 | `Option<T>` + `match`/`?` |
 
@@ -50,8 +50,8 @@ similar = "2"
 | `for` 循环收集结果 | `.collect::<Vec<_>>()` |
 | `if-else` 链分类 | `match` 表达式 |
 | 手动 `Vec<Item>` + `push` | `.flat_map()` + `.collect()` |
-| 递归函数处理树 | `.expand()` 响应式展开 |
-| 手动栈维护嵌套 | `.scan()` 累积折叠 |
+| 递归函数处理树 | `.expand()` 响应式递归展开（核心！） |
+| 手动栈维护嵌套 | `.scan_map(&mut acc, ...)` 累积折叠（&mut 零 clone） |
 | `Arc<Mutex<Vec>>` 做缓冲 | `SharedSubject` 广播 |
 | `subscribe` 里手动收集 | 管线末端一次性 `collect` |
 
@@ -96,7 +96,23 @@ mod tests { ... }
 - 禁止 `clone()` 满天飞 — 先理解所有权设计
 - 禁止 `todo!()` / `unimplemented!()` 不标注 `// TODO:` 并说明计划
 
-### 7. 单文件 ≤ 500 行
+### 7. 禁止 rxrust 反模式回潮（2026-10 源码审计修正）
+
+| ❌ 反模式（已犯过） | ✅ 正确做法 | 历史位置 |
+|------|------|------|
+| `Arc<Mutex<Vec<T>>>` + `.subscribe(\|x\| vec.lock().unwrap().push(x))` | `.collect::<Vec<_>>().into_iter().next().unwrap_or_default()` | eval/mod.rs, parser/mod.rs, pipeline.rs |
+| 手动 `Vec<Work>` queue + `while pop` 模拟 `expand` / `flat_map` | 使用 `.expand(emit_events)` + `.scan_map(fold_state)` 算子链 | eval/mod.rs emit_node_events |
+| 命令式 `for event { match { ... } }` 模拟 `.scan()` | 使用 `.scan_map(initial, \|acc, x\| ...)` 有状态折叠管线 | eval/mod.rs fold_frames |
+| 在 subscribe 闭包内对每个 item 手动收集结果 | 管线末端一次性 `.collect::<Vec<_>>()` | 所有阶段 |
+| `'static` 滥用——为满足生命周期强制 clone 一切 | 理解实际生命周期关系；优先设计 owned 数据流 | 整个管线 |
+| 命令式模拟 rxrust 算子后声称"响应式" | 必须使用真正的 `flat_map`/`scan_map`/`expand`/`filter_map` 算子 | eval/mod.rs |
+| `#[cfg(test)]` 测试代码写 src/ 模块内 | 所有测试放在 `tests/` 目录 | serialize/mod.rs, builder.rs |
+| `.scan(FrameStack, fold)` 每帧 clone 整帧栈 | `.scan_map(\|state, ev\| ...)` 用 `&mut FrameStack` 零 clone | eval/mod.rs |
+| `.box_it()` 在每个节点/每个算子后调用 | `.box_it()` **只在管线最终返回边界调用一次** | eval/emit.rs (89 处滥用) |
+| flat_map 闭包内 `Vec::new() + push + Shared::from_iter(vec)` | flat_map/expand 闭包直接返回 `impl Observable<Item=T>`（惰性） | emit.rs |
+| `sync_collect_vec = Arc<Mutex<Vec>>` + subscribe | `collect::<Vec<_>>().into_iter().next()` | observable_ext.rs |
+
+### 8. 单文件 ≤ 500 行
 
 | 场景 | 推荐上限 |
 |------|---------|
@@ -106,52 +122,110 @@ mod tests { ... }
 
 超过 **500 行**的文件必须先拆分再编写（源码和测试分别计算）。
 
-### 8. 禁止 'static 滥用
+### 9. 禁止 'static 滥用
 
 理解实际生命周期关系，不要随意加 `'static`。
+
+### 10. 禁止 `Infallible` 残留（2026-10 新增）
+
+全链路响应式重构后，错误类型已从 `Infallible` 迁移到 `CompileError`。**新增代码 MUST NOT 使用 `Infallible`**：
+
+```rust
+// ❌ 禁止
+use std::convert::Infallible;
+pub type AstStream = SharedBoxedObservable<'static, AstNode, Infallible>;
+
+// ✅ 必须
+pub type AstStream = SharedBoxedObservable<'static, AstNode, CompileError>;
+```
+
+✅ **2026-10-10 已清除** — `Infallible` 已从 `src/` 和 `tests/` 全量清除，错误统一经 `CompileError` 传播。
+
+### 11. 强制使用 OpenTelemetry Tracing（禁止 eprintln!/println!）
+
+**所有**调试输出、测试打印、诊断信息 **必须** 使用 `tracing` 宏，统一接入 OpenTelemetry：
+
+| ❌ 禁止 | ✅ 必须 |
+|------|------|
+| `eprintln!("...")` | `tracing::debug!("...")` |
+| `println!("...")` | `tracing::info!("...")` |
+| 任何直接 stdout/stderr 输出 | 通过 `tracing-subscriber` + `EnvFilter` |
+
+**测试中调试**：
+```rust
+// ✅ 正确
+tracing::debug!(output = %result, "rest arg parsed");
+// 运行: RUST_LOG=debug cargo test test_name -- --nocapture
+
+// ❌ 禁止
+eprintln!("output: {}", result);
+```
+
+### 12. 行为基准：仅参考 @sass-spec（禁止参照 dart-sass）
+
+SCSS 语法行为的**唯一权威参考**是官方 [sass/sass-spec](https://github.com/sass/sass-spec) 测试套件：
+
+| ❌ 禁止 | ✅ 必须 |
+|------|------|
+| 以 dart-sass 输出为正确性标准 | 以 @sass-spec input/output 为正确性标准 |
+| 参考 dart-sass 源码实现细节 | 参考 @sass-spec 测试用例 + Sass 官方文档 |
+| "dart-sass does it this way" 作为设计理由 | "sass-spec expects this output" 作为设计理由 |
 
 ---
 
 ## 🏗️ 架构总览
 
-### 响应式编译管道
+### 目标：全链路响应式编译管道（规划中）
 
 ```
 Source(String)
     │
-    ▼ scan() — Shared::create + box_it()
-TokenStream (SharedBoxedObservable<'static, Token, Infallible>)
+    ▼ Shared::create (lexer)
+TokenStream (SharedBoxedObservable<'static, Token, CompileError>)
     │
-    ▼ parse_stream()
-AstStream (SharedBoxedObservable<'static, AstNode, Infallible>)
+    ▼ Shared::create + subscribe_all 桥接 (parser: parser_feed 增量解析)
+AstStream (SharedBoxedObservable<'static, AstNode, CompileError>)
     │
-    ▼ eval_stream() — expand + scan 模拟
-CssStream (SharedBoxedObservable<'static, CssStmt, Infallible>)
+    ▼ expand + scan_map(&mut) + filter_map (eval — 递归展开 + 帧栈累积)
+CssStream (SharedBoxedObservable<'static, CssStmt, CompileError>)
     │
-    ▼ collect + serialize
+    ▼ fold + map (serialize — 累积渲染)
+OutputStream (SharedBoxedObservable<'static, String, CompileError>)
+    │
+    ▼ collect_boxed（终端阻塞收集）
 String (CSS 输出)
 ```
+
+**关键差异（vs 旧架构）**:
+- ❌ 旧: Parser/Eval 中间 `collect_boxed` → Vec → `from_iter`（断裂点）
+- ✅ 新: 流式直连，零中间收集
+- ❌ 旧: `Infallible` 错误类型
+- ✅ 新: `CompileError` 统一错误通道
+- ❌ 旧: `flat_map` 做 AST 递归
+- ✅ 新: `expand` 深度优先递归展开
+
+**✅ 2026-10-10 全链路响应式重构完成** — `Infallible` 已从全链路清除，统一使用 `CompileError`。openspec `full-reactive-pipeline` 已实施并测试通过（244 tests）。
 
 ### 模块职责
 
 | 模块 | 文件 | 职责 | 核心 rxrust 模式 |
 |------|------|------|------------------|
 | Lexer | `lexer/mod.rs` | 字符 → Token 流 | `Shared::create` + `box_it()` |
-| Parser | `parser/mod.rs` | Token 流 → AST 流 | `Shared::from_iter` + `box_it()` |
-| Evaluator | `eval/mod.rs` | AST 流 → CSS 流 | `expand` + `scan` 模拟 |
-| Serializer | `serialize/mod.rs` | CSS 树 → 字符串 | 纯函数，无流 |
+| Parser | `parser/mod.rs` | Token 流 → AST 流 | `Shared::create` + `subscribe_all` 桥接 |
+| Evaluator | `eval/mod.rs` | AST 流 → CSS 流 | `expand` + `scan_map(&mut)` + `filter_map` |
+| Serializer | `serialize/mod.rs` | CSS 树 → 字符串 | `fold` 累积 + `map(render)` |
 | Runtime | `runtime.rs` | 作用域 + 总线 | `Arc<EvalContext>` + `CompilerBus` |
 | Bus | `bus.rs` | Mixin/Function/Var 注册表 | `SharedSubject` 广播 |
 | Telemetry | `telemetry.rs` | Tracing 初始化 | `tracing-subscriber` + `EnvFilter` |
 
-### 类型别名（核心）
+### 类型别名（核心 — 目标状态）
 
 ```rust
 // types.rs — 管道统一类型
-pub type TokenStream = SharedBoxedObservable<'static, Token, Infallible>;
-pub type AstStream   = SharedBoxedObservable<'static, AstNode, Infallible>;
-pub type CssStream   = SharedBoxedObservable<'static, CssStmt, Infallible>;
-pub type OutputStream = SharedBoxedObservable<'static, String, Infallible>;
+pub type TokenStream = SharedBoxedObservable<'static, Token, CompileError>;
+pub type AstStream   = SharedBoxedObservable<'static, AstNode, CompileError>;
+pub type CssStream   = SharedBoxedObservable<'static, CssStmt, CompileError>;
+pub type OutputStream = SharedBoxedObservable<'static, String, CompileError>;
 ```
 
 ### 入口函数 (`src/lib.rs`/`src/pipeline.rs`)
@@ -169,7 +243,7 @@ pub type OutputStream = SharedBoxedObservable<'static, String, Infallible>;
 ### 创建 Observable
 
 ```rust
-// 从闭包创建（最常用的自定义源）
+// 从闭包创建（自定义源）
 Shared::create(move |subscriber| {
     subscriber.next(value);
     subscriber.complete();
@@ -184,11 +258,11 @@ Shared::of(single_value).box_it()
 // 空流
 Shared::empty::<ItemType>().box_it()
 
-// Subject (hot observable — 手动 emit)
-let subject: SharedSubject<'static, T, Infallible> = Shared::subject();
-subject.next(value);      // emit
-subject.complete();       // signal done
-subject.box_it()          // convert to Observable for chaining
+// Subject
+let subject: SharedSubject<'static, T, CompileError> = Shared::subject();
+subject.next(value);
+subject.complete();
+subject.box_it()
 ```
 
 ### 核心算子选择
@@ -197,19 +271,17 @@ subject.box_it()          // convert to Observable for chaining
 |------|------|------|
 | 1:1 变换 | `.map(\|x\| ...)` | 值转换 |
 | 1:N 展平 | `.flat_map(\|x\| Observable)` | 子节点注入流 |
-| 递归展开 | `.expand(\|x\| Observable)` | 树 → 事件流（核心！） |
-| 状态累积 | `.scan(init, \|s, x\| ...)` | 栈/累加器 |
-| 过滤 | `.map(\|x\| Option).filter_map(...)` | 条件通过 |
-| 终止收集 | `.collect::<Vec<_>>()` | 流 → Vec |
+| 递归展开 | `.expand(\|x\| Observable)` | 树 → 事件流（深度优先！） |
+| 状态累积 | `.scan_map(\|state, x\| ...)` | &mut 零 clone 累积 |
+| 终止收集 | `.collect::<Vec<_>>()` | 流 → Vec（仅最终消费端） |
 | 调试 | `.tap(\|x\| tracing::debug!(...))` | 副作用观察 |
 
 ### 类型擦除（box_it）
 
 ```rust
-// 任何算子链的终点必须擦除类型
 let stream: AstStream = Shared::create(|s| { ... })
     .flat_map(|x| Shared::from_iter(x))
-    .box_it();  // 必须！
+    .box_it();  // 只在阶段边界调用！
 ```
 
 ### Context: Local vs Shared
@@ -219,7 +291,7 @@ let stream: AstStream = Shared::create(|s| { ... })
 | `Local` | Single-thread (WASM, UI main) | `Rc<RefCell>` — zero lock | None |
 | `Shared` | Multi-thread server | `Arc<Mutex>` — work-stealing | `Send + Sync` |
 
-**rx-scss 默认使用 `Shared`**（静态生命周期，多线程能力）。
+**rx-scss 默认使用 `Shared`**。
 
 ---
 
@@ -227,34 +299,35 @@ let stream: AstStream = Shared::create(|s| { ... })
 
 ### 响应式展开 + 扫描累积
 
-evaluator 的核心是模拟两个 rxrust 算子：
-
 ```
 AST 节点流
     │
-    ▼ expand_nodes_to_events()  ← 模拟 expand
-事件流 (Vec<EvalEvent>)
+    ▼ expand(emit_events)          ← 递归展开 AST 树
+事件流 (EvalEvent)
     EnterRule / LeaveRule / EnterMedia / ...
     │
-    ▼ apply_event()  ← 模拟 scan
-CSS 树流 (frame 栈累积)
+    ▼ scan_map(EvalState, fold_frame)  ← &mut 有状态折叠累积
+中间状态流 (EvalState)
+    │
+    ▼ filter_map(emit_completed)   ← frame 关闭时发射 CssStmt
+CSS 树流
 ```
 
 ### EvalEvent 枚举
 
 ```rust
 enum EvalEvent {
-    EnterRule(String),    // 进入嵌套规则
-    LeaveRule,            // 退出规则 → pop frame
-    EnterMedia(String),   // 进入 @media
-    LeaveMedia,           // 退出 @media
-    EnterSupports(String),// 进入 @supports
-    LeaveSupports,        // 退出 @supports
-    Terminal(CssStmt),    // 终端声明
+    EnterRule(String),
+    LeaveRule,
+    EnterMedia(String),
+    LeaveMedia,
+    EnterSupports(String),
+    LeaveSupports,
+    Terminal(CssStmt),
 }
 ```
 
-### Frame 栈（scan 状态）
+### Frame 栈（scan_map 状态）
 
 ```rust
 struct Frame {
@@ -265,8 +338,6 @@ struct Frame {
 }
 ```
 
-Enter 事件 = push frame；Leave 事件 = pop frame 并组装 CssStmt 注入父 frame。
-
 ---
 
 ## 🚌 CompilerBus 设计
@@ -275,18 +346,12 @@ Enter 事件 = push frame；Leave 事件 = pop frame 并组装 CssStmt 注入父
 
 ```rust
 pub struct CompilerBus {
-    var_subject: SharedSubject<'static, VarEvent, Infallible>,
-    module_subject: SharedSubject<'static, ModuleEvent, Infallible>,
-    scope_subject: SharedSubject<'static, ScopeEvent, Infallible>,
-    inner: Arc<Mutex<BusInner>>,  // 实际存储
+    var_subject: SharedSubject<'static, VarEvent, CompileError>,
+    module_subject: SharedSubject<'static, ModuleEvent, CompileError>,
+    scope_subject: SharedSubject<'static, ScopeEvent, CompileError>,
+    inner: Arc<Mutex<BusInner>>,
 }
 ```
-
-### 为何用 Arc<Mutex> 而非 Rc<RefCell>
-
-- `Send + Sync` 要求：跨线程安全
-- 需要 `SharedSubject` 广播事件
-- 闭包必须 `move` 进 rxrust 算子
 
 ### 变量查找 = 沿 parent 链向上
 
@@ -303,37 +368,23 @@ fn get_var(&self, ctx: &EvalContext, name: &str) -> Option<Value> {
 
 ---
 
-## 🦀 Rust 所有权强制规则（函数式第一公民）
+## 🦀 Rust 所有权强制规则
 
 ### 所有权：move 优先，禁止 clone 满天飞
 
-| 禁止 | 替代 | 说明 |
-|------|------|------|
-| `env.clone()` | `env` move 进函数，返回 `(T, Env)` | 零拷贝传递 |
-| `&mut Env` 参数 | `Env`（move）→ `self -> Self` 链式 | 不可变借用 + 返回新值 |
-| `Rc<RefCell<T>>` | 按值传递 + 返回新值 | 避免 interior mutability |
-
 ### 迭代器：禁止显式 for 循环处理集合变换
 
-| 禁止 | 替代 | 场景 |
-|------|------|------|
-| `for x in vec { result.push(f(x)) }` | `vec.into_iter().map(f).collect()` | map 变换 |
-| `for x in &vec { if pred(x) { ... } }` | `vec.into_iter().filter(pred)...` | filter 筛选 |
-| `for x in vec { match ... { Ok(v) => acc.push(v), Err(e) => return e } }` | `vec.into_iter().try_fold(acc, ...)` | 错误传播累积 |
-| `for x in vec { if pred(x) { left.push(x) } else { right.push(x) } }` | `vec.into_iter().partition(pred)` | 分流 |
-| 可变 `Vec` + push + extend | `flat_map` / `flatten` | 展平嵌套 |
-| `for (i, x) in vec.iter().enumerate()` | `vec.into_iter().enumerate()` | 带索引 |
+| 禁止 | 替代 |
+|------|------|
+| `for x in vec { result.push(f(x)) }` | `vec.into_iter().map(f).collect()` |
+| `for x in &vec { if pred(x) { ... } }` | `vec.into_iter().filter(pred)...` |
+| `for x in vec { match ... { Ok(v) => acc.push(v) } }` | `vec.into_iter().try_fold(acc, ...)` |
+| `for x in vec { if pred(x) { left.push(x) } else { right.push(x) } }` | `vec.into_iter().partition(pred)` |
 
 ### 模式匹配：禁止 if-else 链处理枚举
 
 ```rust
-// ❌ 禁止：if-else 链
-if token == "{" { ... }
-else if token == "}" { ... }
-else if token == ";" { ... }
-else { ... }
-
-// ✅ 正确：match
+// ✅ 必须
 match token {
     "{" => ...,
     "}" => ...,
@@ -345,54 +396,26 @@ match token {
 ### 错误处理：禁止 match Err 分支
 
 ```rust
-// ❌ 禁止：显式 match Err
-let result = match parse(tokens) {
-    Ok(ast) => ast,
-    Err(e) => return Err(e),
-};
-
-// ✅ 正确：? 传播
+// ✅ 必须
 let ast = parse(tokens)?;
 ```
 
 ### 函数签名的强制模式
 
-| 场景 | 签名模板 | 说明 |
-|------|----------|------|
-| 数据变换 | `fn transform(input: Input) -> Output` | 消费输入，返回新值 |
-| 带状态变换 | `fn step(state: State, input: Input) -> (Output, State)` | move 语义，返回新状态 |
-| 管线阶段 | `fn next_stage(self) -> Result<NextStage>` | `self` 消费，类型状态机 |
-| 链式构建 | `fn with_x(mut self, x: X) -> Self` | builder 模式 |
-| 只读查询 | `fn query(&self, key: &str) -> Option<&Value>` | 纯函数，不可变借用 |
+| 场景 | 签名模板 |
+|------|----------|
+| 数据变换 | `fn transform(input: Input) -> Output` |
+| 带状态变换 | `fn step(state: State, input: Input) -> (Output, State)` |
+| 管线阶段 | `fn next_stage(self) -> Result<NextStage>` |
+| 只读查询 | `fn query(&self, key: &str) -> Option<&Value>` |
 
 ---
 
 ## 📋 代码风格强制
 
 ### match 优于 if-else
-
-```rust
-// ✅ 必须
-match self.peek() {
-    Token::AtMedia => self.parse_at_media(),
-    Token::AtSupports => self.parse_at_supports(),
-    _ => self.parse_rule_set(),
-}
-```
-
 ### ? 优于 match Err
-
-```rust
-// ✅ 必须
-let ast = parse(tokens)?;
-```
-
 ### partition 优于 for + if
-
-```rust
-// ✅ 必须
-let (left, right): (Vec<_>, Vec<_>) = items.into_iter().partition(pred);
-```
 
 ---
 
@@ -400,14 +423,13 @@ let (left, right): (Vec<_>, Vec<_>) = items.into_iter().partition(pred);
 
 ### 核心原则
 
-跨函数/跨阶段的管道处理**必须**用 `tracing::span!`（或 `#[instrument]`），记录上下文与耗时。**禁止仅用 event! 单一日志**。
+跨函数/跨阶段的管道处理**必须**用 `tracing::span!`（或 `#[instrument]`），记录上下文与耗时。
 
 ### Span 创建优先级
 
-**默认首选：`#[instrument]` 宏** — 函数入口自动创建 span，参数自动记录为字段。
+**首选：`#[instrument]` 宏**
 
 ```rust
-// ✅ 首选：函数入口用 #[instrument]
 #[tracing::instrument(skip(large_param), fields(result = tracing::field::Empty))]
 fn my_function(large_param: &BigType, input: &str) -> Result<...> {
     let result = do_work(large_param, input)?;
@@ -416,39 +438,26 @@ fn my_function(large_param: &BigType, input: &str) -> Result<...> {
 }
 ```
 
-**备选 1: `.entered()` — 条件分支/内联代码块**
+**备选: `.entered()`**
 
 ```rust
 let _span = info_span!("parse_expr", expr = ?input, pos = self.pos).entered();
-// ... logic ...
-// _span drop 时自动退出
-```
-
-### tap 插桩（响应式管道内）
-
-```rust
-stream
-    .tap(|x| tracing::debug!(value = ?x, "after filter"))
-    .flat_map(|x| /* ... */)
 ```
 
 ### Telemetry 初始化
 
 ```rust
-// 生产环境：stdout + 行号信息
-rx_scss::telemetry::init_tracing();
-
-// 测试环境：stderr + --nocapture 支持
-rx_scss::telemetry::init_test_tracing();
+rx_scss::telemetry::init_tracing();      // 生产
+rx_scss::telemetry::init_test_tracing(); // 测试
 ```
 
 ### Span 字段 sigil
 
-| Sigil | 含义 | 示例 |
-|-------|------|------|
-| `?` | Debug 格式化 | `field = ?value` |
-| `%` | Display 格式化 | `field = %value` |
-| 无 | 实现 Value trait | `field = value` |
+| Sigil | 含义 |
+|-------|------|
+| `?` | Debug 格式化 |
+| `%` | Display 格式化 |
+| 无 | 实现 Value trait |
 
 ---
 
@@ -476,35 +485,26 @@ rx_scss::telemetry::init_test_tracing();
 | `integration_test.rs` | 集成测试 |
 | `bootstrap_test.rs` | Bootstrap 兼容性 |
 | `telemetry_test.rs` | Tracing/Telemetry 集成 |
+| `serialize_test.rs` | 序列化器 |
 | `debug_utility.rs` ~ `debug_utility6.rs` | 调试辅助 |
-| `diag_custom_prop.rs` | 自定义属性诊断 |
+| `diag_*.rs` | 诊断辅助测试 |
+| `while_loop_test.rs` | while 循环 |
+| `rfs_function_test.rs` | RFS 函数 |
 
 ### 测试命令
 
 ```bash
-# 运行全部测试
 cargo test
-
-# 单个测试套件
 cargo test --test compile_test
-cargo test --test lexer_test
-cargo test --test parser_test
-cargo test --test eval_test
-cargo test --test pipeline_test
-cargo test --test integration_test
-cargo test --test bootstrap_test
-
-# tracing 调试
-RUST_LOG=debug cargo test test_name 2>&1 | head -100
+RUST_LOG=debug cargo test test_name -- --nocapture
 RUST_LOG=error cargo test --test integration_test -- --nocapture
-RUST_LOG=debug cargo test --test telemetry_test -- --nocapture
 ```
 
 ---
 
 ## 🚫 反模式检测清单
 
-出现以下任一情况，**立即停止**并通知用户：
+出现以下任一情况，**立即停止**：
 
 - [ ] 同一行被反复修改 2 次以上
 - [ ] 新增代码与现有枚举/trait 定义矛盾
@@ -515,6 +515,11 @@ RUST_LOG=debug cargo test --test telemetry_test -- --nocapture
 - [ ] 在纯函数中引入 `&mut` 参数
 - [ ] 用 `if-else` 链替换已有的 `match`
 - [ ] 修改波及 3 个以上不相关函数
+- [ ] 出现 subscribe-collect GC 模式
+- [ ] 命令式 queue/while pop 模拟 flat_map/expand
+- [ ] 用命令式 for+match 模拟 scan 算子
+- [ ] 新增 #[cfg(test)] 内联测试模块
+- [ ] 新代码仍使用 `Infallible` 类型
 
 ---
 
@@ -524,26 +529,19 @@ RUST_LOG=debug cargo test --test telemetry_test -- --nocapture
 
 - [ ] 未使用 Python
 - [ ] 所有输出用 tracing 宏（无 println!/eprintln!）
-- [ ] 测试在 tests/ 目录（无 inline #[cfg(test)]）
-- [ ] 跨函数/管道使用 tracing span（或 `#[instrument]`）
-- [ ] span 字段用 `?`/`%` sigil（非 `&format!(...)`）
-- [ ] async 代码不用 `Span::enter`（用 `#[instrument]` 或 `.instrument()`）
-- [ ] 无 `unwrap()`（用 `?`/`expect()`/`unwrap_or()`）
-- [ ] 无 `clone()` 满天飞（先理解所有权设计）
+- [ ] 测试在 tests/ 目录
+- [ ] 跨函数/管道使用 tracing span
+- [ ] span 字段用 `?`/`%` sigil
+- [ ] 无 `unwrap()`
+- [ ] 无 `clone()` 满天飞
 - [ ] 无 `todo!()`/`unimplemented!()` 不标注 TODO
+- [ ] 无 subscribe-collect GC 模式
+- [ ] 算子链使用真正的 rxrust 算子
 - [ ] 公开 API 有 `///` 文档注释
 - [ ] 单文件 ≤ 500 行
-- [ ] 集合变换用 `map/filter/collect` 而非 `for + push`
-- [ ] 枚举分派用 `match` 而非 `if-else` 链
-- [ ] 错误传播用 `?` 而非 `match ... Err(e) => return`
-- [ ] 状态变更返回新值（`self -> Self`）而非 `&mut self`
-- [ ] 管线阶段消费 `self`（类型状态机）而非 `&self` + clone
-- [ ] 累积操作用 `try_fold` / `fold` 而非可变 `Vec` + push
-- [ ] 分流用 `partition` 而非两个 `Vec` + for + if
+- [ ] 枚举分派用 `match`
+- [ ] 错误传播用 `?`
 - [ ] 调试遵循 4 步协议（如果是 bug 修复）
-- [ ] OTel 追踪可用（如有配置）
-- [ ] CodeGraph 用于代码查询（如有配置）
-- [ ] 使用高效工具链
 - [ ] Commit 等用户确认后再推送
 
 ---
@@ -553,3 +551,4 @@ RUST_LOG=debug cargo test --test telemetry_test -- --nocapture
 - **rxrust 完整参考（含 OTel）**：`.claude/skills/rxrust/SKILL.md`
 - **OpenSpec 工作流**：`.claude/skills/openspec-*/SKILL.md`
 - **telemetry 模块**：`src/telemetry.rs`
+- **全链路响应式重构规划**：`openspec/changes/full-reactive-pipeline/`

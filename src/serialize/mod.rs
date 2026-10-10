@@ -1,4 +1,5 @@
-use crate::types::{CssStmt, OutputStyle};
+use crate::types::{CssStmt, OutputStyle, CssStream, OutputStream};
+use rxrust::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -92,10 +93,12 @@ fn flatten_stmts(stmts: &[CssStmt], parent: &str) -> Vec<CssStmt> {
         match stmt {
             CssStmt::Rule { selector, inner } => {
                 let selector = strip_at_root_marker(selector);
+                // Strip placeholder selectors (%name) — they are removed from output when extended
+                let selector = strip_placeholders(&selector);
                 // 分离声明和嵌套规则
                 let (decls, nested): (Vec<_>, Vec<_>) = inner.iter().cloned().partition(|s| matches!(s, CssStmt::Decl { .. }));
                 // 输出当前规则的声明（选择器已是最终形式，直接使用）
-                if !decls.is_empty() {
+                if !decls.is_empty() && !selector.is_empty() {
                     result.push(CssStmt::Rule {
                         selector: selector.clone(),
                         inner: decls,
@@ -147,6 +150,16 @@ fn strip_at_root_marker(selector: &str) -> String {
     selector.strip_prefix("/*@at-root*/ ").unwrap_or(selector).to_string()
 }
 
+/// Strip placeholder selectors (%name) from a comma-separated selector string.
+/// Placeholders should not appear in CSS output — they are only used as @extend targets.
+fn strip_placeholders(selector: &str) -> String {
+    let entries: Vec<&str> = selector.split(',')
+        .map(str::trim)
+        .filter(|e| !e.starts_with('%'))
+        .collect();
+    entries.join(", ")
+}
+
 /// Format comma-separated selectors for Expanded/Nested style.
 /// Always prepends the base_indent (Bootstrap format: indented selectors inside @media).
 /// Multi-selectors are separated by ",\n" with each on its own indented line.
@@ -191,6 +204,11 @@ fn serialize_stmt(stmt: &CssStmt, opts: &Options, out: &mut String, indent_level
         }
         CssStmt::Rule { selector, inner } => {
             let selector = strip_at_root_marker(selector);
+            // Strip placeholder selectors (%name) — they are removed from output when extended
+            let selector = strip_placeholders(&selector);
+            if selector.is_empty() {
+                return; // Placeholder was not extended → invisible
+            }
             match opts.style {
                 OutputStyle::Expanded => {
                     let indent = "  ".repeat(indent_level);
@@ -265,10 +283,67 @@ fn serialize_stmt(stmt: &CssStmt, opts: &Options, out: &mut String, indent_level
                 }
             }
         }
-        CssStmt::Charset => {
+                CssStmt::Charset => {
             out.push_str(CHARSET);
         }
     }
 }
+
+// ── 响应式序列化 ─────────────────────────────────────────────────────────
+
+/// 序列化状态：累积 CssStmt 并渲染为字符串
+#[derive(Clone)]
+struct SerializeState {
+    options: Options,
+    buffer: String,
+}
+
+impl SerializeState {
+    fn new(options: Options) -> Self {
+        Self {
+            options,
+            buffer: String::new(),
+        }
+    }
+
+    /// 压入 CssStmt 并立即渲染到 buffer
+    fn push(&mut self, stmt: CssStmt) {
+        // 预pend charset 只在第一次
+        if self.buffer.is_empty() && !self.options.suppress_charset {
+            match self.options.style {
+                OutputStyle::Expanded | OutputStyle::Nested => {
+                    self.buffer.push_str(CHARSET);
+                }
+                OutputStyle::Compressed => {}
+            }
+        }
+        serialize_stmt(&stmt, &self.options, &mut self.buffer, 0);
+    }
+
+    /// 渲染累积内容为 String
+    fn render(&self) -> String {
+        self.buffer.clone()
+    }
+}
+
+/// 响应式序列化：CssStmt 流 → String 流
+///
+/// 使用 scan_map 累积 CssStmt 状态到 SerializeState，
+/// 流结束时通过 take_last(1) 只输出最终渲染结果。
+/// box_it() 在 stage 尾端调用一次。
+pub fn serialize_stream(
+    css_stream: CssStream,
+    options: Options,
+) -> OutputStream {
+    css_stream
+        .scan_map(SerializeState::new(options), |state, stmt| {
+            state.push(stmt);
+            state.clone()
+        })
+        .take_last(1)
+        .map(|state| state.render())
+        .box_it()
+}
+
 
 

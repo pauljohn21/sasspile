@@ -8,11 +8,7 @@ mod lexer_number_with_unit {
 
     fn collect_tokens(source: &str) -> Vec<Token> {
         let stream = scan(source);
-        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let r = result.clone();
-        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
-        let guard = result.lock().unwrap();
-        guard.clone()
+        rx_scss::collect_boxed(stream).unwrap_or_default()
     }
 
     #[test]
@@ -65,11 +61,7 @@ mod lexer_comments {
 
     fn collect_tokens(source: &str) -> Vec<Token> {
         let stream = scan(source);
-        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let r = result.clone();
-        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
-        let guard = result.lock().unwrap();
-        guard.clone()
+        rx_scss::collect_boxed(stream).unwrap_or_default()
     }
 
     #[test]
@@ -102,11 +94,7 @@ mod lexer_strings {
 
     fn collect_tokens(source: &str) -> Vec<Token> {
         let stream = scan(source);
-        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let r = result.clone();
-        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
-        let guard = result.lock().unwrap();
-        guard.clone()
+        rx_scss::collect_boxed(stream).unwrap_or_default()
     }
 
     #[test]
@@ -141,11 +129,7 @@ mod lexer_operators {
 
     fn collect_tokens(source: &str) -> Vec<Token> {
         let stream = scan(source);
-        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let r = result.clone();
-        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
-        let guard = result.lock().unwrap();
-        guard.clone()
+        rx_scss::collect_boxed(stream).unwrap_or_default()
     }
 
     #[test]
@@ -192,11 +176,7 @@ mod lexer_at_rules {
 
     fn collect_tokens(source: &str) -> Vec<Token> {
         let stream = scan(source);
-        let result = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let r = result.clone();
-        stream.subscribe(move |tok| r.lock().unwrap().push(tok));
-        let guard = result.lock().unwrap();
-        guard.clone()
+        rx_scss::collect_boxed(stream).unwrap_or_default()
     }
 
     #[test]

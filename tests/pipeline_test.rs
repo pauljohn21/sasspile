@@ -1,4 +1,4 @@
-use rx_scss::pipeline::{from_string, collect_stream};
+use rx_scss::pipeline::from_string;
 use rx_scss::serialize::Options;
 
 #[test]
@@ -36,22 +36,6 @@ fn from_string_variable_and_interpolation() {
 }
 
 #[test]
-fn collect_stream_basic() {
-    use rxrust::prelude::*;
-    let stream = Shared::from_iter(vec!["a".to_string(), "b".to_string(), "c".to_string()]).box_it();
-    let result = collect_stream(stream);
-    assert_eq!(result, "abc");
-}
-
-#[test]
-fn collect_stream_empty() {
-    use rxrust::prelude::*;
-    let stream: rx_scss::types::OutputStream = Shared::from_iter(Vec::<String>::new()).box_it();
-    let result = collect_stream(stream);
-    assert_eq!(result, "");
-}
-
-#[test]
 fn from_string_with_options_charset() {
     let opts = Options {
         style: rx_scss::types::OutputStyle::Expanded,
@@ -69,4 +53,84 @@ fn from_string_suppress_charset() {
     };
     let result = from_string("div{}", &opts).unwrap();
     assert!(!result.contains("@charset"), "should suppress charset when requested");
+}
+
+#[test]
+fn compound_selector_attribute() {
+    // 属性选择器 `[type="checkbox"]` 应 compound 组合（无空格）
+    let result = from_string(
+        ".btn-check { &[type=\"checkbox\"] { margin: 0; } }",
+        &Options::default(),
+    )
+    .unwrap();
+    assert!(
+        result.contains(".btn-check[type=checkbox]"),
+        "attribute selector should be compound (no space). Got: {}",
+        result
+    );
+}
+
+#[test]
+fn compound_selector_pseudo_class() {
+    // 伪类 `:focus` 应 compound 组合（无空格）
+    let result = from_string(
+        ".btn { &:focus { outline: none; } }",
+        &Options::default(),
+    )
+    .unwrap();
+    assert!(
+        result.contains(".btn:focus"),
+        "pseudo-class should be compound (no space). Got: {}",
+        result
+    );
+}
+
+#[test]
+fn compound_selector_pseudo_element() {
+    // 伪元素 `::after` 应 compound 组合（无空格）
+    let result = from_string(
+        ".card { &::after { content: \"\"; } }",
+        &Options::default(),
+    )
+    .unwrap();
+    assert!(
+        result.contains(".card::after"),
+        "pseudo-element should be compound (no space). Got: {}",
+        result
+    );
+}
+
+#[test]
+fn descendant_selector_class() {
+    // 普通类选择器嵌套应产生空格分隔的 descendant 组合子
+    let result = from_string(
+        ".card { .title { font-weight: bold; } }",
+        &Options::default(),
+    )
+    .unwrap();
+    assert!(
+        result.contains(".card .title"),
+        "class selector should produce descendant combinator (space). Got: {}",
+        result
+    );
+}
+
+#[test]
+fn compound_selector_multiple_children() {
+    // 逗号分隔的子选择器中 `[attr]` 和 `:pseudo` 各自独立判断
+    let result = from_string(
+        ".parent { &[type=\"x\"], &:hover { color: red; } }",
+        &Options::default(),
+    )
+    .unwrap();
+    assert!(
+        result.contains(".parent[type=x]"),
+        "attribute child should be compound. Got: {}",
+        result
+    );
+    assert!(
+        result.contains(".parent:hover"),
+        "pseudo-class child should be compound. Got: {}",
+        result
+    );
 }

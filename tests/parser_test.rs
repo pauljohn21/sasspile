@@ -1,21 +1,19 @@
 use rx_scss::parser::parse_stream;
-use rx_scss::types::*;
+use rx_scss::types::{AstNode, BinOp, Token, TokenStream, UnaryOp, Value};
 use rxrust::prelude::*;
-use std::sync::{Arc, Mutex};
 
 fn tokens_to_stream(tokens: Vec<Token>) -> TokenStream {
-    Shared::from_iter(tokens).box_it()
+    Shared::create(move |subscriber| {
+        for t in tokens {
+            subscriber.next(t);
+        }
+        subscriber.complete();
+    }).box_it()
 }
 
 fn collect_ast(stream: TokenStream) -> Vec<AstNode> {
     let ast_stream = parse_stream(stream, 0);
-    let result = Arc::new(Mutex::new(Vec::new()));
-    let r = result.clone();
-    ast_stream.subscribe(move |node| {
-        r.lock().unwrap().push(node);
-    });
-    let guard = result.lock().unwrap();
-    guard.clone()
+    rx_scss::collect_boxed(ast_stream).unwrap_or_default()
 }
 
 #[test]
