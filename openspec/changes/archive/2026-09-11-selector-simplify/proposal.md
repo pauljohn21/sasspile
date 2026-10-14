@@ -2,7 +2,7 @@
 
 ## 动机
 
-`sass-spec` 基线 7698/12131 (63.4%) 中，唯一一个 `directives/use/extend/diamond/merge` 因选择器简化缺失而失败。
+`sass-spec` 通过率中，一个 `directives/use/extend/diamond/merge` case 因选择器简化缺失而失败。
 
 该 case 测试菱形依赖（diamond dependency）中的 @extend 合并行为——两个子模块分别扩展同一个 placeholder，最终产物应消除冗余选择器。
 
@@ -11,7 +11,6 @@
 - 实现 compound 内 simple 去重（`.a.a` → `.a`）
 - 实现 selector list 内 superselector 消除
 - 不引入任何测试回退
-- sass-spec 通过率 7698 → 7699 (+1)
 
 ## 非目标
 

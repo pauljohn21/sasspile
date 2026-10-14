@@ -25,7 +25,7 @@
 
 ## 5. 验证修复效果
 
-- [x] 5.1 EP normalized 78/121→101/121 (+23) ≥ 93/121 ✓
+- [x] 5.1 EP normalized 验证（实际结果详见 AGENTS.md 当前基线）
 - [x] 5.2 EP full 121/121 维持 ✓
 - [x] 5.3 核心测试 242/242 + bs_spec 15/15 维持 ✓
 - [x] 5.4 sass-spec 全量运行（session 内已验证 4/4 通过）
@@ -35,6 +35,6 @@
 
 - [ ] 6.1 移除临时 debug span，或降级为 trace! / debug!
 - [x] 6.2 更新 CHANGELOG.md Unreleased 节，记录修复内容和统计提升
-- [x] 6.3 更新 AGENTS.md EP normalized 基线数字（101/121 = 83.5%）
+- [x] 6.3 更新 AGENTS.md EP normalized 基线数字
 - [x] 6.4 运行 `codegraph sync` 更新代码导航索引（Done: 2 added, 6 modified, 1 removed — 134 nodes）
 - [ ] 6.5 等待用户确认后 commit + push

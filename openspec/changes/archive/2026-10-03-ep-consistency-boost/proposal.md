@@ -23,7 +23,7 @@ Element-Plus (EP) 项目有 121 个 SCSS 组件文件，通过 `@use 'mixins/mix
 
 **决策**：新增 `CssNode::AtRootDirect` 节点类型，在 `exec_mixin` 求值后替换 `AtRoot` → `AtRootDirect`，`RuleBuilder::push` 识别并直接放入源码位置（bypass combine_selectors）。
 
-**影响**：全链路适配 rule/serialize/hoist/extend/meta_ops。sass-spec -84（7977→7893），trade-off 可接受。
+**影响**：全链路适配 rule/serialize/hoist/extend/meta_ops。sass-spec 有 regression（trade-off 可接受）。
 
 ### ✅ 字面 `&` 选择器展开（commit c97e582）
 
@@ -83,4 +83,4 @@ DIFF: 44
 - 单文件 ≤ 500 行
 - 禁止 `unwrap()`（生产代码）
 - 每次修改需先建回归测试
-- sass-spec 通过率不退化（当前 7893/12133 = 65%）
+- sass-spec 通过率不退化

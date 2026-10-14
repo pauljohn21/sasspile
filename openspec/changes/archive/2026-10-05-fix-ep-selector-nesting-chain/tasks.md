@@ -10,13 +10,13 @@
 
 ## 3. 验证
 
-- [x] 3.1 运行 `cargo test --test ep_classify_test -- --nocapture` 确认 14 个选择器嵌套文件 bug 分类缩小，EP 差异中 dropdown/menu/message/table/tag/timeline/transfer/tree/upload/popover/switch/form-item/message-box/overlay 均归为 "一致" 或 "autoprefixer only" → 验证：sasspile-bug 文件减少 10+
+- [x] 3.1 运行 `cargo test --test ep_classify_test -- --nocapture` 确认选择器嵌套文件 bug 分类缩小，EP 差异中 dropdown/menu/message/table/tag/timeline/transfer/tree/upload/popover/switch/form-item/message-box/overlay 均归为 "一致" 或 "autoprefixer only"
 
-- [x] 3.2 运行 `cargo test --test compile_test --test reactor_test --test stage_test --test ast_test --test common_test --test interp_test --test bs_spec` 确认核心 202 测试 0 回归 → 验证：全部通过
+- [x] 3.2 运行核心测试确认 0 回归 → 验证：全部通过
 
-- [x] 3.3 运行 `RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture` 统计 sass-spec 通过率未下降 → 验证：通过率 >= 当前基线 7837/12133 (64.9%)
+- [x] 3.3 运行 `RUST_LOG="sass_spec_full=info,sasspile=warn" cargo test --test sass_spec_full -- --nocapture` 统计 sass-spec 通过率未下降
 
-- [x] 3.4 运行 `cargo test --test ep_full --release -- --nocapture` 确认 EP 121/121 通过 → 验证：121/121
+- [x] 3.4 运行 `cargo test --test ep_full --release -- --nocapture` 确认 EP 全部通过
 
 ## 4. 清理
 

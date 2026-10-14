@@ -24,7 +24,6 @@
 - 补全 `MATH_NAMES` 注册缺失，使 `exp`/`sign`/`hypot`/`atan2`/`log` 全局可调用
 - 扩展 calc 简化器能力（乘除/符号/常量吸收/数学常量）
 - 修复 `min`/`max` unitless 和 unknown-unit 边界
-- sass-spec +63 cases
 
 **Non-Goals:**
 - 不实现新的 calc 嵌套简化（如 `calc(calc(...))` 深层展开）

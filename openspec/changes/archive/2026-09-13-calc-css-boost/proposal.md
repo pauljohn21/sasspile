@@ -1,6 +1,6 @@
 ## Why
 
-`sass-spec` 当前通过率 7647/12131 (63%)，其中 `values/calculation` 区域以 **39% 通过率（596 个失败）** 成为单一最大失败池。诊断发现三个明确的根因：(1) `MATH_NAMES` 注册表缺失 5 个 CSS 全局数学函数条目导致函数不被分派求值；(2) `calc()` 表达式简化逻辑缺少乘除/符号/常量折叠；(3) `max()`/`min()` 单位转换存在 unitless/unknown-unit 边界错误。此变更是将 7647 → ~7710 (+63) 的关键路径。
+`sass-spec` 通过率 (63%)，其中 `values/calculation` 区域以 **39% 通过率（596 个失败）** 成为单一最大失败池。诊断发现三个明确的根因：(1) `MATH_NAMES` 注册表缺失 5 个 CSS 全局数学函数条目导致函数不被分派求值；(2) `calc()` 表达式简化逻辑缺少乘除/符号/常量折叠；(3) `max()`/`min()` 单位转换存在 unitless/unknown-unit 边界错误。
 
 ## What Changes
 
@@ -26,4 +26,4 @@
 - **受影响文件**：`src/eval/builtin/dispatch.rs`（注册表）、`src/eval/value/calc_simplify.rs`（简化器）、`src/eval/builtin/math.rs`（min/max 逻辑）
 - **API/ABI**：不影响公开 API，纯内部求值增强
 - **性能影响**：calc 简化略有增加但常数级
-- **测试影响**：预估 +63 cases (7647 → ~7710)，`values/calculation` 从 39% → ~50%
+- **测试影响**：预期改善 `values/calculation` 区域的通过率

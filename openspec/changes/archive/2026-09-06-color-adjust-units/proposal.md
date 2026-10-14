@@ -22,7 +22,4 @@
 
 ## Impact
 
-- sass-spec: 6426→6695 (+269) = 56.2%
-- adjust: 78% (364/462, +27)
-- change: 63% (242/379, +27)
 - 影响文件：`color_adjust.rs`, `color_adjust_cie.rs`

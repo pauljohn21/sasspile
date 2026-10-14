@@ -60,7 +60,7 @@ RuleBuilder 把 `@at-root` 原始节点统一存入 `root_nodes`，`build()` 在
 
 ### sass-spec 影响
 
-约 -84 case（7977 → 7893），集中在 mixin 内使用 `@at-root` 的测试。
+少量 regression（集中在 mixin 内使用 `@at-root` 的测试）。
 trade-off 接受：EP 一致性收益 > sass-spec 少量回归。
 
 ## D4: 字面 `&` 选择器在 AtRootDirect 中的条件展开

@@ -478,7 +478,7 @@ Reactor<StateSerialized>.finish()  → Result<String>
 ## 验证清单（修复后必跑）
 
 ```bash
-cargo test --test compile_test    # 46 个
+cargo test --test compile_test    # 70 个
 cargo test --test reactor_test    # 14 个
 cargo test --test stage_test      # 8 个
 cargo test --test ast_test        # 8 个
@@ -500,9 +500,9 @@ SPEC_STORE_CMD=run cargo test --test spec_store -- --nocapture
 
 **通过标准**：70/70 + 14/14 + 8/8 + 8/8 + 5/5 + 15/15 + 15/15 + 25/25 + 1/1 + 1/1 = 162/162
 （compile_test + reactor_test + stage_test + ast_test + common_test + interp_test + bs_spec + selector_combine_test + ep_full + ep_normalized_test）
-**sass-spec 基线**：7877/12133 = 64.9%（含 color 目录，跳过 libsass 不支持目录）
-**ep_full**：121/121 = 100%
-**ep_normalized**：101/121 = 83.5%（Phase 8 目标 121/121）
+**sass-spec 基线**：7868/12133 = 64.8%（含 color 目录，跳过 libsass 不支持目录）
+**ep_full**：121 SCSS files 全部编译通过
+**ep_normalized**：73/121 = 60.3%（与 EP baseline 对比，目标 121/121）
 **颜色测试**：已跳过（防止无限修复循环，需 `--ignored` 手动触发）
 
 ### 颜色测试跳过策略
@@ -543,30 +543,30 @@ sasspile 测试模块通过 `tests/hrx_support.rs` 内联 HRX 解析，**不依�
 已归档变更存储在 `openspec/changes/archive/` 目录。最近归档：
 ## 🔄 归档记录
 
-- **comprehensive-ep-bugfix**（2026-10-05）：EP 全量编译性能 + CSS 序列化修复 — selector_chain 改用 imbl::Vector<Rc<str>> 持久化数据结构消除嵌套 O(n²)（Env::clone 零堆复制）；normalize_css 系列函数引入 chars 快速路径（O(n²)→O(n)）；rule.rs 拆分为 rule_builder.rs（状态机累积器）+ selector_combine.rs（纯函数：& 替换/前缀检测/逗号安全拆分）；eval_rule 使用 RuleBuilder + combine_selectors + has_descendant_prefix 实现 BEM 嵌套链正确传播；eval_content 使用 immediate selector 而非完整 chain 作为 current_selector 修复 arrow 场景；新增 appearance -moz- 前缀、var() null fallback、:not() 多参包装 — ep_full 121/121 全通过，release 模式耗时 ~2s
-- **ep-bem-atroot-chain-fix**（2026-10-05）：BEM 嵌套 @at-root chain 修复 — outer_only 子 Rule 检测 + 无条件 reset_selector + eval_content 用 immediate selector 替代 chain — EP sasspile-bug 37→27 (-10)，dialog/collapse 场景修复
-- **ep-rule-refactor-and-bugfix**（2026-10-04）：BEM 嵌套链传播修复 — with_chain 去重 + & 解析用 chain + eval_content 传播 chain + push_atroot_direct child 去重 — EP normalized 78/121→101/121 (+23)
-- **ep-consistency-boost**（2026-09-22）：EP 一致性 Phase 1-6 — AtRootDirect 优化、@at-root/@content 顺序、@extend %placeholder 选择器分组（含单/多 extender + mixin 传播增量快照 + 后缀匹配 + 指数膨胀 bug）、eval_at_rule @media 参数提前求值、var() fallback 求值、calc() 内函数求值 — EP 一致性 45/121→73/121 (+28)，sass-spec 7975→8003 (+28)
+- **comprehensive-ep-bugfix**（2026-10-05）：EP 全量编译性能 + CSS 序列化修复 — selector_chain 改用 imbl::Vector<Rc<str>> 持久化数据结构消除嵌套 O(n²)；normalize_css 系列函数引入 chars 快速路径；rule.rs 拆分为 rule_builder.rs + selector_combine.rs；新增 appearance -moz- 前缀、var() null fallback、:not() 多参包装
+- **ep-bem-atroot-chain-fix**（2026-10-05）：BEM 嵌套 @at-root chain 修复 — outer_only 子 Rule 检测 + 无条件 reset_selector + eval_content 用 immediate selector 替代 chain
+- **ep-rule-refactor-and-bugfix**（2026-10-04）：BEM 嵌套链传播修复 — with_chain 去重 + & 解析用 chain + eval_content 传播 chain + push_atroot_direct child 去重
+- **ep-consistency-boost**（2026-09-22）：EP 一致性 Phase 1-6 — AtRootDirect 优化、@at-root/@content 顺序、@extend %placeholder 选择器分组、eval_at_rule @media 参数提前求值、var() fallback 求值、calc() 内函数求值
 
 更早的归档记录详见 `openspec/changes/archive/` 目录。
 
-- **math-clamp-comparable-error**（2026-09-19）：clamp 单位转换+min>max 回退、max/min 单位兼容性前置检查、ops.rs div 倒数单位（1/1px→1/px）— math 466→472 (+6)
-- **calc-round-infinity-fix**（2026-09-13）：CSS round() 策略取整（up/down/nearest/to-zero + step）+ 三角函数 infinity/NaN 输入支持 + validate_single_number 特殊值字符串接受 — 7837→7883 (+46 net)
-- **tokio-internal-async**（2026-09-13）：对内异步对外同步架构 — 引入 tokio runtime (block_on 桥接) + 清理 Reactor 死字段 (14→9) + 删除 6 死类型 (ReactorIO/Warning/IoRecord/ModuleCacheEntry/DefaultReactorIO/MockReactorIO) + Parser 回归 Iterator — sass-spec 7444→7592 (+148)
-- **spec-store**（2026-09-10）：sass-spec SQLite 数据管理工具 — 取代 `failures_json.rs` + `sass_spec_stats.rs`，用 SQLite WAL 存储 case 结果/快照/Delta，集成统计/趋势/桥接/回归定位，12131 个 case 入库
-- **tests-cleanup**（2026-09-10）：测试架构清理合 — 15 个诊断文件合并为 `diag_helper.rs` + `diagnostic_runner.rs` + `diag_color.rs`，单文件 ≤ 500 行合规
-- **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON、format! 内联变量、let...else 重写、items_after_statements 修复 — cargo clippy 零错误，核心测试全通过
-- **cf-noncolor-boost**（2026-09-08）：core_functions 非 color 子域修复 — list join/set-nth/zip/is-bracketed 修复 (+48)、math sin/cos/tan 角度单位转换 (+13)、meta module_exports 全覆盖 (+120) — sass-spec 7144→7365 (+221)
-- **color-adjust-units**（2026-09-06）：CIE+Modern RGB 颜色 adjust/change/scale percent 单位处理 — 新增 cie_channel 提取器（区分 unitless n 与 n%），CIE 各通道正确 max 值（Oklch/Oklab/Lch/Lab），Modern RGB 统一使用 cie_channel(max=1.0)，sass-spec 6426→6695 (+269)
-- **color-level4-complete**（2026-09-06）：CSS Color Level 4 测试工具链修复（.sass 过滤 + _utils.scss OnceLock 注入）+ 14 个 lab/lch/oklab/oklch 构造序列化测试 — 核心测试 100/100 全通过，sass-spec 6264→6426 (+162)
-- **sass-spec-boost**（2026-09-05）：color/to_space NaN 处理 + HWB/HSL 序列化 + scale/change HWB 通道扩展 — 202/202 核心测试全通过，sass-spec 6205→6264 (+59)
-- **sass-spec-completeness**（2026-09-05）：CSS at-rules 全链路（@keyframes/@font-face/@page/@charset/@namespace/@layer/@container）+ meta 反射修复 + 颜色算法精度 + selector-replace compound-level subset matching — 202/202 核心测试全通过，sass-spec 6123→6205 (+82)
-- **functional-cleanup**（2026-09-04）：函数式风格全量清理 — else-if 链→match（81处）、for+push→迭代器链（76处）、if-let 链→apply_kw 链式、&mut 参数→move 语义 — 105/105 核心测试通过，sass-spec 3366/5624 维持基线
-- **selector-ast**（2026-09-04）：选择器 AST + calc 简化函数式重构 — 226/226 全通过，sass-spec 3327→3366 (+39)
-- **scope-chain-arch**（2026-09-03）：Scope Chain 作用域管理架构 — 202/202 全通过，sass-spec 3324→3327
+- **math-clamp-comparable-error**（2026-09-19）：clamp 单位转换+min>max 回退、max/min 单位兼容性前置检查、ops.rs div 倒数单位
+- **calc-round-infinity-fix**（2026-09-13）：CSS round() 策略取整 + 三角函数 infinity/NaN 输入支持 + validate_single_number 特殊值字符串接受
+- **tokio-internal-async**（2026-09-13）：对内异步对外同步架构 — 引入 tokio runtime (block_on 桥接) + 清理 Reactor 死字段 + 删除死类型 + Parser 回归 Iterator
+- **spec-store**（2026-09-10）：sass-spec SQLite 数据管理工具 — 取代 `failures_json.rs` + `sass_spec_stats.rs`，用 SQLite WAL 存储 case 结果/快照/Delta
+- **tests-cleanup**（2026-09-10）：测试架构清理合 — 15 个诊断文件合并为 `diag_helper.rs` + `diagnostic_runner.rs` + `diag_color.rs`
+- **clippy-cleanup**（2026-09-09）：全量 clippy 清理 — unwrap→expect、eprintln→tracing::error、float_cmp→abs<EPSILON
+- **cf-noncolor-boost**（2026-09-08）：core_functions 非 color 子域修复 — list join/set-nth/zip/is-bracketed、math sin/cos/tan 角度单位转换、meta module_exports 全覆盖
+- **color-adjust-units**（2026-09-06）：CIE+Modern RGB 颜色 adjust/change/scale percent 单位处理
+- **color-level4-complete**（2026-09-06）：CSS Color Level 4 测试工具链修复 + lab/lch/oklab/oklch 构造序列化测试
+- **sass-spec-boost**（2026-09-05）：color/to_space NaN 处理 + HWB/HSL 序列化 + scale/change HWB 通道扩展
+- **sass-spec-completeness**（2026-09-05）：CSS at-rules 全链路 + meta 反射修复 + 颜色算法精度 + selector-replace compound-level subset matching
+- **functional-cleanup**（2026-09-04）：函数式风格全量清理 — else-if 链→match、for+push→迭代器链、&mut 参数→move 语义
+- **selector-ast**（2026-09-04）：选择器 AST + calc 简化函数式重构
+- **scope-chain-arch**（2026-09-03）：Scope Chain 作用域管理架构
 - **otel-integration**（2026-09-02）：OpenTelemetry 0.32 集成
 - **hrx-auditor-removal**（2026-09-02）：移除 hrx-auditor 外部依赖，内联 hrx_support.rs
-- **calc-simplification**（2026-09-01）：calc 表达式简化 + CSS round/mod/rem — 2902→3068 (+166)
+- **calc-simplification**（2026-09-01）：calc 表达式简化 + CSS round/mod/rem
 
 更早的归档记录详见 `openspec/changes/archive/` 目录。
 
